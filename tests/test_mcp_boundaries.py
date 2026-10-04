@@ -160,7 +160,18 @@ def test_no_offset_a_caller_can_send_crashes_or_stalls(
     assert page.next_offset is None or page.next_offset > offset
 
 
-@settings(max_examples=60, suppress_health_check=[HealthCheck.function_scoped_fixture])
+# No deadline. One example pages through up to 600 bytes four at a time: 150
+# calls, each resolving the bundle against the roots and opening content.md,
+# after writing a bundle to disk. Its wall time measures the machine's load,
+# not the paging: under `pytest -n 4` one example took 316 ms against
+# Hypothesis's 200 ms default and failed a run in which every assertion held.
+# The property is termination and completeness, not speed. The sanitizer's
+# property tests already run without a deadline.
+@settings(
+    max_examples=60,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 @given(
     size=st.integers(min_value=0, max_value=600),
     # Four is the floor for a *text* window: below it a page cannot hold one
