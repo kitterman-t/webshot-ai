@@ -434,3 +434,32 @@ def test_no_fonts_at_all_is_still_reported_as_none(
     (tmp_path / "truetype" / "README").write_text("not a font", encoding="utf-8")
     monkeypatch.setattr(harness, "FONT_DIRECTORIES", (str(tmp_path),))
     assert harness.font_fingerprint() == "none"
+
+
+def test_the_portable_profile_masks_the_ocr_path_versions() -> None:
+    """An OCRmyPDF bump moved only `text_layer_engine` and the producer pikepdf
+    writes, and the check reported it as a real output change. The tool's name
+    stays compared: a different engine is a different output."""
+    from tools.golden.harness import portable
+
+    def snapshot(engine: str, producer: str) -> dict[str, str]:
+        return {
+            "bundle/manifest.json": json.dumps(
+                {"pdf": {"searchable_ocr_layer": True, "text_layer_engine": engine}}
+            ),
+            "pdf.json": json.dumps({"metadata": {"/Producer": producer}}),
+        }
+
+    recorded = portable(
+        snapshot("OCRmyPDF 17.12.1", "pikepdf 10.12.0"), ocr_pdf_text=True
+    )
+    bumped = portable(
+        snapshot("OCRmyPDF 17.13.0", "pikepdf 10.16.0"), ocr_pdf_text=True
+    )
+    assert bumped == recorded
+    assert "OCRmyPDF <VERSION>" in recorded["bundle/manifest.json"]
+    assert "pikepdf <VERSION>" in recorded["pdf.json"]
+    other_engine = portable(
+        snapshot("Tesseract 5.5.3", "pikepdf 10.12.0"), ocr_pdf_text=True
+    )
+    assert other_engine != recorded
