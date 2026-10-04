@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.32.0"]
+requires = ["hatchling>=1.32.4"]
 build-backend = "hatchling.build"
 
 [project]
@@ -56,7 +56,7 @@ dependencies = [
     # >=6 is required: the AF-embedding code already uses the EmbeddedFile API,
     # which the previous >=4.2 floor did not guarantee (docs/05 task 0.1).
     "pypdf>=6.19.0,<7",
-    "pydantic>=2.7,<3",
+    "pydantic>=2.13.5,<3",
     "Markdown>=3.6,<4",
     # Pillow < 12.3 carries 25 known CVEs (pip-audit/OSV, Aug 2026); the
     # protected path feeds it page images, so the floor is the fixed release.
@@ -67,7 +67,7 @@ dependencies = [
     # 17.x is also what sets requires-python above (P1-1). They replace the
     # hand-built reportlab sandwich, which is why reportlab is gone.
     "img2pdf>=0.6,<1",
-    "ocrmypdf>=17.12.1,<18",
+    "ocrmypdf>=17.13.0,<18",
     # Phase 2 extraction stack, pinned at or above the spike-verified versions
     # (docs/09 S3-S5): nh3 sanitizes the snapshot; docling-slim's HTML backend
     # builds the DoclingDocument (no torch — CI asserts it); chonkie
@@ -110,7 +110,7 @@ ocr-rapid = ["rapidocr>=3.9,<4", "onnxruntime>=1.30.0"]
 # equips the environment to re-chunk content.json downstream with it; the
 # default pipeline stays HierarchicalChunker + chonkie (ADR-0008) and never
 # imports any of it. tests/test_footprint.py holds the default install clean.
-chunk-hybrid = ["docling-core[chunking]>=2.92"]
+chunk-hybrid = ["docling-core[chunking]>=2.99.0"]
 # Kept as a resolvable alias: `webshot[pdfa]` still installs, but OCRmyPDF and
 # img2pdf moved into the core dependencies in Phase 1 (docs/09 P1-2).
 pdfa = []
