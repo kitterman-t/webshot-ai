@@ -241,3 +241,46 @@ def test_rapid_accepts_a_language_and_has_no_packs_to_miss() -> None:
 
     engine = RapidOcrEngine()
     assert engine.unavailable_reason(language="spa") == engine.unavailable_reason()
+
+
+def test_every_tesseract_run_is_limited_to_one_openmp_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pages and assets are recognized in parallel, one process each; an
+    OpenMP Tesseract that also starts a thread per core stalls under that."""
+    seen: dict[str, str] = {}
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.update(kwargs["env"])  # type: ignore[arg-type]
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(tesseract_module, "_TESSERACT", "/usr/bin/tesseract")
+    monkeypatch.setattr(tesseract_module.subprocess, "run", fake_run)
+    monkeypatch.delenv("OMP_THREAD_LIMIT", raising=False)
+    monkeypatch.setenv("WEBSHOT_TEST_MARKER", "kept")
+    tesseract_module.recognize_page(1, OCR_FIXTURE, "eng", 11)
+    assert seen["OMP_THREAD_LIMIT"] == "1"
+    assert seen["WEBSHOT_TEST_MARKER"] == "kept", "the rest of the environment"
+
+    monkeypatch.setenv("OMP_THREAD_LIMIT", "2")
+    tesseract_module.recognize_page(1, OCR_FIXTURE, "eng", 11)
+    assert seen["OMP_THREAD_LIMIT"] == "2", "a limit the user set is kept"
+
+
+@pytest.mark.skipif(tesseract_executable() is None, reason="tesseract is not installed")
+def test_simultaneous_recognitions_of_one_page_all_finish() -> None:
+    """The reproduction: without the thread limit, four at once on the fixture
+    were still running after 200 seconds on a 4-core machine, where one alone
+    takes half a second."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        pages = list(
+            executor.map(
+                lambda _: tesseract_module.recognize_page(
+                    1, OCR_FIXTURE, "eng", 11, timeout=30
+                ),
+                range(4),
+            )
+        )
+    assert all(SENTINEL in page.text for page in pages)
