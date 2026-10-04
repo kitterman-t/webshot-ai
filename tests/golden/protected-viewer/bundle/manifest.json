@@ -21,7 +21,7 @@
     "bytes": -1,
     "sha256": "<PDF-SHA256>",
     "searchable_ocr_layer": true,
-    "text_layer_engine": "OCRmyPDF 17.12.1",
+    "text_layer_engine": "OCRmyPDF 17.13.0",
     "pdfa": null,
     "tagged": false,
     "bookmarks": true,

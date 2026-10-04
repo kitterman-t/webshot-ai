@@ -4,8 +4,7 @@
   - heading "Navigating your project" [level=2] [ref=e5]
   - paragraph [ref=e6]: The video below walks through the project workspace end to end.
   - generic [ref=e7]:
-    - iframe [ref=e8]:
-      
+    - iframe [ref=e8]
     - paragraph [ref=e9]:
       - text: Touring Your Project Workspace ·
       - link "Open in a new tab" [ref=e10] [cursor=pointer]:

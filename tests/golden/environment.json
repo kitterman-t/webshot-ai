@@ -1,6 +1,7 @@
 {
   "platform": "Darwin",
   "python": "3.12",
-  "playwright": "1.62.0",
-  "tesseract": "tesseract 5.5.3"
+  "playwright": "1.63.0",
+  "tesseract": "tesseract 5.5.3",
+  "fonts": "369 fonts, 9bedbc3ec25e"
 }

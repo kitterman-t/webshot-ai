@@ -36,11 +36,11 @@
       "nearby_heading": "Understanding the sandbox environment",
       "ocr": {
         "text": "ra\n.\n> 0:00\n4)\nLs\n.",
-        "confidence": 58.26,
+        "confidence": 57.38,
         "language": "eng",
         "engine": "Tesseract"
       },
-      "sha256": "2f2b0f18d78a10cc0cb382a9fef1c83c3a23451791b9469f07f6048f6f2a9bed",
+      "sha256": "baf4a4a3db5cee7efb559e8f896265edbc6b98dbe83225ea29711167f85c089a",
       "frame_content": null
     }
   ],
