@@ -243,6 +243,20 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **Tesseract no longer stalls when several pages are read at once.** WebShot
+  recognizes pages and assets in parallel, and an OpenMP build of Tesseract
+  (the Debian and Ubuntu packages) also starts a thread per core in each
+  process. On a 4-core machine, three of four simultaneous runs on a page that
+  takes half a second alone were still going after 200 seconds, and CI's
+  Linux test jobs timed out on that page. Every Tesseract run now gets
+  `OMP_THREAD_LIMIT=1`, as OCRmyPDF already does, unless the user set it.
+  See docs/09 P20-10.
+- **A dependency bump no longer reads as an output change.** The portable
+  golden profile masked the Skia producer's version but not its counterparts
+  on the OCR path, so an OCRmyPDF update failed the corpus on nothing but
+  `OCRmyPDF 17.12.1` and `pikepdf 10.12.0` and the check called it a real
+  change. Both versions are now masked; the tool names are still compared.
+  See docs/09 P20-11.
 - **No message tells a user to `pip install webshot`.** WebShot is not on
   PyPI, and `webshot` there is an unrelated project, so the office, RapidOCR,
   MCP and doctor hints that said `pip install 'webshot[...]'` would have
