@@ -52,7 +52,7 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "playwright>=1.59,<2",
+    "playwright>=1.63.0,<2",
     # >=6 is required: the AF-embedding code already uses the EmbeddedFile API,
     # which the previous >=4.2 floor did not guarantee (docs/05 task 0.1).
     "pypdf>=6.19.0,<7",

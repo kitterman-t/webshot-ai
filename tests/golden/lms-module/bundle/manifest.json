@@ -81,12 +81,12 @@
   },
   "files": {
     "accessibility.yaml": {
-      "bytes": 1843,
-      "sha256": "153f0d76bed647a06642e21eb635c884082dd88a04667a1a5f7c99ebef48d936"
+      "bytes": 1835,
+      "sha256": "03e577598030818dd254b190bd90312f409ee1141695d3d993fa0872d5003017"
     },
     "assets.json": {
       "bytes": 1834,
-      "sha256": "5e48ef20633e9e008a336c957377bc5c7656cbd9a8972e36425abed1c2932293"
+      "sha256": "9c8eb86ab9b552c55d0f17f1c941d17831569b37e5473a2e6d7225d7b6662099"
     },
     "assets/asset-001.png": {
       "bytes": -1,
