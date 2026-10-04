@@ -7342,3 +7342,36 @@ needs a re-record.
 **Tests.** `test_the_portable_profile_masks_the_ocr_path_versions` compares two
 snapshots that differ only in those versions, and one that names a different
 engine. It fails without the mask. No golden moves.
+
+*Superseded in part by P20-12:* the strict profile now masks these two
+versions as well.
+
+### P20-12: the strict profile compared the same two versions (2026-10-04)
+
+P20-11 left the OCRmyPDF and pikepdf versions compared exactly on the strict
+profile, on the reasoning that strict applies only when the environment
+matches the recording. That reasoning does not hold for these two. The
+recorded environment holds the platform, Python, Playwright, Tesseract and
+fonts, and no OCRmyPDF or pikepdf version, so an update to either leaves the
+recording machine on `strict`. A checkout whose CI runs on the machine that
+recorded its goldens would fail its corpus on the same update that P20-11 made
+pass here, and every later OCRmyPDF update would need a re-record whose only
+content is a version number.
+
+Measured on one Linux machine: `check.py --case protected-viewer --profile
+strict`, run once with OCRmyPDF 17.12.1 and pikepdf 10.12.0 and once with
+17.13.0 and 10.16.0. The only differences between the two reports are the
+manifest's `text_layer_engine` and the PDF's `/Producer`. Every other line is
+identical, so on that machine the update changed nothing else the strict
+profile compares, the OCR text layer included. Both profiles now mask those two
+versions and keep the tool names. docs/06 already says tool-version strings are
+normalized before comparison, and the strict profile already masked the
+manifest's `tool_versions` for that reason. The Chromium version in
+`Skia/PDF m151` stays compared on `strict`: Playwright's version is part of the
+recorded environment, so a browser update moves the check to `portable`.
+
+**Tests.** `test_the_strict_profile_masks_the_ocr_path_versions_too` compares
+two strict snapshots that differ only in those versions, one that names a
+different engine, and two that differ only in the Chromium version. `check.py`
+now reduces both sides through the same `comparable` function the test calls.
+No golden moves.

@@ -436,30 +436,57 @@ def test_no_fonts_at_all_is_still_reported_as_none(
     assert harness.font_fingerprint() == "none"
 
 
+def _ocr_path_snapshot(engine: str, producer: str) -> dict[str, str]:
+    return {
+        "bundle/manifest.json": json.dumps(
+            {"pdf": {"searchable_ocr_layer": True, "text_layer_engine": engine}}
+        ),
+        "pdf.json": json.dumps({"metadata": {"/Producer": producer}}),
+    }
+
+
 def test_the_portable_profile_masks_the_ocr_path_versions() -> None:
     """An OCRmyPDF bump moved only `text_layer_engine` and the producer pikepdf
     writes, and the check reported it as a real output change. The tool's name
     stays compared: a different engine is a different output."""
     from tools.golden.harness import portable
 
-    def snapshot(engine: str, producer: str) -> dict[str, str]:
-        return {
-            "bundle/manifest.json": json.dumps(
-                {"pdf": {"searchable_ocr_layer": True, "text_layer_engine": engine}}
-            ),
-            "pdf.json": json.dumps({"metadata": {"/Producer": producer}}),
-        }
-
     recorded = portable(
-        snapshot("OCRmyPDF 17.12.1", "pikepdf 10.12.0"), ocr_pdf_text=True
+        _ocr_path_snapshot("OCRmyPDF 17.12.1", "pikepdf 10.12.0"), ocr_pdf_text=True
     )
     bumped = portable(
-        snapshot("OCRmyPDF 17.13.0", "pikepdf 10.16.0"), ocr_pdf_text=True
+        _ocr_path_snapshot("OCRmyPDF 17.13.0", "pikepdf 10.16.0"), ocr_pdf_text=True
     )
     assert bumped == recorded
     assert "OCRmyPDF <VERSION>" in recorded["bundle/manifest.json"]
     assert "pikepdf <VERSION>" in recorded["pdf.json"]
     other_engine = portable(
-        snapshot("Tesseract 5.5.3", "pikepdf 10.12.0"), ocr_pdf_text=True
+        _ocr_path_snapshot("Tesseract 5.5.3", "pikepdf 10.12.0"), ocr_pdf_text=True
     )
     assert other_engine != recorded
+
+
+def test_the_strict_profile_masks_the_ocr_path_versions_too() -> None:
+    """The recorded environment holds no OCRmyPDF or pikepdf version, so the
+    same bump left the recording machine on `strict`, where those two strings
+    were the only difference (docs/09 P20-12). `strict` still compares what
+    only `portable` masks: the Chromium version, which the recorded
+    environment does track through Playwright's."""
+    from tools.golden.harness import comparable
+
+    recorded = comparable(
+        _ocr_path_snapshot("OCRmyPDF 17.12.1", "pikepdf 10.12.0"), "strict"
+    )
+    bumped = comparable(
+        _ocr_path_snapshot("OCRmyPDF 17.13.0", "pikepdf 10.16.0"), "strict"
+    )
+    assert bumped == recorded
+    assert "OCRmyPDF <VERSION>" in recorded["bundle/manifest.json"]
+    assert "pikepdf <VERSION>" in recorded["pdf.json"]
+    other_engine = comparable(
+        _ocr_path_snapshot("Tesseract 5.5.3", "pikepdf 10.12.0"), "strict"
+    )
+    assert other_engine != recorded
+    assert comparable(
+        _ocr_path_snapshot("OCRmyPDF 17.12.1", "Skia/PDF m151"), "strict"
+    ) != comparable(_ocr_path_snapshot("OCRmyPDF 17.12.1", "Skia/PDF m152"), "strict")
