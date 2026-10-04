@@ -110,7 +110,7 @@ ocr-rapid = ["rapidocr>=3.9,<4", "onnxruntime>=1.30.0"]
 # equips the environment to re-chunk content.json downstream with it; the
 # default pipeline stays HierarchicalChunker + chonkie (ADR-0008) and never
 # imports any of it. tests/test_footprint.py holds the default install clean.
-chunk-hybrid = ["docling-core[chunking]>=2.92"]
+chunk-hybrid = ["docling-core[chunking]>=2.99.0"]
 # Kept as a resolvable alias: `webshot[pdfa]` still installs, but OCRmyPDF and
 # img2pdf moved into the core dependencies in Phase 1 (docs/09 P1-2).
 pdfa = []
