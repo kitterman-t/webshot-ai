@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import os
 import re
 import shutil
 import subprocess
@@ -97,6 +98,24 @@ class OCRPage:
 _TESSERACT: str | None = None
 
 
+def tesseract_environment() -> dict[str, str]:
+    """The environment every Tesseract run gets: one OpenMP thread per process.
+
+    WebShot already runs pages and assets in parallel, one process each. An
+    OpenMP build of Tesseract (the Debian and Ubuntu packages) also starts a
+    thread per core in every process, and with several processes at once they
+    can stall: on a 4-core Linux machine, `tests/fixtures/viewer/page-001.png`
+    took half a second alone, but three of four simultaneous runs were still
+    going after 200 seconds, and CI's Linux jobs timed out on that fixture.
+    With one thread each, the four finished together in under a second.
+    OCRmyPDF sets the same limit for the same reason. A limit the user set
+    themselves is kept.
+    """
+    environment = dict(os.environ)
+    environment.setdefault("OMP_THREAD_LIMIT", "1")
+    return environment
+
+
 def tesseract_executable() -> str | None:
     """The Tesseract binary, resolved once rather than once per page.
 
@@ -140,6 +159,7 @@ def recognize_page(
         capture_output=True,
         text=True,
         timeout=timeout,
+        env=tesseract_environment(),
     )
     if completed.returncode != 0:
         raise RuntimeError(
