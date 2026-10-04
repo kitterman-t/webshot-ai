@@ -109,7 +109,7 @@ def tesseract_environment() -> dict[str, str]:
     going after 200 seconds, and CI's Linux jobs timed out on that fixture.
     With one thread each, the four finished together in under a second.
     OCRmyPDF sets the same limit for the same reason. A limit the user set
-    themselves is kept.
+    themselves is kept. docs/09 P20-10.
     """
     environment = dict(os.environ)
     environment.setdefault("OMP_THREAD_LIMIT", "1")

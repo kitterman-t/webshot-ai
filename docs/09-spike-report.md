@@ -7288,3 +7288,57 @@ starts and requires every one to be answered. With a queue of 5 and
 `tcp_abort_on_overflow` set to 1 on Linux, one client was reset and the test
 failed; with 64 it passes. Without that setting only a macOS run can fail it.
 No golden moves.
+
+### P20-10: simultaneous Tesseract runs stalled on Linux (2026-10-04)
+
+When the public repository's six Dependabot pull requests ran CI, every Linux
+test job failed, including the one that changes only a GitHub Action's
+version. The Action update's job log shows the cause: Tesseract killed at
+its 45-second limit on `tests/fixtures/viewer/page-001.png`, in
+`test_tesseract_recognizes_the_fixture`. Master's run on the same runner image
+(ubuntu-24.04 20260927.320.1, Tesseract 5.3.4 from the Ubuntu package) had
+passed the same morning.
+
+The Ubuntu package is built with OpenMP, which starts a thread per core in
+every process. The suite runs four pytest workers, and WebShot itself
+recognizes pages and assets in parallel, so several Tesseract processes can
+run at once. Measured in the development container (Linux, 4 cores, Tesseract
+5.3.4) on that page:
+
+| Runs at once | `OMP_THREAD_LIMIT` unset | `OMP_THREAD_LIMIT=1` |
+|---|---|---|
+| 1 | 0.54 s | 0.54 s |
+| 4 | 3 of 4 still running when killed at 200 s | all 4 done in 0.59 s |
+
+Whether a job stalls depends on whether runs overlap, so a pass like master's
+does not show the problem is absent. It is not only a test problem: in the
+same container, `test_a_second_assembly_announces_what_it_replaces` hit the
+90-second page limit in the product's own page recognition.
+
+Every Tesseract run now gets `OMP_THREAD_LIMIT=1` unless the user set one,
+which is what OCRmyPDF does for its own Tesseract runs.
+
+**Tests.** `test_every_tesseract_run_is_limited_to_one_openmp_thread` checks
+the environment `recognize_page` passes, and that a value the user set is
+kept. `test_simultaneous_recognitions_of_one_page_all_finish` runs four
+recognitions of the fixture at once with a 30-second limit. Without the change
+both fail, the second by timing out; with it they pass in under a second. No
+golden moves.
+
+### P20-11: two version strings the portable profile did not mask (2026-10-04)
+
+The OCRmyPDF 17.12.1 to 17.13.0 update failed the golden corpus on
+`protected-viewer`, and `check.py` called the difference a real output change.
+Only two lines differed: the manifest's `text_layer_engine`
+(`OCRmyPDF 17.12.1`) and the PDF's `/Producer` (`pikepdf 10.12.0`, written by
+pikepdf when OCRmyPDF saves; the update moved it to 10.16.0). docs/06 says
+tool-version strings are normalized before comparison, and the portable
+profile already masked the Chromium producer (`Skia/PDF m151`). It now masks
+these two the same way and keeps the tool names, so a different engine still
+fails. The strict profile still compares them exactly; it applies only when
+the environment matches the recording, and an OCRmyPDF update there still
+needs a re-record.
+
+**Tests.** `test_the_portable_profile_masks_the_ocr_path_versions` compares two
+snapshots that differ only in those versions, and one that names a different
+engine. It fails without the mask. No golden moves.

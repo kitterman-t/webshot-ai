@@ -77,7 +77,8 @@ SKIA_RE = re.compile(r"Skia/PDF m\d+")
 #: The OCR path's own version strings: OCRmyPDF names itself in the
 #: manifest's `text_layer_engine`, and pikepdf rewrites the PDF producer when
 #: OCRmyPDF saves. They are the Skia string's counterparts on that path, so a
-#: dependency bump that changes nothing but these is not an output change.
+#: dependency bump that changes nothing but these is not an output change
+#: (docs/09 P20-11).
 OCR_ENGINE_VERSION_RE = re.compile(
     r"\b(OCRmyPDF|pikepdf) \d+(?:\.\d+)+(?:(?:a|b|rc)\d+)?(?:\.post\d+)?(?:\.dev\d+)?"
 )
