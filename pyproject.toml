@@ -56,7 +56,7 @@ dependencies = [
     # >=6 is required: the AF-embedding code already uses the EmbeddedFile API,
     # which the previous >=4.2 floor did not guarantee (docs/05 task 0.1).
     "pypdf>=6.19.0,<7",
-    "pydantic>=2.7,<3",
+    "pydantic>=2.13.5,<3",
     "Markdown>=3.6,<4",
     # Pillow < 12.3 carries 25 known CVEs (pip-audit/OSV, Aug 2026); the
     # protected path feeds it page images, so the floor is the fixed release.
