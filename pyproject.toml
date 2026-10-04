@@ -67,7 +67,7 @@ dependencies = [
     # 17.x is also what sets requires-python above (P1-1). They replace the
     # hand-built reportlab sandwich, which is why reportlab is gone.
     "img2pdf>=0.6,<1",
-    "ocrmypdf>=17.12.1,<18",
+    "ocrmypdf>=17.13.0,<18",
     # Phase 2 extraction stack, pinned at or above the spike-verified versions
     # (docs/09 S3-S5): nh3 sanitizes the snapshot; docling-slim's HTML backend
     # builds the DoclingDocument (no torch — CI asserts it); chonkie
