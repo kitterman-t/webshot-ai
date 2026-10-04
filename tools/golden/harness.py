@@ -16,12 +16,12 @@ Two comparison profiles exist (docs/06-quality-and-testing.md):
 
 `portable`
     Everything `strict` does, plus: OCR-derived text, confidences, and counts
-    become placeholders, and the PDF producer string is dropped.  Tesseract and
-    Chromium legitimately produce different pixels and different words across
-    versions, so a machine that differs from the recording environment checks
-    structure rather than recognition output.  OCR is still proven to work — by
-    the per-case sentinel assertions, which must be found in the recognized
-    text on both profiles.
+    become placeholders, and the versions in the PDF producer and OCR engine
+    strings are masked.  Tesseract and Chromium legitimately produce different
+    pixels and different words across versions, so a machine that differs from
+    the recording environment checks structure rather than recognition output.
+    OCR is still proven to work — by the per-case sentinel assertions, which
+    must be found in the recognized text on both profiles.
 
 `check.py` picks the profile automatically from `environment.json` and says
 which one it used.
@@ -74,6 +74,13 @@ WEBSHOT_VERSION_RE = re.compile(
     r"(?:\+[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?"
 )
 SKIA_RE = re.compile(r"Skia/PDF m\d+")
+#: The OCR path's own version strings: OCRmyPDF names itself in the
+#: manifest's `text_layer_engine`, and pikepdf rewrites the PDF producer when
+#: OCRmyPDF saves. They are the Skia string's counterparts on that path, so a
+#: dependency bump that changes nothing but these is not an output change.
+OCR_ENGINE_VERSION_RE = re.compile(
+    r"\b(OCRmyPDF|pikepdf) \d+(?:\.\d+)+(?:(?:a|b|rc)\d+)?(?:\.post\d+)?(?:\.dev\d+)?"
+)
 OCR_PREFIX = "Text recognized within visual asset"
 
 # Masked numbers stay numbers: a golden must still validate against the frozen
@@ -866,6 +873,7 @@ def portable(files: dict[str, str], *, ocr_pdf_text: bool = False) -> dict[str, 
             rf"\g<1>{MASKED_OCR_CONFIDENCE}\g<3>", text
         )
         text = SKIA_RE.sub("Skia/PDF <VERSION>", text)
+        text = OCR_ENGINE_VERSION_RE.sub(r"\1 <VERSION>", text)
         return text
 
     result = {name: scrub(name, text) for name, text in files.items()}
