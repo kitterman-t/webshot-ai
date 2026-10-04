@@ -1,0 +1,20 @@
+--- page 1 ---
+Change your password
+Current password
+••••••••••••••••••••
+New password
+••••••••••••••••••••••••••••
+Account
+live@example.com
+Display mode
+Dense
+Email me about sign-ins
+Recovery note
+live recovery note
+What the capture must contain
+Both password values are replaced by a redaction marker before they can reach any
+published artifact, and so is every fragment of one. The account field is ordinary form state
+and is recorded with its value, which is what makes the absence of the passwords a
+measurement rather than an empty bundle.
+Change your password form_overlapping_passwords.html
+WebShot Page 1 of 1

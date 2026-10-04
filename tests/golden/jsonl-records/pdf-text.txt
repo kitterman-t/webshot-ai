@@ -1,0 +1,9 @@
+--- page 1 ---
+JSON LINES DATA
+sample_records.jsonl
+Records
+{"id": 1, "event": "created", "status": "open"}
+{"id": 2, "event": "reviewed", "status": "approved"}
+{"id": 3, "event": "published", "status": "complete"}
+sample_records.jsonl sample_records.jsonl
+WebShot Page 1 of 1

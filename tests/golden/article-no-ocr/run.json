@@ -1,0 +1,15 @@
+{
+  "case": "article-no-ocr",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/professional_page.html",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>",
+    "--no-ocr"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

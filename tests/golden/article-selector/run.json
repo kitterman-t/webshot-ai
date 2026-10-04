@@ -1,0 +1,17 @@
+{
+  "case": "article-selector",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/professional_page.html",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>",
+    "--selector",
+    "main",
+    "--no-header-footer"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

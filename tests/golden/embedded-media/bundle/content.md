@@ -1,0 +1,23 @@
+# Embedded Media Review
+
+A page's media elements are part of its record even when their streams cannot be archived: the source URL, the title, and every caption track are facts about what the page offered a reader.
+
+## Training video
+
+The walkthrough covers the capture workflow end to end and is captioned in English for accessibility.
+
+### Video not transcribed: Quarterly training video
+
+This media is NOT transcribed. It declares caption track(s) and the browser could not read them — the track loaded with an error, which a cross-origin caption file does when the page itself was opened from a file:// URL. A transcript for this media exists and is absent from this bundle for that reason, not because none was written.
+
+Source: <file://<REPO>/tests/fixtures/sample-video.mp4>
+
+## Audio briefing
+
+The audio briefing summarizes the quarter in four minutes; a German subtitle track accompanies it.
+
+### Audio not transcribed: Operations audio briefing
+
+This media is NOT transcribed. It declares caption track(s) and the browser could not read them — the track loaded with an error, which a cross-origin caption file does when the page itself was opened from a file:// URL. A transcript for this media exists and is absent from this bundle for that reason, not because none was written.
+
+Source: <file://<REPO>/tests/fixtures/sample-audio.mp3>

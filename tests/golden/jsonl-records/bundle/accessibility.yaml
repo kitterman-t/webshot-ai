@@ -1,0 +1,5 @@
+- main [ref=e2]:
+  - paragraph [ref=e3]: JSON Lines data
+  - heading "sample_records.jsonl" [level=1] [ref=e4]
+  - heading "Records" [level=2] [ref=e5]
+  - code [ref=e7]: "{\"id\": 1, \"event\": \"created\", \"status\": \"open\"} {\"id\": 2, \"event\": \"reviewed\", \"status\": \"approved\"} {\"id\": 3, \"event\": \"published\", \"status\": \"complete\"}"

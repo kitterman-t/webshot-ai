@@ -1,0 +1,951 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/manifest.schema.json",
+  "$defs": {
+    "CaptionTrackRecord": {
+      "additionalProperties": false,
+      "description": "One `<track>` a media element declared, and what came of reading it.\n\n`role` is stated rather than left to be inferred from `kind`: a subtitle\ntrack kept in the corpus is a translation of the speech, not a record of\nit, and a reader that treated the two alike would quote a translation as\nif it were what was said.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "subtitles",
+            "captions",
+            "descriptions",
+            "chapters",
+            "metadata",
+            ""
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "srclang": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Srclang"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "source_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Url"
+        },
+        "readable": {
+          "title": "Readable",
+          "type": "boolean"
+        },
+        "cues": {
+          "title": "Cues",
+          "type": "integer"
+        },
+        "truncated": {
+          "default": false,
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "total_cues": {
+          "default": 0,
+          "title": "Total Cues",
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "transcript",
+            "translation",
+            "unreadable",
+            "empty",
+            "descriptions",
+            "chapters",
+            "metadata"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "srclang",
+        "label",
+        "source_url",
+        "readable",
+        "cues",
+        "role"
+      ],
+      "title": "CaptionTrackRecord",
+      "type": "object"
+    },
+    "ContentDiscovery": {
+      "additionalProperties": false,
+      "description": "How the captured content region was chosen, and what it was.",
+      "properties": {
+        "strategy": {
+          "enum": [
+            "explicit",
+            "trafilatura",
+            "static-selectors",
+            "full-page"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        },
+        "selector": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Selector"
+        }
+      },
+      "required": [
+        "strategy",
+        "selector"
+      ],
+      "title": "ContentDiscovery",
+      "type": "object"
+    },
+    "DiscoveredMetadata": {
+      "additionalProperties": false,
+      "description": "What Trafilatura read from the captured page (docs/05 task 3.4).\n\nDeliberately separate from `page_metadata`, which is the DOM's own\ndeclarations as the snapshot recorded them: a consumer that needs to know\nwhere a value came from can tell the two apart. Empty strings mean the\npage declared nothing — WebShot does not infer (docs/09 P3-3).",
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "title": "Author",
+          "type": "string"
+        },
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "sitename": {
+          "title": "Sitename",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "author",
+        "date",
+        "sitename"
+      ],
+      "title": "DiscoveredMetadata",
+      "type": "object"
+    },
+    "FileRecordV3": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "legacy": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Legacy"
+        }
+      },
+      "required": [
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileRecordV3",
+      "type": "object"
+    },
+    "MediaVideoRecord": {
+      "additionalProperties": false,
+      "description": "Timed media the bundle could not document, recorded rather than omitted.\n\nEverything knowable without playing it, plus `note` saying in plain words\nwhat is missing. Media an agent cannot hear is worse unlabelled than\nlabelled: unlabelled, a bundle reads as complete when it is not.",
+      "properties": {
+        "provider": {
+          "const": "media-element",
+          "title": "Provider",
+          "type": "string"
+        },
+        "media_kind": {
+          "enum": [
+            "video",
+            "audio"
+          ],
+          "title": "Media Kind",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "duration_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Duration Seconds"
+        },
+        "poster_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Poster Url"
+        },
+        "poster_asset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Poster Asset"
+        },
+        "caption_tracks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Caption Tracks",
+          "type": "array"
+        },
+        "tracks": {
+          "items": {
+            "$ref": "#/$defs/CaptionTrackRecord"
+          },
+          "title": "Tracks",
+          "type": "array"
+        },
+        "directory": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Directory"
+        },
+        "locator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Locator"
+        },
+        "transcribed": {
+          "title": "Transcribed",
+          "type": "boolean"
+        },
+        "transcript_provenance": {
+          "anyOf": [
+            {
+              "const": "authored",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Transcript Provenance"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Note"
+        }
+      },
+      "required": [
+        "provider",
+        "media_kind",
+        "title",
+        "source_url",
+        "duration_seconds",
+        "poster_url",
+        "poster_asset",
+        "caption_tracks",
+        "tracks",
+        "locator",
+        "transcribed",
+        "transcript_provenance",
+        "note"
+      ],
+      "title": "MediaVideoRecord",
+      "type": "object"
+    },
+    "OcrSettingsV3": {
+      "additionalProperties": false,
+      "description": "`manifest.ocr` in bundle_format 3.\n\nTwo fields are nullable here and were not in v2, because v2 had one\nengine. `--ocr-engine rapid` selects its own models and has no\npage-segmentation mode, so under it a manifest that reported the requested\n`--ocr-language`/`--ocr-psm` would be claiming settings that were never\napplied (docs/09 P3-7). Null means \"this engine does not take it\".",
+      "properties": {
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Language"
+        },
+        "page_segmentation_mode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Page Segmentation Mode"
+        },
+        "engine": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Engine"
+        }
+      },
+      "required": [
+        "enabled",
+        "language",
+        "page_segmentation_mode",
+        "engine"
+      ],
+      "title": "OcrSettingsV3",
+      "type": "object"
+    },
+    "PageMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "language": {
+          "title": "Language",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "author": {
+          "title": "Author",
+          "type": "string"
+        },
+        "keywords": {
+          "title": "Keywords",
+          "type": "string"
+        },
+        "canonicalUrl": {
+          "title": "Canonicalurl",
+          "type": "string"
+        },
+        "publishedTime": {
+          "title": "Publishedtime",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "language",
+        "description",
+        "author",
+        "keywords",
+        "canonicalUrl",
+        "publishedTime"
+      ],
+      "title": "PageMetadata",
+      "type": "object"
+    },
+    "SourceResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "http_status": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Http Status"
+        },
+        "content_type": {
+          "title": "Content Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "http_status",
+        "content_type"
+      ],
+      "title": "SourceResponse",
+      "type": "object"
+    },
+    "ToolVersions": {
+      "additionalProperties": false,
+      "description": "What actually produced the bundle (docs/04 §2.2).",
+      "properties": {
+        "webshot": {
+          "title": "Webshot",
+          "type": "string"
+        },
+        "playwright": {
+          "title": "Playwright",
+          "type": "string"
+        },
+        "chromium": {
+          "title": "Chromium",
+          "type": "string"
+        },
+        "markitdown": {
+          "title": "Markitdown",
+          "type": "string"
+        },
+        "trafilatura": {
+          "title": "Trafilatura",
+          "type": "string"
+        },
+        "docling_slim": {
+          "title": "Docling Slim",
+          "type": "string"
+        },
+        "docling_core": {
+          "title": "Docling Core",
+          "type": "string"
+        },
+        "chonkie": {
+          "title": "Chonkie",
+          "type": "string"
+        },
+        "nh3": {
+          "title": "Nh3",
+          "type": "string"
+        },
+        "tesseract": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tesseract"
+        }
+      },
+      "required": [
+        "webshot",
+        "playwright",
+        "chromium",
+        "markitdown",
+        "trafilatura",
+        "docling_slim",
+        "docling_core",
+        "chonkie",
+        "nh3",
+        "tesseract"
+      ],
+      "title": "ToolVersions",
+      "type": "object"
+    },
+    "VideoAppendixRecord": {
+      "additionalProperties": false,
+      "description": "The appended walkthrough pages, and the one thing not to claim of them.\n\n`tagged` is always false: pypdf's merge does not carry a structure tree\nacross (docs/09 S8). The capture's own pages keep theirs, which is what\n`WebPdfRecord.tagged` describes — this says the appended ones have none,\nso the two claims cannot be confused.",
+      "properties": {
+        "pages": {
+          "title": "Pages",
+          "type": "integer"
+        },
+        "starts_on_page": {
+          "title": "Starts On Page",
+          "type": "integer"
+        },
+        "videos": {
+          "title": "Videos",
+          "type": "integer"
+        },
+        "steps": {
+          "title": "Steps",
+          "type": "integer"
+        },
+        "tagged": {
+          "const": false,
+          "title": "Tagged",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pages",
+        "starts_on_page",
+        "videos",
+        "steps",
+        "tagged"
+      ],
+      "title": "VideoAppendixRecord",
+      "type": "object"
+    },
+    "VideoTally": {
+      "additionalProperties": false,
+      "description": "How many videos of each kind. The per-page half of counting a corpus.\n\nThe three parts are exhaustive and sum to `total`. They have to: a reader\nsubtracting two of them from the total to derive the third would silently\nabsorb any case the tally forgot, which is how a count starts reading as\nauthority for something nobody measured (docs/09 P7-8).",
+      "properties": {
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        },
+        "documented_walkthroughs": {
+          "title": "Documented Walkthroughs",
+          "type": "integer"
+        },
+        "transcribed_media": {
+          "title": "Transcribed Media",
+          "type": "integer"
+        },
+        "untranscribed_media": {
+          "title": "Untranscribed Media",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total",
+        "documented_walkthroughs",
+        "transcribed_media",
+        "untranscribed_media"
+      ],
+      "title": "VideoTally",
+      "type": "object"
+    },
+    "WalkthroughVideoRecord": {
+      "additionalProperties": false,
+      "description": "A video whose content reached the bundle, and how it got there.",
+      "properties": {
+        "provider": {
+          "const": "guidde",
+          "title": "Provider",
+          "type": "string"
+        },
+        "playbook_id": {
+          "title": "Playbook Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "duration_seconds": {
+          "title": "Duration Seconds",
+          "type": "number"
+        },
+        "steps": {
+          "title": "Steps",
+          "type": "integer"
+        },
+        "narrated_steps": {
+          "title": "Narrated Steps",
+          "type": "integer"
+        },
+        "transcript_cues": {
+          "title": "Transcript Cues",
+          "type": "integer"
+        },
+        "organization": {
+          "title": "Organization",
+          "type": "string"
+        },
+        "language": {
+          "title": "Language",
+          "type": "string"
+        },
+        "last_updated_by": {
+          "title": "Last Updated By",
+          "type": "string"
+        },
+        "directory": {
+          "title": "Directory",
+          "type": "string"
+        },
+        "assets": {
+          "title": "Assets",
+          "type": "integer"
+        },
+        "chunks": {
+          "title": "Chunks",
+          "type": "integer"
+        },
+        "locator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Locator"
+        },
+        "transcribed": {
+          "const": true,
+          "title": "Transcribed",
+          "type": "boolean"
+        },
+        "transcript_provenance": {
+          "enum": [
+            "authored",
+            "unverified"
+          ],
+          "title": "Transcript Provenance",
+          "type": "string"
+        },
+        "narration": {
+          "title": "Narration",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "playbook_id",
+        "title",
+        "source_url",
+        "duration_seconds",
+        "steps",
+        "narrated_steps",
+        "transcript_cues",
+        "organization",
+        "language",
+        "last_updated_by",
+        "directory",
+        "assets",
+        "chunks",
+        "locator",
+        "transcribed",
+        "transcript_provenance",
+        "narration"
+      ],
+      "title": "WalkthroughVideoRecord",
+      "type": "object"
+    },
+    "WebContentCountsV3": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "title": "Items",
+          "type": "integer"
+        },
+        "tables": {
+          "title": "Tables",
+          "type": "integer"
+        },
+        "links": {
+          "title": "Links",
+          "type": "integer"
+        },
+        "chunks": {
+          "title": "Chunks",
+          "type": "integer"
+        },
+        "text_characters": {
+          "title": "Text Characters",
+          "type": "integer"
+        },
+        "visual_assets": {
+          "title": "Visual Assets",
+          "type": "integer"
+        },
+        "ocr_words": {
+          "title": "Ocr Words",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "tables",
+        "links",
+        "chunks",
+        "text_characters",
+        "visual_assets",
+        "ocr_words"
+      ],
+      "title": "WebContentCountsV3",
+      "type": "object"
+    },
+    "WebPdfRecordV3": {
+      "additionalProperties": false,
+      "description": "`manifest.pdf` in bundle_format 3.\n\nIts own model rather than a widening of `WebPdfRecord`: that one is the\n*frozen* v2.2 contract, and a field v2 could never produce has no business\nappearing in the schema v2 consumers validate against.",
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "pages": {
+          "title": "Pages",
+          "type": "integer"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "tagged": {
+          "title": "Tagged",
+          "type": "boolean"
+        },
+        "bookmarks": {
+          "title": "Bookmarks",
+          "type": "boolean"
+        },
+        "embedded_files": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Embedded Files",
+          "type": "array"
+        },
+        "video_appendix": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VideoAppendixRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "file",
+        "pages",
+        "bytes",
+        "sha256",
+        "tagged",
+        "bookmarks"
+      ],
+      "title": "WebPdfRecordV3",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`manifest.json` in bundle_format 3.",
+  "properties": {
+    "bundle_format": {
+      "const": 3,
+      "title": "Bundle Format",
+      "type": "integer"
+    },
+    "generator": {
+      "title": "Generator",
+      "type": "string"
+    },
+    "generator_version": {
+      "title": "Generator Version",
+      "type": "string"
+    },
+    "captured_at": {
+      "title": "Captured At",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "final_url": {
+      "title": "Final Url",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "page_metadata": {
+      "$ref": "#/$defs/PageMetadata"
+    },
+    "discovered_metadata": {
+      "$ref": "#/$defs/DiscoveredMetadata"
+    },
+    "content_discovery": {
+      "$ref": "#/$defs/ContentDiscovery"
+    },
+    "auth_mode": {
+      "enum": [
+        "none",
+        "storage-state",
+        "auth-profile"
+      ],
+      "title": "Auth Mode",
+      "type": "string"
+    },
+    "source_response": {
+      "$ref": "#/$defs/SourceResponse"
+    },
+    "pdf": {
+      "$ref": "#/$defs/WebPdfRecordV3"
+    },
+    "content": {
+      "$ref": "#/$defs/WebContentCountsV3"
+    },
+    "ocr": {
+      "$ref": "#/$defs/OcrSettingsV3"
+    },
+    "tool_versions": {
+      "$ref": "#/$defs/ToolVersions"
+    },
+    "files": {
+      "additionalProperties": {
+        "$ref": "#/$defs/FileRecordV3"
+      },
+      "title": "Files",
+      "type": "object"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "ocr_notice": {
+      "title": "Ocr Notice",
+      "type": "string"
+    },
+    "videos": {
+      "anyOf": [
+        {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "guidde": "#/$defs/WalkthroughVideoRecord",
+                "media-element": "#/$defs/MediaVideoRecord"
+              },
+              "propertyName": "provider"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/WalkthroughVideoRecord"
+              },
+              {
+                "$ref": "#/$defs/MediaVideoRecord"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Videos"
+    },
+    "video_tally": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VideoTally"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "bundle_format",
+    "generator",
+    "generator_version",
+    "captured_at",
+    "source",
+    "final_url",
+    "title",
+    "page_metadata",
+    "discovered_metadata",
+    "content_discovery",
+    "auth_mode",
+    "source_response",
+    "pdf",
+    "content",
+    "ocr",
+    "tool_versions",
+    "files",
+    "warnings",
+    "ocr_notice"
+  ],
+  "title": "WebManifestV3",
+  "type": "object"
+}

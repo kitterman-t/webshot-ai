@@ -1,0 +1,15 @@
+{
+  "case": "article-no-ai-bundle",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/professional_page.html",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>",
+    "--no-ai-bundle"
+  ],
+  "exit_code": 0,
+  "bundle_present": false,
+  "pdf_present": true
+}

@@ -1,0 +1,130 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/sample_notes.txt",
+  "final_url": "file://<REPO>/tests/fixtures/sample_notes.txt",
+  "title": "sample_notes.txt",
+  "page_metadata": {
+    "title": "sample_notes.txt",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "sample_notes.txt",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../text-notes.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json"
+    ]
+  },
+  "content": {
+    "items": 3,
+    "tables": 0,
+    "links": 0,
+    "chunks": 2,
+    "text_characters": 224,
+    "visual_assets": 0,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 315,
+      "sha256": "8490e9d4e5d66106da5c796f79d66066e4ef3c8b229a58aa1ef64fd36e5fe78d"
+    },
+    "assets.json": {
+      "bytes": 93,
+      "sha256": "254f1ebdc290bd2774d0677739798ca1744f2582c0f98139b06bcc045604d36e"
+    },
+    "chunks.jsonl": {
+      "bytes": 590,
+      "sha256": "097244c316c3a8cd013f95d913ca1f81feec586beb24cc53a8d47b672a83628c"
+    },
+    "content.doctags": {
+      "bytes": 292,
+      "sha256": "252cf9a85e7a76bce39958a80c432571d79c9e19ada619c8fa2784c68bab1853"
+    },
+    "content.html": {
+      "bytes": 401,
+      "sha256": "6bc756fc40b173c47ebbe5c9161ee1d3947225f5b063e090e03b0a1824063635"
+    },
+    "content.json": {
+      "bytes": 2008,
+      "sha256": "243f1f74b0966ec02dd3b030d3c5edcf845e11051aaa9e75decea7630e20ddd4"
+    },
+    "content.md": {
+      "bytes": 235,
+      "sha256": "8ed00793a30ffa8a9193d6dcbf594abc6c4bf62848d0c4b88a1b08bfe20b46cd"
+    },
+    "content.txt": {
+      "bytes": 224,
+      "sha256": "df10183561f469706dd29b5f0c13caad3f7ca7974bb57e98632d37491bafbd46"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/sample_notes.txt": {
+      "bytes": 191,
+      "sha256": "96be4de65cb079387cfd1fd6e940b17891447384e390372ff839b7d34dbcff94"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

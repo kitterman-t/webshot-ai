@@ -1,0 +1,14 @@
+{
+  "case": "svg-chart",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/chart-source.svg",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/viewer-chunk.schema.json",
+  "additionalProperties": false,
+  "description": "One line of `chunks.jsonl` on the protected-viewer path.",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "page": {
+      "title": "Page",
+      "type": "integer"
+    },
+    "kind": {
+      "title": "Kind",
+      "type": "string"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    },
+    "ocr_confidence": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Ocr Confidence"
+    }
+  },
+  "required": [
+    "id",
+    "page",
+    "kind",
+    "text",
+    "ocr_confidence"
+  ],
+  "title": "ViewerChunk",
+  "type": "object"
+}

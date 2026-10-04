@@ -1,0 +1,33 @@
+{
+  "page_count": 2,
+  "page_sizes": [
+    [
+      612.0,
+      792.0
+    ],
+    [
+      612.0,
+      792.0
+    ]
+  ],
+  "outline": [
+    "WebShot Quality Review",
+    [
+      "Executive summary",
+      "Quality indicators",
+      "Recommendations",
+      [
+        "Before capture",
+        "During capture",
+        "After capture"
+      ],
+      "Conclusion"
+    ]
+  ],
+  "attachments": [],
+  "metadata": {
+    "/Title": "WebShot Quality Review",
+    "/Creator": "Chromium",
+    "/Producer": "Skia/PDF m151"
+  }
+}

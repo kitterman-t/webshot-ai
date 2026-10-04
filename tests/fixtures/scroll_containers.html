@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Service Hours — Scroll Containers</title>
+<meta name="description" content="Text a scrolling box shows only when scrolled, which a PDF cannot do.">
+<style>
+  body { font: 16px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+         color: #1d2738; max-width: 46rem; margin: 0 auto; padding: 2rem 1.5rem; }
+  td, th { padding: 0 12px; white-space: nowrap; text-align: left; }
+
+  /* docs/09 P16-8. Chromium keeps a scroll container's clip on paper, where
+     nobody can scroll it, so a box prints the part that is showing and nothing
+     else. The bundle, read from the DOM, has every cell and every row. Since
+     P16-10 the log is released and prints whole; the table is not. */
+
+  /* Shape one: the responsive-table wrapper. Twelve columns of no-wrap cells
+     cannot fit a page, so the wrapper scrolls them sideways on screen. */
+  .table-wrap { overflow-x: auto; }
+
+  /* Shape two: a capped log that scrolls vertically. Capped by its own
+     max-height, so `release_clamped_text` lets it grow (P16-10). */
+  .log { max-height: 6em; overflow-y: auto; border: 1px solid #c6ccd8; padding: 0 .5rem; }
+
+  /* Shape three: a scrolling box with room to spare. Nothing in it is hidden,
+     so nothing in it may be counted. */
+  .roomy { max-height: 20em; overflow-y: auto; }
+
+  /* Shape four: a carousel. `overflow: hidden` hides the other slides from the
+     screen too, so the PDF loses nothing a reader could reach, and they are
+     not counted. */
+  .carousel { overflow: hidden; }
+  .track { display: flex; width: 300%; }
+  .slide { width: 33.333%; }
+</style>
+</head>
+<body>
+
+<!-- Outside every box, so it prints whole: the text layer is shown to be
+     readable, and the capture cannot pass by having lost everything. -->
+<p>The service desk publishes its hours below, and SCROLLBASELINEALPHA marks
+the one paragraph no box hides.</p>
+
+<h2>Hours by site</h2>
+<div class="table-wrap">
+  <table>
+    <tr><th>Site</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th>
+        <th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th>
+        <th>Holidays</th><th>Phone</th><th>Room</th><th>SCROLLEDCOLUMNOMEGA</th></tr>
+    <tr><td>North campus</td><td>8 a.m. to 6 p.m.</td><td>8 a.m. to 6 p.m.</td>
+        <td>8 a.m. to 6 p.m.</td><td>8 a.m. to 6 p.m.</td><td>8 a.m. to 4 p.m.</td>
+        <td>10 a.m. to 2 p.m.</td><td>closed</td><td>closed</td>
+        <td>800-555-0100</td><td>Library 140</td><td>walk-ins welcome</td></tr>
+  </table>
+</div>
+
+<h2>Recent changes</h2>
+<div class="log">
+  <p>September 2: extended Thursday hours at the north campus.</p>
+  <p>September 9: the south desk moved to the second floor.</p>
+  <p>September 16: phone support now opens at eight in the morning.</p>
+  <p>September 23: SCROLLEDROWSIGMA holiday closures were published.</p>
+</div>
+
+<h2>Contact</h2>
+<div class="roomy">
+  <p>Write to the service desk at any time; replies come within one working day.</p>
+</div>
+
+<div class="carousel">
+  <div class="track">
+    <div class="slide"><p>Featured: the new study rooms open in October.</p></div>
+    <div class="slide"><p>Featured: CAROUSELHIDDENTAU laptops can be borrowed overnight.</p></div>
+    <div class="slide"><p>Featured: printing is free during finals week.</p></div>
+  </div>
+</div>
+
+</body>
+</html>

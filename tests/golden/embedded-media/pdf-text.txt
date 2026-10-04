@@ -1,0 +1,12 @@
+--- page 1 ---
+Embedded Media Review
+A page's media elements are part of its record even when their streams cannot be archived: the
+source URL, the title, and every caption track are facts about what the page offered a reader.
+Training video
+The walkthrough covers the capture workflow end to end and is captioned in English for
+accessibility.
+Audio briefing
+The audio briefing summarizes the quarter in four minutes; a German subtitle track accompanies
+it.
+Embedded Media Review media_page.html
+WebShot Page 1 of 1

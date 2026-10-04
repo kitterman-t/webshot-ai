@@ -1,0 +1,13 @@
+INFO: Opening file://<REPO>/tests/fixtures/media_page.html
+INFO: Loading lazy content (up to 100 scroll steps)...
+INFO: Lazy-load pass finished after 4 step(s).
+INFO: Building AI-ready content bundle...
+INFO: Found 2 video(s): 0 documented as walkthroughs (0 step(s)), 0 captioned, 2 not transcribed.
+INFO: Rendering PDF...
+INFO: Embedded 12 bundle file(s) into the PDF
+INFO: Created AI bundle at <OUT>/embedded-media.ai
+INFO: Created <OUT>/embedded-media.pdf (1 page, <SIZE> KB)
+INFO: Wrote capture report to <OUT>/report.json
+WARNING: asset-001 is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing.
+WARNING: 1 request for the page's resources failed (texttrack 1), so the PDF and the bundle may lack what it would have loaded.
+WARNING: The capture report (--report) lists the failed request URLs.

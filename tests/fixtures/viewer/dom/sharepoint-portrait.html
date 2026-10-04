@@ -1,0 +1,43 @@
+<!doctype html>
+<!--
+  Structure-only reproduction of an authenticated SharePoint PDF viewer showing
+  a portrait document. Authored from the accessibility-tree contract in
+  webshot/protected/viewer.py — see README.md in this directory. No tenant data.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Protected viewer fixture — portrait document</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px system-ui, sans-serif; background: #f3f2f1; }
+  .commandbar { height: 48px; background: #ffffff; border-bottom: 1px solid #e1dfdd;
+                display: flex; align-items: center; gap: 16px; padding: 0 16px; }
+  .viewer { position: relative; height: 820px; overflow: auto; background: #605e5c; }
+  .page { position: absolute; left: 50%; margin-left: -408px; width: 816px;
+          height: 1056px; background: #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+  .canvas-stand-in { width: 100%; height: 100%; background:
+      repeating-linear-gradient(180deg, #ffffff 0 22px, #f8f8f8 22px 44px); }
+</style>
+</head>
+<body>
+  <div class="commandbar" role="toolbar" aria-label="Document commands">
+    <span aria-label="Page 1 of 3">1 / 3</span>
+  </div>
+
+  <!-- The container is identified only by its file-name label, which is why the
+       capture matches on the suffix rather than on a class or an id. -->
+  <div class="viewer" aria-label="fixture-document.pdf" tabindex="0">
+    <div class="page" aria-label="Page 1." style="top: 24px">
+      <div class="canvas-stand-in"></div>
+    </div>
+    <div class="page" aria-label="Page 2." style="top: 1104px">
+      <div class="canvas-stand-in"></div>
+    </div>
+    <div class="page" aria-label="Page 3." style="top: 2184px">
+      <div class="canvas-stand-in"></div>
+    </div>
+    <div style="position:absolute; top: 3264px; height: 24px; width: 1px"></div>
+  </div>
+</body>
+</html>

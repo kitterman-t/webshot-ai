@@ -1,0 +1,786 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/qa-report.schema.json",
+  "$defs": {
+    "PageCountInvariant": {
+      "additionalProperties": false,
+      "description": "spec §2.2's protected-path invariant: pages == source + appendix.",
+      "properties": {
+        "expected": {
+          "title": "Expected",
+          "type": "integer"
+        },
+        "actual": {
+          "title": "Actual",
+          "type": "integer"
+        },
+        "source_pages": {
+          "title": "Source Pages",
+          "type": "integer"
+        },
+        "appendix_pages": {
+          "title": "Appendix Pages",
+          "type": "integer"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "expected",
+        "actual",
+        "source_pages",
+        "appendix_pages",
+        "passed"
+      ],
+      "title": "PageCountInvariant",
+      "type": "object"
+    },
+    "PdfValidationRecord": {
+      "additionalProperties": false,
+      "description": "A `--validate-pdf` result, present only when the gate actually ran.\n\n`compliant: null` is the one way of saying \"not established\"; `tool` says\nwhether that was because no validator was found or because the file\ndeclares no conformance level to measure.",
+      "properties": {
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tool"
+        },
+        "flavour": {
+          "title": "Flavour",
+          "type": "string"
+        },
+        "compliant": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Compliant"
+        },
+        "passed_rules": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Passed Rules"
+        },
+        "failed_rules": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Failed Rules"
+        },
+        "failed_checks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Failed Checks"
+        },
+        "failures": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Failures",
+          "type": "array"
+        },
+        "report_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Report File"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "flavour",
+        "compliant",
+        "passed_rules",
+        "failed_rules",
+        "failed_checks",
+        "failures",
+        "report_file",
+        "detail"
+      ],
+      "title": "PdfValidationRecord",
+      "type": "object"
+    },
+    "ReportCounts": {
+      "additionalProperties": false,
+      "description": "`counts` — the spec §2.3 tally, normalized across both capture paths.\n\n`None` means \"this path does not produce that number\" rather than zero: the\nprotected-viewer bundle has pages and chunks but no links or tables, and a\n`--no-ai-bundle` run has no semantic counts at all.  Zero would read as a\nmeasurement, and measuring nothing is not the same as measuring none.",
+      "properties": {
+        "pages": {
+          "title": "Pages",
+          "type": "integer"
+        },
+        "items": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Items"
+        },
+        "tables": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tables"
+        },
+        "links": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Links"
+        },
+        "chunks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Chunks"
+        },
+        "visual_assets": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Visual Assets"
+        },
+        "ocr_words": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ocr Words"
+        },
+        "text_characters": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Text Characters"
+        },
+        "failed_requests": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failed Requests"
+        }
+      },
+      "required": [
+        "pages",
+        "items",
+        "tables",
+        "links",
+        "chunks",
+        "visual_assets",
+        "ocr_words",
+        "text_characters"
+      ],
+      "title": "ReportCounts",
+      "type": "object"
+    },
+    "ReportValidation": {
+      "additionalProperties": false,
+      "description": "`validation` — every gate the published file went through.\n\nOnly gates that actually ran are reported as run.  `pdfa` is null unless\n`--validate-pdf` was asked for, and `page_count_invariant` is null on the\nweb path, which has no appendix to account for.",
+      "properties": {
+        "pdf_readable": {
+          "title": "Pdf Readable",
+          "type": "boolean"
+        },
+        "pdf_pages": {
+          "title": "Pdf Pages",
+          "type": "integer"
+        },
+        "page_count_invariant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PageCountInvariant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pdfa": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PdfValidationRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "pdf_readable",
+        "pdf_pages",
+        "page_count_invariant",
+        "pdfa"
+      ],
+      "title": "ReportValidation",
+      "type": "object"
+    },
+    "ResolvedOptions": {
+      "additionalProperties": false,
+      "description": "`options` — what the run was actually configured with (docs/04 §2.3).\n\n\"As resolved\" means after flags, `WEBSHOT_*`, and `webshot.toml` have been\nreconciled, so a report answers \"why did this capture behave that way?\"\nwithout the reader having to reconstruct the precedence.\n\nCredential-bearing options are deliberately *not* here.  `--storage-state`\nand `--auth-profile` reduce to `auth_mode`: a QA report is a file people\nattach to tickets, and the location of a session store is not something it\nneeds to carry (spec §6.1's spirit, applied one artifact wider).",
+      "properties": {
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "selector": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Selector"
+        },
+        "auto_selector": {
+          "title": "Auto Selector",
+          "type": "boolean"
+        },
+        "exclude": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclude",
+          "type": "array"
+        },
+        "wait_for": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wait For"
+        },
+        "delay_seconds": {
+          "title": "Delay Seconds",
+          "type": "number"
+        },
+        "navigation_timeout_seconds": {
+          "title": "Navigation Timeout Seconds",
+          "type": "number"
+        },
+        "scroll": {
+          "title": "Scroll",
+          "type": "boolean"
+        },
+        "max_scrolls": {
+          "title": "Max Scrolls",
+          "type": "integer"
+        },
+        "scroll_delay_seconds": {
+          "title": "Scroll Delay Seconds",
+          "type": "number"
+        },
+        "paper_format": {
+          "title": "Paper Format",
+          "type": "string"
+        },
+        "landscape": {
+          "title": "Landscape",
+          "type": "boolean"
+        },
+        "margin": {
+          "title": "Margin",
+          "type": "string"
+        },
+        "scale": {
+          "title": "Scale",
+          "type": "number"
+        },
+        "media": {
+          "title": "Media",
+          "type": "string"
+        },
+        "header_footer": {
+          "title": "Header Footer",
+          "type": "boolean"
+        },
+        "document_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Document Title"
+        },
+        "tagged": {
+          "title": "Tagged",
+          "type": "boolean"
+        },
+        "outline": {
+          "title": "Outline",
+          "type": "boolean"
+        },
+        "prefer_css_page_size": {
+          "title": "Prefer Css Page Size",
+          "type": "boolean"
+        },
+        "protected_viewer": {
+          "title": "Protected Viewer",
+          "type": "boolean"
+        },
+        "embed_bundle": {
+          "title": "Embed Bundle",
+          "type": "boolean"
+        },
+        "embed_assets": {
+          "title": "Embed Assets",
+          "type": "boolean"
+        },
+        "css": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Css"
+        },
+        "user_agent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "User Agent"
+        },
+        "allow_http_errors": {
+          "title": "Allow Http Errors",
+          "type": "boolean"
+        },
+        "block_private_requests": {
+          "title": "Block Private Requests",
+          "type": "boolean"
+        },
+        "ai_bundle": {
+          "title": "Ai Bundle",
+          "type": "boolean"
+        },
+        "videos": {
+          "title": "Videos",
+          "type": "boolean"
+        },
+        "video_assets": {
+          "title": "Video Assets",
+          "type": "boolean"
+        },
+        "ai_bundle_directory": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ai Bundle Directory"
+        },
+        "legacy_bundle": {
+          "title": "Legacy Bundle",
+          "type": "boolean"
+        },
+        "max_assets": {
+          "title": "Max Assets",
+          "type": "integer"
+        },
+        "ocr": {
+          "title": "Ocr",
+          "type": "boolean"
+        },
+        "require_ocr": {
+          "title": "Require Ocr",
+          "type": "boolean"
+        },
+        "ocr_language": {
+          "title": "Ocr Language",
+          "type": "string"
+        },
+        "ocr_page_segmentation_mode": {
+          "title": "Ocr Page Segmentation Mode",
+          "type": "integer"
+        },
+        "ocr_engine": {
+          "title": "Ocr Engine",
+          "type": "string"
+        },
+        "pdfa": {
+          "title": "Pdfa",
+          "type": "boolean"
+        },
+        "validate_pdf": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Validate Pdf"
+        },
+        "auth_mode": {
+          "enum": [
+            "none",
+            "storage-state",
+            "auth-profile"
+          ],
+          "title": "Auth Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "selector",
+        "auto_selector",
+        "exclude",
+        "wait_for",
+        "delay_seconds",
+        "navigation_timeout_seconds",
+        "scroll",
+        "max_scrolls",
+        "scroll_delay_seconds",
+        "paper_format",
+        "landscape",
+        "margin",
+        "scale",
+        "media",
+        "header_footer",
+        "document_title",
+        "tagged",
+        "outline",
+        "prefer_css_page_size",
+        "protected_viewer",
+        "embed_bundle",
+        "embed_assets",
+        "css",
+        "user_agent",
+        "allow_http_errors",
+        "block_private_requests",
+        "ai_bundle",
+        "videos",
+        "video_assets",
+        "ai_bundle_directory",
+        "legacy_bundle",
+        "max_assets",
+        "ocr",
+        "require_ocr",
+        "ocr_language",
+        "ocr_page_segmentation_mode",
+        "ocr_engine",
+        "pdfa",
+        "validate_pdf",
+        "auth_mode"
+      ],
+      "title": "ResolvedOptions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The JSON written by `--report` — schema v2 (docs/04-spec.md §2.3).\n\nv2 keeps every v2.2 key except `ai_summary`, whose two path-dependent\nshapes are replaced by the typed `counts` above, and turns `validation`\nfrom an optional veraPDF record into the full gate report.  It adds\n`options`, `timings`, `exit_code`, and `manifest_sha256`.  The rename is\nwhat the version bump is for; docs/migration-v2-to-v3.md lists it.",
+  "properties": {
+    "schema_version": {
+      "const": "2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "final_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Final Url"
+    },
+    "output": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Output"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Title"
+    },
+    "pages": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Pages"
+    },
+    "bytes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Bytes"
+    },
+    "http_status": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Http Status"
+    },
+    "content_type": {
+      "title": "Content Type",
+      "type": "string"
+    },
+    "duration_seconds": {
+      "title": "Duration Seconds",
+      "type": "number"
+    },
+    "timings": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Timings",
+      "type": "object"
+    },
+    "captured_at": {
+      "title": "Captured At",
+      "type": "string"
+    },
+    "content_selector": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Content Selector"
+    },
+    "source_kind": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Source Kind"
+    },
+    "ai_bundle": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Ai Bundle"
+    },
+    "counts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReportCounts"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "options": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ResolvedOptions"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "validation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReportValidation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "failed_requests": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Failed Requests",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "manifest_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Manifest Sha256"
+    },
+    "exit_code": {
+      "title": "Exit Code",
+      "type": "integer"
+    },
+    "error": {
+      "title": "Error",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source",
+    "final_url",
+    "output",
+    "title",
+    "pages",
+    "bytes",
+    "http_status",
+    "content_type",
+    "duration_seconds",
+    "timings",
+    "captured_at",
+    "content_selector",
+    "source_kind",
+    "ai_bundle",
+    "counts",
+    "options",
+    "validation",
+    "failed_requests",
+    "warnings",
+    "manifest_sha256",
+    "exit_code"
+  ],
+  "title": "QaReport",
+  "type": "object"
+}

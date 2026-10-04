@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Service Desk — Positioned Panels</title>
+<meta name="description" content="Scrolling panels positioned over the page: a floating contents list and a fixed help widget.">
+<style>
+  /* docs/09 P16-15. Two scrolling panels positioned over the page. On paper
+     the contents list printed its first entries over the article's text, and
+     the fixed help widget printed its first answers again on every page.
+     WebShot puts both into the flow where they sit in the document, so each
+     prints whole, once, and covers nothing. */
+  body { font: 16px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+         color: #1d2738; max-width: 46rem; margin: 0 auto; padding: 2rem 1.5rem; }
+  .page { position: relative; }
+  .toc { position: absolute; top: 0; right: 0; width: 14rem; max-height: 8em;
+          overflow-y: auto; background: #fff; border: 1px solid #c6ccd8; }
+  .help { position: fixed; bottom: 1rem; right: 1rem; width: 16rem; max-height: 6em;
+           overflow-y: auto; background: #fff; border: 1px solid #c6ccd8; }
+</style>
+</head>
+<body>
+<div class="page">
+  <nav class="toc" id="toc" aria-label="On this page">
+    <ul>
+      <li>Section 1: how the desk handles it</li>
+      <li>Section 2: how the desk handles it</li>
+      <li>Section 3: how the desk handles it</li>
+      <li>Section 4: how the desk handles it</li>
+      <li>Section 5: how the desk handles it</li>
+      <li>Section 6: how the desk handles it</li>
+      <li>Section 7: how the desk handles it</li>
+      <li>Section 8: how the desk handles it</li>
+      <li>Section 9: how the desk handles it</li>
+      <li>Section 10: how the desk handles it</li>
+      <li>Section 11: how the desk handles it</li>
+      <li>Section 12: how the desk handles it</li>
+      <li>Section 13: how the desk handles it</li>
+      <li>Section 14: how the desk handles it</li>
+      <li>Section 15: how the desk handles it</li>
+      <li>Section 16: how the desk handles it</li>
+      <li>Section 17: how the desk handles it</li>
+      <li>Section 18: how the desk handles it</li>
+      <li>Section 19: how the desk handles it</li>
+      <li>POSITIONEDTOCOMEGA: how the desk handles it</li>
+    </ul>
+  </nav>
+  <p>POSITIONEDBASELINEALPHA: the service desk handbook.</p>
+  <p>Paragraph 1: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 2: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 3: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 4: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 5: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 6: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 7: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 8: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 9: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 10: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 11: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 12: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 13: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 14: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 15: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 16: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 17: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 18: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 19: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 20: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 21: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 22: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 23: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 24: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 25: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 26: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 27: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 28: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 29: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 30: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 31: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 32: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 33: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 34: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 35: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 36: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 37: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 38: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 39: the service desk keeps a record of every visit and every reply.</p>
+  <p>Paragraph 40: the service desk keeps a record of every visit and every reply.</p>
+</div>
+<aside class="help" id="help">
+    <p>Answer 1: see the service desk page.</p>
+    <p>Answer 2: see the service desk page.</p>
+    <p>Answer 3: see the service desk page.</p>
+    <p>Answer 4: see the service desk page.</p>
+    <p>Answer 5: see the service desk page.</p>
+    <p>Answer 6: see the service desk page.</p>
+    <p>Answer 7: see the service desk page.</p>
+    <p>Answer 8: see the service desk page.</p>
+    <p>Answer 9: see the service desk page.</p>
+    <p>Answer 10: see the service desk page.</p>
+    <p>Answer 11: see the service desk page.</p>
+    <p>Answer 12: see the service desk page.</p>
+    <p>Answer 13: see the service desk page.</p>
+    <p>Answer 14: see the service desk page.</p>
+    <p>POSITIONEDHELPSIGMA: see the service desk page.</p>
+</aside>
+</body>
+</html>

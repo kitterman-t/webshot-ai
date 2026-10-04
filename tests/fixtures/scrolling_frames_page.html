@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Frames taller or wider than their box</title>
+<style>
+  /* A frame prints its box, not its document (docs/09 P16-16). Seven frames
+     here hold a first sentence the box shows and a last one below it, and the
+     wide one a line wider than its box, so the PDF's text layer says whether
+     each frame was grown for print. */
+  body { font: 16px/1.5 sans-serif; margin: 2rem; max-width: 40rem; }
+  iframe { border: 0; width: 100%; height: 6rem; display: block; margin: 1rem 0; }
+  #capped { height: 6rem; overflow: hidden; }
+  #capped iframe { height: 100%; margin: 0; }
+</style>
+</head>
+<body>
+<h1>Frames taller or wider than their box</h1>
+
+<!-- In the flow, with room to grow. -->
+<iframe title="Tall frame" srcdoc="<!doctype html><style>body { margin: 0; font: 16px/1.5 sans-serif; }</style><p>Top of the tall frame.</p><div style='height: 20rem'></div><p>Bottom of the tall frame: printed once it grows.</p>"></iframe>
+
+<!-- Its wrapper has a fixed height: growing would cover what follows, so it
+     stays, and a warning names it. -->
+<div id="capped"><iframe title="Capped frame" srcdoc="<!doctype html><style>body { margin: 0; font: 16px/1.5 sans-serif; }</style><p>Top of the capped frame.</p><div style='height: 20rem'></div><p>Bottom of the capped frame: not printed, and named.</p>"></iframe></div>
+
+<!-- Its author turned scrolling off: not grown, since what it shows is what
+     it means to, and named, since the bundle holds what it hides. -->
+<iframe title="Unscrollable frame" scrolling="no" srcdoc="<!doctype html><style>body { margin: 0; font: 16px/1.5 sans-serif; }</style><p>Top of the unscrollable frame.</p><div style='height: 20rem'></div><p>Bottom of the unscrollable frame: hidden by its author.</p>"></iframe>
+
+<!-- The same, decided by the frame's own document. -->
+<iframe title="Hidden-overflow frame" srcdoc="<!doctype html><style>html, body { overflow: hidden; } body { margin: 0; font: 16px/1.5 sans-serif; }</style><p>Top of the hidden-overflow frame.</p><div style='height: 20rem'></div><p>Bottom of the hidden-overflow frame: hidden by its own document.</p>"></iframe>
+
+<!-- Too wide rather than too tall: not grown sideways, and named. -->
+<iframe id="wide" title="Wide frame" srcdoc="<!doctype html><style>body { margin: 0; font: 16px/1.5 sans-serif; white-space: nowrap; }</style><p>Wide frame: this line does not wrap, so it runs on past the right edge of its box, and on, and on, and on, and on, and on, and on, and on, and on, and further still.</p>"></iframe>
+
+<!-- A frame inside a frame: the inner one grows first, then the outer one
+     grows around it. -->
+<iframe title="Outer frame" srcdoc="<!doctype html><style>body { margin: 0; font: 16px/1.5 sans-serif; } iframe { border: 0; width: 100%; height: 6rem; display: block; }</style><p>Top of the outer frame.</p><iframe title='Inner frame' srcdoc='<!doctype html><style>body { margin: 0; font: 16px/1.5 sans-serif; }</style><p>Top of the inner frame.</p><div style=height:20rem></div><p>Bottom of the inner frame: printed once both grow.</p>'></iframe><p>Bottom of the outer frame: printed once it grows.</p>"></iframe>
+
+<div id="host"></div>
+
+<script>
+  document.getElementById('host').attachShadow({mode: 'open'}).innerHTML = `
+    <style>iframe { border: 0; width: 100%; height: 6rem; display: block; }</style>
+    <iframe title="Shadow frame" srcdoc="<!doctype html><style>body { margin: 0; font: 16px/1.5 sans-serif; }</style><p>Top of the shadow frame.</p><div style='height: 20rem'></div><p>Bottom of the shadow frame: printed once it grows.</p>"></iframe>`;
+</script>
+</body>
+</html>

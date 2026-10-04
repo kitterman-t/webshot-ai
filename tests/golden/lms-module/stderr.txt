@@ -1,0 +1,11 @@
+INFO: Opening file://<REPO>/tests/fixtures/lms_page.html
+INFO: Loading lazy content (up to 100 scroll steps)...
+INFO: Lazy-load pass finished after 4 step(s).
+INFO: Removed 1 non-document element(s).
+INFO: Building AI-ready content bundle...
+INFO: Rendering PDF...
+INFO: Embedded 12 bundle file(s) into the PDF
+INFO: Created AI bundle at <OUT>/lms-module.ai
+INFO: Created <OUT>/lms-module.pdf (2 pages, <SIZE> KB)
+INFO: Wrote capture report to <OUT>/report.json
+WARNING: asset-002 is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing.

@@ -1,0 +1,130 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/structures_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/structures_page.html",
+  "title": "Field Guide to Document Structures",
+  "page_metadata": {
+    "title": "Field Guide to Document Structures",
+    "language": "en",
+    "description": "Definition lists, blockquotes, code, and ordered lists for extraction fidelity.",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "Field Guide to Document Structures",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../definition-structures.pdf",
+    "pages": 2,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json"
+    ]
+  },
+  "content": {
+    "items": 21,
+    "tables": 0,
+    "links": 0,
+    "chunks": 6,
+    "text_characters": 1102,
+    "visual_assets": 0,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 1708,
+      "sha256": "1952426d415384c64d01ab7c76c5e0963bafe0f68a3bc796d3f4f514240712a9"
+    },
+    "assets.json": {
+      "bytes": 93,
+      "sha256": "254f1ebdc290bd2774d0677739798ca1744f2582c0f98139b06bcc045604d36e"
+    },
+    "chunks.jsonl": {
+      "bytes": 2753,
+      "sha256": "5218a6b32e7c162dace30b30d17f014f12d36909e17ce718966c8b88aec11590"
+    },
+    "content.doctags": {
+      "bytes": 1925,
+      "sha256": "bf93bbe7b601440814c14b506c3627e67b77549a62e70dfa9d7e512abdd43679"
+    },
+    "content.html": {
+      "bytes": 1606,
+      "sha256": "6ecaeb0dc759340562b742742660e09e5141a560f8455276c38e1fb8f7327ea6"
+    },
+    "content.json": {
+      "bytes": 11582,
+      "sha256": "7d60001971af7213dcc7c1250c3d9c62da9e5348d9c3ecbf5a84362cdb49eaa2"
+    },
+    "content.md": {
+      "bytes": 1139,
+      "sha256": "ffdcd5a99a2b160b89ce675854f6dbc3253009bdd9411ffc43683709dd206cac"
+    },
+    "content.txt": {
+      "bytes": 1102,
+      "sha256": "45a6560f5b2914c2b2131fbc7aa91dc3ef587e7511fdb87917b43b94427881e4"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/structures_page.html": {
+      "bytes": 2283,
+      "sha256": "551c776687d50acf74bef5a927f90ddb0209f251cbe77b13b5122bcf06a3fd91"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

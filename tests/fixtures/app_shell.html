@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Service Desk — App Shell</title>
+<meta name="description" content="A single-page app layout whose one scrolling pane holds the whole document.">
+<style>
+  /* docs/09 P16-13. The app shell as single-page apps build it: the root fixed
+     at the viewport with its own scrollbar off, a column of a header and one
+     pane with `flex: 1` that scrolls. On paper that is one page: the pane's
+     first two dozen entries. WebShot releases the pane, the column, `body`
+     and `html` as a chain, and every entry prints. */
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body { font: 16px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #1d2738; }
+  .app { display: flex; flex-direction: column; height: 100vh; }
+  .app-header { flex: none; padding: .75rem 1.5rem; border-bottom: 1px solid #c6ccd8; }
+  .app-pane { flex: 1; min-height: 0; overflow-y: auto; padding: 0 1.5rem; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="app-header">Service desk visit log</div>
+  <div class="app-pane" id="pane">
+    <p>SHELLFIRSTROWALPHA: the service desk logged a visit.</p>
+    <p>Entry 1: the service desk logged a visit.</p>
+    <p>Entry 2: the service desk logged a visit.</p>
+    <p>Entry 3: the service desk logged a visit.</p>
+    <p>Entry 4: the service desk logged a visit.</p>
+    <p>Entry 5: the service desk logged a visit.</p>
+    <p>Entry 6: the service desk logged a visit.</p>
+    <p>Entry 7: the service desk logged a visit.</p>
+    <p>Entry 8: the service desk logged a visit.</p>
+    <p>Entry 9: the service desk logged a visit.</p>
+    <p>Entry 10: the service desk logged a visit.</p>
+    <p>Entry 11: the service desk logged a visit.</p>
+    <p>Entry 12: the service desk logged a visit.</p>
+    <p>Entry 13: the service desk logged a visit.</p>
+    <p>Entry 14: the service desk logged a visit.</p>
+    <p>Entry 15: the service desk logged a visit.</p>
+    <p>Entry 16: the service desk logged a visit.</p>
+    <p>Entry 17: the service desk logged a visit.</p>
+    <p>Entry 18: the service desk logged a visit.</p>
+    <p>Entry 19: the service desk logged a visit.</p>
+    <p>Entry 20: the service desk logged a visit.</p>
+    <p>Entry 21: the service desk logged a visit.</p>
+    <p>Entry 22: the service desk logged a visit.</p>
+    <p>Entry 23: the service desk logged a visit.</p>
+    <p>Entry 24: the service desk logged a visit.</p>
+    <p>Entry 25: the service desk logged a visit.</p>
+    <p>Entry 26: the service desk logged a visit.</p>
+    <p>Entry 27: the service desk logged a visit.</p>
+    <p>Entry 28: the service desk logged a visit.</p>
+    <p>Entry 29: the service desk logged a visit.</p>
+    <p>Entry 30: the service desk logged a visit.</p>
+    <p>Entry 31: the service desk logged a visit.</p>
+    <p>Entry 32: the service desk logged a visit.</p>
+    <p>Entry 33: the service desk logged a visit.</p>
+    <p>Entry 34: the service desk logged a visit.</p>
+    <p>Entry 35: the service desk logged a visit.</p>
+    <p>Entry 36: the service desk logged a visit.</p>
+    <p>Entry 37: the service desk logged a visit.</p>
+    <p>Entry 38: the service desk logged a visit.</p>
+    <p>Entry 39: the service desk logged a visit.</p>
+    <p>Entry 40: the service desk logged a visit.</p>
+    <p>Entry 41: the service desk logged a visit.</p>
+    <p>Entry 42: the service desk logged a visit.</p>
+    <p>Entry 43: the service desk logged a visit.</p>
+    <p>Entry 44: the service desk logged a visit.</p>
+    <p>Entry 45: the service desk logged a visit.</p>
+    <p>Entry 46: the service desk logged a visit.</p>
+    <p>Entry 47: the service desk logged a visit.</p>
+    <p>Entry 48: the service desk logged a visit.</p>
+    <p>Entry 49: the service desk logged a visit.</p>
+    <p>Entry 50: the service desk logged a visit.</p>
+    <p>Entry 51: the service desk logged a visit.</p>
+    <p>Entry 52: the service desk logged a visit.</p>
+    <p>Entry 53: the service desk logged a visit.</p>
+    <p>Entry 54: the service desk logged a visit.</p>
+    <p>Entry 55: the service desk logged a visit.</p>
+    <p>Entry 56: the service desk logged a visit.</p>
+    <p>Entry 57: the service desk logged a visit.</p>
+    <p>Entry 58: the service desk logged a visit.</p>
+    <p>Entry 59: the service desk logged a visit.</p>
+    <p>Entry 60: the service desk logged a visit.</p>
+    <p>Entry 61: the service desk logged a visit.</p>
+    <p>Entry 62: the service desk logged a visit.</p>
+    <p>Entry 63: the service desk logged a visit.</p>
+    <p>Entry 64: the service desk logged a visit.</p>
+    <p>Entry 65: the service desk logged a visit.</p>
+    <p>Entry 66: the service desk logged a visit.</p>
+    <p>Entry 67: the service desk logged a visit.</p>
+    <p>Entry 68: the service desk logged a visit.</p>
+    <p>Entry 69: the service desk logged a visit.</p>
+    <p>Entry 70: the service desk logged a visit.</p>
+    <p>Entry 71: the service desk logged a visit.</p>
+    <p>Entry 72: the service desk logged a visit.</p>
+    <p>Entry 73: the service desk logged a visit.</p>
+    <p>Entry 74: the service desk logged a visit.</p>
+    <p>Entry 75: the service desk logged a visit.</p>
+    <p>Entry 76: the service desk logged a visit.</p>
+    <p>Entry 77: the service desk logged a visit.</p>
+    <p>Entry 78: the service desk logged a visit.</p>
+    <p>Entry 79: the service desk logged a visit.</p>
+    <p>Entry 80: the service desk logged a visit.</p>
+    <p>Entry 81: the service desk logged a visit.</p>
+    <p>Entry 82: the service desk logged a visit.</p>
+    <p>Entry 83: the service desk logged a visit.</p>
+    <p>Entry 84: the service desk logged a visit.</p>
+    <p>Entry 85: the service desk logged a visit.</p>
+    <p>Entry 86: the service desk logged a visit.</p>
+    <p>Entry 87: the service desk logged a visit.</p>
+    <p>Entry 88: the service desk logged a visit.</p>
+    <p>Entry 89: the service desk logged a visit.</p>
+    <p>Entry 90: the service desk logged a visit.</p>
+    <p>Entry 91: the service desk logged a visit.</p>
+    <p>Entry 92: the service desk logged a visit.</p>
+    <p>Entry 93: the service desk logged a visit.</p>
+    <p>Entry 94: the service desk logged a visit.</p>
+    <p>Entry 95: the service desk logged a visit.</p>
+    <p>Entry 96: the service desk logged a visit.</p>
+    <p>Entry 97: the service desk logged a visit.</p>
+    <p>Entry 98: the service desk logged a visit.</p>
+    <p>Entry 99: the service desk logged a visit.</p>
+    <p>Entry 100: the service desk logged a visit.</p>
+    <p>Entry 101: the service desk logged a visit.</p>
+    <p>Entry 102: the service desk logged a visit.</p>
+    <p>Entry 103: the service desk logged a visit.</p>
+    <p>Entry 104: the service desk logged a visit.</p>
+    <p>Entry 105: the service desk logged a visit.</p>
+    <p>Entry 106: the service desk logged a visit.</p>
+    <p>Entry 107: the service desk logged a visit.</p>
+    <p>Entry 108: the service desk logged a visit.</p>
+    <p>Entry 109: the service desk logged a visit.</p>
+    <p>Entry 110: the service desk logged a visit.</p>
+    <p>Entry 111: the service desk logged a visit.</p>
+    <p>Entry 112: the service desk logged a visit.</p>
+    <p>Entry 113: the service desk logged a visit.</p>
+    <p>Entry 114: the service desk logged a visit.</p>
+    <p>Entry 115: the service desk logged a visit.</p>
+    <p>Entry 116: the service desk logged a visit.</p>
+    <p>Entry 117: the service desk logged a visit.</p>
+    <p>Entry 118: the service desk logged a visit.</p>
+    <p>SHELLLASTROWOMEGA: the service desk logged a visit.</p>
+  </div>
+</div>
+</body>
+</html>

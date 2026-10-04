@@ -1,0 +1,27 @@
+Change your password
+
+Current password
+
+[REDACTED PASSWORD]
+
+New password
+
+[REDACTED PASSWORD]
+
+Account
+
+live@example.com
+
+Display mode
+
+- [x] Email me about sign-ins
+
+Email me about sign-ins
+
+Recovery note
+
+live recovery note
+
+What the capture must contain
+
+Both password values are replaced by a redaction marker before they can reach any published artifact, and so is every fragment of one. The account field is ordinary form state and is recorded with its value, which is what makes the absence of the passwords a measurement rather than an empty bundle.

@@ -1,0 +1,15 @@
+<doctag><title>Change your password</title>
+<text>Current password</text>
+<text>[REDACTED PASSWORD]</text>
+<text>New password</text>
+<text>[REDACTED PASSWORD]</text>
+<text>Account</text>
+<text>live@example.com</text>
+<text>Display mode</text>
+<checkbox_selected>Email me about sign-ins</checkbox_selected>
+<text>Email me about sign-ins</text>
+<text>Recovery note</text>
+<text>live recovery note</text>
+<section_header_level_1>What the capture must contain</section_header_level_1>
+<text>Both password values are replaced by a redaction marker before they can reach any published artifact, and so is every fragment of one. The account field is ordinary form state and is recorded with its value, which is what makes the absence of the passwords a measurement rather than an empty bundle.</text>
+</doctag>

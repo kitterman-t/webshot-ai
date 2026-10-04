@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.1",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "title": "Quarterly Operations Review",
+  "source": "https://fixture.invalid/protected/quarterly-operations-review",
+  "capture": {
+    "method": "authorized-protected-viewer-page-capture",
+    "native_file_downloaded": false,
+    "download_restriction_respected": true,
+    "viewer": "WebShot protected-viewer fixture",
+    "viewer_url": "https://fixture.invalid/protected/quarterly-operations-review",
+    "authentication": "fixture"
+  },
+  "pdf": {
+    "file": "../protected-viewer.pdf",
+    "pages": 5,
+    "source_pages": 2,
+    "transcript_appendix_pages": 3,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "searchable_ocr_layer": true,
+    "text_layer_engine": "OCRmyPDF 17.12.1",
+    "pdfa": null,
+    "tagged": false,
+    "bookmarks": true,
+    "visible_transcript_appendix": true,
+    "embedded_machine_readable_files": [
+      "webshot-ai-readme.txt",
+      "webshot-ai-content.json",
+      "webshot-ai-content.txt",
+      "webshot-ai-chunks.jsonl",
+      "webshot-capture.json"
+    ],
+    "word_coordinates_embedded": true,
+    "original_visual_pages_first": true
+  },
+  "content": {
+    "pages": 2,
+    "chunks": 2,
+    "text_characters": 1075,
+    "ocr_words": 169,
+    "primary_ocr_text_characters": 1075,
+    "alternate_ocr_pages": 0,
+    "ocr_mean_confidence": 96.07
+  },
+  "files": [
+    {
+      "file": "capture.json",
+      "bytes": 296,
+      "sha256": "ba64b3727ce5b4260e80721759601b9feabd26cf48f52edd8a4a49b503d77df7"
+    },
+    {
+      "file": "chunks.jsonl",
+      "bytes": 1298,
+      "sha256": "63c700510a1a6fa1c022cb79f71b8bece86c5449101760fe71317b30ea795feb"
+    },
+    {
+      "file": "content.json",
+      "bytes": 50927,
+      "sha256": "93bf9395604c415a5d827561183509ba3edd5258ed10ec389ea86e13ea0134b0"
+    },
+    {
+      "file": "content.md",
+      "bytes": 1193,
+      "sha256": "678cba947fd0d110cb4ade3024ec54a0322a582437360b430915c6b10b8c48ea"
+    },
+    {
+      "file": "content.txt",
+      "bytes": 1116,
+      "sha256": "167d473a643119487f2b4b7b4a921f161f618ff947c14007fa40509a5b2c5e1f"
+    },
+    {
+      "file": "ocr/page-001.tsv",
+      "bytes": 5924,
+      "sha256": "dde32c96da4e0309e75cc4b57d789d41345d2a6526989b7e8a85b5f21c389682"
+    },
+    {
+      "file": "ocr/page-002.tsv",
+      "bytes": 3946,
+      "sha256": "88748c2fd305eecc00a30fa61e246426a022567f9b1752a7a1e795cb18260715"
+    },
+    {
+      "file": "ocr/text-layer.txt",
+      "bytes": 1101,
+      "sha256": "91775f61d1b48922a70988831b69984b498302777cf08f4721b8033ecc3043d8"
+    },
+    {
+      "file": "pages/page-001.png",
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    {
+      "file": "pages/page-002.png",
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    }
+  ],
+  "warnings": [
+    "This local copy was reconstructed from page images permitted by the authenticated viewer; it is not the protected native source file.",
+    "OCR is probabilistic. The original visual source pages remain inside the PDF for verification and multimodal analysis.",
+    "The transcript appendix is authored from tagged HTML, but merging it onto the page images does not preserve a structure tree: this PDF is searchable and bookmarked, not a tagged PDF."
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "source": "file://<REPO>/tests/fixtures/sample_records.jsonl",
+  "metadata": {
+    "title": "sample_records.jsonl",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "blocks": [
+    {
+      "id": "block-00001",
+      "locator": "body > main > p",
+      "text": "JSON LINES DATA",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00002",
+      "locator": "body > main > h1",
+      "text": "sample_records.jsonl",
+      "type": "heading",
+      "level": 1
+    },
+    {
+      "id": "block-00003",
+      "locator": "body > main > h2",
+      "text": "Records",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00004",
+      "locator": "body > main > pre",
+      "text": "[\n  {\n    \"id\": 1,\n    \"event\": \"created\",\n    \"status\": \"open\"\n  },\n  {\n    \"id\": 2,\n    \"event\": \"reviewed\",\n    \"status\": \"approved\"\n  },\n  {\n    \"id\": 3,\n    \"event\": \"published\",\n    \"status\": \"complete\"\n  }\n]",
+      "type": "code"
+    }
+  ],
+  "links": [],
+  "visual_assets": []
+}

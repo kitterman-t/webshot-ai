@@ -1,0 +1,9 @@
+IMAGE DOCUMENT
+
+chart-source.svg
+Text recognized within visual asset asset-001: Service Score
+Jan 82
+Feb 87
+Mar 91
+Apr 95
+chart-source.svg

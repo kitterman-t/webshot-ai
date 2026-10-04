@@ -1,0 +1,57 @@
+{
+  "bundle_format": 3,
+  "visual_assets": [
+    {
+      "id": "asset-001",
+      "file": "assets/asset-001.png",
+      "kind": "video",
+      "width": 320,
+      "height": 180,
+      "alt": "",
+      "aria_label": "Quarterly training video",
+      "title": "Quarterly training video",
+      "caption": "",
+      "source_url": "file://<REPO>/tests/fixtures/sample-video.mp4",
+      "nearby_heading": "Training video",
+      "ocr": {
+        "text": "",
+        "confidence": null,
+        "language": "eng",
+        "engine": "Tesseract"
+      },
+      "sha256": "63d372edf1d499e9b53b237bf0faa7729b7336c53dbd7a1957c5ade370be87ab",
+      "frame_content": null
+    }
+  ],
+  "form_fields": [],
+  "embedded_media": [
+    {
+      "media_type": "video",
+      "source_url": "file://<REPO>/tests/fixtures/sample-video.mp4",
+      "title": "Quarterly training video",
+      "tracks": [
+        {
+          "kind": "captions",
+          "language": "en",
+          "label": "English captions",
+          "url": "file://<REPO>/tests/fixtures/captions.vtt"
+        }
+      ],
+      "locator": "body > main > video"
+    },
+    {
+      "media_type": "audio",
+      "source_url": "file://<REPO>/tests/fixtures/sample-audio.mp3",
+      "title": "Operations audio briefing",
+      "tracks": [
+        {
+          "kind": "subtitles",
+          "language": "de",
+          "label": "German subtitles",
+          "url": "file://<REPO>/tests/fixtures/captions.vtt"
+        }
+      ],
+      "locator": "body > main > audio"
+    }
+  ]
+}

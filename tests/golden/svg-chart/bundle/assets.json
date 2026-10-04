@@ -1,0 +1,28 @@
+{
+  "bundle_format": 3,
+  "visual_assets": [
+    {
+      "id": "asset-001",
+      "file": "assets/asset-001.png",
+      "kind": "img",
+      "width": 640,
+      "height": 240,
+      "alt": "chart-source",
+      "aria_label": "",
+      "title": "",
+      "caption": "chart-source.svg",
+      "source_url": "file://<REPO>/tests/fixtures/chart-source.svg",
+      "nearby_heading": "chart-source.svg",
+      "ocr": {
+        "text": "Service Score\nJan 82\nFeb 87\nMar 91\nApr 95",
+        "confidence": 96.03,
+        "language": "eng",
+        "engine": "Tesseract"
+      },
+      "sha256": "b5610addb0c1a8573309f1dbddec705dd097bade84030874c0e6dd0fe617cc97",
+      "frame_content": null
+    }
+  ],
+  "form_fields": [],
+  "embedded_media": []
+}

@@ -1,0 +1,6 @@
+- main [ref=e2]:
+  - paragraph [ref=e3]: Image document
+  - heading "chart-source.svg" [level=1] [ref=e4]
+  - figure "chart-source.svg" [ref=e5]:
+    - 'img "chart-source | chart-source.svg | Text recognized within visual asset: Service Score Jan 82 Feb 87 Mar 91 Apr 95" [ref=e6]'
+    - generic: "Text recognized within visual asset asset-001: Service Score Jan 82 Feb 87 Mar 91 Apr 95"

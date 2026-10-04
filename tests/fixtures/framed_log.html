@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Service Desk — Framed Log</title>
+<meta name="description" content="A capped scrolling log inside a same-origin frame.">
+<style>
+  /* docs/09 P16-17. The log scrolls inside a frame, so the release that
+     lets a capped box grow for print (P16-10) never saw it: it walked the
+     page's own document only, and the frame printed the log's first rows.
+     The frame is tall enough to show its whole document, so what prints is
+     the release's doing, not the frame's height. */
+  body { font: 16px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+         color: #1d2738; max-width: 46rem; margin: 0 auto; padding: 2rem 1.5rem; }
+  iframe { width: 100%; height: 1600px; border: 0; }
+</style>
+</head>
+<body>
+<p>FRAMEBASELINEALPHA: the desk's log, embedded below.</p>
+<iframe title="Desk log" srcdoc="&lt;!doctype html&gt;&lt;style&gt;body{margin:0;font:16px/1.5 -apple-system,&#x27;Segoe UI&#x27;,Helvetica,Arial,sans-serif}.log{max-height:6em;overflow-y:auto;border:1px solid #c6ccd8}&lt;/style&gt;&lt;div class=&quot;log&quot; id=&quot;log&quot;&gt;&lt;p&gt;Frame entry 0: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 1: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 2: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 3: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 4: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 5: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 6: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 7: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 8: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 9: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 10: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 11: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 12: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 13: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 14: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 15: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 16: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 17: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 18: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 19: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 20: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 21: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 22: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 23: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 24: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 25: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 26: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 27: logged by the desk.&lt;/p&gt;&lt;p&gt;Frame entry 28: logged by the desk.&lt;/p&gt;&lt;p&gt;FRAMELASTROWOMEGA: logged by the desk.&lt;/p&gt;&lt;/div&gt;"></iframe>
+</body>
+</html>

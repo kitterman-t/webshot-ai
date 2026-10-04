@@ -1,0 +1,7 @@
+# Blank issues are off so that every report passes the forms' warning about
+# authentication state and private page content.
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/kitterman-t/webshot-ai/blob/master/SECURITY.md
+    about: Report it privately, as SECURITY.md describes, and not in a public issue.

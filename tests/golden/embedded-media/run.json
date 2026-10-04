@@ -1,0 +1,14 @@
+{
+  "case": "embedded-media",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/media_page.html",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/structures_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/structures_page.html",
+  "title": "Field Guide to Document Structures",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../definition-structures.pdf",
+    "pages": 2,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true
+  },
+  "content": {
+    "blocks": 12,
+    "tables": 0,
+    "links": 0,
+    "chunks": 1,
+    "text_characters": 1053,
+    "visual_assets": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 1708,
+      "sha256": "1952426d415384c64d01ab7c76c5e0963bafe0f68a3bc796d3f4f514240712a9"
+    },
+    "chunks.jsonl": {
+      "bytes": 1592,
+      "sha256": "a2096c73c2d23e57fd0c8f4014730e886ba2872ea56418c4773641172230a7d5"
+    },
+    "content.html": {
+      "bytes": 1726,
+      "sha256": "e839deb47dd67dadde9a037631d033cec0d5e985c526a6c49dffe6a347c507f4"
+    },
+    "content.json": {
+      "bytes": 4037,
+      "sha256": "bbcc86c2bef30645f0c0e8decfce62805592ad02dfc3b3e11b14a27cfca478fe"
+    },
+    "content.md": {
+      "bytes": 1286,
+      "sha256": "323726dd816945d84867f5581c4efb34ff981b18bdda5eb456675fd8da466ccf"
+    },
+    "content.txt": {
+      "bytes": 1054,
+      "sha256": "a39803a48972cfdd1cb3d15f341fb16e5228b78f4089e46e384dcf9d9b405269"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/structures_page.html": {
+      "bytes": 2283,
+      "sha256": "551c776687d50acf74bef5a927f90ddb0209f251cbe77b13b5122bcf06a3fd91"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

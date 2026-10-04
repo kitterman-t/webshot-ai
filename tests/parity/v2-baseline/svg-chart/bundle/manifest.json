@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/chart-source.svg",
+  "final_url": "file://<REPO>/tests/fixtures/chart-source.svg",
+  "title": "chart-source.svg",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../svg-chart.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true
+  },
+  "content": {
+    "blocks": 3,
+    "tables": 0,
+    "links": 0,
+    "chunks": 2,
+    "text_characters": 138,
+    "visual_assets": 1
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": "Tesseract"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 387,
+      "sha256": "f006feb42732a59e0212f23146212d785386bc0d636d54fa7698790a25ebe661"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 714,
+      "sha256": "9e9f2d253eb38466d50b59874c593993747aa6861a8025c390d4830e6717e5d9"
+    },
+    "content.html": {
+      "bytes": 711,
+      "sha256": "8fcb0435bebe1607599d986263391875182d7da5af41bdb2eb3438c2241da285"
+    },
+    "content.json": {
+      "bytes": 1557,
+      "sha256": "8e0b4b849a73f925eb298f236976629dc92d14a280f1f79752c25d6248bc7d59"
+    },
+    "content.md": {
+      "bytes": 437,
+      "sha256": "13f12c913ac521d0fa1acd884c13aae407e644ab942652622aca011a9d5185a3"
+    },
+    "content.txt": {
+      "bytes": 139,
+      "sha256": "ff298c5294217ca7e328f760f048a3b054ddf0d580f8fe6e6f683b1f4fb37eb2"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/chart-source.svg": {
+      "bytes": 777,
+      "sha256": "53a74fd1c63a4e97c82db8f5c48a8bf20af7dabe24e9d74af8e3833fae8b3a68"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

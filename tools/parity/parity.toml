@@ -1,0 +1,33 @@
+# Parity thresholds — docs/06-quality-and-testing.md §Parity.
+#
+# This file is deliberately the ONLY place a threshold lives, so loosening one
+# is a visible diff that needs written justification in the PR body and a
+# docs/09 P2-n correction. 1.0 means exact-match; coverage metrics are
+# token-multiset fractions.
+
+[thresholds]
+headings = 1.0
+tables = 1.0
+links = 1.0
+# Renamed from `asset_hashes`, and a loosening, though the number did not
+# move (docs/09 P18-5). It is still 1.0 over a multiset, but of a weaker
+# identity. A raster's digest is a fact about the fonts that drew it
+# (P7-14), so the metric keys on (kind, width, height, alt) and never reads
+# the pixels. What it can no longer detect: a raster whose pixels are wrong
+# but whose kind, size and alt text are right -- a blank or stale capture, the
+# wrong crop at the right size, two same-sized assets swapped -- scores 100%.
+# What still reads pixels is the golden corpus: its OCR sentinels ("Revenue
+# 2026" out of the canvas) on every profile, and the digest comparison under
+# the strict profile only. `asset_digest_failures` proves a digest describes
+# its own file, not that the file is the right picture.
+assets = 1.0
+text_coverage = 0.99
+form_fields = 1.0
+definitions = 1.0
+embedded_media = 1.0
+# Added by the Phase 2 review (a strengthening, not a loosening): the page's
+# declared metadata moved from content.json to the manifest, and the original
+# metric set would not have noticed it vanishing entirely.
+page_metadata = 1.0
+chunk_doc_items = 1.0
+chunk_text_coverage = 0.99

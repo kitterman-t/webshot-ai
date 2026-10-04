@@ -1,0 +1,8 @@
+{
+  "method": "authorized-protected-viewer-page-capture",
+  "native_file_downloaded": false,
+  "download_restriction_respected": true,
+  "viewer": "WebShot protected-viewer fixture",
+  "viewer_url": "https://fixture.invalid/protected/quarterly-operations-review",
+  "authentication": "fixture"
+}

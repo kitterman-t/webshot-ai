@@ -1,0 +1,42 @@
+- main [ref=e2]:
+  - article [ref=e3]:
+    - heading "WebShot Quality Review" [level=1] [ref=e4]
+    - paragraph [ref=e5]: A representative long-form report used to verify typography, tables, page breaks, headers, and footers.
+    - generic [ref=e6]:
+      - heading "Executive summary" [level=2] [ref=e7]
+      - paragraph [ref=e8]: Professional web-to-PDF output should preserve the substance of a page while removing controls and interruptions that only make sense in a browser.
+      - list [ref=e9]:
+        - listitem [ref=e10]: Readable hierarchy and spacing
+        - listitem [ref=e11]: Stable pagination
+        - listitem [ref=e12]: Accessible document structure
+    - generic [ref=e13]:
+      - heading "Quality indicators" [level=2] [ref=e14]
+      - table [ref=e15]:
+        - rowgroup [ref=e16]:
+          - row [ref=e17]:
+            - columnheader "Indicator" [ref=e18]
+            - columnheader "Expectation" [ref=e19]
+        - rowgroup [ref=e20]:
+          - row [ref=e21]:
+            - cell "Structure" [ref=e22]
+            - cell "At least one valid, readable page" [ref=e23]
+          - row [ref=e24]:
+            - cell "Navigation" [ref=e25]
+            - cell "Page numbers appear consistently" [ref=e26]
+          - row [ref=e27]:
+            - cell "Content" [ref=e28]
+            - cell "No clipped text or obstructive overlays" [ref=e29]
+      - figure "Quarterly revenue increased from 1.2 million dollars in Q1 to 2.4 million dollars in Q4." [ref=e30]:
+        - img "Quarterly revenue bar chart" [ref=e31]
+    - generic [ref=e33]:
+      - heading "Recommendations" [level=2] [ref=e34]
+      - paragraph [ref=e35]: The capture workflow should make the reliable choice the easy choice. Defaults should suit common reports, while explicit controls should remain available for unusual layouts and authenticated applications.
+      - heading "Before capture" [level=3] [ref=e36]
+      - paragraph [ref=e37]: Wait for the page's meaningful readiness signal, load lazy content incrementally, and let web fonts and images settle. Preserve the original document tree so linked assets and inherited styles remain valid.
+      - heading "During capture" [level=3] [ref=e38]
+      - paragraph [ref=e39]: Use predictable paper geometry, repeat useful context in the header, and make navigation obvious with current and total page numbers. Avoid reintroducing hidden dialogs or stripping semantic structure.
+      - heading "After capture" [level=3] [ref=e40]
+      - paragraph [ref=e41]: Validate the PDF structure and page count before publishing the file. Review high-value documents visually to catch clipping, awkward breaks, and content that only a human can judge.
+    - generic [ref=e42]:
+      - heading "Conclusion" [level=2] [ref=e43]
+      - paragraph [ref=e44]: The resulting document should be ready to share without manual cleanup.

@@ -1,0 +1,2582 @@
+{
+  "schema_version": "1.1",
+  "title": "Quarterly Operations Review",
+  "source": "https://fixture.invalid/protected/quarterly-operations-review",
+  "pages": [
+    {
+      "page": 1,
+      "pdf_source_page": 1,
+      "image": "pages/page-001.png",
+      "width": 1275,
+      "height": 1650,
+      "sha256": "aab5d1a21dddb3b95d047c63bd3970b5bbac2f399330493561391781610bf66d",
+      "ocr": {
+        "text": "Quarterly Operations Review\nPrepared for the WebShot protected-viewer fixture corpus.\nThis page exists so the protected assembly path can be exercised\nwithout a live document viewer or any tenant data. Every word on\nit was written for this repository.\nSection 1. Recognition sentinel\nSENTINEL PAGE ONE ALPHA\nThe invisible text layer built from this page must contain the\nsentinel above, and the page transcript must report it as well.\nSection 2. Layout\nBody text uses a plain serif-free face at a size that a standard\nTesseract installation reads reliably, so the fixture stays stable\nacross machines and continuous integration runners.\nPage 1 of 2",
+        "confidence": 95.96,
+        "word_count": 104,
+        "language": "eng",
+        "engine": "Tesseract",
+        "page_segmentation_mode": 11,
+        "tsv": "ocr/page-001.tsv",
+        "alternate": null,
+        "words": [
+          {
+            "text": "Quarterly",
+            "confidence": 95.916847,
+            "bbox": [
+              112,
+              128,
+              203,
+              43
+            ],
+            "line": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Operations",
+            "confidence": 96.184547,
+            "bbox": [
+              331,
+              128,
+              239,
+              43
+            ],
+            "line": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Review",
+            "confidence": 96.59874,
+            "bbox": [
+              589,
+              129,
+              157,
+              33
+            ],
+            "line": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Prepared",
+            "confidence": 96.695412,
+            "bbox": [
+              112,
+              266,
+              121,
+              28
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "for",
+            "confidence": 96.664322,
+            "bbox": [
+              243,
+              266,
+              35,
+              22
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 92.893356,
+            "bbox": [
+              286,
+              266,
+              40,
+              22
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "WebShot",
+            "confidence": 91.404373,
+            "bbox": [
+              336,
+              266,
+              124,
+              22
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "protected-viewer",
+            "confidence": 92.041115,
+            "bbox": [
+              470,
+              266,
+              222,
+              28
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "fixture",
+            "confidence": 96.634064,
+            "bbox": [
+              700,
+              266,
+              80,
+              22
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "corpus.",
+            "confidence": 96.283058,
+            "bbox": [
+              791,
+              272,
+              96,
+              22
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "This",
+            "confidence": 96.247879,
+            "bbox": [
+              111,
+              362,
+              55,
+              22
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "page",
+            "confidence": 96.506096,
+            "bbox": [
+              177,
+              368,
+              64,
+              22
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "exists",
+            "confidence": 96.599709,
+            "bbox": [
+              252,
+              362,
+              75,
+              22
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "so",
+            "confidence": 96.069878,
+            "bbox": [
+              337,
+              368,
+              30,
+              16
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 96.069878,
+            "bbox": [
+              376,
+              362,
+              40,
+              22
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "protected",
+            "confidence": 96.264313,
+            "bbox": [
+              428,
+              362,
+              122,
+              28
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "assembly",
+            "confidence": 96.264313,
+            "bbox": [
+              561,
+              362,
+              127,
+              28
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "path",
+            "confidence": 96.814041,
+            "bbox": [
+              698,
+              362,
+              55,
+              28
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "can",
+            "confidence": 95.541817,
+            "bbox": [
+              764,
+              368,
+              46,
+              16
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "be",
+            "confidence": 96.261917,
+            "bbox": [
+              822,
+              362,
+              30,
+              22
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "exercised",
+            "confidence": 96.008629,
+            "bbox": [
+              863,
+              362,
+              127,
+              22
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "without",
+            "confidence": 96.714943,
+            "bbox": [
+              110,
+              410,
+              96,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "a",
+            "confidence": 96.75547,
+            "bbox": [
+              215,
+              416,
+              14,
+              16
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "live",
+            "confidence": 96.75547,
+            "bbox": [
+              241,
+              410,
+              42,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "document",
+            "confidence": 96.015503,
+            "bbox": [
+              294,
+              410,
+              132,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "viewer",
+            "confidence": 96.328285,
+            "bbox": [
+              434,
+              410,
+              88,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "or",
+            "confidence": 96.347763,
+            "bbox": [
+              531,
+              416,
+              26,
+              16
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "any",
+            "confidence": 96.347763,
+            "bbox": [
+              566,
+              416,
+              48,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "tenant",
+            "confidence": 96.516823,
+            "bbox": [
+              622,
+              411,
+              84,
+              21
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "data.",
+            "confidence": 96.516823,
+            "bbox": [
+              715,
+              410,
+              64,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Every",
+            "confidence": 96.707748,
+            "bbox": [
+              791,
+              410,
+              75,
+              28
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "word",
+            "confidence": 95.926636,
+            "bbox": [
+              874,
+              410,
+              64,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "on",
+            "confidence": 96.970436,
+            "bbox": [
+              949,
+              416,
+              31,
+              16
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "it",
+            "confidence": 96.965897,
+            "bbox": [
+              112,
+              458,
+              13,
+              22
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "was",
+            "confidence": 96.696877,
+            "bbox": [
+              133,
+              464,
+              53,
+              16
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "written",
+            "confidence": 96.696877,
+            "bbox": [
+              195,
+              458,
+              87,
+              22
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "for",
+            "confidence": 96.827438,
+            "bbox": [
+              292,
+              458,
+              35,
+              22
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "this",
+            "confidence": 96.936844,
+            "bbox": [
+              335,
+              458,
+              46,
+              22
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "repository.",
+            "confidence": 96.80529,
+            "bbox": [
+              392,
+              458,
+              137,
+              28
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Section",
+            "confidence": 96.352783,
+            "bbox": [
+              111,
+              554,
+              98,
+              22
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "1.",
+            "confidence": 96.352783,
+            "bbox": [
+              222,
+              554,
+              20,
+              22
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Recognition",
+            "confidence": 96.05143,
+            "bbox": [
+              254,
+              554,
+              157,
+              28
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "sentinel",
+            "confidence": 96.774178,
+            "bbox": [
+              422,
+              554,
+              102,
+              22
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "SENTINEL",
+            "confidence": 96.712654,
+            "bbox": [
+              111,
+              650,
+              145,
+              22
+            ],
+            "line": [
+              7,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "PAGE",
+            "confidence": 95.696922,
+            "bbox": [
+              267,
+              650,
+              79,
+              22
+            ],
+            "line": [
+              7,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "ONE",
+            "confidence": 95.696922,
+            "bbox": [
+              357,
+              650,
+              62,
+              22
+            ],
+            "line": [
+              7,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "ALPHA",
+            "confidence": 96.53022,
+            "bbox": [
+              429,
+              650,
+              99,
+              22
+            ],
+            "line": [
+              7,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "The",
+            "confidence": 96.942154,
+            "bbox": [
+              111,
+              746,
+              49,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "invisible",
+            "confidence": 96.677498,
+            "bbox": [
+              172,
+              746,
+              105,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "text",
+            "confidence": 96.431404,
+            "bbox": [
+              287,
+              747,
+              48,
+              21
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "layer",
+            "confidence": 96.431404,
+            "bbox": [
+              345,
+              746,
+              64,
+              28
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "built",
+            "confidence": 96.87413,
+            "bbox": [
+              419,
+              746,
+              54,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "from",
+            "confidence": 96.748421,
+            "bbox": [
+              481,
+              746,
+              58,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "this",
+            "confidence": 96.288414,
+            "bbox": [
+              549,
+              746,
+              46,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "page",
+            "confidence": 96.155449,
+            "bbox": [
+              606,
+              752,
+              64,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "must",
+            "confidence": 96.160736,
+            "bbox": [
+              682,
+              747,
+              63,
+              21
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "contain",
+            "confidence": 96.160736,
+            "bbox": [
+              754,
+              746,
+              95,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 96.957939,
+            "bbox": [
+              859,
+              746,
+              40,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "sentinel",
+            "confidence": 96.693657,
+            "bbox": [
+              111,
+              794,
+              102,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "above,",
+            "confidence": 95.927223,
+            "bbox": [
+              224,
+              794,
+              88,
+              26
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "and",
+            "confidence": 96.843765,
+            "bbox": [
+              323,
+              794,
+              48,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 96.814041,
+            "bbox": [
+              381,
+              794,
+              40,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "page",
+            "confidence": 95.775894,
+            "bbox": [
+              433,
+              800,
+              64,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "transcript",
+            "confidence": 96.766365,
+            "bbox": [
+              507,
+              794,
+              124,
+              28
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "must",
+            "confidence": 96.074509,
+            "bbox": [
+              641,
+              795,
+              63,
+              21
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "report",
+            "confidence": 93.441185,
+            "bbox": [
+              714,
+              795,
+              77,
+              27
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "it",
+            "confidence": 95.870285,
+            "bbox": [
+              801,
+              794,
+              13,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "as",
+            "confidence": 95.870285,
+            "bbox": [
+              823,
+              800,
+              30,
+              16
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "well.",
+            "confidence": 95.812904,
+            "bbox": [
+              862,
+              794,
+              59,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Section",
+            "confidence": 96.581268,
+            "bbox": [
+              111,
+              890,
+              98,
+              22
+            ],
+            "line": [
+              10,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "2.",
+            "confidence": 96.166214,
+            "bbox": [
+              220,
+              890,
+              22,
+              22
+            ],
+            "line": [
+              10,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Layout",
+            "confidence": 96.166214,
+            "bbox": [
+              254,
+              890,
+              89,
+              28
+            ],
+            "line": [
+              10,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Body",
+            "confidence": 96.085167,
+            "bbox": [
+              112,
+              986,
+              67,
+              28
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "text",
+            "confidence": 96.838272,
+            "bbox": [
+              187,
+              987,
+              48,
+              21
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "uses",
+            "confidence": 96.929787,
+            "bbox": [
+              245,
+              992,
+              61,
+              16
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "a",
+            "confidence": 95.674126,
+            "bbox": [
+              316,
+              992,
+              14,
+              16
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "plain",
+            "confidence": 93.267639,
+            "bbox": [
+              342,
+              986,
+              61,
+              28
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "serif-free",
+            "confidence": 92.485214,
+            "bbox": [
+              414,
+              986,
+              116,
+              22
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "face",
+            "confidence": 96.892937,
+            "bbox": [
+              540,
+              986,
+              55,
+              22
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "at",
+            "confidence": 93.159035,
+            "bbox": [
+              606,
+              987,
+              24,
+              21
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "a",
+            "confidence": 93.159035,
+            "bbox": [
+              639,
+              992,
+              14,
+              16
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "size",
+            "confidence": 95.820633,
+            "bbox": [
+              664,
+              986,
+              51,
+              22
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "that",
+            "confidence": 92.51387,
+            "bbox": [
+              725,
+              986,
+              50,
+              22
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "a",
+            "confidence": 92.51387,
+            "bbox": [
+              784,
+              992,
+              14,
+              16
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "standard",
+            "confidence": 96.5961,
+            "bbox": [
+              809,
+              986,
+              115,
+              22
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Tesseract",
+            "confidence": 96.623413,
+            "bbox": [
+              111,
+              1034,
+              131,
+              22
+            ],
+            "line": [
+              12,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "installation",
+            "confidence": 95.953903,
+            "bbox": [
+              252,
+              1034,
+              140,
+              22
+            ],
+            "line": [
+              12,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "reads",
+            "confidence": 96.428986,
+            "bbox": [
+              404,
+              1034,
+              73,
+              22
+            ],
+            "line": [
+              12,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "reliably,",
+            "confidence": 96.217682,
+            "bbox": [
+              488,
+              1034,
+              101,
+              28
+            ],
+            "line": [
+              12,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "so",
+            "confidence": 96.727951,
+            "bbox": [
+              600,
+              1040,
+              30,
+              16
+            ],
+            "line": [
+              12,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 96.727951,
+            "bbox": [
+              639,
+              1034,
+              40,
+              22
+            ],
+            "line": [
+              12,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "fixture",
+            "confidence": 96.865585,
+            "bbox": [
+              689,
+              1034,
+              80,
+              22
+            ],
+            "line": [
+              12,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "stays",
+            "confidence": 97.008705,
+            "bbox": [
+              780,
+              1035,
+              68,
+              27
+            ],
+            "line": [
+              12,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "stable",
+            "confidence": 96.304993,
+            "bbox": [
+              858,
+              1034,
+              78,
+              22
+            ],
+            "line": [
+              12,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "across",
+            "confidence": 96.751961,
+            "bbox": [
+              111,
+              1088,
+              87,
+              16
+            ],
+            "line": [
+              13,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "machines",
+            "confidence": 95.596291,
+            "bbox": [
+              209,
+              1082,
+              127,
+              22
+            ],
+            "line": [
+              13,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "and",
+            "confidence": 96.57869,
+            "bbox": [
+              346,
+              1082,
+              48,
+              22
+            ],
+            "line": [
+              13,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "continuous",
+            "confidence": 96.202538,
+            "bbox": [
+              405,
+              1082,
+              145,
+              22
+            ],
+            "line": [
+              13,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "integration",
+            "confidence": 96.708015,
+            "bbox": [
+              561,
+              1082,
+              138,
+              28
+            ],
+            "line": [
+              13,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "runners.",
+            "confidence": 96.505875,
+            "bbox": [
+              711,
+              1088,
+              107,
+              16
+            ],
+            "line": [
+              13,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Page",
+            "confidence": 96.85907,
+            "bbox": [
+              112,
+              1536,
+              67,
+              28
+            ],
+            "line": [
+              14,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "1",
+            "confidence": 92.217606,
+            "bbox": [
+              192,
+              1536,
+              8,
+              22
+            ],
+            "line": [
+              14,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "of",
+            "confidence": 92.217606,
+            "bbox": [
+              215,
+              1536,
+              25,
+              22
+            ],
+            "line": [
+              14,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "2",
+            "confidence": 93.577591,
+            "bbox": [
+              248,
+              1536,
+              14,
+              22
+            ],
+            "line": [
+              14,
+              1,
+              1
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "page": 2,
+      "pdf_source_page": 2,
+      "image": "pages/page-002.png",
+      "width": 1275,
+      "height": 1650,
+      "sha256": "c6e34423fa9cf2114803ba0add617230b710fd8b4fea4c0be616037ce05b22bb",
+      "ocr": {
+        "text": "Quarterly Operations Review\nPage two of the protected-viewer fixture.\nSection 3. Second recognition sentinel\nSENTINEL PAGE TWO BRAVO\nPage ordering matters: the assembly step must keep source pages\nfirst and in order, then append the readable transcript.\nSection 4. Counts\nTwo source pages plus the transcript appendix determine the total\npage count that the page-count invariant checks before anything\nis published.\nPage 2 of 2",
+        "confidence": 96.19,
+        "word_count": 65,
+        "language": "eng",
+        "engine": "Tesseract",
+        "page_segmentation_mode": 11,
+        "tsv": "ocr/page-002.tsv",
+        "alternate": null,
+        "words": [
+          {
+            "text": "Quarterly",
+            "confidence": 95.916847,
+            "bbox": [
+              112,
+              128,
+              203,
+              43
+            ],
+            "line": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Operations",
+            "confidence": 96.184547,
+            "bbox": [
+              331,
+              128,
+              239,
+              43
+            ],
+            "line": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Review",
+            "confidence": 96.59874,
+            "bbox": [
+              589,
+              129,
+              157,
+              33
+            ],
+            "line": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Page",
+            "confidence": 96.740997,
+            "bbox": [
+              112,
+              266,
+              67,
+              28
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "two",
+            "confidence": 96.585419,
+            "bbox": [
+              189,
+              267,
+              46,
+              21
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "of",
+            "confidence": 95.899734,
+            "bbox": [
+              245,
+              266,
+              25,
+              22
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 93.232742,
+            "bbox": [
+              277,
+              266,
+              40,
+              22
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "protected-viewer",
+            "confidence": 92.24572,
+            "bbox": [
+              329,
+              266,
+              222,
+              28
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "fixture.",
+            "confidence": 95.529381,
+            "bbox": [
+              559,
+              266,
+              88,
+              22
+            ],
+            "line": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Section",
+            "confidence": 96.847786,
+            "bbox": [
+              111,
+              362,
+              98,
+              22
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "3.",
+            "confidence": 95.901222,
+            "bbox": [
+              220,
+              362,
+              22,
+              22
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Second",
+            "confidence": 96.791367,
+            "bbox": [
+              253,
+              362,
+              100,
+              22
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "recognition",
+            "confidence": 96.466286,
+            "bbox": [
+              365,
+              362,
+              145,
+              28
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "sentinel",
+            "confidence": 96.928375,
+            "bbox": [
+              521,
+              362,
+              102,
+              22
+            ],
+            "line": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "SENTINEL",
+            "confidence": 96.579636,
+            "bbox": [
+              111,
+              458,
+              145,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "PAGE",
+            "confidence": 96.787575,
+            "bbox": [
+              267,
+              458,
+              79,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "TWO",
+            "confidence": 95.333504,
+            "bbox": [
+              357,
+              458,
+              67,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "BRAVO",
+            "confidence": 95.333504,
+            "bbox": [
+              435,
+              458,
+              102,
+              22
+            ],
+            "line": [
+              4,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Page",
+            "confidence": 95.518425,
+            "bbox": [
+              112,
+              554,
+              67,
+              28
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "ordering",
+            "confidence": 96.366043,
+            "bbox": [
+              190,
+              554,
+              109,
+              28
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "matters:",
+            "confidence": 96.559166,
+            "bbox": [
+              311,
+              555,
+              104,
+              21
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 96.247307,
+            "bbox": [
+              425,
+              554,
+              40,
+              22
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "assembly",
+            "confidence": 96.780762,
+            "bbox": [
+              476,
+              554,
+              127,
+              28
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "step",
+            "confidence": 96.367966,
+            "bbox": [
+              612,
+              555,
+              55,
+              27
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "must",
+            "confidence": 95.793434,
+            "bbox": [
+              678,
+              555,
+              63,
+              21
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "keep",
+            "confidence": 96.902657,
+            "bbox": [
+              751,
+              554,
+              63,
+              28
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "source",
+            "confidence": 96.463989,
+            "bbox": [
+              824,
+              560,
+              88,
+              16
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "pages",
+            "confidence": 96.595886,
+            "bbox": [
+              924,
+              560,
+              80,
+              22
+            ],
+            "line": [
+              5,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "first",
+            "confidence": 96.885269,
+            "bbox": [
+              110,
+              602,
+              48,
+              22
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "and",
+            "confidence": 96.663971,
+            "bbox": [
+              167,
+              602,
+              48,
+              22
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "in",
+            "confidence": 96.72979,
+            "bbox": [
+              227,
+              602,
+              20,
+              22
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "order,",
+            "confidence": 96.519714,
+            "bbox": [
+              258,
+              602,
+              76,
+              26
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "then",
+            "confidence": 96.136986,
+            "bbox": [
+              344,
+              602,
+              57,
+              22
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "append",
+            "confidence": 96.548294,
+            "bbox": [
+              412,
+              602,
+              99,
+              28
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 96.745796,
+            "bbox": [
+              521,
+              602,
+              40,
+              22
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "readable",
+            "confidence": 96.24202,
+            "bbox": [
+              573,
+              602,
+              115,
+              22
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "transcript.",
+            "confidence": 96.546089,
+            "bbox": [
+              698,
+              602,
+              130,
+              28
+            ],
+            "line": [
+              6,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Section",
+            "confidence": 96.676079,
+            "bbox": [
+              111,
+              698,
+              98,
+              22
+            ],
+            "line": [
+              7,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "4.",
+            "confidence": 96.199631,
+            "bbox": [
+              219,
+              698,
+              23,
+              22
+            ],
+            "line": [
+              7,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Counts",
+            "confidence": 96.590042,
+            "bbox": [
+              253,
+              698,
+              94,
+              22
+            ],
+            "line": [
+              7,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Two",
+            "confidence": 96.204803,
+            "bbox": [
+              111,
+              794,
+              55,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "source",
+            "confidence": 96.58403,
+            "bbox": [
+              176,
+              800,
+              88,
+              16
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "pages",
+            "confidence": 96.58403,
+            "bbox": [
+              276,
+              800,
+              80,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "plus",
+            "confidence": 96.828201,
+            "bbox": [
+              367,
+              794,
+              53,
+              28
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 96.420959,
+            "bbox": [
+              429,
+              794,
+              40,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "transcript",
+            "confidence": 96.415871,
+            "bbox": [
+              479,
+              794,
+              124,
+              28
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "appendix",
+            "confidence": 95.802544,
+            "bbox": [
+              612,
+              794,
+              123,
+              28
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "determine",
+            "confidence": 96.634712,
+            "bbox": [
+              744,
+              794,
+              132,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 96.733521,
+            "bbox": [
+              886,
+              794,
+              40,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "total",
+            "confidence": 96.99836,
+            "bbox": [
+              936,
+              794,
+              55,
+              22
+            ],
+            "line": [
+              8,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "page",
+            "confidence": 96.552582,
+            "bbox": [
+              112,
+              848,
+              64,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "count",
+            "confidence": 96.419701,
+            "bbox": [
+              187,
+              843,
+              73,
+              21
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "that",
+            "confidence": 96.360779,
+            "bbox": [
+              268,
+              842,
+              50,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "the",
+            "confidence": 93.299782,
+            "bbox": [
+              326,
+              842,
+              40,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "page-count",
+            "confidence": 91.52916,
+            "bbox": [
+              378,
+              843,
+              150,
+              27
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "invariant",
+            "confidence": 96.4552,
+            "bbox": [
+              538,
+              842,
+              113,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "checks",
+            "confidence": 96.60627,
+            "bbox": [
+              660,
+              842,
+              92,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "before",
+            "confidence": 96.59761,
+            "bbox": [
+              763,
+              842,
+              82,
+              22
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "anything",
+            "confidence": 96.360527,
+            "bbox": [
+              856,
+              842,
+              112,
+              28
+            ],
+            "line": [
+              9,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "is",
+            "confidence": 96.06926,
+            "bbox": [
+              112,
+              890,
+              19,
+              22
+            ],
+            "line": [
+              10,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "published.",
+            "confidence": 96.578758,
+            "bbox": [
+              142,
+              890,
+              135,
+              28
+            ],
+            "line": [
+              10,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "Page",
+            "confidence": 96.715736,
+            "bbox": [
+              112,
+              1536,
+              67,
+              28
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "2",
+            "confidence": 96.559525,
+            "bbox": [
+              190,
+              1536,
+              14,
+              22
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "of",
+            "confidence": 96.506577,
+            "bbox": [
+              215,
+              1536,
+              25,
+              22
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          },
+          {
+            "text": "2",
+            "confidence": 96.688446,
+            "bbox": [
+              248,
+              1536,
+              14,
+              22
+            ],
+            "line": [
+              11,
+              1,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

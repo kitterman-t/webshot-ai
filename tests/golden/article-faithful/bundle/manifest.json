@@ -1,0 +1,139 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/professional_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/professional_page.html",
+  "title": "WebShot Quality Review",
+  "page_metadata": {
+    "title": "WebShot Quality Review",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "WebShot Quality Review",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../article-faithful.pdf",
+    "pages": 3,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json",
+      "tables/table-001.csv"
+    ]
+  },
+  "content": {
+    "items": 25,
+    "tables": 1,
+    "links": 0,
+    "chunks": 12,
+    "text_characters": 1819,
+    "visual_assets": 1,
+    "ocr_words": 3
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": "Tesseract"
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 3458,
+      "sha256": "d57a616a9e02dc3567a321545488d40efb9365ff970ccd8743b1a5f60ce60c6c"
+    },
+    "assets.json": {
+      "bytes": 761,
+      "sha256": "6cee75f3c44eeaa6fe8e98c26e0ab93815b10863f3fee80a3dc149b3cdacfd6d"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 5062,
+      "sha256": "c6e65cfcdbe535ebcc82c6de95b0599e0262c8d1ea0e5b8f4aca11901114f6f2"
+    },
+    "content.doctags": {
+      "bytes": 2434,
+      "sha256": "f2a6d01211a411d67b2a2c722fb087677373517e41ce65c41d39617eae0257b0"
+    },
+    "content.html": {
+      "bytes": 3146,
+      "sha256": "cf5034119831a35570b4611779dc86965ddef6b03e44156a3baf3ebeec238fc0"
+    },
+    "content.json": {
+      "bytes": 19572,
+      "sha256": "13b035d587a70b65f6500e7b57d4855363faa3e601bfa4ba36c918be2317823d"
+    },
+    "content.md": {
+      "bytes": 1861,
+      "sha256": "dbc538023419905df5ae9411a64f55739b1dd8ee2cbcf3b716f1a88157c6b00b"
+    },
+    "content.txt": {
+      "bytes": 1819,
+      "sha256": "a8fecd06a1fd537d7624e2a207beb8ceb31f1e322944c009ef53afefbcc244aa"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/professional_page.html": {
+      "bytes": 4814,
+      "sha256": "a5cde0166764c3362939d652dd49ab3a7ab37ea0bd7118c6ef4d0c2d34368e89"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "tables/table-001.csv": {
+      "bytes": 160,
+      "sha256": "00e41412d019fe37a23ba114a8645dce65fbdd686d0377f63f88ce79beb96fb1"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

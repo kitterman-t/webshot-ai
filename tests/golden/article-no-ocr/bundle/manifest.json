@@ -1,0 +1,139 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/professional_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/professional_page.html",
+  "title": "WebShot Quality Review",
+  "page_metadata": {
+    "title": "WebShot Quality Review",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "WebShot Quality Review",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../article-no-ocr.pdf",
+    "pages": 2,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json",
+      "tables/table-001.csv"
+    ]
+  },
+  "content": {
+    "items": 21,
+    "tables": 1,
+    "links": 0,
+    "chunks": 11,
+    "text_characters": 1637,
+    "visual_assets": 1,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": false,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 2959,
+      "sha256": "00262bcb5203cdf7d653f1384bd251f5c8df66c82559d0864353ff1b455cb73c"
+    },
+    "assets.json": {
+      "bytes": 735,
+      "sha256": "833cfafc99bb4a377a005fa29961e083dc77ad46ecca662072cd1591d999e3e6"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 4479,
+      "sha256": "1f0bcdaebaf94bf60290075ab19524b514bf5af09cb44e0fbcbec98fb395f924"
+    },
+    "content.doctags": {
+      "bytes": 2258,
+      "sha256": "9f78948ab148707a0a76e8f243cbf1e51a13d2eed226b85009a110e5996416a2"
+    },
+    "content.html": {
+      "bytes": 2928,
+      "sha256": "894d0dc8fa5995ad53daa52fb710e147f8161a76383f2b32397a52847756c727"
+    },
+    "content.json": {
+      "bytes": 17798,
+      "sha256": "68a00ebcd8068e57f1f7456277e00994872db8d27980fe842ca04a7cf247fb11"
+    },
+    "content.md": {
+      "bytes": 1679,
+      "sha256": "faf5a503deb9e7004e33e7f2cb53f169493f492e2b2833ed27b815f683efdd6c"
+    },
+    "content.txt": {
+      "bytes": 1637,
+      "sha256": "32a610feaca16a3ec20c3cd0e4b55f837e0697f6b1fb75fee49c465ec73c8103"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/professional_page.html": {
+      "bytes": 4814,
+      "sha256": "a5cde0166764c3362939d652dd49ab3a7ab37ea0bd7118c6ef4d0c2d34368e89"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "tables/table-001.csv": {
+      "bytes": 160,
+      "sha256": "00e41412d019fe37a23ba114a8645dce65fbdd686d0377f63f88ce79beb96fb1"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

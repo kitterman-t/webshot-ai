@@ -1,0 +1,139 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/sample_report.md",
+  "final_url": "file://<REPO>/tests/fixtures/sample_report.md",
+  "title": "Quarterly Operations Review",
+  "page_metadata": {
+    "title": "Quarterly Operations Review",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "Quarterly Operations Review",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../markdown-report.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json",
+      "tables/table-001.csv"
+    ]
+  },
+  "content": {
+    "items": 11,
+    "tables": 1,
+    "links": 1,
+    "chunks": 7,
+    "text_characters": 506,
+    "visual_assets": 1,
+    "ocr_words": 10
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": "Tesseract"
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 1233,
+      "sha256": "062074d3c1fd8c1792dee41154c60136a344fe5fcf604e2b7e533824c2acd041"
+    },
+    "assets.json": {
+      "bytes": 728,
+      "sha256": "38cb85d62eda2968ee7b87ca18e9b17aa93b887b2fb4245330c2fcd23b1b9125"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 2375,
+      "sha256": "fe0210277cb16e43d706d9fbf73be6981383f5178e0b82dfc7dfbb38168e3593"
+    },
+    "content.doctags": {
+      "bytes": 602,
+      "sha256": "e21de18eefaf2452395f459a03f519251837dc3a75e62836776bfa6a7eb5968b"
+    },
+    "content.html": {
+      "bytes": 947,
+      "sha256": "5d2b60ac6e094833add67dd8b0003d803c24c9569c7f1f92d8262dd2017a8718"
+    },
+    "content.json": {
+      "bytes": 13110,
+      "sha256": "e4b594b29a4460fb0db3f1bea5c8f85288f5de151dae4f1d008a04907471b96a"
+    },
+    "content.md": {
+      "bytes": 563,
+      "sha256": "c5448493a37ea9e3343313d273b4adc65596657b7ed4843c9178ac4b211ad249"
+    },
+    "content.txt": {
+      "bytes": 506,
+      "sha256": "930d48afdc802efac1c484370f0fcea6432d1700bf88a58090fc6e836a45a9c5"
+    },
+    "links.json": {
+      "bytes": 87,
+      "sha256": "327d8b2c580c79f398bd34d0dcaefcc048681858c4293e10a9f87925b395d8c9"
+    },
+    "source/sample_report.md": {
+      "bytes": 404,
+      "sha256": "21b2150e90130e3996c06d56519a79651eb786341da5b58ded46261d0420bbd0"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "tables/table-001.csv": {
+      "bytes": 67,
+      "sha256": "b7e68214c030f17b14efa55976b4cd4e6c074e45cad37c89db2c3a3b67ff751f"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

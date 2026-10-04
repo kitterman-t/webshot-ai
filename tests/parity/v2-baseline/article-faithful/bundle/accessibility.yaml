@@ -1,0 +1,48 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]: Example Corporation
+  - navigation [ref=e3]: Overview Research Contact
+  - main [ref=e4]:
+    - article [ref=e5]:
+      - heading "WebShot Quality Review" [level=1] [ref=e6]
+      - paragraph [ref=e7]: A representative long-form report used to verify typography, tables, page breaks, headers, and footers.
+      - generic [ref=e8]:
+        - heading "Executive summary" [level=2] [ref=e9]
+        - paragraph [ref=e10]: Professional web-to-PDF output should preserve the substance of a page while removing controls and interruptions that only make sense in a browser.
+        - list [ref=e11]:
+          - listitem [ref=e12]: Readable hierarchy and spacing
+          - listitem [ref=e13]: Stable pagination
+          - listitem [ref=e14]: Accessible document structure
+      - generic [ref=e15]:
+        - heading "Quality indicators" [level=2] [ref=e16]
+        - table [ref=e17]:
+          - rowgroup [ref=e18]:
+            - row [ref=e19]:
+              - columnheader "Indicator" [ref=e20]
+              - columnheader "Expectation" [ref=e21]
+          - rowgroup [ref=e22]:
+            - row [ref=e23]:
+              - cell "Structure" [ref=e24]
+              - cell "At least one valid, readable page" [ref=e25]
+            - row [ref=e26]:
+              - cell "Navigation" [ref=e27]
+              - cell "Page numbers appear consistently" [ref=e28]
+            - row [ref=e29]:
+              - cell "Content" [ref=e30]
+              - cell "No clipped text or obstructive overlays" [ref=e31]
+        - figure "Quarterly revenue increased from 1.2 million dollars in Q1 to 2.4 million dollars in Q4." [ref=e32]:
+          - 'img "Quarterly revenue bar chart | Quarterly revenue increased from 1.2 million dollars in Q1 to 2.4 million dollars in Q4. | Text recognized within visual asset: Revenue 2026 ($M)" [ref=e33]'
+          - generic: "Text recognized within visual asset asset-001: Revenue 2026 ($M)"
+      - generic [ref=e35]:
+        - heading "Recommendations" [level=2] [ref=e36]
+        - paragraph [ref=e37]: The capture workflow should make the reliable choice the easy choice. Defaults should suit common reports, while explicit controls should remain available for unusual layouts and authenticated applications.
+        - heading "Before capture" [level=3] [ref=e38]
+        - paragraph [ref=e39]: Wait for the page's meaningful readiness signal, load lazy content incrementally, and let web fonts and images settle. Preserve the original document tree so linked assets and inherited styles remain valid.
+        - heading "During capture" [level=3] [ref=e40]
+        - paragraph [ref=e41]: Use predictable paper geometry, repeat useful context in the header, and make navigation obvious with current and total page numbers. Avoid reintroducing hidden dialogs or stripping semantic structure.
+        - heading "After capture" [level=3] [ref=e42]
+        - paragraph [ref=e43]: Validate the PDF structure and page count before publishing the file. Review high-value documents visually to catch clipping, awkward breaks, and content that only a human can judge.
+      - generic [ref=e44]:
+        - heading "Conclusion" [level=2] [ref=e45]
+        - paragraph [ref=e46]: The resulting document should be ready to share without manual cleanup.
+  - generic "Cookie consent" [ref=e47]: This overlay should not appear in clean output.
+  - contentinfo [ref=e48]: Copyright Example Corporation

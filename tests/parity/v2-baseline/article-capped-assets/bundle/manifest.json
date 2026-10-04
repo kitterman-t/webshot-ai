@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/professional_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/professional_page.html",
+  "title": "WebShot Quality Review",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../article-capped-assets.pdf",
+    "pages": 2,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true
+  },
+  "content": {
+    "blocks": 18,
+    "tables": 1,
+    "links": 0,
+    "chunks": 1,
+    "text_characters": 1592,
+    "visual_assets": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 2868,
+      "sha256": "a2e50ced4ad800e86f0f16ebfd1f82daf99ae86d8834f86808a6e2ffb247dac7"
+    },
+    "chunks.jsonl": {
+      "bytes": 2212,
+      "sha256": "dea0be0291b6617b2176e022ca6b6a834bf81bba5a1f65128f76a5b07f6e3008"
+    },
+    "content.html": {
+      "bytes": 2693,
+      "sha256": "0c601c7c46a83185c55b56510e0cd8e2084fbfb4642f36127dbcd496db286314"
+    },
+    "content.json": {
+      "bytes": 6491,
+      "sha256": "877d57f899be61f0ae2d7bc054e5cb5bdc00a81ab54d4b80806429d1a617bc5a"
+    },
+    "content.md": {
+      "bytes": 1817,
+      "sha256": "5eae539bf0b3475af0aa0eb2e31ab61a9e44ee08a0573437f94407cc737729ee"
+    },
+    "content.txt": {
+      "bytes": 1593,
+      "sha256": "e21d917a7c227135a31c0ade52ea9fb22326f9ec421d3d21d9fb6e1a32b9c458"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/professional_page.html": {
+      "bytes": 4814,
+      "sha256": "a5cde0166764c3362939d652dd49ab3a7ab37ea0bd7118c6ef4d0c2d34368e89"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "tables/table-001.csv": {
+      "bytes": 160,
+      "sha256": "00e41412d019fe37a23ba114a8645dce65fbdd686d0377f63f88ce79beb96fb1"
+    }
+  },
+  "warnings": [
+    "The page contains 1 visual assets; only the first 0 were captured."
+  ],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

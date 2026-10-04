@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/sample_data.json",
+  "final_url": "file://<REPO>/tests/fixtures/sample_data.json",
+  "title": "sample_data.json",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../json-data.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true
+  },
+  "content": {
+    "blocks": 3,
+    "tables": 0,
+    "links": 0,
+    "chunks": 1,
+    "text_characters": 328,
+    "visual_assets": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 390,
+      "sha256": "e5f95238c52dc134ef03e712d7ef9e7abb8705f04e3a11e9c5553e3bf3153f27"
+    },
+    "chunks.jsonl": {
+      "bytes": 649,
+      "sha256": "517bfef3f54c6b6283a00726db4de43aee75323782427be6abb5587ba81f29ee"
+    },
+    "content.html": {
+      "bytes": 701,
+      "sha256": "6db6feaf48e4fae5d530b8e6c61bbf430828343bf23e885530fcbdcb3d3665b4"
+    },
+    "content.json": {
+      "bytes": 1080,
+      "sha256": "d7ba653d9d107d14b985c522b578445427b5daee1bf3f01fb2d6213dc97ad686"
+    },
+    "content.md": {
+      "bytes": 482,
+      "sha256": "d098ecd4e4c48b3657f0557ce70dcc97e498d0bc730bd7f62021ffdc8f1723b9"
+    },
+    "content.txt": {
+      "bytes": 329,
+      "sha256": "7f18bacb59bd809866d02799ee6b1ff3c64d785d05a1fd72fcf934192dc400f8"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/sample_data.json": {
+      "bytes": 253,
+      "sha256": "4fd761a1c8e294e110bc6ccfd35fdecf1f5b197527423aaa84319bb49121c705"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

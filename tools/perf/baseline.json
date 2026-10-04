@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "fixture": "tests/fixtures/professional_page.html",
+  "args": [
+    "--no-ocr"
+  ],
+  "runs": [
+    6.277,
+    6.373,
+    6.348
+  ],
+  "median_seconds": 6.348,
+  "environment": {
+    "system": "Linux",
+    "machine": "x86_64",
+    "python": "3.12",
+    "cpu_count": 4,
+    "runner": "Linux"
+  },
+  "budget_multiplier": 3.0,
+  "note": "Recorded on the CI runner named in `environment`. Re-record only with a pinned-browser or Playwright upgrade, in the pull request that makes it (docs/06 \u00a7CI)."
+}

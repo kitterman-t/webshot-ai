@@ -1,0 +1,354 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/chunk.schema.json",
+  "$defs": {
+    "ChunkMediaProvenance": {
+      "additionalProperties": false,
+      "description": "Which media element a chunk came from, and whether it carries its words.\n\nOn an `untranscribed_media` chunk it carries none of the media's content —\nthat is the point. A corpus that cannot describe its own gaps invites\nconfident answers built on absent material, so retrieval returns a record\nsaying the media exists and its words are not here, rather than returning\nnothing.\n\nOn a `media_transcript` chunk it carries the opposite claim, and the extra\nfields exist so the chunk can be trusted alone: a retrieved fragment is the\nwhole context its consumer has, and \"who wrote these words, in what\nlanguage, and when in the media do they happen\" must be answerable without\nleaving it.",
+      "properties": {
+        "provider": {
+          "const": "media-element",
+          "title": "Provider",
+          "type": "string"
+        },
+        "media_kind": {
+          "enum": [
+            "video",
+            "audio"
+          ],
+          "title": "Media Kind",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "transcribed": {
+          "title": "Transcribed",
+          "type": "boolean"
+        },
+        "duration_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Duration Seconds"
+        },
+        "transcript_provenance": {
+          "anyOf": [
+            {
+              "const": "authored",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transcript Provenance"
+        },
+        "track_kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Track Kind"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "start_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Seconds"
+        },
+        "end_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Seconds"
+        }
+      },
+      "required": [
+        "provider",
+        "media_kind",
+        "title",
+        "source_url",
+        "transcribed",
+        "duration_seconds"
+      ],
+      "title": "ChunkMediaProvenance",
+      "type": "object"
+    },
+    "ChunkMetaV3": {
+      "additionalProperties": false,
+      "description": "Spec §2: provenance into content.json's DoclingDocument.",
+      "properties": {
+        "doc_items": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Doc Items",
+          "type": "array"
+        },
+        "headings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Headings",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "text",
+            "table",
+            "figure",
+            "video_step",
+            "untranscribed_media",
+            "media_transcript"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Page"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "journey": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JourneyChunkPath"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "video": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VideoChunkProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "media": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChunkMediaProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "doc_items",
+        "headings",
+        "kind",
+        "page",
+        "locator",
+        "sha256"
+      ],
+      "title": "ChunkMetaV3",
+      "type": "object"
+    },
+    "JourneyChunkPath": {
+      "additionalProperties": false,
+      "description": "Where a chunk sits in the journey that produced it.\n\nAll five levels by name plus the module's synthetic id, so a retrieved\nfragment knows where it belongs without a second lookup (docs/13). Two\nmodules in different groups can carry the same heading, and a chunk without\nthis is indistinguishable from the other one's.",
+      "properties": {
+        "journey": {
+          "title": "Journey",
+          "type": "string"
+        },
+        "journey_id": {
+          "title": "Journey Id",
+          "type": "string"
+        },
+        "section": {
+          "title": "Section",
+          "type": "string"
+        },
+        "track": {
+          "title": "Track",
+          "type": "string"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "module": {
+          "title": "Module",
+          "type": "string"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "journey",
+        "journey_id",
+        "section",
+        "track",
+        "group",
+        "module",
+        "node_id"
+      ],
+      "title": "JourneyChunkPath",
+      "type": "object"
+    },
+    "VideoChunkProvenance": {
+      "additionalProperties": false,
+      "description": "Where a video chunk came from, completely enough to cite it.\n\nEvery field is here so that \"this came from video X, step 3, at 0:42\" is\nread off the record rather than reconstructed: without the timestamp a\nclaim cannot be checked against the video, and without the playbook id it\ncannot be traced to *which* video on a page that had several.",
+      "properties": {
+        "provider": {
+          "const": "guidde",
+          "title": "Provider",
+          "type": "string"
+        },
+        "playbook_id": {
+          "title": "Playbook Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "step": {
+          "title": "Step",
+          "type": "integer"
+        },
+        "steps": {
+          "title": "Steps",
+          "type": "integer"
+        },
+        "start_seconds": {
+          "title": "Start Seconds",
+          "type": "number"
+        },
+        "end_seconds": {
+          "title": "End Seconds",
+          "type": "number"
+        },
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "screenshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Screenshot"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "steps_document": {
+          "title": "Steps Document",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "playbook_id",
+        "title",
+        "step",
+        "steps",
+        "start_seconds",
+        "end_seconds",
+        "timestamp",
+        "screenshot",
+        "source_url",
+        "steps_document"
+      ],
+      "title": "VideoChunkProvenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One line of `chunks.jsonl` in bundle_format 3.",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    },
+    "meta": {
+      "$ref": "#/$defs/ChunkMetaV3"
+    }
+  },
+  "required": [
+    "id",
+    "text",
+    "meta"
+  ],
+  "title": "WebChunkV3",
+  "type": "object"
+}

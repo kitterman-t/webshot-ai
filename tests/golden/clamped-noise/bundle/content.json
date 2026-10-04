@@ -1,0 +1,79 @@
+{
+  "schema_name": "DoclingDocument",
+  "version": "1.10.0",
+  "name": "content",
+  "origin": {
+    "mimetype": "text/html",
+    "binary_hash": 7644988611317988915,
+    "filename": "content.html"
+  },
+  "furniture": {
+    "self_ref": "#/furniture",
+    "children": [],
+    "content_layer": "furniture",
+    "name": "_root_",
+    "label": "unspecified"
+  },
+  "body": {
+    "self_ref": "#/body",
+    "children": [
+      {
+        "$ref": "#/texts/0"
+      }
+    ],
+    "content_layer": "body",
+    "name": "_root_",
+    "label": "unspecified"
+  },
+  "groups": [],
+  "texts": [
+    {
+      "self_ref": "#/texts/0",
+      "parent": {
+        "$ref": "#/body"
+      },
+      "children": [
+        {
+          "$ref": "#/texts/1"
+        },
+        {
+          "$ref": "#/texts/2"
+        }
+      ],
+      "content_layer": "body",
+      "label": "title",
+      "prov": [],
+      "orig": "The Real Article",
+      "text": "The Real Article"
+    },
+    {
+      "self_ref": "#/texts/1",
+      "parent": {
+        "$ref": "#/texts/0"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "text",
+      "prov": [],
+      "orig": "This is the document body and it should appear in the PDF. It is long enough, together with the paragraph below it, for the locator to treat the main element as the substantive content region of this page.",
+      "text": "This is the document body and it should appear in the PDF. It is long enough, together with the paragraph below it, for the locator to treat the main element as the substantive content region of this page."
+    },
+    {
+      "self_ref": "#/texts/2",
+      "parent": {
+        "$ref": "#/texts/0"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "text",
+      "prov": [],
+      "orig": "A second paragraph of genuine body text carrying BODYTEXTPRESENT so the capture can be confirmed to have worked at all, rather than silently producing a page with nothing on it and passing for that reason.",
+      "text": "A second paragraph of genuine body text carrying BODYTEXTPRESENT so the capture can be confirmed to have worked at all, rather than silently producing a page with nothing on it and passing for that reason."
+    }
+  ],
+  "pictures": [],
+  "tables": [],
+  "key_value_items": [],
+  "form_items": [],
+  "pages": {}
+}

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Visuals in shadow roots and frames</title>
+<style>
+  /* Each visual draws one capitalized phrase, for OCR to read, and carries a
+     label for the test to find it by (docs/09 P16-9). Before P16-9 only the
+     light chart and the frame element itself were assets. */
+  body { font: 16px/1.5 sans-serif; margin: 2rem; max-width: 40rem; }
+  iframe { border: 0; width: 100%; height: 10rem; display: block; }
+</style>
+</head>
+<body>
+<h1>Visuals in shadow roots and frames</h1>
+<p>Light text before the card.</p>
+
+<div id="card"></div>
+
+<!-- In the light DOM, after the card. The last heading a reader passed is the
+     shadow root's, which document order never saw. -->
+<svg role="img" aria-label="Light chart" width="360" height="70"><text x="8" y="46" font-size="30" font-family="sans-serif">LIGHT CHART 11</text></svg>
+
+<h2>Frame section</h2>
+
+<!-- Readable. Its first visual is in view; its second is below the frame's
+     fold, so photographing it scrolls the frame, and the frame must print from
+     its top all the same. It also carries a page-authored asset id. -->
+<iframe title="Figure frame" srcdoc='<!doctype html><style>body { margin: 0; font: 16px/1.5 sans-serif; }</style><p>Top of the frame: printed where it starts.</p><svg role="img" aria-label="Framed chart" data-webshot-asset-id="asset-001" width="360" height="70"><text x="8" y="46" font-size="30" font-family="sans-serif">FRAMED CHART 5</text></svg><div style="height: 40rem"></div><img alt="Below the fold" width="360" height="70" src="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22360%22%20height=%2270%22%3E%3Crect%20width=%22360%22%20height=%2270%22%20fill=%22white%22/%3E%3Ctext%20x=%228%22%20y=%2246%22%20font-size=%2230%22%20font-family=%22sans-serif%22%3EBELOW%20THE%20FOLD%209%3C/text%3E%3C/svg%3E"><p>Bottom of the frame: printed only if it is scrolled.</p>'></iframe>
+
+<!-- Readable and not shown, so nothing in it is on the page. -->
+<iframe title="Hidden frame" style="display: none" srcdoc='<svg role="img" aria-label="Hidden chart" width="360" height="70"><text x="8" y="46" font-size="30">HIDDEN CHART</text></svg>'></iframe>
+
+<script>
+  const shadow = document.getElementById('card').attachShadow({mode: 'open'});
+  shadow.innerHTML = `
+    <h2>Shadow section</h2>
+    <svg role="img" aria-label="Shadow chart" width="360" height="70"><text x="8" y="46" font-size="30" font-family="sans-serif">SHADOW CHART 42</text></svg>
+    <div id="inner"></div>`;
+  const inner = shadow.getElementById('inner').attachShadow({mode: 'open'});
+  inner.innerHTML = '<canvas aria-label="Nested canvas" width="360" height="70"></canvas>';
+  const context = inner.querySelector('canvas').getContext('2d');
+  context.fillStyle = '#fff';
+  context.fillRect(0, 0, 360, 70);
+  context.fillStyle = '#000';
+  context.font = '30px sans-serif';
+  context.fillText('NESTED CANVAS 7', 8, 46);
+</script>
+</body>
+</html>

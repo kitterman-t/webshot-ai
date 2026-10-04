@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/sample_records.jsonl",
+  "final_url": "file://<REPO>/tests/fixtures/sample_records.jsonl",
+  "title": "sample_records.jsonl",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../jsonl-records.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true
+  },
+  "content": {
+    "blocks": 4,
+    "tables": 0,
+    "links": 0,
+    "chunks": 1,
+    "text_characters": 260,
+    "visual_assets": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 369,
+      "sha256": "278083fc7dec1c722f740970aaa8c4f5434dd7e492f37c8404f6ecd066e49d0d"
+    },
+    "chunks.jsonl": {
+      "bytes": 603,
+      "sha256": "1da8c8ed888292161f4dc3065f1124ba919d1c694538e12c592c2b83d8ff39c7"
+    },
+    "content.html": {
+      "bytes": 651,
+      "sha256": "c6b492ea24af7f2b7284671e8659521d68fbaae2ec6f9376454aa8827a6e4e77"
+    },
+    "content.json": {
+      "bytes": 1153,
+      "sha256": "ed4e66da674d2b1b0cfc9554b63c9ea645ddcc3070f37736db463e6145c88551"
+    },
+    "content.md": {
+      "bytes": 426,
+      "sha256": "8d360404521a72ed4627a168fd035c2f67cc6d4584745eab10e56150fc74cbb4"
+    },
+    "content.txt": {
+      "bytes": 261,
+      "sha256": "49f880c2f73ed1d6f6b1fc89c28d7377ce3d558ca103e54efe14089dcb9c4978"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/sample_records.jsonl": {
+      "bytes": 155,
+      "sha256": "c008a21bafc38c754316872ba8509d026d182843784b1a9627040c59e48097e6"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

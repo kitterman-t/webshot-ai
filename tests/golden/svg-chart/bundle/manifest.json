@@ -1,0 +1,134 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/chart-source.svg",
+  "final_url": "file://<REPO>/tests/fixtures/chart-source.svg",
+  "title": "chart-source.svg",
+  "page_metadata": {
+    "title": "chart-source.svg",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "chart-source.svg",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../svg-chart.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json"
+    ]
+  },
+  "content": {
+    "items": 4,
+    "tables": 0,
+    "links": 0,
+    "chunks": 3,
+    "text_characters": 208,
+    "visual_assets": 1,
+    "ocr_words": 10
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": "Tesseract"
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 387,
+      "sha256": "f006feb42732a59e0212f23146212d785386bc0d636d54fa7698790a25ebe661"
+    },
+    "assets.json": {
+      "bytes": 742,
+      "sha256": "1a24815bc829aff652ddd3ba4ab6913907d91f43cef8e354fd8f56b573f07968"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 1018,
+      "sha256": "e94aef132b5c04639a1847e2b20d53a5dd95c70952688ccddee6ecf637d5ed4b"
+    },
+    "content.doctags": {
+      "bytes": 133,
+      "sha256": "7be1cbfb6d896e308582085b67ca921a012fc9ba8a03e337cadc90398706e00c"
+    },
+    "content.html": {
+      "bytes": 375,
+      "sha256": "3ac32b4d6f94a3df77586fff2c43e351c43e55eddbe3d0342da3330fea646365"
+    },
+    "content.json": {
+      "bytes": 2722,
+      "sha256": "972f89f001630d3e7c13df1e95f502149902d1a7dfb203170523e62df5830a60"
+    },
+    "content.md": {
+      "bytes": 226,
+      "sha256": "1a7a3fc355b8d66d658a3c7b57558e36bdc03036ac30f8918862188e244bb631"
+    },
+    "content.txt": {
+      "bytes": 208,
+      "sha256": "3a532562d88c718f531a03a610514378693e9d3f920b01224a806bb39af132fb"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/chart-source.svg": {
+      "bytes": 777,
+      "sha256": "53a74fd1c63a4e97c82db8f5c48a8bf20af7dabe24e9d74af8e3833fae8b3a68"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

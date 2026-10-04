@@ -1,0 +1,209 @@
+{
+  "bundle_format": 3,
+  "visual_assets": [
+    {
+      "id": "asset-001",
+      "file": "assets/asset-001.png",
+      "kind": "iframe",
+      "width": 734,
+      "height": 260,
+      "alt": "",
+      "aria_label": "",
+      "title": "Touring Your Project Workspace",
+      "caption": "",
+      "source_url": "about:blank",
+      "nearby_heading": "Navigating your project",
+      "ocr": {
+        "text": "",
+        "confidence": null,
+        "language": null,
+        "engine": null
+      },
+      "sha256": "8aa17f049f3620040880cec3a431070727133950a0721d894322f6b959769efe",
+      "frame_content": "dom"
+    },
+    {
+      "id": "asset-002",
+      "file": "assets/asset-002.png",
+      "kind": "video",
+      "width": 640,
+      "height": 240,
+      "alt": "",
+      "aria_label": "",
+      "title": "Understanding the Sandbox Environment",
+      "caption": "",
+      "source_url": "https://usw-input-videos.continuassets.example/sandbox-overview.mp4",
+      "nearby_heading": "Understanding the sandbox environment",
+      "ocr": {
+        "text": "",
+        "confidence": null,
+        "language": null,
+        "engine": null
+      },
+      "sha256": "2f2b0f18d78a10cc0cb382a9fef1c83c3a23451791b9469f07f6048f6f2a9bed",
+      "frame_content": null
+    }
+  ],
+  "form_fields": [],
+  "embedded_media": [
+    {
+      "media_type": "iframe",
+      "source_url": "about:blank",
+      "title": "Touring Your Project Workspace",
+      "tracks": [],
+      "locator": "body > main > div:nth-of-type(1) > iframe"
+    },
+    {
+      "media_type": "video",
+      "source_url": "https://usw-input-videos.continuassets.example/sandbox-overview.mp4",
+      "title": "Understanding the Sandbox Environment",
+      "tracks": [],
+      "locator": "body > main > div:nth-of-type(2) > video"
+    }
+  ],
+  "video_assets": [
+    {
+      "id": "video-ExamplePlaybook0000001-step-001",
+      "file": "assets/video-ExamplePlaybook0000001-step-001.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 1,
+      "source_url": "<STANDIN>/asset/005.png",
+      "bytes": 74,
+      "sha256": "6969a7311e3dfd15807c288c2b7a28e47eff8d8ae1305da2c99cb71cc41ecedc",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    },
+    {
+      "id": "video-ExamplePlaybook0000001-step-002",
+      "file": "assets/video-ExamplePlaybook0000001-step-002.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 2,
+      "source_url": "<STANDIN>/asset/011.png",
+      "bytes": 74,
+      "sha256": "cd04051a7fc4791eba392766da4fa4883e3c855910fe81efb10820a9b1a79ec0",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    },
+    {
+      "id": "video-ExamplePlaybook0000001-step-003",
+      "file": "assets/video-ExamplePlaybook0000001-step-003.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 3,
+      "source_url": "<STANDIN>/asset/021.png",
+      "bytes": 74,
+      "sha256": "5b45f0aa42537e6fcae85e9e49ca7f947f16647198cf66599ff040c1dac4b7f9",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    },
+    {
+      "id": "video-ExamplePlaybook0000001-step-004",
+      "file": "assets/video-ExamplePlaybook0000001-step-004.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 4,
+      "source_url": "<STANDIN>/asset/032.png",
+      "bytes": 74,
+      "sha256": "2ef5a29596055547d97045f3bd2b2b8a53614a96c32bdf6a534bedbc67d049fc",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    },
+    {
+      "id": "video-ExamplePlaybook0000001-step-005",
+      "file": "assets/video-ExamplePlaybook0000001-step-005.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 5,
+      "source_url": "<STANDIN>/asset/042.png",
+      "bytes": 74,
+      "sha256": "cc4d5cc3fdfec8b01d0b1c448580d09477014a66c57a3f54944dd2f3069d7a5f",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    },
+    {
+      "id": "video-ExamplePlaybook0000001-step-006",
+      "file": "assets/video-ExamplePlaybook0000001-step-006.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 6,
+      "source_url": "<STANDIN>/asset/053.png",
+      "bytes": 74,
+      "sha256": "4111ba6ab46827e016c64d0b76ee798f421f147f7bc6d37258e2f80c292754a7",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    },
+    {
+      "id": "video-ExamplePlaybook0000001-step-007",
+      "file": "assets/video-ExamplePlaybook0000001-step-007.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 7,
+      "source_url": "<STANDIN>/asset/064.png",
+      "bytes": 74,
+      "sha256": "d8c5e94f817b3d5fdb6a3e6f719e7392a61227954a51d941a5d21cbd8a52dbb8",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    },
+    {
+      "id": "video-ExamplePlaybook0000001-step-008",
+      "file": "assets/video-ExamplePlaybook0000001-step-008.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 8,
+      "source_url": "<STANDIN>/asset/075.png",
+      "bytes": 74,
+      "sha256": "7a4ca347f643e6bd9e189661ee2d8011d23a5986ce9853165925a6bd89bf980f",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    },
+    {
+      "id": "video-ExamplePlaybook0000001-step-009",
+      "file": "assets/video-ExamplePlaybook0000001-step-009.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 9,
+      "source_url": "<STANDIN>/asset/085.png",
+      "bytes": 74,
+      "sha256": "3cb941ee7551f67503b21be4f3d66b356897e95ff33e1914185ee5f2c31c9784",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    },
+    {
+      "id": "video-ExamplePlaybook0000001-step-010",
+      "file": "assets/video-ExamplePlaybook0000001-step-010.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 10,
+      "source_url": "<STANDIN>/asset/096.png",
+      "bytes": 74,
+      "sha256": "a7bdb136b16ae5d721fa5e6707526a449e1752c4ad6839755803bb6e7049c221",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    },
+    {
+      "id": "video-ExamplePlaybook0000001-step-011",
+      "file": "assets/video-ExamplePlaybook0000001-step-011.png",
+      "kind": "step-screenshot",
+      "playbook_id": "ExamplePlaybook0000001",
+      "step": 11,
+      "source_url": "<STANDIN>/asset/105.png",
+      "bytes": 74,
+      "sha256": "4d58c66f2b66dab8fadcb00536fdb1177e0d88b2b0c2d36efcb46855978188c1",
+      "width": 2,
+      "height": 2,
+      "shared_with": null
+    }
+  ]
+}

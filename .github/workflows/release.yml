@@ -1,0 +1,235 @@
+name: release
+
+# Cuts a GitHub release from a tag, and can be rehearsed before one exists.
+#
+# Every action is pinned to a commit SHA with the human-readable tag in a
+# trailing comment, the same rule ci.yml follows: a tag can be moved by whoever
+# owns it, a SHA cannot.
+#
+# The order is deliberate. Nothing is published until the *built artifact* has
+# been installed into an empty environment and used (docs/05 task 5.6): a
+# release whose wheel is broken is worse than no release, and every other check
+# in this repository runs against the source tree, where the package is
+# importable for reasons a user does not have.
+#
+# **WebShot is not published to PyPI.** That is an owner decision, not an
+# oversight — see CHANGELOG.md and docs/08-roadmap-and-ideas.md for the name
+# collision it turns on, and the `pypi` job at the foot of this file for the
+# steps that would enable it.
+
+on:
+  push:
+    tags: ["v*"]
+  # Note for the first real use: GitHub will only dispatch a
+  # `workflow_dispatch` workflow that exists on the **default branch**, so this
+  # one cannot be rehearsed from a feature branch through the UI or `gh`. To
+  # rehearse a material change before it reaches the default branch, add a
+  # temporary `push` trigger for the feature branch and remove it before
+  # merging.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >-
+          Build and verify everything, then stop without creating a release.
+          This is how the workflow is rehearsed before the tag that matters.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_COLOR: "1"
+
+jobs:
+  release:
+    name: verify, build, and publish
+    runs-on: ubuntu-latest
+    # Granted on the job rather than at the top of the file, so `pypi` and any
+    # job added later stay read-only. This is what `gh release create` needs;
+    # without it the tag push runs the whole twenty-minute verification and
+    # then 403s on the last call — and the dry run cannot catch that, because
+    # the dry run is defined as the run that skips that step (docs/09 P5-10).
+    permissions:
+      contents: write
+    # docs/06 §CI has always said this job is gated on manual approval, and it
+    # was not — Phase 5 nearly rewrote the *document* to match the workflow
+    # instead of the other way round (docs/09 P5-10). A named environment is
+    # how GitHub expresses it: with no reviewers configured it simply runs, and
+    # adding "Required reviewers" to the `release` environment in the
+    # repository settings turns the gate on without touching this file — the
+    # same "publication is a setting, not a code change" shape as docs.yml.
+    environment: release
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # `src/webshot/version.py` is the single source of the version (docs/09
+      # P5-3). A tag that disagrees with it would produce a release whose
+      # artifacts are named one thing and whose manifests claim another, so it
+      # stops here rather than at whoever downloads it.
+      - name: The tag and the package must agree
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          package="$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' src/webshot/version.py | tr -d '"')"
+          tag="${GITHUB_REF_NAME#v}"
+          echo "package=$package tag=$tag"
+          test "$package" = "$tag" || {
+            echo "::error::tag $GITHUB_REF_NAME does not match VERSION $package"
+            exit 1
+          }
+
+      # Every extra the tests need, in one environment. docs/09 P4-14 is the
+      # reason this is spelled out rather than left to `--extra dev`: an
+      # importable module behind an extra makes a job that has less installed
+      # fail on an import rather than on anything real, and a release job that
+      # skipped the MCP, office and RapidOCR suites would be verifying less
+      # than CI does while claiming to verify a release.
+      - name: Install the locked environment, with every extra the suite needs
+        run: >
+          uv sync --frozen --extra dev --extra mcp --extra office
+          --extra ocr-rapid
+      - name: Install Chromium
+        run: uv run playwright install --with-deps chromium
+      - name: Install Tesseract and Ghostscript
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y tesseract-ocr ghostscript
+      - name: The whole suite
+        run: uv run pytest
+
+      - name: Build the sdist and the wheel
+        run: uv build --out-dir dist
+
+      # The gate the plan lacked (docs/05 task 5.6, docs/09 P5-6): install the
+      # artifact — not the checkout — into an empty virtual environment and use
+      # it from a directory that is not the repository.
+      - name: The built wheel must install clean and work
+        run: >
+          uv run python tools/release/wheel_check.py --dist dist --reuse-dist
+          --extras mcp,office,ocr-rapid
+
+      - name: Export the published JSON Schemas
+        run: uv run webshot schema --write release-schemas
+
+      # veraPDF runs as the container the project documents (docs/adr/0006):
+      # GPL, invoked, never linked. The report is attached to the release so a
+      # given version's conformance is a published fact rather than a claim.
+      - name: veraPDF conformance report
+        continue-on-error: true
+        run: |
+          docker pull verapdf/cli
+          mkdir -p verapdf-report
+          uv run python tools/verapdf/check.py --out verapdf-report || true
+
+      - name: Collect the release assets
+        run: |
+          mkdir -p release-assets
+          cp dist/*.whl dist/*.tar.gz release-assets/
+          tar -czf release-assets/webshot-schemas.tar.gz -C release-schemas .
+          if [ -d verapdf-report ] && [ -n "$(ls -A verapdf-report)" ]; then
+            tar -czf release-assets/verapdf-report.tar.gz -C verapdf-report .
+          fi
+          ls -l release-assets | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the assets as a workflow artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: release-assets/
+          if-no-files-found: error
+
+      # The CHANGELOG entry for this version *is* the release notes — one text,
+      # written once, so the two cannot drift.
+      - name: Extract this version's changelog entry
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md || {
+            echo "::error::CHANGELOG.md has no entry for $version"
+            exit 1
+          }
+
+      # `inputs` is empty on a `push` event, so `inputs.dry_run` is null, which
+      # GitHub coerces to false — `!inputs.dry_run` is therefore true on a real
+      # tag push and the release is created. A `workflow_dispatch` defaults
+      # `dry_run` to true and stops here; dispatched against a tag *with*
+      # `dry_run: false`, it publishes, which is the intended manual escape.
+      - name: Create the GitHub release
+        if: startsWith(github.ref, 'refs/tags/') && !inputs.dry_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The one step in this workflow that writes anything; `contents: write`
+        # is granted on this job for it and nowhere else.
+        run: >
+          gh release create "$GITHUB_REF_NAME"
+          --title "WebShot $GITHUB_REF_NAME"
+          --notes-file release-notes.md
+          release-assets/*
+
+  # --------------------------------------------------------------------------
+  # PyPI — WRITTEN AND DISABLED. Do not remove the `if: false`.
+  # --------------------------------------------------------------------------
+  #
+  # WebShot v3.0.0 is deliberately not published to PyPI. The name `webshot` is
+  # taken on CRAN (the webshot and webshot2 R packages) and shot-scraper owns
+  # the adjacent Python niche, so publishing under this name would be a
+  # collision the project has not decided how to resolve. Until it does, the
+  # release is a GitHub release and installation is from a tag or a wheel.
+  #
+  # To enable it, in this order:
+  #
+  #   1. Decide the distribution name and rename it in `pyproject.toml`
+  #      (`[project] name`). The import package can stay `webshot`; the two do
+  #      not have to match, and every README/docs install line changes with it.
+  #   2. Register the project on PyPI as a **pending publisher** under Trusted
+  #      Publishing: https://pypi.org/manage/account/publishing/ — owner and
+  #      repository as this repository's `github.repository` reads (the two
+  #      halves of `owner/name`), workflow `release.yml`, environment `pypi`.
+  #      PyPI matches those names exactly, so register after the repository
+  #      has its final name, and re-register if it is renamed or transferred.
+  #      Trusted Publishing means no API token is ever stored in this
+  #      repository, which is the reason to use it.
+  #   3. Create a GitHub environment named `pypi` with whatever reviewers the
+  #      owner wants on a publish.
+  #   4. Delete the `if: false` below and uncomment `needs`/`environment`.
+  #
+  # Attestations are on by default in gh-action-pypi-publish v1.11+, which is
+  # why nothing here asks for them.
+  pypi:
+    name: publish to PyPI (disabled)
+    if: false
+    # needs: release
+    # environment:
+    #   name: pypi
+    #   url: https://pypi.org/p/<the distribution name from step 1>
+    runs-on: ubuntu-latest
+    permissions:
+      # OIDC: the token Trusted Publishing exchanges for a short-lived upload
+      # credential. It is what replaces a stored API token.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: dist
+      # The release artifact carries more than the distributions; PyPI takes
+      # only the sdist and the wheel.
+      - name: Keep only the distributions
+        run: rm -f dist/webshot-schemas.tar.gz dist/verapdf-report.tar.gz
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

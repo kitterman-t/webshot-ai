@@ -1,0 +1,460 @@
+name: CI
+
+# Every action is pinned to a commit SHA, with the human-readable tag in a
+# trailing comment. Dependabot keeps the pins current (.github/dependabot.yml);
+# a tag can be moved by whoever owns it, a SHA cannot.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      record_perf_baseline:
+        description: >-
+          Re-record the perf-smoke baseline on this runner and upload it as an
+          artifact. docs/06 §CI: only with a pinned-browser or Playwright
+          upgrade, and the artifact is committed in the pull request that makes
+          it. The baseline must come from a CI runner — one recorded on a
+          laptop is a budget calibrated to the wrong hardware. One exception:
+          the baseline in the tree predates the move to GitHub-hosted runners,
+          so re-recording it on them needs no browser upgrade (see the perf
+          job).
+        type: boolean
+        default: false
+
+# Pull requests from forks run every job here, on GitHub-hosted runners, with
+# the read-only token below and no secrets. That is the whole of the fork
+# story, and it depends on two things staying true: the trigger is
+# `pull_request`, never `pull_request_target` (which runs with the base
+# repository's secrets and a write token), and nothing in this file asks for a
+# secret or for more than `contents: read`.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: "1"
+
+jobs:
+  lint:
+    name: lint + types
+    runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      # `--extra mcp` because mypy checks `files = ["src", "tools"]`, and
+      # `src/webshot/mcp_server/server.py` imports the SDK. Both `mcp` and
+      # `mcp-types` ship `py.typed`, so installing them is what lets mypy check
+      # the bridge against the real API — `ignore_missing_imports` would have
+      # silenced the three import errors by making `MCPServer`, `Context`, and
+      # `CallToolResult` all `Any` in the one file that most needs checking
+      # (docs/09 P4-14).
+      #
+      # The invariant for whoever adds the next extra: this job's environment
+      # has to hold every optional module the tree imports, or the job goes red
+      # on an import it cannot resolve rather than on anything real.
+      - name: Install the locked environment
+        run: uv sync --extra dev --extra mcp --frozen
+      - name: ruff (lint)
+        run: uv run ruff check .
+      - name: ruff (format)
+        run: uv run ruff format --check .
+      - name: mypy
+        run: uv run mypy
+      # mypy skips a `sys.platform == "win32"` block when it runs anywhere
+      # else, so without this the ctypes calls in `winacl.py` and the `msvcrt`
+      # lock were type-checked by nobody; the weekly Windows run is the only
+      # other place they execute (docs/09 P10-25).
+      - name: mypy (Windows branches)
+        run: uv run mypy --platform win32
+
+  tests:
+    name: tests (${{ matrix.os }}, py${{ matrix.python }})
+    # The matrix keeps the short names `linux` and `macos` because they are
+    # what the check names show, and a branch-protection rule matches the
+    # name; the runner label is derived from them here.
+    runs-on: ${{ matrix.os == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [linux, macos]
+        python: ["3.11", "3.12", "3.13"]
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      # Every optional extra is installed here on purpose: the office-format,
+      # RapidOCR, and MCP tests skip without them, and a test that skips
+      # everywhere is how "it works behind an extra" quietly stops being true.
+      # The MCP client harness in particular is Phase 4's acceptance criterion.
+      - name: Install the locked environment
+        run: >
+          uv sync --frozen --extra dev --extra office --extra ocr-rapid
+          --extra mcp
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - name: Install Chromium (Linux, with system dependencies)
+        if: runner.os == 'Linux'
+        run: uv run playwright install --with-deps chromium
+      - name: Install Chromium (macOS)
+        if: runner.os == 'macOS'
+        run: uv run playwright install chromium
+      - name: Install Tesseract (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y tesseract-ocr
+      - name: Install Tesseract (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tesseract
+      - name: pytest
+        # `-n 4`, not `-n auto`. The parallel win is real — 864 tests, 101.8s
+        # serial against 32.9s, same 864 passing — and a fixed count is what
+        # `tools/verify.py` and the Windows run use too, so a local run and
+        # every CI leg parallelize alike instead of each following its own
+        # `os.cpu_count()`. Four workers stay worth having on a hosted runner's
+        # few cores because the suite is I/O-bound rather than CPU-bound (25s
+        # of CPU for 66s of wall clock, measured).
+        run: uv run pytest -n 4
+
+  golden:
+    name: golden corpus
+    # macOS, not Linux: the goldens encode Chromium's own text layout (page
+    # count, page breaks, extracted text), and layout depends on the platform's
+    # fonts. Comparing a Linux rendering against a macOS recording would fail
+    # for a reason that is not a regression. A Linux baseline can be recorded as
+    # a second environment when someone can record it — see docs/09 P0-6.
+    #
+    # A hosted macOS image is still not the machine that recorded the goldens:
+    # its macOS release, Tesseract and system fonts are its own. The harness
+    # fingerprints the platform, Playwright, Tesseract and the fonts, and drops
+    # to the portable profile when any differs (docs/09 P7-14), which masks
+    # recognized text and raster digests — but not layout. If a hosted image's
+    # fonts paginate a fixture differently, this job fails for a reason that
+    # is not a regression; settling that is a recording decision with a
+    # written reason, never a re-record to make it pass (CONTRIBUTING rule 2).
+    runs-on: macos-latest
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install the locked environment
+        run: uv sync --extra dev --frozen
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - name: Install Chromium
+        run: uv run playwright install chromium
+      - name: Install Tesseract
+        run: brew install tesseract
+      # The runner's Tesseract will not be the maintainer's, so the harness
+      # selects the portable profile automatically: structure and text are
+      # compared byte-for-byte, and recognized words are proven by the
+      # per-case sentinel assertions instead.
+      - name: Check the fixture corpus against the goldens
+        run: uv run python tools/golden/check.py
+
+  parity:
+    name: parity (v2 baseline vs v3 candidate)
+    # Same platform as the golden job and for the same reason: the frozen v2
+    # baselines were recorded on macOS, and Chromium's text layout is
+    # platform-dependent (docs/09 P0-6). The mutation self-test that proves
+    # this harness can catch planted defects runs in the ordinary test suite.
+    runs-on: macos-latest
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install the locked environment
+        run: uv sync --extra dev --frozen
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - name: Install Chromium
+        run: uv run playwright install chromium
+      - name: Install Tesseract
+        run: brew install tesseract
+      - name: Measure candidate bundles against the frozen v2 baselines
+        run: uv run python tools/parity/check.py --report parity-report.md
+      - name: Publish the parity report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: parity-report
+          path: parity-report.md
+          if-no-files-found: warn
+
+  docs:
+    name: docs site
+    runs-on: ubuntu-latest
+    # Blocking from the day the site exists (docs/05 task 4.2). `--strict`
+    # turns a broken cross-reference into a failed build, which is the only way
+    # a documentation link stays correct across a refactor.
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install the locked environment
+        run: uv sync --extra dev --extra docs --extra mcp --frozen
+      - name: Build the documentation site
+        run: uv run mkdocs build --strict
+      - name: Publish the built site
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docs-site
+          path: site/
+          if-no-files-found: error
+
+  licenses:
+    name: license gate
+    runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      # Every extra, not just `dev`: this gate reads the *installed* tree, so
+      # an extra that is not installed is an extra whose transitive licenses
+      # nobody checked. `mcp` and `docs` were added to pyproject without being
+      # added here, and a future locked dependency under either could have
+      # been GPL/AGPL/SSPL without failing CI — while CONTRIBUTING rule 4 and
+      # spec §6 invariant 9 both say the installed tree contains none
+      # (docs/09 P8-3). `--all-extras` also pulls `chunk-hybrid`, which is
+      # heavier than this job needs but is exactly the kind of extra the check
+      # exists for. The footprint test is unaffected: it runs in the `tests`
+      # job, whose environment is unchanged.
+      - name: Install the locked environment
+        run: uv sync --all-extras --frozen
+      - name: Deny GPL / AGPL / SSPL in the installed tree
+        run: |
+          {
+            echo "## Dependency licenses"
+            echo
+            uv run python tools/licenses/check.py --summary
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
+
+  audit:
+    name: vulnerability scan
+    runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install the locked environment
+        run: uv sync --extra dev --frozen
+      # Audit the *lock file*, not the ambient environment, and all of it.
+      # Handed `uv export` directly, pip-audit evaluates each line's marker
+      # against whichever runner this is and drops the rest without a word:
+      # on a macOS runner, every pin held only for Linux or Windows; on this
+      # Linux one, the macOS-only transformers 5.8.1 (docs/09 P10-16). The
+      # script exports, strips the markers, and fails unless pip-audit's
+      # report accounts for every pin; `tools/verify.py` runs the same command.
+      #
+      # Any advisory fails it, including one with no fixed version yet: the
+      # script has no allowlist, so a pin nobody can upgrade keeps this job red
+      # until the dependency is dropped or replaced, or the advisory withdrawn.
+      - name: pip-audit (OSV), every locked pin on every platform
+        run: uv run python tools/audit/check.py
+
+  perf:
+    name: perf smoke (non-blocking)
+    # Linux specifically. `tools/perf/baseline.json` records the environment
+    # it was taken in (Linux/x86_64), and `Environment.comparable_to` refuses
+    # to judge a run from a different one — it prints the number under
+    # `REPORTED ONLY` and exits 0. On a macOS runner this job therefore could
+    # not detect an order-of-magnitude regression, which is the single thing
+    # it exists to detect (docs/09 P8-5).
+    #
+    # The baseline in the tree was recorded before CI moved to GitHub-hosted
+    # runners, in a Linux/x86_64 container on other hardware. `comparable_to`
+    # compares OS, architecture and `RUNNER_OS` only, and those match here, so
+    # the first hosted runs ARE judged — against a median this hardware never
+    # produced. Read them as calibration: if the hosted median sits well away
+    # from the recorded 6.35s, re-record with `record_perf_baseline` in a pull
+    # request of its own that says why. Until then a pass is weaker evidence
+    # than it looks, and an over-budget run may be the hardware, not the code.
+    runs-on: ubuntu-latest
+    # Non-blocking and trend-tracked, per docs/06 §CI. The budget is 3x a
+    # recorded median: it exists to catch an order-of-magnitude regression, not
+    # to police a few hundred milliseconds, and spec §4 sets no SLO on purpose.
+    # A run that goes over publishes the number and says so on the pull request
+    # rather than stopping it.
+    continue-on-error: true
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install the locked environment
+        run: uv sync --extra dev --frozen
+      # Cached like every other job. An earlier revision skipped the cache on
+      # the theory that a downloaded browser is a different first run from a
+      # cached one — but `playwright install` finishes before `smoke.py`
+      # starts, so the browser is on disk either way before the first timed
+      # capture, and `capture_once(0)` is discarded precisely to absorb cold
+      # start. The theory cost a ~150 MB download on every push for nothing.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - name: Install Chromium
+        run: uv run playwright install --with-deps chromium
+      # Before the measurement, not after it: a run with no baseline to compare
+      # against exits non-zero on purpose, which would skip a recording step
+      # placed below — so the one job that exists to create the baseline could
+      # never create it. Recording first also means the comparison below runs
+      # against the file this runner just wrote, which is a check that what was
+      # recorded is usable.
+      - name: Re-record the baseline on this runner
+        if: inputs.record_perf_baseline
+        run: uv run python tools/perf/smoke.py --record
+      # No pipeline around the thing whose status matters. Two shapes were
+      # wrong before this one, and both reported success for an over-budget
+      # run: `exit "${PIPESTATUS[0]}"` after a brace group reads the *last*
+      # command in the braces, which with a closing ``` fence is the `echo`;
+      # and moving the capture to `|| status=$?` inside those braces does not
+      # help either, because bash runs both sides of a pipeline in subshells,
+      # so the assignment is thrown away with the subshell (docs/09 P5-9).
+      # Redirect to a file, compose the summary from it, and the status is an
+      # ordinary variable in the step's own shell.
+      - name: Measure the fixture article
+        run: |
+          status=0
+          uv run python tools/perf/smoke.py --json perf-smoke.json > perf.log 2>&1 \
+            || status=$?
+          {
+            echo "## Perf smoke — fixture article, median of 3"
+            echo
+            echo '```'
+            cat perf.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat perf.log
+          exit "$status"
+      - name: Publish the measurement
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: perf-smoke
+          path: |
+            perf-smoke.json
+            tools/perf/baseline.json
+          if-no-files-found: warn
+
+  verapdf:
+    name: veraPDF conformance (non-blocking)
+    runs-on: ubuntu-latest
+    # Non-blocking while the baseline settles, per ADR-0010; the job publishes
+    # its report either way so a regression is visible on the pull request that
+    # caused it. Flip `continue-on-error` off (and add --strict below) once the
+    # baseline has held for a few releases.
+    continue-on-error: true
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install the locked environment
+        run: uv sync --extra dev --frozen
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - name: Install Chromium (the transcript appendix is a rendered document)
+        run: uv run playwright install --with-deps chromium
+      - name: Install Tesseract and Ghostscript
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y tesseract-ocr ghostscript
+      # veraPDF is GPL and is never linked — it runs as a separate program
+      # (docs/adr/0006), here from its container image, so this job needs no
+      # Java. `check.py` also accepts an installed `verapdf` CLI, which is how
+      # it runs on a workstation.
+      - name: Pull the veraPDF image
+        run: docker pull verapdf/cli
+      # Validates the FINAL COMPOSED file: img2pdf pack -> OCRmyPDF pdfa-3 ->
+      # appendix merge -> bookmarks and back-links -> associated files. Every
+      # one of those steps happens after the conversion, so validating the
+      # intermediate would prove nothing (ADR-0010, red-team finding C2).
+      # Same shape as the perf step, and it had the same latent bug: the
+      # closing ``` fence was the last command in the braces, so
+      # `PIPESTATUS[0]` was the `echo`'s status and a non-conformant file
+      # reported success. The job is non-blocking either way, but a gate that
+      # cannot fail is worse than no gate — it looks like evidence.
+      # `--strict` is what makes the report a status. Without it
+      # `tools/verapdf/check.py` returns 0 for a non-conformant file (its
+      # `return 1 if arguments.strict else 0`), so this step always succeeded
+      # and `continue-on-error` never had a failure to soften — the job was
+      # advisory in name and inert in fact, which the comment three lines above
+      # already calls worse than no gate (docs/09 P8-4). The advisory status
+      # comes from `continue-on-error`, where it belongs.
+      - name: Validate the composed --pdfa deliverable
+        run: |
+          mkdir -p verapdf-report
+          status=0
+          uv run python tools/verapdf/check.py --strict --out verapdf-report \
+            > verapdf.log 2>&1 || status=$?
+          {
+            echo "## veraPDF — final composed protected-viewer PDF/A"
+            echo
+            echo '```'
+            cat verapdf.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat verapdf.log
+          exit "$status"
+      - name: Publish the report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verapdf-report
+          path: verapdf-report/
+          if-no-files-found: warn

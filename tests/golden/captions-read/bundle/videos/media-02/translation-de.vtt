@@ -1,0 +1,17 @@
+WEBVTT
+
+NOTE
+kind: subtitles
+language: de
+label: German subtitles
+media: <STANDIN>/sample-audio.mp3
+title: Operations audio briefing
+role: translation
+
+1
+00:00:00.000 --> 00:00:04.000
+Willkommen zur vierteljährlichen Überprüfung des Erfassungsablaufs.
+
+2
+00:00:04.000 --> 00:00:08.000
+Jedes Seitenelement wird Teil der Aufzeichnung.

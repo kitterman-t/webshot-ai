@@ -1,0 +1,10 @@
+{
+  "case": "captions-read",
+  "kind": "captions",
+  "argv": [
+    "<capture of tests/fixtures/captions_page.html over loopback>"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

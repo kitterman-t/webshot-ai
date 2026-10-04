@@ -1,0 +1,21 @@
+- main [ref=e2]:
+  - heading "Change your password" [level=1] [ref=e3]
+  - generic [ref=e4]:
+    - generic [ref=e5]: Current password
+    - textbox "Current password" [ref=e6]: [REDACTED PASSWORD]
+    - generic [ref=e7]: New password
+    - textbox "New password" [ref=e8]: [REDACTED PASSWORD]
+    - generic [ref=e9]: Account
+    - textbox "Account" [ref=e10]: live@example.com
+    - generic [ref=e11]: Display mode
+    - combobox "Display mode" [ref=e12]:
+      - option "Compact"
+      - option "Comfortable"
+      - option "Dense" [selected]
+    - generic [ref=e13]:
+      - checkbox "Email me about sign-ins" [checked] [ref=e14]
+      - text: Email me about sign-ins
+    - generic [ref=e15]: Recovery note
+    - textbox "Recovery note" [ref=e16]: live recovery note
+  - heading "What the capture must contain" [level=2] [ref=e17]
+  - paragraph [ref=e18]: Both password values are replaced by a redaction marker before they can reach any published artifact, and so is every fragment of one. The account field is ordinary form state and is recorded with its value, which is what makes the absence of the passwords a measurement rather than an empty bundle.

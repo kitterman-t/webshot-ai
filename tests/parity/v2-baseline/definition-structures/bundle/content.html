@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <title>Field Guide to Document Structures</title>
+  <meta name="description" content="Definition lists, blockquotes, code, and ordered lists for extraction fidelity.">
+  
+</head>
+<body>
+  <main>
+    <h1>Field Guide to Document Structures</h1>
+    <p>This page exercises the block types that long-form technical writing relies
+    on: a definition list, a block quotation, an ordered procedure, an unordered
+    checklist, and preformatted configuration text.</p>
+
+    <h2>Terminology</h2>
+    <dl>
+      <dt>Capture</dt>
+      <dd>The act of recording what a page rendered for an authorized reader, without altering its substance.</dd>
+      <dt>Bundle</dt>
+      <dd>The machine-readable companion to the PDF: text, structure, chunks, and provenance in one directory.</dd>
+      <dt>Sentinel</dt>
+      <dd>A string that exists only inside a raster, so its presence in the text proves recognition ran.</dd>
+    </dl>
+
+    <h2>Advice from the manual</h2>
+    <blockquote>Preserve the reading order first. A beautiful page that reads in
+    the wrong order is a worse record than a plain page that reads correctly.</blockquote>
+
+    <h2>Procedure</h2>
+    <ol>
+      <li>Wait for the page's readiness signal before touching the DOM.</li>
+      <li>Record every structure the page used to say what it said.</li>
+      <li>Validate the result before publishing anything.</li>
+    </ol>
+
+    <h2>Pre-flight checklist</h2>
+    <ul>
+      <li>Fonts settled</li>
+      <li>Images loaded</li>
+      <li>Overlays accounted for</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <pre>capture:
+  mode: clean
+  scroll: bounded
+  ocr: tesseract</pre>
+  </main>
+
+
+</body></html>

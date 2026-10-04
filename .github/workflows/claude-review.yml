@@ -1,0 +1,498 @@
+name: Claude review
+
+# Deliberately NOT `synchronize`. A review per push mostly re-reads code an
+# earlier review already read, and each one spends quota: one pull request
+# took five rounds of fixes, which would have been five reviews. One review
+# when the PR is ready is the whole of the value. Add `synchronize` back only
+# if a PR routinely lands work you want re-read.
+#
+# `pull_request`, never `pull_request_target`. The review job holds an OAuth
+# secret and `id-token: write`; `pull_request_target` runs with the base
+# repository's secrets while the code it checks out is the fork's. Under
+# `pull_request` GitHub gives a fork's run no secrets and a read-only token,
+# so a fork that edits this file can at most stop its own review running.
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+
+# Nothing by default; the review job asks for what it uses.
+permissions: {}
+
+# Harmless with the triggers above, and the guard that matters if you ever
+# add `synchronize`: a review of a commit you have already replaced is spend
+# with no reader.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Whether to review at all, decided in a job of its own so that a pull
+  # request the reviewer cannot or should not read is reported as one. The
+  # review job below is then `skipped`, which is neither the false green of a
+  # review that did not happen nor a red that invites someone to fix it — and
+  # this job's run summary says why, in every branch, so the reason is on the
+  # page next to the skip rather than inferred from it.
+  #
+  # Bots skip: `claude-code-action` refuses a run a bot initiated and exits
+  # before writing an execution file, so the guard would fail a review that
+  # verified nothing — a Dependabot diff is a version number, and what proves
+  # a bump safe is the golden corpus and parity, which run regardless.
+  # Drafts skip: the reviewer's first step stops on one by design, and
+  # `ready_for_review` fires when it is not a draft any more.
+  # Forks skip: GitHub gives a fork's run neither the OAuth secret nor an OIDC
+  # token, and the action refuses an actor without write access, so a fork's
+  # review would be a red that verified nothing.
+  # A missing secret skips with a warning: on a same-repository pull request
+  # that is a configuration gap, not a property of the PR.
+  gate:
+    name: should this pull request be reviewed?
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      review: ${{ steps.decide.outputs.review }}
+    steps:
+      # The fork test compares names rather than reading `head.repo.fork`.
+      # A pull request whose fork was deleted has no head repository, so
+      # `head.repo.fork` is null — which reads as "not a fork". An empty name
+      # is simply not this repository's.
+      - name: Decide, and say why in the run summary
+        id: decide
+        env:
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+          # A boolean, not the secret: whether it reached this run at all.
+          HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+        run: |
+          echo "author=${AUTHOR} (${AUTHOR_TYPE}) draft=${DRAFT} head=${HEAD_REPO:-none}" \
+            "repo=${REPO} token-present=${HAS_TOKEN}"
+          review=false level=notice reason=""
+          if [ "${AUTHOR_TYPE}" = "Bot" ]; then
+            reason="it was opened by a bot (${AUTHOR}), and the action refuses a run a bot initiated."
+          elif [ "${DRAFT}" = "true" ]; then
+            reason="it is a draft. Marking it ready for review starts one."
+          elif [ "${DRAFT}" != "false" ]; then
+            reason="the event carried no draft state (draft=${DRAFT:-unset}), so whether it is ready is unknown."
+            level=warning
+          elif [ "${HEAD_REPO}" != "${REPO}" ]; then
+            reason="its head is ${HEAD_REPO:-a repository that no longer exists}, not ${REPO}. GitHub gives a fork's run no secrets, so there is nothing to review with."
+          elif [ "${HAS_TOKEN}" != "true" ]; then
+            reason="the CLAUDE_CODE_OAUTH_TOKEN secret did not reach this run, so the reviewer cannot sign in. Set it as a repository secret on ${REPO}."
+            level=warning
+          else
+            review=true
+          fi
+          if [ "${review}" = true ]; then
+            {
+              echo "## Claude review: running"
+              echo
+              echo "Same-repository pull request by ${AUTHOR}, not a draft, and the token is set."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Claude review: skipped"
+              echo
+              echo "No review ran on this pull request because ${reason}"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::${level}::Claude review skipped: ${reason}"
+          fi
+          echo "review=${review}"
+          echo "review=${review}" >> "$GITHUB_OUTPUT"
+
+  review:
+    needs: gate
+    if: needs.gate.outputs.review == 'true'
+    # Linux: the job drives no browser, and the hosted Ubuntu image ships `gh`,
+    # which the review plugin does all of its GitHub work through.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+    steps:
+      # Pinned by commit, like every other workflow here. This is the file that
+      # carries CLAUDE_CODE_OAUTH_TOKEN and `id-token: write`, and it was the
+      # only one still resolving actions through mutable tags — the wrong way
+      # round. Dependabot keeps the pins current on a weekly schedule, so this
+      # costs one grouped pull request a week.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history, not depth 1: a review compares the head against the
+          # base, and a shallow clone has no base commit to compare against.
+          fetch-depth: 0
+      # A pull request that edits this file cannot be reviewed by it: the action
+      # refuses to run a workflow whose content differs from the default branch,
+      # and exits before writing an execution file. That is a security control,
+      # not a fault — but it is indistinguishable, from the guard below, from an
+      # action that simply produced nothing. So establish which it is here,
+      # as a fact rather than an inference.
+      #
+      # HEAD is the merge commit GitHub made when the event fired, and its first
+      # parent is the base as it was then. The PR's own change is HEAD^1..HEAD.
+      # Diffing against origin/<base> instead — the base as it is NOW — also
+      # counts every edit master took while this run sat queued: when one
+      # pull request changed this file, two reviews queued before it merged
+      # each read it as "this PR edits the reviewer" and passed in ten
+      # seconds having reviewed nothing (docs/09 P10-18). That case is `stale`,
+      # not `changed`: the action still refuses the old copy, but nothing here
+      # is documented behaviour, and the guard fails it.
+      - name: Does this pull request change the reviewer itself?
+        id: selfmod
+        env:
+          F: .github/workflows/claude-review.yml
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          if ! git rev-parse -q --verify HEAD^2 >/dev/null; then
+            echo "::error::HEAD $(git rev-parse --short HEAD) is not a merge commit"
+            echo "::error::($(git log -1 --format='%p' HEAD) as parents), so this"
+            echo "::error::PR's own change to the reviewer cannot be isolated."
+            exit 1
+          fi
+          changed=true stale=false
+          git diff --quiet HEAD^1 HEAD -- "$F" && changed=false
+          if [ "$changed" = false ] && ! git diff --quiet "$BASE" HEAD -- "$F"; then
+            stale=true
+          fi
+          echo "changed=$changed stale=$stale merge=$(git rev-parse --short HEAD)" \
+            "base-then=$(git rev-parse --short HEAD^1) base-now=$(git rev-parse --short "$BASE")"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "stale=$stale" >> "$GITHUB_OUTPUT"
+          if [ "$changed" = true ]; then
+            echo "::notice::This PR edits claude-review.yml, so the reviewer runs the"
+            echo "::notice::default branch's copy and skips. It cannot review itself."
+          fi
+      # The guard below is Python, and this job installs nothing else that
+      # would pin an interpreter. Taking whatever `python3` the runner image
+      # carries is what once made the guard fail with "command not found" and
+      # report it as an unreadable file, so the version is named here.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # The review plugin does everything on GitHub through `gh`: the check
+      # that the PR wants a review, the diff, and the "no issues found" comment.
+      # On a runner without it, 11 of 26 review runs failed that way, and one
+      # ended "the gh CLI is not installed" and exited success (docs/09
+      # P10-18). Hosted Ubuntu images ship it today; an image that stops would
+      # bring that back silently, so refuse before spending the review rather
+      # than after.
+      #
+      # The timestamp is the guard's "this run" boundary: a comment older than
+      # it was left by some earlier review, not this one.
+      - name: The reviewer needs gh
+        id: started
+        run: |
+          echo "runner=${RUNNER_NAME} gh=$(command -v gh || echo MISSING)"
+          if ! command -v gh >/dev/null; then
+            echo "::error::gh is not on PATH on ${RUNNER_NAME}, so the review could"
+            echo "::error::neither read the pull request nor post to it."
+            exit 1
+          fi
+          gh --version
+          echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - uses: anthropics/claude-code-action@756cc22e19660d20e8cc9496b4f242475a7f7790 # v1.0.235
+        # Claude Code starts a subagent in the background unless the call says
+        # `run_in_background: false` (2.1.241, and still 2.1.281, the build
+        # nearest the 2.1.283 that v1.0.235 installs), and the review plugin's
+        # calls say nothing. The action ends the session at the first result message,
+        # and the first result is the orchestrator saying it will wait for its
+        # agents. 20 of the 26 reviews that ran from 2026-08-24 to 2026-09-27
+        # ended there, green, having reviewed nothing. With this set the tool
+        # drops the parameter and every subagent blocks until it returns
+        # (P10-18).
+        env:
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
+        with:
+          # A subscription token, not an API key: the review draws on the
+          # owner's Claude quota rather than a separate per-review meter that
+          # runs out. The gate job is what keeps a fork's run from asking for
+          # it; GitHub would not hand it over anyway.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Off, the action's default. The full output is every tool call and
+          # its result, the reviewer may run Bash in a job that holds this
+          # token and an OIDC grant, and Actions logs on a public repository
+          # are world-readable. The cost is diagnosis: when a review posts
+          # nothing, the log no longer says what it decided and why. The guard
+          # below still prints what the execution file records of the session
+          # — its final result, turn and denial counts, and subagent tally —
+          # but not the turns in between.
+          show_full_output: false
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+          # `--allowedTools` REPLACES the default tool set, it does not add to
+          # it. Naming only the comment tool gave the reviewer exactly one
+          # capability — post a comment — and no way to read a single line of
+          # the code it was reviewing. It spent its turns being denied and then
+          # exited `success` with `No buffered inline comments`, on eight
+          # consecutive pull requests. The run cited as proof it worked was 38
+          # turns with 21 permission denials.
+          #
+          # So the MCP tool must still be named — the action starts that server
+          # only when --allowedTools names it — but the reading tools have to be
+          # named alongside it.
+          #
+          # The plugin's first step stops without a word when the PR is closed,
+          # needs no review, or already has Claude's comment. Silence is also
+          # what a review that died looks like, and the guard below fails a run
+          # that posted nothing. So a deliberate stop has to say so; the one
+          # sentence here is what tells the two apart.
+          claude_args: >-
+            --allowedTools
+            "Read,Grep,Glob,Bash,Skill,Task,TodoWrite,WebFetch,NotebookRead,mcp__github_inline_comment__create_inline_comment"
+            --append-system-prompt
+            "If the code review stops at its first step because the pull request is closed, is a draft, does not need review, or already has a comment from Claude, post one pull request comment with gh pr comment that names the condition, then stop. A run that leaves no comment on the pull request is reported as a failed review."
+        id: review
+      # A reviewer that cannot read still exits `success`, which is how the
+      # broken configuration above survived eight pull requests. `is_error` was
+      # false every time; the signal was `permission_denials_count`, four lines
+      # away in the same object, and nobody read it.
+      #
+      # Then it survived twenty more with nothing denied. The session ended
+      # with its subagents still running, on a result that said it would wait
+      # for them, and a guard that asked only about denials had nothing to see
+      # (P10-18). So this asks for the outcome as well as the obstacles: every
+      # subagent finished, and the pull request carries a comment this run
+      # left. The comment is the review's only product; its absence is the
+      # failure, whatever the record says about how the session went.
+      #
+      # Every branch here FAILS. The first version of this guard skipped itself
+      # when the output was empty and exited 0 when the file was missing, so a
+      # wrong output name would have produced the same silent green it exists
+      # to catch. A guard that cannot find its input has failed.
+      #
+      # `turns=N denials=M ...` prints on every run that reaches a verdict, so
+      # the LINE'S ABSENCE means this step did not execute — the one thing a
+      # green job must not hide.
+      - name: The review must finish, unrefused, and leave a comment
+        if: always()
+        env:
+          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+          SELF_MODIFIED: ${{ steps.selfmod.outputs.changed }}
+          STALE: ${{ steps.selfmod.outputs.stale }}
+          REVIEW_STARTED_AT: ${{ steps.started.outputs.at }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # The author the action's app token posts as. If comments start
+          # arriving under another name, the guard lists who did comment.
+          REVIEWER_LOGIN: claude[bot]
+        run: |
+          if [ -z "${EXECUTION_FILE}" ] && [ "${SELF_MODIFIED}" = "true" ]; then
+            echo "turns=skipped denials=skipped"
+            echo "The reviewer skipped itself because this PR edits its workflow."
+            echo "That is the documented behaviour; there is nothing to verify."
+            exit 0
+          fi
+          if [ -z "${EXECUTION_FILE}" ] && [ "${STALE}" = "true" ]; then
+            echo "turns=stale denials=stale"
+            echo "::error::master's claude-review.yml changed after this run's merge"
+            echo "::error::commit was made, so the action refused the stale copy and"
+            echo "::error::reviewed nothing. Re-running this job reuses that copy; a"
+            echo "::error::fresh event does not (mark the PR draft, then ready)."
+            exit 1
+          fi
+          if [ -z "${EXECUTION_FILE}" ]; then
+            echo "::error::The review step produced no execution_file output."
+            echo "::error::Either the action failed before writing it, or that"
+            echo "::error::output has been renamed. Either way this guard cannot"
+            echo "::error::see whether the review read anything."
+            exit 1
+          fi
+          if [ ! -f "${EXECUTION_FILE}" ]; then
+            echo "::error::execution_file names ${EXECUTION_FILE}, which does not exist."
+            exit 1
+          fi
+          python3 - "${EXECUTION_FILE}" <<'PYEOF'
+          import json, os, re, sys, urllib.request
+
+          def fail_now(msg):
+              print("::error::" + msg)
+              sys.exit(1)
+
+          raw = open(sys.argv[1]).read()
+
+          # The action writes a stream of objects, pretty-printed and
+          # concatenated — not an array, and not one per line. `json.load`
+          # fails on the second object and a line reader fails on the first.
+          # raw_decode consumes one value at a time and reports where it
+          # stopped, which handles all three shapes with no format guess.
+          records, idx, decoder = [], 0, json.JSONDecoder()
+          while idx < len(raw):
+              while idx < len(raw) and raw[idx] in " \t\r\n":
+                  idx += 1
+              if idx >= len(raw):
+                  break
+              try:
+                  obj, idx = decoder.raw_decode(raw, idx)
+              except json.JSONDecodeError:
+                  break
+              records.append(obj)
+          if len(records) == 1 and isinstance(records[0], list):
+              records = records[0]
+
+          result = next((r for r in records
+                         if isinstance(r, dict) and r.get("type") == "result"), None)
+          if result is None:
+              shapes = sorted({r.get("type", "?") for r in records if isinstance(r, dict)})
+              # Show the file rather than describing the failure.
+              fail_now("no result record; %d record(s), type(s): %s; first 200 bytes: %r"
+                       % (len(records), ", ".join(shapes) or "none", raw[:200]))
+
+          # What the session said last. When it ended early, this is where it
+          # said so: "I'll wait for both to finish before proceeding."
+          print("final result: %s" % " ".join(str(result.get("result")).split())[:600])
+
+          denied = []
+          for r in records:
+              if isinstance(r, dict):
+                  for d in (r.get("permission_denials") or []):
+                      n = (d.get("tool_name") or d.get("tool")) if isinstance(d, dict) else str(d)
+                      if n:
+                          denied.append(n)
+          if denied:
+              print("denied tools:", ", ".join(sorted(set(denied))))
+          elif result.get("permission_denials_count"):
+              print("denials reported but not itemised in the execution file")
+
+          # The count has appeared in the action's log but not, so far, under
+          # this name in the file. Look for it wherever it is rather than
+          # assuming one spelling, and if it is genuinely absent, say what the
+          # record DOES carry — a missing key is a question the file can answer.
+          NAMES = ("permission_denials_count", "permissionDenialsCount",
+                   "num_permission_denials", "denials_count")
+          count = next((result[k] for k in NAMES if k in result), None)
+          if count is None:
+              for r in records:
+                  if isinstance(r, dict):
+                      count = next((r[k] for k in NAMES if k in r), None)
+                      if count is not None:
+                          break
+          # An EMPTY denial list means zero, not unknown. The file carries
+          # `permission_denials` and no count field at all, so keying the
+          # fallback on the list being truthy made a clean review — empty list —
+          # indistinguishable from a missing key, which is the exact conflation
+          # this guard exists to prevent. Presence of the key is the signal.
+          if count is None:
+              for r in records:
+                  if isinstance(r, dict) and "permission_denials" in r:
+                      count = len(r.get("permission_denials") or [])
+                      break
+          if count is None:
+              print("result record keys: %s" % ", ".join(sorted(result)))
+              print("record types in file: %s"
+                    % ", ".join(sorted({r.get("type", "?") for r in records
+                                        if isinstance(r, dict)})))
+              fail_now("no denial count under any known name")
+          if not isinstance(count, int):
+              fail_now("permission_denials_count was %r, not a number." % (count,))
+
+          failures, warnings = [], []
+          if count:
+              failures.append(
+                  "The review was denied %d tool call(s) in %s turns. A small count "
+                  "usually means --allowedTools needs one more entry; a large one "
+                  "means it could not read the code at all."
+                  % (count, result.get("num_turns", "?")))
+
+          # A subagent still running when the result arrived is work the
+          # session abandoned: the action stops reading at the first result.
+          # A killed or failed one is counted as ended, not as finished.
+          stats = result.get("subagent_stats")
+          if not isinstance(stats, dict) or not all(
+                  isinstance(stats.get(k), int)
+                  for k in ("spawned", "completed", "started_in_background")):
+              unfinished = "unknown"
+              print("subagent_stats: %r; result record keys: %s"
+                    % (stats, ", ".join(sorted(result))))
+              warnings.append("The result record has no usable subagent_stats, so "
+                              "whether every subagent finished is unknown; the "
+                              "comment check below is the only evidence.")
+          else:
+              killed = sum(v for v in (stats.get("killed") or {}).values()
+                           if isinstance(v, int))
+              ended = stats["completed"] + (stats.get("failed") or 0) + killed
+              unfinished = stats["spawned"] - ended
+              print("subagents: spawned=%d completed=%d failed=%s killed=%d "
+                    "background=%d unfinished=%d"
+                    % (stats["spawned"], stats["completed"], stats.get("failed"),
+                       killed, stats["started_in_background"], unfinished))
+              if unfinished > 0:
+                  failures.append(
+                      "The session ended with %d of %d subagent(s) still running. "
+                      "It stopped to wait for them, and the action does not wait: "
+                      "whatever they would have found was never read or posted."
+                      % (unfinished, stats["spawned"]))
+              if stats["started_in_background"]:
+                  warnings.append(
+                      "%d subagent(s) started in the background although "
+                      "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS is set. Has Claude Code "
+                      "renamed it? A run that stops to wait for them reviews nothing."
+                      % stats["started_in_background"])
+              if stats.get("failed") or killed:
+                  warnings.append("%s subagent(s) failed and %d were killed; the "
+                                  "review may have covered less than it says."
+                                  % (stats.get("failed"), killed))
+
+          # The postcondition. A finished review always leaves a comment:
+          # findings inline, "No issues found" as a summary, or — by the
+          # instruction in claude_args — the reason it stopped.
+          since = os.environ.get("REVIEW_STARTED_AT", "")
+          if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", since):
+              fail_now("REVIEW_STARTED_AT is %r, so there is no boundary between "
+                       "this run's comments and older ones." % since)
+          api = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+          login, pr, head = (os.environ["REVIEWER_LOGIN"], os.environ["PR_NUMBER"],
+                             os.environ["HEAD_SHA"])
+
+          def listing(path):
+              url = "%s/repos/%s/%s?per_page=100" % (api, os.environ["REPO"], path)
+              out = []
+              while url:
+                  req = urllib.request.Request(url, headers={
+                      "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                      "Accept": "application/vnd.github+json"})
+                  with urllib.request.urlopen(req, timeout=30) as resp:
+                      page = json.load(resp)
+                      nxt = re.search(r'<([^>]+)>;\s*rel="next"',
+                                      resp.headers.get("Link") or "")
+                  if not isinstance(page, list):
+                      fail_now("GET %s returned %s, not a list" % (url, type(page).__name__))
+                  out.extend(page)
+                  url = nxt.group(1) if nxt else None
+              return out
+
+          inline = listing("pulls/%s/comments" % pr)
+          issue = listing("issues/%s/comments" % pr)
+          by = lambda c: (c.get("user") or {}).get("login")
+          new_inline = [c for c in inline if by(c) == login and c["created_at"] >= since]
+          new_issue = [c for c in issue if by(c) == login and c["created_at"] >= since]
+          older = sum(1 for c in inline + issue if by(c) == login and c["created_at"] < since)
+          print("comments by %s since %s: inline=%d (on head %s: %d) summary=%d; "
+                "older: %d; on the PR in all: inline=%d issue=%d"
+                % (login, since, len(new_inline), head[:8],
+                   sum(1 for c in new_inline if c.get("commit_id") == head),
+                   len(new_issue), older, len(inline), len(issue)))
+          for c in new_inline + new_issue:
+              print("  %s %s" % (c["created_at"], c.get("html_url")))
+          posted = len(new_inline) + len(new_issue)
+          if not posted:
+              others = sorted({by(c) or "?" for c in inline + issue} - {login})
+              print("other commenters on #%s: %s" % (pr, ", ".join(others) or "none"))
+              failures.append(
+                  "The review left no comment on #%s: no inline finding, no summary, "
+                  "and no reason for stopping. Its final result is printed above."
+                  % pr)
+
+          print("turns=%s denials=%d unfinished=%s comments=%d"
+                % (result.get("num_turns", "?"), count, unfinished, posted))
+          for w in warnings:
+              print("::warning::" + w)
+          for f in failures:
+              print("::error::" + f)
+          sys.exit(1 if failures else 0)
+          PYEOF

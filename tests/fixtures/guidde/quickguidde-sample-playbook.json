@@ -1,0 +1,1302 @@
+{
+  "playbook": {
+    "language": {
+      "langCode": "en-US",
+      "langName": "English (United States)"
+    },
+    "magicCapture": {
+      "captureType": {
+        "id": "ExampleId0000000000001",
+        "imageUrl": "https://storage.googleapis.com/guidde-production.appspot.com/defaultLogos%2Fessences%2FProduct%20Demonstration.svg",
+        "title": "Product Demo"
+      },
+      "language": {
+        "langCode": "en-US",
+        "langName": "English (United States)"
+      }
+    },
+    "sourceCaptureVideo": {
+      "videoDimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "videoThumbnailPreview": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000002.webp?alt=media",
+      "url": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideo%2FExampleId0000000000003.webm?alt=media",
+      "duration": 88.441
+    },
+    "id": "ExamplePlaybook0000001",
+    "applications": [],
+    "docScreenshotVersion": "v1",
+    "coverColor": "",
+    "duration": 81.4,
+    "foldersIds": [
+      "ExampleTeamId000000001-root"
+    ],
+    "isMainIncluded": null,
+    "isPlaylist": false,
+    "isPublic": true,
+    "isPublished": true,
+    "lastUpdatedAt": 1776878692,
+    "lastUpdatedBy": "Pat Example",
+    "lastUpdatedPhotoUrl": "",
+    "mode": "quickGuidde",
+    "orgIdForAdmin": "ExampleOrgId0000000001",
+    "orgName": "Example Organization",
+    "organizationId": null,
+    "private": false,
+    "publishedForUsers": null,
+    "showAiDialog": false,
+    "spaceGroups": null,
+    "state": "published_public",
+    "steps": [
+      {
+        "audioNote": {
+          "audioDuration": 2.567,
+          "audioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Faudio%2FExampleStep00000000001%2FExampleId0000000000004.webm?alt=media",
+          "isUserEdited": true,
+          "markdown": "This walkthrough tours the main areas of a project.",
+          "speakerConfig": {
+            "disabledFeatures": {
+              "pronunciation": false,
+              "speakingRate": false
+            },
+            "avatarUrl": null,
+            "avatarUrlCompressed": null,
+            "disabled": false,
+            "provider": "AZURE",
+            "gender": "MALE",
+            "id": "ExampleId0000000000005",
+            "isStudio": true,
+            "langCode": "en-US",
+            "langName": "English (United States)",
+            "model": "en-US-Andrew:DragonHDLatestNeural",
+            "name": "Andrew",
+            "sampleAudioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/public%2Faudio%2Fsamples%2Fen-US-Andrew%3ADragonHDLatestNeural_ExampleId0000000000006.webm?alt=media",
+            "speakingRate": 1,
+            "s2t": true,
+            "t2s": true
+          },
+          "speakingRate": 1,
+          "start": 0,
+          "end": 2.567,
+          "type": "textToSpeech"
+        },
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "description": "This walkthrough tours the main areas of a project.",
+        "docCoverPublicScreenshot": "https://static.guidde.com/v0/qg%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000001_cover.png?alt=media",
+        "docCoverScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000001_cover.png?alt=media",
+        "docScreenshot": "",
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000001.png?alt=media",
+        "duration": 3.2,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000001",
+        "kind": "cover",
+        "layers": [
+          {
+            "fillLinearGradientStartPoint": {
+              "x": 168,
+              "y": 965.9999999999999
+            },
+            "fillLinearGradientEndPoint": {
+              "x": 1302,
+              "y": -167.9999999999999
+            },
+            "cornerRadius": 0,
+            "fill": "",
+            "fillColors": [],
+            "fillLinearGradientColorStops": [
+              0,
+              "rgb(76, 84, 113)",
+              0.2,
+              "rgb(119, 125, 147)",
+              0.6,
+              "rgb(222, 223, 229)",
+              1,
+              "#FFFFFF"
+            ],
+            "height": 1080,
+            "id": "ExampleId0000000000007",
+            "isBackground": true,
+            "isSpotlight": false,
+            "rotation": 0,
+            "scaleFactor": 0.8,
+            "scaleX": 1,
+            "scaleY": 1,
+            "strokeColor": "",
+            "strokeColors": [],
+            "strokeWidth": 0,
+            "type": "rectangle",
+            "url": "",
+            "width": 1920,
+            "x": 0,
+            "y": 0
+          },
+          {
+            "align": "left",
+            "backgroundColor": "",
+            "color": "#000000",
+            "cornerRadius": 0,
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "fontFamily": "Inter",
+            "fontSize": 105,
+            "fontStyle": "bold normal",
+            "textDecoration": "",
+            "height": 265,
+            "id": "ExampleId0000000000008",
+            "isProfile": false,
+            "isTitle": true,
+            "padding": 80,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "strokeColors": [],
+            "title": "Touring Your Project Workspace",
+            "type": "text",
+            "verticalAlign": "top",
+            "width": 1386.08,
+            "x": 109.99999999999862,
+            "y": 109.99999999999696
+          },
+          {
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "height": 148,
+            "id": "ExampleId0000000000009",
+            "isBackground": false,
+            "isBrandkitLogo": true,
+            "isWatermark": false,
+            "rotation": 0,
+            "scaleX": 0.478,
+            "scaleY": 0.478,
+            "strokeColors": [],
+            "type": "image",
+            "url": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/qgSlides%2FExampleOrgId0000000001%2Fv_2026_03_23%2020_56_42%2Fcover_ExampleId0000000000010.png?alt=media",
+            "width": 856,
+            "x": 1448.8,
+            "y": 971
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "",
+        "firstFrameScreenshot": "",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000001_preview.webp?alt=media",
+        "screenshot": "",
+        "status": "done",
+        "subGenerationId": "00000000-0000-4000-8000-000000000001",
+        "subtitles": [
+          {
+            "text": "This walkthrough tours the main areas of a project.",
+            "start": 0,
+            "end": 2.2
+          }
+        ],
+        "timeStamp": 1769697796995,
+        "title": "Touring Your Project Workspace",
+        "type": "click",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000001.mp4?alt=media",
+        "videoSize": 34441,
+        "shouldRedraw": true,
+        "resetTextCallouts": false
+      },
+      {
+        "audioNote": {
+          "audioDuration": 16.027,
+          "audioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Faudio%2FExampleStep00000000002%2FExampleId0000000000011.webm?alt=media",
+          "isUserEdited": true,
+          "markdown": "/pause-2.2/ Once you are signed in, open Projects and choose a project. /pause-7/ Inside the project, the feed lists recent notes and status changes.",
+          "speakerConfig": {
+            "disabledFeatures": {
+              "pronunciation": false,
+              "speakingRate": false
+            },
+            "avatarUrl": null,
+            "avatarUrlCompressed": null,
+            "disabled": false,
+            "provider": "AZURE",
+            "gender": "MALE",
+            "id": "ExampleId0000000000005",
+            "isStudio": true,
+            "langCode": "en-US",
+            "langName": "English (United States)",
+            "model": "en-US-Andrew:DragonHDLatestNeural",
+            "name": "Andrew",
+            "sampleAudioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/public%2Faudio%2Fsamples%2Fen-US-Andrew%3ADragonHDLatestNeural_ExampleId0000000000006.webm?alt=media",
+            "speakingRate": 1,
+            "s2t": true,
+            "t2s": true
+          },
+          "speakingRate": 1,
+          "start": 0,
+          "end": 16.027,
+          "type": "textToSpeech"
+        },
+        "recordingEvent": {
+          "id": "ExampleId0000000000012",
+          "start": 0,
+          "end": 20883,
+          "name": "speaking"
+        },
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "description": "  Once you are signed in, open Projects and choose a project.   Inside the project, the feed lists recent notes and status changes.",
+        "docCoverPublicScreenshot": "",
+        "docCoverScreenshot": "",
+        "docPublicScreenshot": "https://static.guidde.com/v0/qg%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000002_doc.png?alt=media",
+        "docScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000002_doc.png?alt=media",
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000002.png?alt=media",
+        "duration": 16.72,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000002",
+        "kind": "step",
+        "layers": [
+          {
+            "audioUrl": "",
+            "shouldExtractNow": false,
+            "end": 20.883,
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "firstFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000013.png?alt=media",
+            "height": 1080,
+            "id": "ExampleId0000000000014",
+            "isBackground": true,
+            "lastFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000015.png?alt=media",
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "sourceDuration": 88.441,
+            "sourceVideoThumbnailPreview": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000016.webp?alt=media",
+            "sourceVideoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideo%2FExampleId0000000000003.webm?alt=media",
+            "start": 4.199780335215275,
+            "strokeColors": [],
+            "type": "video",
+            "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000017.png?alt=media",
+            "width": 1920,
+            "x": 0,
+            "y": 0,
+            "speed": 1
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000002_lf.png?alt=media",
+        "firstFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000002_first_frame.png?alt=media",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000002_preview.webp?alt=media",
+        "relativeRecordingTime": 0,
+        "subGenerationId": "00000000-0000-4000-8000-000000000002",
+        "subtitles": [
+          {
+            "text": "Once you are signed in, open Projects and choose a project.",
+            "start": 2,
+            "end": 5.2
+          },
+          {
+            "text": "Inside the project, the feed lists recent notes and status changes.",
+            "start": 12.6,
+            "end": 15.8
+          }
+        ],
+        "timeStamp": 0,
+        "title": "Opening A Project And Reading Its Feed",
+        "type": "click",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000002.mp4?alt=media",
+        "videoSize": 857882,
+        "resetTextCallouts": false
+      },
+      {
+        "recordingEvent": {
+          "id": "ExampleId0000000000018",
+          "start": 20883,
+          "end": 27500,
+          "name": "speaking"
+        },
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "docCoverPublicScreenshot": "",
+        "docCoverScreenshot": "",
+        "docPublicScreenshot": "https://static.guidde.com/v0/qg%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000003_doc.png?alt=media",
+        "docScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000003_doc.png?alt=media",
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000003.png?alt=media",
+        "duration": 4.52,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000003",
+        "kind": "step",
+        "layers": [
+          {
+            "audioUrl": "",
+            "shouldExtractNow": false,
+            "end": 27.5,
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "firstFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000019.png?alt=media",
+            "height": 1080,
+            "id": "ExampleId0000000000020",
+            "isBackground": true,
+            "lastFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000021.png?alt=media",
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "sourceDuration": 88.441,
+            "sourceVideoThumbnailPreview": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000022.webp?alt=media",
+            "sourceVideoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideo%2FExampleId0000000000003.webm?alt=media",
+            "start": 20.883,
+            "strokeColors": [],
+            "type": "video",
+            "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000023.png?alt=media",
+            "width": 1920,
+            "x": 0,
+            "y": 0,
+            "speed": 1.5
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000003_lf.png?alt=media",
+        "firstFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000003_first_frame.png?alt=media",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000003_preview.webp?alt=media",
+        "relativeRecordingTime": 20883,
+        "subtitles": [],
+        "timeStamp": 1,
+        "title": "Segment",
+        "type": "silence",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000003.mp4?alt=media",
+        "videoSize": 260637,
+        "resetTextCallouts": false,
+        "isHiddenInDoc": true
+      },
+      {
+        "audioNote": {
+          "audioDuration": 2.367,
+          "audioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Faudio%2FExampleStep00000000004%2FExampleId0000000000024.webm?alt=media",
+          "markdown": "The Files tab is where documents are kept.",
+          "speakerConfig": {
+            "disabledFeatures": {
+              "pronunciation": false,
+              "speakingRate": false
+            },
+            "avatarUrl": null,
+            "avatarUrlCompressed": null,
+            "disabled": false,
+            "provider": "AZURE",
+            "gender": "MALE",
+            "id": "ExampleId0000000000005",
+            "isStudio": true,
+            "langCode": "en-US",
+            "langName": "English (United States)",
+            "model": "en-US-Andrew:DragonHDLatestNeural",
+            "name": "Andrew",
+            "sampleAudioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/public%2Faudio%2Fsamples%2Fen-US-Andrew%3ADragonHDLatestNeural_ExampleId0000000000006.webm?alt=media",
+            "s2t": true,
+            "t2s": true
+          },
+          "speakingRate": 1,
+          "start": 0,
+          "end": 2.367,
+          "type": "textToSpeech"
+        },
+        "recordingEvent": {
+          "id": "ExampleId0000000000025",
+          "start": 27500,
+          "end": 30399,
+          "name": "speaking"
+        },
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "docCoverPublicScreenshot": "",
+        "docCoverScreenshot": "",
+        "docPublicScreenshot": "https://static.guidde.com/v0/qg%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000004_doc.png?alt=media",
+        "docScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000004_doc.png?alt=media",
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000004.png?alt=media",
+        "duration": 2.92,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000004",
+        "kind": "step",
+        "layers": [
+          {
+            "audioUrl": "",
+            "shouldExtractNow": false,
+            "end": 30.399,
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "firstFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000026.png?alt=media",
+            "height": 1080,
+            "id": "ExampleId0000000000027",
+            "isBackground": true,
+            "lastFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000028.png?alt=media",
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "sourceDuration": 88.441,
+            "sourceVideoThumbnailPreview": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000029.webp?alt=media",
+            "sourceVideoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideo%2FExampleId0000000000003.webm?alt=media",
+            "start": 27.5,
+            "strokeColors": [],
+            "type": "video",
+            "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000030.png?alt=media",
+            "width": 1920,
+            "x": 0,
+            "y": 0,
+            "speed": 1
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000004_lf.png?alt=media",
+        "firstFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000004_first_frame.png?alt=media",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000004_preview.webp?alt=media",
+        "relativeRecordingTime": 27500,
+        "subGenerationId": "00000000-0000-4000-8000-000000000003",
+        "subtitles": [
+          {
+            "text": "The Files tab is where documents are kept.",
+            "start": 0,
+            "end": 1.8
+          }
+        ],
+        "timeStamp": 2,
+        "title": "Files Tab Document Storage",
+        "type": "click",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000004.mp4?alt=media",
+        "videoSize": 113080,
+        "resetTextCallouts": false
+      },
+      {
+        "recordingEvent": {
+          "id": "ExampleId0000000000031",
+          "start": 30399,
+          "end": 36236,
+          "name": "speaking"
+        },
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "docCoverPublicScreenshot": "",
+        "docCoverScreenshot": "",
+        "docPublicScreenshot": "https://static.guidde.com/v0/qg%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000005_doc.png?alt=media",
+        "docScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000005_doc.png?alt=media",
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000005.png?alt=media",
+        "duration": 3.92,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000005",
+        "kind": "step",
+        "layers": [
+          {
+            "audioUrl": "",
+            "shouldExtractNow": false,
+            "end": 36.236,
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "firstFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000032.png?alt=media",
+            "height": 1080,
+            "id": "ExampleId0000000000033",
+            "isBackground": true,
+            "lastFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000034.png?alt=media",
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "sourceDuration": 88.441,
+            "sourceVideoThumbnailPreview": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000035.webp?alt=media",
+            "sourceVideoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideo%2FExampleId0000000000003.webm?alt=media",
+            "start": 30.399,
+            "strokeColors": [],
+            "type": "video",
+            "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000036.png?alt=media",
+            "width": 1920,
+            "x": 0,
+            "y": 0,
+            "speed": 1.5
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000005_lf.png?alt=media",
+        "firstFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000005_first_frame.png?alt=media",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000005_preview.webp?alt=media",
+        "relativeRecordingTime": 30399,
+        "subtitles": [],
+        "timeStamp": 3,
+        "title": "Segment",
+        "type": "silence",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000005.mp4?alt=media",
+        "videoSize": 190614,
+        "resetTextCallouts": false,
+        "isHiddenInDoc": true
+      },
+      {
+        "audioNote": {
+          "audioDuration": 5.527,
+          "audioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Faudio%2FExampleStep00000000006%2FExampleId0000000000037.webm?alt=media",
+          "markdown": "Use the Questions list to ask the project team anything that comes up during your rollout. /pause-3.7/",
+          "speakerConfig": {
+            "disabledFeatures": {
+              "pronunciation": false,
+              "speakingRate": false
+            },
+            "avatarUrl": null,
+            "avatarUrlCompressed": null,
+            "disabled": false,
+            "provider": "AZURE",
+            "gender": "MALE",
+            "id": "ExampleId0000000000005",
+            "isStudio": true,
+            "langCode": "en-US",
+            "langName": "English (United States)",
+            "model": "en-US-Andrew:DragonHDLatestNeural",
+            "name": "Andrew",
+            "sampleAudioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/public%2Faudio%2Fsamples%2Fen-US-Andrew%3ADragonHDLatestNeural_ExampleId0000000000006.webm?alt=media",
+            "s2t": true,
+            "t2s": true
+          },
+          "speakingRate": 1,
+          "start": 0,
+          "end": 5.527,
+          "type": "textToSpeech"
+        },
+        "recordingEvent": {
+          "id": "ExampleId0000000000038",
+          "start": 36236,
+          "end": 45691,
+          "name": "speaking"
+        },
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "docCoverPublicScreenshot": "",
+        "docCoverScreenshot": "",
+        "docPublicScreenshot": "https://static.guidde.com/v0/qg%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000006_doc.png?alt=media",
+        "docScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000006_doc.png?alt=media",
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000006.png?alt=media",
+        "duration": 9.48,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000006",
+        "kind": "step",
+        "layers": [
+          {
+            "audioUrl": "",
+            "shouldExtractNow": false,
+            "end": 45.691,
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "firstFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000039.png?alt=media",
+            "height": 1080,
+            "id": "ExampleId0000000000040",
+            "isBackground": true,
+            "lastFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000041.png?alt=media",
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "sourceDuration": 88.441,
+            "sourceVideoThumbnailPreview": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000042.webp?alt=media",
+            "sourceVideoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideo%2FExampleId0000000000003.webm?alt=media",
+            "start": 36.236,
+            "strokeColors": [],
+            "type": "video",
+            "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000043.png?alt=media",
+            "width": 1920,
+            "x": 0,
+            "y": 0,
+            "speed": 1
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000006_lf.png?alt=media",
+        "firstFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000006_first_frame.png?alt=media",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000006_preview.webp?alt=media",
+        "relativeRecordingTime": 36236,
+        "subGenerationId": "00000000-0000-4000-8000-000000000004",
+        "subtitles": [
+          {
+            "text": "Use the Questions list to ask the project team anything that comes up during",
+            "start": 0,
+            "end": 4.2
+          },
+          {
+            "text": "your rollout.",
+            "start": 4.2,
+            "end": 4.7
+          }
+        ],
+        "timeStamp": 4,
+        "title": "Asking The Project Team",
+        "type": "click",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000006.mp4?alt=media",
+        "videoSize": 478173,
+        "resetTextCallouts": false
+      },
+      {
+        "audioNote": {
+          "audioDuration": 5.167,
+          "audioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Faudio%2FExampleStep00000000007%2FExampleId0000000000044.webm?alt=media",
+          "markdown": "The Resources tab gathers useful links, help articles, and recordings of past meetings. /pause-3.7/",
+          "speakerConfig": {
+            "disabledFeatures": {
+              "pronunciation": false,
+              "speakingRate": false
+            },
+            "avatarUrl": null,
+            "avatarUrlCompressed": null,
+            "disabled": false,
+            "provider": "AZURE",
+            "gender": "MALE",
+            "id": "ExampleId0000000000005",
+            "isStudio": true,
+            "langCode": "en-US",
+            "langName": "English (United States)",
+            "model": "en-US-Andrew:DragonHDLatestNeural",
+            "name": "Andrew",
+            "sampleAudioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/public%2Faudio%2Fsamples%2Fen-US-Andrew%3ADragonHDLatestNeural_ExampleId0000000000006.webm?alt=media",
+            "s2t": true,
+            "t2s": true
+          },
+          "speakingRate": 1,
+          "start": 0,
+          "end": 5.167,
+          "type": "textToSpeech"
+        },
+        "recordingEvent": {
+          "id": "ExampleId0000000000045",
+          "start": 45691,
+          "end": 54407,
+          "name": "speaking"
+        },
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "docCoverPublicScreenshot": "",
+        "docCoverScreenshot": "",
+        "docPublicScreenshot": "https://static.guidde.com/v0/qg%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000007_doc.png?alt=media",
+        "docScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000007_doc.png?alt=media",
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000007.png?alt=media",
+        "duration": 8.72,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000007",
+        "kind": "step",
+        "layers": [
+          {
+            "audioUrl": "",
+            "shouldExtractNow": false,
+            "end": 54.407,
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "firstFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000046.png?alt=media",
+            "height": 1080,
+            "id": "ExampleId0000000000047",
+            "isBackground": true,
+            "lastFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000048.png?alt=media",
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "sourceDuration": 88.441,
+            "sourceVideoThumbnailPreview": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000049.webp?alt=media",
+            "sourceVideoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideo%2FExampleId0000000000003.webm?alt=media",
+            "start": 45.691,
+            "strokeColors": [],
+            "type": "video",
+            "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000050.png?alt=media",
+            "width": 1920,
+            "x": 0,
+            "y": 0,
+            "speed": 1
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000007_lf.png?alt=media",
+        "firstFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000007_first_frame.png?alt=media",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000007_preview.webp?alt=media",
+        "relativeRecordingTime": 45691,
+        "subGenerationId": "00000000-0000-4000-8000-000000000005",
+        "subtitles": [
+          {
+            "text": "The Resources tab gathers useful links, help articles, and recordings of past",
+            "start": 0,
+            "end": 4.3
+          },
+          {
+            "text": "meetings.",
+            "start": 4.3,
+            "end": 4.8
+          }
+        ],
+        "timeStamp": 5,
+        "title": "Resources Tab Links",
+        "type": "click",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000007.mp4?alt=media",
+        "videoSize": 338985,
+        "resetTextCallouts": false
+      },
+      {
+        "audioNote": {
+          "audioDuration": 7.767,
+          "audioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Faudio%2FExampleStep00000000008%2FExampleId0000000000051.webm?alt=media",
+          "markdown": "On the Board, you can see and change your assigned work by opening My Work, /pause-1.2/ choosing the task, and Edit.",
+          "speakerConfig": {
+            "disabledFeatures": {
+              "pronunciation": false,
+              "speakingRate": false
+            },
+            "avatarUrl": null,
+            "avatarUrlCompressed": null,
+            "disabled": false,
+            "provider": "AZURE",
+            "gender": "MALE",
+            "id": "ExampleId0000000000005",
+            "isStudio": true,
+            "langCode": "en-US",
+            "langName": "English (United States)",
+            "model": "en-US-Andrew:DragonHDLatestNeural",
+            "name": "Andrew",
+            "sampleAudioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/public%2Faudio%2Fsamples%2Fen-US-Andrew%3ADragonHDLatestNeural_ExampleId0000000000006.webm?alt=media",
+            "s2t": true,
+            "t2s": true
+          },
+          "speakingRate": 1,
+          "start": 0,
+          "end": 7.767,
+          "type": "textToSpeech"
+        },
+        "recordingEvent": {
+          "id": "ExampleId0000000000052",
+          "start": 54407,
+          "end": 61664,
+          "name": "speaking"
+        },
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "docCoverPublicScreenshot": "",
+        "docCoverScreenshot": "",
+        "docPublicScreenshot": "https://static.guidde.com/v0/qg%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000008_doc.png?alt=media",
+        "docScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000008_doc.png?alt=media",
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000008.png?alt=media",
+        "duration": 7.8,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000008",
+        "kind": "step",
+        "layers": [
+          {
+            "audioUrl": "",
+            "shouldExtractNow": false,
+            "end": 61.664,
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "firstFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000053.png?alt=media",
+            "height": 1080,
+            "id": "ExampleId0000000000054",
+            "isBackground": true,
+            "lastFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000055.png?alt=media",
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "sourceDuration": 88.441,
+            "sourceVideoThumbnailPreview": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000056.webp?alt=media",
+            "sourceVideoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideo%2FExampleId0000000000003.webm?alt=media",
+            "start": 54.407,
+            "strokeColors": [],
+            "type": "video",
+            "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000057.png?alt=media",
+            "width": 1920,
+            "x": 0,
+            "y": 0,
+            "speed": 1
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000008_lf.png?alt=media",
+        "firstFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000008_first_frame.png?alt=media",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000008_preview.webp?alt=media",
+        "relativeRecordingTime": 54407,
+        "subGenerationId": "00000000-0000-4000-8000-000000000006",
+        "subtitles": [
+          {
+            "text": "On the Board, you can see and change your assigned work by opening My Work,",
+            "start": 0,
+            "end": 4
+          },
+          {
+            "text": "choosing the task, and Edit.",
+            "start": 5.7,
+            "end": 7.6
+          }
+        ],
+        "timeStamp": 6,
+        "title": "Updating Tasks On The Board",
+        "type": "click",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000008.mp4?alt=media",
+        "videoSize": 299713,
+        "resetTextCallouts": false
+      },
+      {
+        "recordingEvent": {
+          "id": "ExampleId0000000000058",
+          "start": 61664,
+          "end": 72694,
+          "name": "speaking"
+        },
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "docCoverPublicScreenshot": "",
+        "docCoverScreenshot": "",
+        "docPublicScreenshot": "https://static.guidde.com/v0/qg%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000009_doc.png?alt=media",
+        "docScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000009_doc.png?alt=media",
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000009.png?alt=media",
+        "duration": 7.36,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000009",
+        "kind": "step",
+        "layers": [
+          {
+            "audioUrl": "",
+            "shouldExtractNow": false,
+            "end": 72.694,
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "firstFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000059.png?alt=media",
+            "height": 1080,
+            "id": "ExampleId0000000000060",
+            "isBackground": true,
+            "lastFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000061.png?alt=media",
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "sourceDuration": 88.441,
+            "sourceVideoThumbnailPreview": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000062.webp?alt=media",
+            "sourceVideoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideo%2FExampleId0000000000003.webm?alt=media",
+            "start": 61.664,
+            "strokeColors": [],
+            "type": "video",
+            "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000063.png?alt=media",
+            "width": 1920,
+            "x": 0,
+            "y": 0,
+            "speed": 1.5
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000009_lf.png?alt=media",
+        "firstFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000009_first_frame.png?alt=media",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000009_preview.webp?alt=media",
+        "relativeRecordingTime": 61664,
+        "subtitles": [],
+        "timeStamp": 7,
+        "title": "Segment",
+        "type": "silence",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000009.mp4?alt=media",
+        "videoSize": 599480,
+        "resetTextCallouts": false,
+        "isHiddenInDoc": true
+      },
+      {
+        "audioNote": {
+          "audioDuration": 4.967,
+          "audioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Faudio%2FExampleStep00000000010%2FExampleId0000000000064.webm?alt=media",
+          "markdown": "Or browse every task, grouped by phase, by choosing the board listed below.",
+          "speakerConfig": {
+            "disabledFeatures": {
+              "pronunciation": false,
+              "speakingRate": false
+            },
+            "avatarUrl": null,
+            "avatarUrlCompressed": null,
+            "disabled": false,
+            "provider": "AZURE",
+            "gender": "MALE",
+            "id": "ExampleId0000000000005",
+            "isStudio": true,
+            "langCode": "en-US",
+            "langName": "English (United States)",
+            "model": "en-US-Andrew:DragonHDLatestNeural",
+            "name": "Andrew",
+            "sampleAudioUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/public%2Faudio%2Fsamples%2Fen-US-Andrew%3ADragonHDLatestNeural_ExampleId0000000000006.webm?alt=media",
+            "s2t": true,
+            "t2s": true
+          },
+          "speakingRate": 1,
+          "start": 0,
+          "end": 4.967,
+          "type": "textToSpeech"
+        },
+        "recordingEvent": {
+          "id": "ExampleId0000000000065",
+          "start": 72694,
+          "end": 88441,
+          "name": "speaking"
+        },
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "docCoverPublicScreenshot": "",
+        "docCoverScreenshot": "",
+        "docPublicScreenshot": "https://static.guidde.com/v0/qg%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000010_doc.png?alt=media",
+        "docScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000010_doc.png?alt=media",
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000010.png?alt=media",
+        "duration": 15.76,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000010",
+        "kind": "step",
+        "layers": [
+          {
+            "audioUrl": "",
+            "shouldExtractNow": false,
+            "end": 88.441,
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "firstFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000066.png?alt=media",
+            "height": 1080,
+            "id": "ExampleId0000000000067",
+            "isBackground": true,
+            "lastFrameUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000068.png?alt=media",
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "sourceDuration": 88.441,
+            "sourceVideoThumbnailPreview": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000069.webp?alt=media",
+            "sourceVideoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideo%2FExampleId0000000000003.webm?alt=media",
+            "start": 72.694,
+            "strokeColors": [],
+            "type": "video",
+            "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fuploads%2FExampleId0000000000070.png?alt=media",
+            "width": 1920,
+            "x": 0,
+            "y": 0,
+            "speed": 1
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000010_lf.png?alt=media",
+        "firstFrameScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000010_first_frame.png?alt=media",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000010_preview.webp?alt=media",
+        "relativeRecordingTime": 72694,
+        "subGenerationId": "00000000-0000-4000-8000-000000000007",
+        "subtitles": [
+          {
+            "text": "Or browse every task, grouped by phase, by choosing the board listed below.",
+            "start": 0,
+            "end": 4.6
+          }
+        ],
+        "timeStamp": 8,
+        "title": "Browsing Every Task",
+        "type": "click",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000010.mp4?alt=media",
+        "videoSize": 1005467,
+        "resetTextCallouts": false
+      },
+      {
+        "windowDimensions": {
+          "innerHeight": 1080,
+          "innerWidth": 1920,
+          "outerHeight": 1080,
+          "outerWidth": 1920
+        },
+        "drawnScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000011.png?alt=media",
+        "duration": 1,
+        "gradientScreenshot": null,
+        "id": "ExampleStep00000000011",
+        "kind": "end",
+        "layers": [
+          {
+            "fillLinearGradientStartPoint": {
+              "x": 0,
+              "y": 0
+            },
+            "fillLinearGradientEndPoint": {
+              "x": 0,
+              "y": 0
+            },
+            "cornerRadius": 0,
+            "fill": "transparent",
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "height": 1080,
+            "id": "ExampleId0000000000071",
+            "isBackground": true,
+            "isSpotlight": false,
+            "rotation": 0,
+            "scaleFactor": 0.8,
+            "scaleX": 1,
+            "scaleY": 1,
+            "strokeColor": "",
+            "strokeColors": [],
+            "strokeWidth": 0,
+            "type": "rectangle",
+            "url": "",
+            "width": 1920,
+            "x": 0,
+            "y": 0
+          },
+          {
+            "fillColors": [],
+            "fillLinearGradientColorStops": [],
+            "height": 720,
+            "id": "ExampleId0000000000072",
+            "isBackground": false,
+            "isBrandkitLogo": false,
+            "isWatermark": false,
+            "rotation": 0,
+            "scaleX": 1.510180310887894,
+            "scaleY": 1.5101803108878944,
+            "strokeColors": [],
+            "type": "image",
+            "url": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/qgSlides%2FExampleOrgId0000000001%2Fv_2026_04_10%2014_13_36%2Fend_ExampleId0000000000073.PNG?alt=media",
+            "width": 1280,
+            "x": -4.620000000000016,
+            "y": -4.610000000000025
+          }
+        ],
+        "usedFonts": [],
+        "lastFrameScreenshot": "",
+        "firstFrameScreenshot": "",
+        "staticScreenshot": "",
+        "previewScreenshot": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000011_preview.webp?alt=media",
+        "screenshot": "",
+        "status": "done",
+        "subGenerationId": "00000000-0000-4000-8000-000000000008",
+        "subtitles": [
+          {
+            "text": "You can now open a project, read its feed, find files, ask questions, browse",
+            "start": 0,
+            "end": 6.6
+          },
+          {
+            "text": "resources, and update your tasks to keep the work moving.",
+            "start": 6.6,
+            "end": 10.7
+          }
+        ],
+        "timeStamp": 1775830380563,
+        "title": "Thank you",
+        "type": "click",
+        "url": "",
+        "videoUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddes%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2Fvideos%2FExampleStep00000000011.mp4?alt=media",
+        "videoSize": 35256,
+        "resetTextCallouts": false
+      }
+    ],
+    "tags": [],
+    "teamIds": [
+      "ExampleTeamId000000001"
+    ],
+    "teams": [
+      {
+        "id": "ExampleTeamId000000001",
+        "name": "1. Getting Started"
+      }
+    ],
+    "title": "Touring Your Project Workspace",
+    "type": "ext",
+    "uploadedAt": 1776877904,
+    "uploadedBy": {
+      "displayName": "Pat Example",
+      "email": "pat.example@example.com",
+      "photoURL": ""
+    },
+    "uploadedByOrgId": "ExampleOrgId0000000001",
+    "uploadedByUid": "ExampleUploaderUid0000000001",
+    "userIds": null,
+    "reviewerIds": [],
+    "version": 10,
+    "visibility": "Public",
+    "waitForAlgolia": false,
+    "links": [],
+    "pageLayout": "videoAndDocument",
+    "screenshotUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000001_preview.webp?alt=media",
+    "slicingSuggestion": [
+      {
+        "applications": [],
+        "duration": 3.2,
+        "end": 3.2,
+        "start": 0,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000001_preview.webp?alt=media",
+        "title": "Cover"
+      },
+      {
+        "applications": [],
+        "duration": 16.72,
+        "end": 19.92,
+        "start": 3.2,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000002_preview.webp?alt=media",
+        "title": "Opening A Project And Reading Its Feed"
+      },
+      {
+        "applications": [],
+        "duration": 4.52,
+        "end": 24.44,
+        "start": 19.92,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000003_preview.webp?alt=media",
+        "title": "Segment"
+      },
+      {
+        "applications": [],
+        "duration": 2.92,
+        "end": 27.36,
+        "start": 24.44,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000004_preview.webp?alt=media",
+        "title": "Files Tab Document Storage"
+      },
+      {
+        "applications": [],
+        "duration": 3.92,
+        "end": 31.28,
+        "start": 27.36,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000005_preview.webp?alt=media",
+        "title": "Segment"
+      },
+      {
+        "applications": [],
+        "duration": 9.48,
+        "end": 40.76,
+        "start": 31.28,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000006_preview.webp?alt=media",
+        "title": "Asking The Project Team"
+      },
+      {
+        "applications": [],
+        "duration": 8.72,
+        "end": 49.48,
+        "start": 40.76,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000007_preview.webp?alt=media",
+        "title": "Resources Tab Links"
+      },
+      {
+        "applications": [],
+        "duration": 7.8,
+        "end": 57.28,
+        "start": 49.48,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000008_preview.webp?alt=media",
+        "title": "Updating Tasks On The Board"
+      },
+      {
+        "applications": [],
+        "duration": 7.36,
+        "end": 64.64,
+        "start": 57.28,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000009_preview.webp?alt=media",
+        "title": "Segment"
+      },
+      {
+        "applications": [],
+        "duration": 15.76,
+        "end": 80.4,
+        "start": 64.64,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000010_preview.webp?alt=media",
+        "title": "Browsing Every Task"
+      },
+      {
+        "applications": [],
+        "duration": 1,
+        "end": 81.4,
+        "start": 80.4,
+        "tags": [],
+        "thumbnail": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/quickguiddeScreenshots%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001%2FExampleStep00000000011_preview.webp?alt=media",
+        "title": "Ending"
+      }
+    ],
+    "templateId": "ExampleId0000000000001",
+    "segmentCount": 11,
+    "subtitlesUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/subtitles%2FExamplePlaybook0000001.vtt?alt=media",
+    "transcriptUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/transcripts%2FExamplePlaybook0000001.json?alt=media",
+    "artifactsColorspaceReprocessed": true,
+    "isDraft": false,
+    "processingInChunksReprocessed": true,
+    "prevSubtitlesUrl": null,
+    "audioTrack": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/audioTracks%2FExamplePlaybook0000001%2Ftrack.mp3?alt=media",
+    "audioTrackSize": 651693,
+    "previewUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/previews%2FExamplePlaybook0000001%2Fpreview.gif?alt=media",
+    "smallPreviewUrl": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/previews%2FExamplePlaybook0000001%2Fpreview480.gif?alt=media",
+    "hideProcessingProgress": false,
+    "skipTranslations": true,
+    "url": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/uploads%2FExampleUploaderUid0000000001%2FExamplePlaybook0000001.mp4?alt=media",
+    "views": 140,
+    "primaryPlaybook": null
+  },
+  "data": {
+    "showEndingScreenFooter": false,
+    "brandKit": {
+      "logo": "https://storage.app.guidde.com/v0/b/guidde-production.appspot.com/o/brandKits%2FExampleBrandKit0000001%2FlogoAndFavicon%2FExampleId0000000000074%2FExampleId0000000000075.png?alt=media",
+      "color": "#1F2937",
+      "highlightColor": "#2563EB",
+      "font": {
+        "bold": true,
+        "id": "Inter",
+        "title": "Inter",
+        "url": "https://app.guidde.com/c/v1/custom-fonts?family=Inter&style=normal&weight=400",
+        "italic": true,
+        "boldItalic": true
+      }
+    },
+    "isFreePlan": false,
+    "isTrialPlan": false,
+    "hideNewPublicEmbedEnding": true,
+    "hideSignInInPublicView": false,
+    "hideCreatorIdentity": true,
+    "shouldTurnOnCaptionsByDefault": true,
+    "hideVideoReactions": false,
+    "hideButtonShareInEmbed": false,
+    "hidePublicGetStartedBanner": false,
+    "showSocialButtons": false,
+    "hidePauseScreen": true,
+    "showGButtonAsIconInEmbed": false
+  }
+}

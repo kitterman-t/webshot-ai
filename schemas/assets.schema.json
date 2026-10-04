@@ -1,0 +1,388 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/assets.schema.json",
+  "$defs": {
+    "AssetOcr": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Language"
+        },
+        "engine": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Engine"
+        }
+      },
+      "required": [
+        "text",
+        "confidence",
+        "language",
+        "engine"
+      ],
+      "title": "AssetOcr",
+      "type": "object"
+    },
+    "BundleVisualAssetRecord": {
+      "additionalProperties": false,
+      "description": "A visual asset in v3's `assets.json`: v2's record, and one field more.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        },
+        "height": {
+          "title": "Height",
+          "type": "number"
+        },
+        "alt": {
+          "title": "Alt",
+          "type": "string"
+        },
+        "aria_label": {
+          "title": "Aria Label",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "caption": {
+          "title": "Caption",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "nearby_heading": {
+          "title": "Nearby Heading",
+          "type": "string"
+        },
+        "ocr": {
+          "$ref": "#/$defs/AssetOcr"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "frame_content": {
+          "anyOf": [
+            {
+              "enum": [
+                "dom",
+                "screenshot"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Frame Content"
+        }
+      },
+      "required": [
+        "id",
+        "file",
+        "kind",
+        "width",
+        "height",
+        "alt",
+        "aria_label",
+        "title",
+        "caption",
+        "source_url",
+        "nearby_heading",
+        "ocr",
+        "sha256",
+        "frame_content"
+      ],
+      "title": "BundleVisualAssetRecord",
+      "type": "object"
+    },
+    "EmbeddedMediaRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "tracks": {
+          "items": {
+            "$ref": "#/$defs/MediaTrackRecord"
+          },
+          "title": "Tracks",
+          "type": "array"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        }
+      },
+      "required": [
+        "media_type",
+        "source_url",
+        "title",
+        "tracks",
+        "locator"
+      ],
+      "title": "EmbeddedMediaRecord",
+      "type": "object"
+    },
+    "FormFieldRecord": {
+      "additionalProperties": false,
+      "description": "A form field's captured state; password values arrive pre-redacted.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "locator"
+      ],
+      "title": "FormFieldRecord",
+      "type": "object"
+    },
+    "MediaTrackRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "language": {
+          "title": "Language",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "language",
+        "label",
+        "url"
+      ],
+      "title": "MediaTrackRecord",
+      "type": "object"
+    },
+    "VideoAssetRecord": {
+      "additionalProperties": false,
+      "description": "One file downloaded from an embedded video's host.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "step-screenshot",
+            "step-clip",
+            "source-recording"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "playbook_id": {
+          "title": "Playbook Id",
+          "type": "string"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Step"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Height"
+        },
+        "shared_with": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shared With"
+        }
+      },
+      "required": [
+        "id",
+        "file",
+        "kind",
+        "playbook_id",
+        "step",
+        "source_url",
+        "bytes",
+        "sha256",
+        "width",
+        "height"
+      ],
+      "title": "VideoAssetRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`assets.json`: typed records for everything that is not document prose.\n\nThe visual-asset records are the shape v2 embedded in content.json, plus\n`frame_content`.\nForm fields and embedded media live here because docling's HTML backend\ndoes not model them (docs/02 fidelity mapping — nothing vanishes\nsilently); definition lists are absent because docling models them\nnatively as list groups.",
+  "properties": {
+    "bundle_format": {
+      "const": 3,
+      "title": "Bundle Format",
+      "type": "integer"
+    },
+    "visual_assets": {
+      "items": {
+        "$ref": "#/$defs/BundleVisualAssetRecord"
+      },
+      "title": "Visual Assets",
+      "type": "array"
+    },
+    "form_fields": {
+      "items": {
+        "$ref": "#/$defs/FormFieldRecord"
+      },
+      "title": "Form Fields",
+      "type": "array"
+    },
+    "embedded_media": {
+      "items": {
+        "$ref": "#/$defs/EmbeddedMediaRecord"
+      },
+      "title": "Embedded Media",
+      "type": "array"
+    },
+    "video_assets": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/VideoAssetRecord"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Video Assets"
+    }
+  },
+  "required": [
+    "bundle_format",
+    "visual_assets",
+    "form_fields",
+    "embedded_media"
+  ],
+  "title": "AssetsFile",
+  "type": "object"
+}

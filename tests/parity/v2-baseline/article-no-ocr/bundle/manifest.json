@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/professional_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/professional_page.html",
+  "title": "WebShot Quality Review",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../article-no-ocr.pdf",
+    "pages": 2,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true
+  },
+  "content": {
+    "blocks": 18,
+    "tables": 1,
+    "links": 0,
+    "chunks": 2,
+    "text_characters": 1592,
+    "visual_assets": 1
+  },
+  "ocr": {
+    "enabled": false,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 2959,
+      "sha256": "00262bcb5203cdf7d653f1384bd251f5c8df66c82559d0864353ff1b455cb73c"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 2737,
+      "sha256": "f0a55d80f56274115a320d32c2be7f3fd60af23a51cba2c78a161160146a7871"
+    },
+    "content.html": {
+      "bytes": 21367,
+      "sha256": "a780f0f83c5222d628023d86d8e4aeba258c74e4371e021bfbddc41840d20c1b"
+    },
+    "content.json": {
+      "bytes": 7131,
+      "sha256": "15bbbfa9ba0a043f9ba7547ec51cc2ef8506554bda45458da9b3d8888e42d49f"
+    },
+    "content.md": {
+      "bytes": 2113,
+      "sha256": "b19505ce11db07686e7239e5b3dc58c8300d687528a8073064bb8fa6ed760eeb"
+    },
+    "content.txt": {
+      "bytes": 1593,
+      "sha256": "e21d917a7c227135a31c0ade52ea9fb22326f9ec421d3d21d9fb6e1a32b9c458"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/professional_page.html": {
+      "bytes": 4814,
+      "sha256": "a5cde0166764c3362939d652dd49ab3a7ab37ea0bd7118c6ef4d0c2d34368e89"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "tables/table-001.csv": {
+      "bytes": 160,
+      "sha256": "00e41412d019fe37a23ba114a8645dce65fbdd686d0377f63f88ce79beb96fb1"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

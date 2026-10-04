@@ -1,0 +1,15 @@
+{
+  "case": "lms-module",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/lms_page.html",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>",
+    "--no-videos"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

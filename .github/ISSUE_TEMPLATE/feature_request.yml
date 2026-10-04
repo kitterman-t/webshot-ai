@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest something WebShot should do, or do differently.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The [roadmap](https://github.com/kitterman-t/webshot-ai/blob/master/docs/08-roadmap-and-ideas.md)
+        lists what is already planned, and its never-list names what WebShot will not do:
+        access-control bypass, credential harvesting, CAPTCHA defeat, site-wide spidering,
+        and a hosted service that captures pages with other people's credentials
+        ([capture ethics](https://github.com/kitterman-t/webshot-ai/blob/master/docs/11-capture-ethics.md)).
+
+        Do not paste authentication state or private page content here; issues are public.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task, and where WebShot falls short of it today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like WebShot to do?
+      description: The behavior you have in mind, such as a flag, an output field or a new input format.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have tried
+      description: Workarounds, other tools, or existing options that came close.

@@ -1,0 +1,130 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/form_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/form_page.html",
+  "title": "Account Preferences Review",
+  "page_metadata": {
+    "title": "Account Preferences Review",
+    "language": "en",
+    "description": "A settings form used to verify form-field fidelity and password redaction.",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "Account Preferences Review",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../form-fields.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json"
+    ]
+  },
+  "content": {
+    "items": 20,
+    "tables": 0,
+    "links": 0,
+    "chunks": 17,
+    "text_characters": 856,
+    "visual_assets": 0,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 1711,
+      "sha256": "ea3b61ceaec37d8d377f8d50e98009ddcfa6d0f81fd13e5965bd783c4ae73331"
+    },
+    "assets.json": {
+      "bytes": 1168,
+      "sha256": "995005351ae46c60b81ebca78ec7b8b341ade6ca0724048755b5372c1bdc9523"
+    },
+    "chunks.jsonl": {
+      "bytes": 4941,
+      "sha256": "4078725fc104bd305f71d6b7a3bc11638daf7eff381aec760115c8ab651f4931"
+    },
+    "content.doctags": {
+      "bytes": 1253,
+      "sha256": "176f22c6babbcb401143c3752f0efba09efd269b89bbca2534577e2175f2ed3d"
+    },
+    "content.html": {
+      "bytes": 1841,
+      "sha256": "376030fd6bece83f4934e7b3e3125f933ae205861dcf3d03dcd063514e5ae7c8"
+    },
+    "content.json": {
+      "bytes": 7936,
+      "sha256": "48cd1e5bb24b5d68cfcbc38fb51179ffd4afe730b5e72724d69fc1089be0b838"
+    },
+    "content.md": {
+      "bytes": 864,
+      "sha256": "904674c2d19bb05c0fe5fa756c78a853b745aa76335948b941ee0f82de3fe510"
+    },
+    "content.txt": {
+      "bytes": 856,
+      "sha256": "ea42e45f052c5a12aaa2e414b0b92d01bc211ebccceaa713615ebd281a794127"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/form_page.html": {
+      "bytes": 2788,
+      "sha256": "5f28a14516482a400fcc150d8955359b3b059ced899127c0910db43c9640584d"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

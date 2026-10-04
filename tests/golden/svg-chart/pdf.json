@@ -1,0 +1,95 @@
+{
+  "page_count": 1,
+  "page_sizes": [
+    [
+      612.0,
+      792.0
+    ]
+  ],
+  "outline": [
+    "chart-source.svg"
+  ],
+  "attachments": [
+    {
+      "name": "README.txt",
+      "af_relationship": "/Data",
+      "subtype": "/text/plain",
+      "description": "Start here: what this PDF contains and how to read it"
+    },
+    {
+      "name": "accessibility.yaml",
+      "af_relationship": "/Data",
+      "subtype": "/text/yaml",
+      "description": "The page's accessibility tree as the browser exposed it"
+    },
+    {
+      "name": "assets.json",
+      "af_relationship": "/Data",
+      "subtype": "/application/json",
+      "description": "Every visual on the page: alt text, captions, nearby headings, dimensions, checksums, and OCR text with per-word confidence — plus the form-field and embedded-media records the document model omits"
+    },
+    {
+      "name": "capture.json",
+      "af_relationship": "/Data",
+      "subtype": "/application/json",
+      "description": "Capture provenance: source, final URL, timestamp, tool versions, OCR settings, and content counts — the manifest's contents minus its self-referential PDF checksum"
+    },
+    {
+      "name": "chunks.jsonl",
+      "af_relationship": "/Data",
+      "subtype": "/application/jsonl",
+      "description": "Retrieval-ready chunks, one JSON object per line, each carrying the doc_items it came from and the heading path above it"
+    },
+    {
+      "name": "content.doctags",
+      "af_relationship": "/Data",
+      "subtype": "/text/plain",
+      "description": "DocTags serialization of the document model"
+    },
+    {
+      "name": "content.html",
+      "af_relationship": "/Data",
+      "subtype": "/text/html",
+      "description": "The captured DOM as a sanitized standalone document — the fallback for structure the document model could not carry, including table captions that could not be re-attached"
+    },
+    {
+      "name": "content.json",
+      "af_relationship": "/Data",
+      "subtype": "/application/json",
+      "description": "Lossless DoclingDocument: the page's full semantic structure — headings, paragraphs, lists, tables, and figures — with stable self_ref anchors the chunks point back to"
+    },
+    {
+      "name": "content.md",
+      "af_relationship": "/Data",
+      "subtype": "/text/markdown",
+      "description": "The page as Markdown, including figures and their recognized text"
+    },
+    {
+      "name": "content.txt",
+      "af_relationship": "/Data",
+      "subtype": "/text/plain",
+      "description": "Plain-text rendering of the page, for full-text search"
+    },
+    {
+      "name": "links.json",
+      "af_relationship": "/Data",
+      "subtype": "/application/json",
+      "description": "Resolved link text and destinations"
+    },
+    {
+      "name": "structured-data.json",
+      "af_relationship": "/Data",
+      "subtype": "/application/json",
+      "description": "JSON-LD structured data as published by the page"
+    }
+  ],
+  "metadata": {
+    "/Title": "chart-source.svg",
+    "/Creator": "Chromium",
+    "/Producer": "Skia/PDF m151",
+    "/WebShotAIReady": "true",
+    "/WebShotBundleFormat": "3",
+    "/WebShotEmbeddedFiles": "README.txt, content.json, content.md, content.txt, content.html, chunks.jsonl, assets.json, links.json, structured-data.json, accessibility.yaml, content.doctags, capture.json",
+    "/Subject": "Self-contained AI-ready capture: rendered pages, searchable text, and the extracted content embedded as associated files"
+  }
+}

@@ -1,0 +1,255 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/lms_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/lms_page.html",
+  "title": "Getting Started with Projects — Learning Journey",
+  "page_metadata": {
+    "title": "Getting Started with Projects — Learning Journey",
+    "language": "en",
+    "description": "Module 2 of the Example Org onboarding journey.",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "Getting Started with Projects",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../lms-module-videos.pdf",
+    "pages": 5,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json",
+      "videos/ExamplePlaybook0000001/walkthrough.md",
+      "videos/ExamplePlaybook0000001/steps.json",
+      "videos/ExamplePlaybook0000001/transcript.txt",
+      "videos/ExamplePlaybook0000001/transcript.vtt"
+    ],
+    "video_appendix": {
+      "pages": 3,
+      "starts_on_page": 3,
+      "videos": 1,
+      "steps": 11,
+      "tagged": false
+    }
+  },
+  "content": {
+    "items": 19,
+    "tables": 0,
+    "links": 3,
+    "chunks": 19,
+    "text_characters": 762,
+    "visual_assets": 2,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": false,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 1698,
+      "sha256": "ce5cff2f26874971ce7ee533efb661a5a487e2c534c525c4f60e7c5007805fcb"
+    },
+    "assets.json": {
+      "bytes": 6681,
+      "sha256": "f8a3c42b9d7a1c76457511580b628734ec81810ca9d9c4d044ef8c09fe7f8a8b"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/asset-002.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-002.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-003.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-004.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-005.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-006.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-007.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-008.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-009.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-010.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "assets/video-ExamplePlaybook0000001-step-011.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 12220,
+      "sha256": "930768e24ae30da513f9005d54f6df9009978c41a9f2a47e9685bd76e0728cdf"
+    },
+    "content.doctags": {
+      "bytes": 1258,
+      "sha256": "84b01e86e44ffaafd22763675e29bfc9a7e7428a8a5e2a57184df6d8c1a62244"
+    },
+    "content.html": {
+      "bytes": 1721,
+      "sha256": "69dc85488cb136b3ddb9a55590738917438057c1654991b8f6c8ace9673656bc"
+    },
+    "content.json": {
+      "bytes": 8705,
+      "sha256": "805ce7459b04e9afc09a20ab44d98093f4765226e545283240bacca89f14c414"
+    },
+    "content.md": {
+      "bytes": 5789,
+      "sha256": "b460b95a8f54791db4b1a018b231507b094c8f765b01ac61f8b94023b2d7c0cd"
+    },
+    "content.txt": {
+      "bytes": 4861,
+      "sha256": "3946293c522d7e780a3e1b291ed3b313e67457c643e0b54a3985b6dba0dda44a"
+    },
+    "links.json": {
+      "bytes": 379,
+      "sha256": "ec62f6017d53cf9b0c50728ec6a27b43cd0fd630506d2a391c8669836ea2465e"
+    },
+    "source/lms_page.html": {
+      "bytes": 3322,
+      "sha256": "8b392d1a84657e9b1976e3ae2f6bb351b249b8522236122dc1039e86af30eaa3"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "videos/ExamplePlaybook0000001/steps.json": {
+      "bytes": 10688,
+      "sha256": "5cca22118f79efd93d6bad7b2ed1ddd301acad76522c4e3704acd6f4beb301c9"
+    },
+    "videos/ExamplePlaybook0000001/transcript.txt": {
+      "bytes": 1868,
+      "sha256": "d1b043d90bab100e875d4d9396e0621f1a1c0a5431b673a9b71f39ebbfd2fbcd"
+    },
+    "videos/ExamplePlaybook0000001/transcript.vtt": {
+      "bytes": 1292,
+      "sha256": "d1aebda058f12a5d5109c663d67dd0f88dd6404d3bfc7023e212b45fa21b0a10"
+    },
+    "videos/ExamplePlaybook0000001/walkthrough.md": {
+      "bytes": 4441,
+      "sha256": "51100cf846efda471e65da971b0681d33577ff5c95a0db8abf1a97d42082e9c7"
+    }
+  },
+  "warnings": [
+    "asset-002 is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing.",
+    "Guidde playbook ExamplePlaybook0000001 times its last narration cue at 91.1s against a stated duration of 81.4s; the timings are reported as Guidde published them."
+  ],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context.",
+  "videos": [
+    {
+      "provider": "guidde",
+      "playbook_id": "ExamplePlaybook0000001",
+      "title": "Touring Your Project Workspace",
+      "source_url": "<STANDIN>/share/playbooks/ExamplePlaybook0000001",
+      "duration_seconds": 81.4,
+      "steps": 11,
+      "narrated_steps": 8,
+      "transcript_cues": 13,
+      "organization": "Example Organization",
+      "language": "en-US",
+      "last_updated_by": "Pat Example",
+      "directory": "videos/ExamplePlaybook0000001",
+      "assets": 11,
+      "chunks": 11,
+      "locator": "body > main > div:nth-of-type(1) > iframe",
+      "transcribed": true,
+      "transcript_provenance": "authored",
+      "narration": "text-to-speech from the authored script"
+    },
+    {
+      "provider": "media-element",
+      "media_kind": "video",
+      "title": "Understanding the Sandbox Environment",
+      "source_url": "https://usw-input-videos.continuassets.example/sandbox-overview.mp4",
+      "duration_seconds": null,
+      "poster_url": null,
+      "poster_asset": "asset-002",
+      "caption_tracks": [],
+      "tracks": [],
+      "locator": "body > main > div:nth-of-type(2) > video",
+      "transcribed": false,
+      "transcript_provenance": null,
+      "note": "This media is NOT transcribed. It is a plain media file with no caption track and no authored walkthrough behind it, so WebShot has its source URL, its duration and its poster frame, and nothing of what is said or shown in it. Anything an agent needs from it is missing from this bundle and has to come from playing it."
+    }
+  ],
+  "video_tally": {
+    "total": 2,
+    "documented_walkthroughs": 1,
+    "transcribed_media": 0,
+    "untranscribed_media": 1
+  }
+}

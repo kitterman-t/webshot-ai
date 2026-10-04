@@ -1,0 +1,25 @@
+- main [ref=e2]:
+  - heading "Field Guide to Document Structures" [level=1] [ref=e3]
+  - paragraph [ref=e4]: "This page exercises the block types that long-form technical writing relies on: a definition list, a block quotation, an ordered procedure, an unordered checklist, and preformatted configuration text."
+  - heading "Terminology" [level=2] [ref=e5]
+  - generic [ref=e6]:
+    - term [ref=e7]: Capture
+    - definition [ref=e8]: The act of recording what a page rendered for an authorized reader, without altering its substance.
+    - term [ref=e9]: Bundle
+    - definition [ref=e10]: "The machine-readable companion to the PDF: text, structure, chunks, and provenance in one directory."
+    - term [ref=e11]: Sentinel
+    - definition [ref=e12]: A string that exists only inside a raster, so its presence in the text proves recognition ran.
+  - heading "Advice from the manual" [level=2] [ref=e13]
+  - blockquote [ref=e14]: Preserve the reading order first. A beautiful page that reads in the wrong order is a worse record than a plain page that reads correctly.
+  - heading "Procedure" [level=2] [ref=e15]
+  - list [ref=e16]:
+    - listitem [ref=e17]: Wait for the page's readiness signal before touching the DOM.
+    - listitem [ref=e18]: Record every structure the page used to say what it said.
+    - listitem [ref=e19]: Validate the result before publishing anything.
+  - heading "Pre-flight checklist" [level=2] [ref=e20]
+  - list [ref=e21]:
+    - listitem [ref=e22]: Fonts settled
+    - listitem [ref=e23]: Images loaded
+    - listitem [ref=e24]: Overlays accounted for
+  - heading "Configuration" [level=2] [ref=e25]
+  - generic [ref=e26]: "capture: mode: clean scroll: bounded ocr: tesseract"

@@ -1,0 +1,28 @@
+{
+  "bundle_format": 3,
+  "visual_assets": [
+    {
+      "id": "asset-001",
+      "file": "assets/asset-001.png",
+      "kind": "canvas",
+      "width": 640,
+      "height": 240,
+      "alt": "",
+      "aria_label": "Quarterly revenue bar chart",
+      "title": "",
+      "caption": "Quarterly revenue increased from 1.2 million dollars in Q1 to 2.4 million dollars in Q4.",
+      "source_url": "",
+      "nearby_heading": "Quality indicators",
+      "ocr": {
+        "text": "",
+        "confidence": null,
+        "language": null,
+        "engine": null
+      },
+      "sha256": "78f008f219af67b2e46ac846c82abaf4926b24d09fee3deed6b61000e9a98f2b",
+      "frame_content": null
+    }
+  ],
+  "form_fields": [],
+  "embedded_media": []
+}

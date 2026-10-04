@@ -1,0 +1,130 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/clamped_noise.html",
+  "final_url": "file://<REPO>/tests/fixtures/clamped_noise.html",
+  "title": "The noise element is itself clamped",
+  "page_metadata": {
+    "title": "The noise element is itself clamped",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "The Real Article",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../clamped-noise.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json"
+    ]
+  },
+  "content": {
+    "items": 3,
+    "tables": 0,
+    "links": 0,
+    "chunks": 2,
+    "text_characters": 431,
+    "visual_assets": 0,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 526,
+      "sha256": "18522a8a08021414f4b574816cd0833b3ed4807f25dba5df87ad6ca3a90f1169"
+    },
+    "assets.json": {
+      "bytes": 93,
+      "sha256": "254f1ebdc290bd2774d0677739798ca1744f2582c0f98139b06bcc045604d36e"
+    },
+    "chunks.jsonl": {
+      "bytes": 818,
+      "sha256": "1b67783a8f8d5454727145451eb7bfe93c05e0d65e3a18f6632865958cef4dcb"
+    },
+    "content.doctags": {
+      "bytes": 488,
+      "sha256": "b2e7f43a1d98270ef1653e3358596828798344d494161d7f849b47e0633a5a09"
+    },
+    "content.html": {
+      "bytes": 631,
+      "sha256": "3c3c5f494f9cf781bc4fe1258d4b19de82ab045fdbcb94e9c3be7cd2500db88f"
+    },
+    "content.json": {
+      "bytes": 2317,
+      "sha256": "8a0072fd591f6482cac0f2a7e52a7f6cc46bef3e086e91ffd5e4e236c19de14d"
+    },
+    "content.md": {
+      "bytes": 433,
+      "sha256": "eb449dfd4383bb04d9644e3faf2062afb4b3d755a3c38a4e60e2bd57bd638f56"
+    },
+    "content.txt": {
+      "bytes": 431,
+      "sha256": "71029665e82355dc0c7a7f2341cb6e4a07e1d1cc6fde0aa258585ce78bc4b5ed"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/clamped_noise.html": {
+      "bytes": 1647,
+      "sha256": "b479d545260c384dcd314c080094a301a1181f782c68993f5f6a1e00e6b2b642"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

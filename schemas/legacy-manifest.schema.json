@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/legacy-manifest.schema.json",
+  "$defs": {
+    "FileRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileRecord",
+      "type": "object"
+    },
+    "OcrSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "language": {
+          "title": "Language",
+          "type": "string"
+        },
+        "page_segmentation_mode": {
+          "title": "Page Segmentation Mode",
+          "type": "integer"
+        },
+        "engine": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Engine"
+        }
+      },
+      "required": [
+        "enabled",
+        "language",
+        "page_segmentation_mode",
+        "engine"
+      ],
+      "title": "OcrSettings",
+      "type": "object"
+    },
+    "SourceResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "http_status": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Http Status"
+        },
+        "content_type": {
+          "title": "Content Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "http_status",
+        "content_type"
+      ],
+      "title": "SourceResponse",
+      "type": "object"
+    },
+    "WebContentCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "title": "Blocks",
+          "type": "integer"
+        },
+        "tables": {
+          "title": "Tables",
+          "type": "integer"
+        },
+        "links": {
+          "title": "Links",
+          "type": "integer"
+        },
+        "chunks": {
+          "title": "Chunks",
+          "type": "integer"
+        },
+        "text_characters": {
+          "title": "Text Characters",
+          "type": "integer"
+        },
+        "visual_assets": {
+          "title": "Visual Assets",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "blocks",
+        "tables",
+        "links",
+        "chunks",
+        "text_characters",
+        "visual_assets"
+      ],
+      "title": "WebContentCounts",
+      "type": "object"
+    },
+    "WebPdfRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "pages": {
+          "title": "Pages",
+          "type": "integer"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "tagged": {
+          "title": "Tagged",
+          "type": "boolean"
+        },
+        "bookmarks": {
+          "title": "Bookmarks",
+          "type": "boolean"
+        },
+        "embedded_files": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Embedded Files",
+          "type": "array"
+        }
+      },
+      "required": [
+        "file",
+        "pages",
+        "bytes",
+        "sha256",
+        "tagged",
+        "bookmarks"
+      ],
+      "title": "WebPdfRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`manifest.json` on the web path.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "generator": {
+      "title": "Generator",
+      "type": "string"
+    },
+    "generator_version": {
+      "title": "Generator Version",
+      "type": "string"
+    },
+    "captured_at": {
+      "title": "Captured At",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "final_url": {
+      "title": "Final Url",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "source_response": {
+      "$ref": "#/$defs/SourceResponse"
+    },
+    "pdf": {
+      "$ref": "#/$defs/WebPdfRecord"
+    },
+    "content": {
+      "$ref": "#/$defs/WebContentCounts"
+    },
+    "ocr": {
+      "$ref": "#/$defs/OcrSettings"
+    },
+    "files": {
+      "additionalProperties": {
+        "$ref": "#/$defs/FileRecord"
+      },
+      "title": "Files",
+      "type": "object"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "ocr_notice": {
+      "title": "Ocr Notice",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "generator",
+    "generator_version",
+    "captured_at",
+    "source",
+    "final_url",
+    "title",
+    "source_response",
+    "pdf",
+    "content",
+    "ocr",
+    "files",
+    "warnings",
+    "ocr_notice"
+  ],
+  "title": "WebManifest",
+  "type": "object"
+}

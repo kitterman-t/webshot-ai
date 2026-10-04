@@ -1,0 +1,31 @@
+- main [ref=e2]:
+  - heading "Getting Started with Projects" [level=1] [ref=e3]
+  - paragraph [ref=e4]: Module 2 of the implementation journey. Watch the walkthrough, then complete the checklist below.
+  - heading "Navigating your project" [level=2] [ref=e5]
+  - paragraph [ref=e6]: The video below walks through the project workspace end to end.
+  - generic [ref=e7]:
+    - iframe [ref=e8]:
+      
+    - paragraph [ref=e9]:
+      - text: Touring Your Project Workspace ·
+      - link "Open in a new tab" [ref=e10] [cursor=pointer]:
+        - /url: https://app.guidde.com/share/playbooks/ExamplePlaybook0000001
+  - heading "Understanding the sandbox environment" [level=2] [ref=e11]
+  - paragraph [ref=e12]: A short recording of the sandbox. There is no walkthrough behind this one.
+  - generic [ref=e13]:
+    - generic "Understanding the Sandbox Environment" [ref=e14]
+    - paragraph [ref=e15]: Understanding the Sandbox Environment · 4:11
+  - heading "Checklist" [level=2] [ref=e16]
+  - list [ref=e17]:
+    - listitem [ref=e18]: Sign in and open your project from the Projects list.
+    - listitem [ref=e19]: Post an update to the project feed.
+    - listitem [ref=e20]: Upload one document to the Files tab.
+  - heading "Where to get help" [level=2] [ref=e21]
+  - paragraph [ref=e22]:
+    - text: Raise a project issue for anything the consultants need to answer, or read the
+    - link "knowledge base article on project issues" [ref=e23] [cursor=pointer]:
+      - /url: https://help.example.com/Portal/Login.aspx?ReturnUrl=/Portal/KB/ArticleDet?ID=1234
+    - text: . The
+    - link "module checklist" [ref=e24] [cursor=pointer]:
+      - /url: checklist.html
+    - text: is on the next page.

@@ -1,0 +1,12 @@
+<doctag><text>Markdown document</text>
+<title>Quarterly Operations Review</title>
+<text>This Markdown document verifies headings, links, tables, code, and relative images.</text>
+<section_header_level_1>Key metrics</section_header_level_1>
+<otsl><ched>Metric<ched>Q1<ched>Q2<nl><fcel>Tickets resolved<fcel>1,240<fcel>1,485<nl><fcel>Satisfaction<fcel>92%<fcel>95%<nl></otsl>
+<picture><caption>Service trend chart</caption></picture>
+<inline><text>See the</text>
+<text>project documentation</text>
+<text>for context.</text>
+</inline>
+<code><_unknown_>{"status": "healthy", "regions": 4}</code>
+</doctag>

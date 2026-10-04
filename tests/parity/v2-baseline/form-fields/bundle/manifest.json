@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/form_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/form_page.html",
+  "title": "Account Preferences Review",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../form-fields.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true
+  },
+  "content": {
+    "blocks": 13,
+    "tables": 0,
+    "links": 0,
+    "chunks": 1,
+    "text_characters": 732,
+    "visual_assets": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 1711,
+      "sha256": "ea3b61ceaec37d8d377f8d50e98009ddcfa6d0f81fd13e5965bd783c4ae73331"
+    },
+    "chunks.jsonl": {
+      "bytes": 1320,
+      "sha256": "2176491b6567670051c791d91fc7d74d28765f58b2fe64f0e117ca5e0214ab89"
+    },
+    "content.html": {
+      "bytes": 2178,
+      "sha256": "0e1a8f43e9651f8cc25f9897934584d662b3f77b9bebf034f64a0cc406adf05a"
+    },
+    "content.json": {
+      "bytes": 3424,
+      "sha256": "a2b969686bf4792fb93700a21ad9c09958e9d5aa1c9ff0c088c8d37eafc52234"
+    },
+    "content.md": {
+      "bytes": 1016,
+      "sha256": "300e6c794ac2190de8ff5d062cdd90bded7d89748be53d8ccd098d7dda56fdff"
+    },
+    "content.txt": {
+      "bytes": 735,
+      "sha256": "d691180da9deccddd411331409e96f08a6b7fe50ff0ab6af9ad54499b751a656"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/form_page.html": {
+      "bytes": 2788,
+      "sha256": "5f28a14516482a400fcc150d8955359b3b059ced899127c0910db43c9640584d"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

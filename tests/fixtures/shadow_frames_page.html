@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shadow roots and frames</title>
+<style>
+  /* Every sentence below is one the test looks for, by name. Each is printed
+     or not printed on purpose (docs/09 P16-6): the PDF's text layer is the
+     control that says which, so an absence from the bundle is only a finding
+     when the PDF has the words. No sentence holds "fi", "fl" or "ff": a
+     ligature the capture cannot turn off (the closed root) would hide a word
+     from the text layer and turn the control into a false negative. */
+  body { font: 16px/1.5 sans-serif; margin: 2rem; max-width: 40rem; }
+  iframe { border: 0; width: 100%; height: 8rem; }
+</style>
+</head>
+<body>
+<h1>Shadow roots and frames</h1>
+<p>Before the host: light text.</p>
+<!-- A slot is `display: contents`, and so is this: no box of its own, and text
+     that is rendered all the same. Dropped before P16-6, shadow DOM or not. -->
+<p><span style="display: contents">Contents: text in a display-contents box.</span></p>
+
+<!-- An open shadow root with every way a slot can be filled, and one light
+     child that no slot shows: the flat tree has it nowhere, and nor does the
+     PDF. -->
+<div id="card"><span slot="title">Slotted title: named slot text.</span>Slotted body: default slot text.<span slot="nowhere">Unslotted: never rendered.</span></div>
+
+<p>After the host: light text.</p>
+
+<iframe title="Readable frame" srcdoc='<!doctype html><p>Framed: text from a same-origin frame.</p><label>Frame password <input id="frame-secret" name="frame_password" type="password"></label><div id="frame-host"></div><script>document.getElementById("frame-secret").value = "Frame-Pass-7!q"; document.getElementById("frame-host").attachShadow({mode: "open"}).innerHTML = "<p>Framed shadow: a shadow root inside the frame.</p>";</script>'></iframe>
+
+<!-- Readable, and not shown: its text must stay out of the bundle. -->
+<iframe title="Hidden frame" style="display: none" srcdoc="<p>Hidden frame: display none.</p>"></iframe>
+
+<!-- A data: URL is an opaque origin, so no script in the page can read the
+     frame's document. Chromium prints it all the same. -->
+<iframe title="Opaque frame" src="data:text/html,%3Cp%3EOpaque%3A%20a%20data%20URL%20frame.%3C%2Fp%3E"></iframe>
+
+<!-- No page script can read a closed shadow root, or find one. -->
+<div id="sealed"></div>
+
+<script>
+  const shadow = document.getElementById('card').attachShadow({mode: 'open'});
+  shadow.innerHTML = `
+    <style>p { margin: .25rem 0; } .gone { display: none; }</style>
+    <h2>Shadowed heading</h2>
+    <p><slot name="title">Named placeholder, not shown.</slot></p>
+    <p><slot>Default placeholder, not shown.</slot></p>
+    <p><slot name="empty">Placeholder: no node is assigned here.</slot></p>
+    <p class="gone">Hidden in shadow: display none.</p>
+    <p>Shadowed: text in an open shadow root.
+       <a href="https://example.org/shadow-link">A link in the shadow root</a></p>
+    <label>Shadow note <input id="note" name="shadow_note" value="default note"></label>
+    <label>Shadow password <input id="secret" name="shadow_password" type="password"></label>
+    <div id="inner"></div>
+    <img alt="Spoof target" width="40" height="30" data-webshot-asset-id="asset-999"
+         src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACwAAAAAAQABAAACAkQBADs=">`;
+  // Live values: what a reader typed, not what the markup says.
+  shadow.getElementById('note').value = 'live shadow note';
+  shadow.getElementById('secret').value = 'Shadow-Pass-3!k';
+  shadow.getElementById('inner').attachShadow({mode: 'open'}).innerHTML =
+    '<p>Nested: text two shadow roots deep.</p>';
+  document.getElementById('sealed').attachShadow({mode: 'closed'}).innerHTML =
+    '<p>Closed: text in a closed shadow root.</p>';
+</script>
+</body>
+</html>

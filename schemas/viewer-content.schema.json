@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/viewer-content.schema.json",
+  "$defs": {
+    "ViewerOcrAlternate": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "page_segmentation_mode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Page Segmentation Mode"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "confidence",
+        "page_segmentation_mode",
+        "purpose"
+      ],
+      "title": "ViewerOcrAlternate",
+      "type": "object"
+    },
+    "ViewerOcrWord": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Bbox",
+          "type": "array"
+        },
+        "line": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Line",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "confidence",
+        "bbox",
+        "line"
+      ],
+      "title": "ViewerOcrWord",
+      "type": "object"
+    },
+    "ViewerPage": {
+      "additionalProperties": false,
+      "properties": {
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "pdf_source_page": {
+          "title": "Pdf Source Page",
+          "type": "integer"
+        },
+        "image": {
+          "title": "Image",
+          "type": "string"
+        },
+        "width": {
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "title": "Height",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "ocr": {
+          "$ref": "#/$defs/ViewerPageOcr"
+        }
+      },
+      "required": [
+        "page",
+        "pdf_source_page",
+        "image",
+        "width",
+        "height",
+        "sha256",
+        "ocr"
+      ],
+      "title": "ViewerPage",
+      "type": "object"
+    },
+    "ViewerPageOcr": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "word_count": {
+          "title": "Word Count",
+          "type": "integer"
+        },
+        "language": {
+          "title": "Language",
+          "type": "string"
+        },
+        "engine": {
+          "title": "Engine",
+          "type": "string"
+        },
+        "page_segmentation_mode": {
+          "title": "Page Segmentation Mode",
+          "type": "integer"
+        },
+        "tsv": {
+          "title": "Tsv",
+          "type": "string"
+        },
+        "alternate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ViewerOcrAlternate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "words": {
+          "items": {
+            "$ref": "#/$defs/ViewerOcrWord"
+          },
+          "title": "Words",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "confidence",
+        "word_count",
+        "language",
+        "engine",
+        "page_segmentation_mode",
+        "tsv",
+        "alternate",
+        "words"
+      ],
+      "title": "ViewerPageOcr",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`content.json` on the protected-viewer path.",
+  "properties": {
+    "schema_version": {
+      "const": "1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "pages": {
+      "items": {
+        "$ref": "#/$defs/ViewerPage"
+      },
+      "title": "Pages",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "title",
+    "source",
+    "pages"
+  ],
+  "title": "ViewerContent",
+  "type": "object"
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/viewer-capture.schema.json",
+  "additionalProperties": true,
+  "description": "`capture.json`: the protected-viewer policy record.\n\nOnly the invariants WebShot itself writes are fixed; the viewer metadata\nmerged in by the capture stage is open-ended by design.",
+  "properties": {
+    "method": {
+      "title": "Method",
+      "type": "string"
+    },
+    "native_file_downloaded": {
+      "title": "Native File Downloaded",
+      "type": "boolean"
+    },
+    "download_restriction_respected": {
+      "title": "Download Restriction Respected",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "method",
+    "native_file_downloaded",
+    "download_restriction_respected"
+  ],
+  "title": "ViewerCapture",
+  "type": "object"
+}

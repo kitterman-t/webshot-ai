@@ -1,0 +1,137 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/professional_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/professional_page.html",
+  "title": "WebShot Quality Review",
+  "page_metadata": {
+    "title": "WebShot Quality Review",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "WebShot Quality Review",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../article-capped-assets.pdf",
+    "pages": 2,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json",
+      "tables/table-001.csv"
+    ]
+  },
+  "content": {
+    "items": 20,
+    "tables": 1,
+    "links": 0,
+    "chunks": 10,
+    "text_characters": 1637,
+    "visual_assets": 0,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 2868,
+      "sha256": "a2e50ced4ad800e86f0f16ebfd1f82daf99ae86d8834f86808a6e2ffb247dac7"
+    },
+    "assets.json": {
+      "bytes": 93,
+      "sha256": "254f1ebdc290bd2774d0677739798ca1744f2582c0f98139b06bcc045604d36e"
+    },
+    "chunks.jsonl": {
+      "bytes": 4118,
+      "sha256": "5d77c494e3db6cdd521211cde6469fd356a99af99747d7311d56636f10c5cca7"
+    },
+    "content.doctags": {
+      "bytes": 2233,
+      "sha256": "3a9af4820bc266a9607c3ddb18a4b46c264b80adc85e8e2199a5cd2df0f87c57"
+    },
+    "content.html": {
+      "bytes": 2425,
+      "sha256": "f7d88c0509bd6112675be7c66e1f7de9e4e5e5748300c6b1ef68c83530e0d606"
+    },
+    "content.json": {
+      "bytes": 16727,
+      "sha256": "d1866bd31837d20aa9c69c5d55a82d852977d821e3e29ed847e968bb2789568c"
+    },
+    "content.md": {
+      "bytes": 1663,
+      "sha256": "85b525cc19b4e692af94221bcd239e54f314b420cd6e9f450a4e0830780dc71a"
+    },
+    "content.txt": {
+      "bytes": 1637,
+      "sha256": "32a610feaca16a3ec20c3cd0e4b55f837e0697f6b1fb75fee49c465ec73c8103"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/professional_page.html": {
+      "bytes": 4814,
+      "sha256": "a5cde0166764c3362939d652dd49ab3a7ab37ea0bd7118c6ef4d0c2d34368e89"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "tables/table-001.csv": {
+      "bytes": 160,
+      "sha256": "00e41412d019fe37a23ba114a8645dce65fbdd686d0377f63f88ce79beb96fb1"
+    }
+  },
+  "warnings": [
+    "The page shows 1 more visual asset than the limit of 0 (--max-assets); it was not captured."
+  ],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

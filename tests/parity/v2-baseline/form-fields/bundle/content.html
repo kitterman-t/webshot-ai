@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <title>Account Preferences Review</title>
+  <meta name="description" content="A settings form used to verify form-field fidelity and password redaction.">
+  
+</head>
+<body>
+  <main>
+    <h1>Account Preferences Review</h1>
+    <p>This page verifies that every kind of form field a capture can encounter is
+    preserved as a record: text, email, password, checkbox, radio, select, and
+    textarea. The password value must never reach any published artifact.</p>
+
+    <h2>Profile</h2>
+    <form>
+      <label for="display-name">Display name</label>
+      <input type="text" id="display-name" name="display_name" value="Avery Fixture">
+
+      <label for="contact-email">Contact email</label>
+      <input type="email" id="contact-email" name="contact_email" value="avery@example.com">
+
+      <label for="account-password">Account password</label>
+      <input type="password" id="account-password" name="account_password" value="[REDACTED PASSWORD]">
+
+      <fieldset>
+        <label><input type="checkbox" name="release_notes_opt_in" checked="" value="on"> Send me release notes</label>
+        <label><input type="radio" name="digest_frequency" value="weekly" checked=""> Weekly digest</label>
+        <label><input type="radio" name="digest_frequency" value="daily"> Daily digest</label>
+      </fieldset>
+
+      <label for="timezone">Time zone</label>
+      <select id="timezone" name="timezone">
+        <option>UTC+00:00 London</option>
+        <option selected="">UTC+01:00 Berlin</option>
+        <option>UTC-05:00 New York</option>
+      </select>
+
+      <label for="signature-note">Signature note</label>
+      <textarea id="signature-note" name="signature_note" rows="3">Sent from the quarterly review workstation.</textarea>
+    </form>
+
+    <h2>Why these settings matter</h2>
+    <p>A capture is an act of record. The state of every control on the page is part
+    of what the page said, so each field above must appear in the bundle with its
+    name and value — except the password, whose value is replaced by a redaction
+    marker before it can reach any artifact.</p>
+  </main>
+
+
+</body></html>

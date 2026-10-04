@@ -1,0 +1,14 @@
+[
+  {
+    "text": "Open in a new tab",
+    "url": "https://app.guidde.com/share/playbooks/ExamplePlaybook0000001"
+  },
+  {
+    "text": "knowledge base article on project issues",
+    "url": "https://help.example.com/Portal/Login.aspx?ReturnUrl=/Portal/KB/ArticleDet?ID=1234"
+  },
+  {
+    "text": "module checklist",
+    "url": "file://<REPO>/tests/fixtures/checklist.html"
+  }
+]

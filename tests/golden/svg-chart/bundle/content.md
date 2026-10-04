@@ -1,0 +1,15 @@
+Image document
+
+# chart-source.svg
+
+chart-source.svg
+
+[OCR text from asset-001, machine-recognized by Tesseract, mean confidence 96%:]
+Service Score
+Jan 82
+Feb 87
+Mar 91
+Apr 95
+[End of OCR text from asset-001]
+
+<!-- image -->

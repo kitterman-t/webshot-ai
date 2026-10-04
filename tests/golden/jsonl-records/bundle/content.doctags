@@ -1,0 +1,7 @@
+<doctag><text>JSON Lines data</text>
+<title>sample_records.jsonl</title>
+<section_header_level_1>Records</section_header_level_1>
+<code><_unknown_>{"id": 1, "event": "created", "status": "open"}
+{"id": 2, "event": "reviewed", "status": "approved"}
+{"id": 3, "event": "published", "status": "complete"}</code>
+</doctag>

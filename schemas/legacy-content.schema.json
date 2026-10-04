@@ -1,0 +1,750 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/legacy-content.schema.json",
+  "$defs": {
+    "AssetOcr": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Language"
+        },
+        "engine": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Engine"
+        }
+      },
+      "required": [
+        "text",
+        "confidence",
+        "language",
+        "engine"
+      ],
+      "title": "AssetOcr",
+      "type": "object"
+    },
+    "BlockquoteBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "blockquote",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "locator",
+        "text",
+        "type"
+      ],
+      "title": "BlockquoteBlock",
+      "type": "object"
+    },
+    "CodeBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "code",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "locator",
+        "text",
+        "type"
+      ],
+      "title": "CodeBlock",
+      "type": "object"
+    },
+    "DefinitionEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "term": {
+          "title": "Term",
+          "type": "string"
+        },
+        "definition": {
+          "title": "Definition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "term",
+        "definition"
+      ],
+      "title": "DefinitionEntry",
+      "type": "object"
+    },
+    "DefinitionsBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "definitions",
+          "title": "Type",
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/DefinitionEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "locator",
+        "text",
+        "type",
+        "entries"
+      ],
+      "title": "DefinitionsBlock",
+      "type": "object"
+    },
+    "EmbeddedMediaBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "embedded-media",
+          "title": "Type",
+          "type": "string"
+        },
+        "mediaType": {
+          "title": "Mediatype",
+          "type": "string"
+        },
+        "sourceUrl": {
+          "title": "Sourceurl",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "tracks": {
+          "items": {
+            "$ref": "#/$defs/MediaTrack"
+          },
+          "title": "Tracks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "locator",
+        "text",
+        "type",
+        "mediaType",
+        "sourceUrl",
+        "title",
+        "tracks"
+      ],
+      "title": "EmbeddedMediaBlock",
+      "type": "object"
+    },
+    "FigureBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "figure",
+          "title": "Type",
+          "type": "string"
+        },
+        "caption": {
+          "title": "Caption",
+          "type": "string"
+        },
+        "assetIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assetids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "locator",
+        "text",
+        "type",
+        "caption",
+        "assetIds"
+      ],
+      "title": "FigureBlock",
+      "type": "object"
+    },
+    "FormValueBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "form-value",
+          "title": "Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "locator",
+        "text",
+        "type",
+        "name",
+        "value"
+      ],
+      "title": "FormValueBlock",
+      "type": "object"
+    },
+    "HeadingBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "heading",
+          "title": "Type",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "locator",
+        "text",
+        "type",
+        "level"
+      ],
+      "title": "HeadingBlock",
+      "type": "object"
+    },
+    "Link": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "url"
+      ],
+      "title": "Link",
+      "type": "object"
+    },
+    "ListBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "list",
+          "title": "Type",
+          "type": "string"
+        },
+        "ordered": {
+          "title": "Ordered",
+          "type": "boolean"
+        },
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "locator",
+        "text",
+        "type",
+        "ordered",
+        "items"
+      ],
+      "title": "ListBlock",
+      "type": "object"
+    },
+    "MediaTrack": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "language": {
+          "title": "Language",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "language",
+        "label",
+        "url"
+      ],
+      "title": "MediaTrack",
+      "type": "object"
+    },
+    "PageMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "language": {
+          "title": "Language",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "author": {
+          "title": "Author",
+          "type": "string"
+        },
+        "keywords": {
+          "title": "Keywords",
+          "type": "string"
+        },
+        "canonicalUrl": {
+          "title": "Canonicalurl",
+          "type": "string"
+        },
+        "publishedTime": {
+          "title": "Publishedtime",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "language",
+        "description",
+        "author",
+        "keywords",
+        "canonicalUrl",
+        "publishedTime"
+      ],
+      "title": "PageMetadata",
+      "type": "object"
+    },
+    "ParagraphBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "paragraph",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "locator",
+        "text",
+        "type"
+      ],
+      "title": "ParagraphBlock",
+      "type": "object"
+    },
+    "TableBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "table",
+          "title": "Type",
+          "type": "string"
+        },
+        "caption": {
+          "title": "Caption",
+          "type": "string"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/TableCell"
+            },
+            "type": "array"
+          },
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "locator",
+        "text",
+        "type",
+        "caption",
+        "rows"
+      ],
+      "title": "TableBlock",
+      "type": "object"
+    },
+    "TableCell": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "header": {
+          "title": "Header",
+          "type": "boolean"
+        },
+        "colspan": {
+          "title": "Colspan",
+          "type": "integer"
+        },
+        "rowspan": {
+          "title": "Rowspan",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "text",
+        "header",
+        "colspan",
+        "rowspan"
+      ],
+      "title": "TableCell",
+      "type": "object"
+    },
+    "VisualAssetRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        },
+        "height": {
+          "title": "Height",
+          "type": "number"
+        },
+        "alt": {
+          "title": "Alt",
+          "type": "string"
+        },
+        "aria_label": {
+          "title": "Aria Label",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "caption": {
+          "title": "Caption",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "nearby_heading": {
+          "title": "Nearby Heading",
+          "type": "string"
+        },
+        "ocr": {
+          "$ref": "#/$defs/AssetOcr"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "file",
+        "kind",
+        "width",
+        "height",
+        "alt",
+        "aria_label",
+        "title",
+        "caption",
+        "source_url",
+        "nearby_heading",
+        "ocr",
+        "sha256"
+      ],
+      "title": "VisualAssetRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`content.json` on the web path.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/PageMetadata"
+    },
+    "blocks": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "blockquote": "#/$defs/BlockquoteBlock",
+            "code": "#/$defs/CodeBlock",
+            "definitions": "#/$defs/DefinitionsBlock",
+            "embedded-media": "#/$defs/EmbeddedMediaBlock",
+            "figure": "#/$defs/FigureBlock",
+            "form-value": "#/$defs/FormValueBlock",
+            "heading": "#/$defs/HeadingBlock",
+            "list": "#/$defs/ListBlock",
+            "paragraph": "#/$defs/ParagraphBlock",
+            "table": "#/$defs/TableBlock"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/HeadingBlock"
+          },
+          {
+            "$ref": "#/$defs/ParagraphBlock"
+          },
+          {
+            "$ref": "#/$defs/BlockquoteBlock"
+          },
+          {
+            "$ref": "#/$defs/CodeBlock"
+          },
+          {
+            "$ref": "#/$defs/ListBlock"
+          },
+          {
+            "$ref": "#/$defs/DefinitionsBlock"
+          },
+          {
+            "$ref": "#/$defs/TableBlock"
+          },
+          {
+            "$ref": "#/$defs/FigureBlock"
+          },
+          {
+            "$ref": "#/$defs/FormValueBlock"
+          },
+          {
+            "$ref": "#/$defs/EmbeddedMediaBlock"
+          }
+        ]
+      },
+      "title": "Blocks",
+      "type": "array"
+    },
+    "links": {
+      "items": {
+        "$ref": "#/$defs/Link"
+      },
+      "title": "Links",
+      "type": "array"
+    },
+    "visual_assets": {
+      "items": {
+        "$ref": "#/$defs/VisualAssetRecord"
+      },
+      "title": "Visual Assets",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source",
+    "metadata",
+    "blocks",
+    "links",
+    "visual_assets"
+  ],
+  "title": "WebContent",
+  "type": "object"
+}

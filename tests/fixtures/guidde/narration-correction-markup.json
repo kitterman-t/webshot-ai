@@ -1,0 +1,35 @@
+{
+  "playbook": {
+    "id": "CorrectionMarkupFixture01",
+    "title": "Working with the {examplitics||||spelling=Examplytics} portal",
+    "duration": 12,
+    "orgName": "Examplytics",
+    "language": {"langCode": "en-US"},
+    "steps": [
+      {
+        "id": "step-one",
+        "kind": "step",
+        "title": "Set an {attribute||||alt=At-tribute}",
+        "description": "Open {examplitics||||spelling=Examplytics} and set the {attribute||||alt=attribute} that {does||||alt=duzz} the work.",
+        "duration": 6,
+        "audioNote": {
+          "type": "textToSpeech",
+          "markdown": "Open {examplitics||||spelling=Examplytics} and set the {attribute||||alt=At-tribute}."
+        },
+        "subtitles": [
+          {"text": "Open {examplitics||||spelling=Examplytics} and set the", "start": 0, "end": 3},
+          {"text": "{attribute||||alt=At-tribute} that {does||||alt=duzz} the work.", "start": 3, "end": 6}
+        ]
+      },
+      {
+        "id": "step-two",
+        "kind": "step",
+        "title": "Pick a {colour||||pronounce=kuh-ler}",
+        "description": "Pick a {colour||||pronounce=kuh-ler} for the {functional||||alt=funktional} view.",
+        "duration": 6,
+        "audioNote": {"type": "textToSpeech", "markdown": "Pick a colour."},
+        "subtitles": [{"text": "Pick a colour.", "start": 0, "end": 6}]
+      }
+    ]
+  }
+}

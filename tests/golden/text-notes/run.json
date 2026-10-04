@@ -1,0 +1,14 @@
+{
+  "case": "text-notes",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/sample_notes.txt",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

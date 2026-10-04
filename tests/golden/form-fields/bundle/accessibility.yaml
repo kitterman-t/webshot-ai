@@ -1,0 +1,30 @@
+- main [ref=e2]:
+  - heading "Account Preferences Review" [level=1] [ref=e3]
+  - paragraph [ref=e4]: "This page verifies that every kind of form field a capture can encounter is preserved as a record: text, email, password, checkbox, radio, select, and textarea. The password value must never reach any published artifact."
+  - heading "Profile" [level=2] [ref=e5]
+  - generic [ref=e6]:
+    - generic [ref=e7]: Display name
+    - textbox "Display name" [ref=e8]: Avery Fixture
+    - generic [ref=e9]: Contact email
+    - textbox "Contact email" [ref=e10]: avery@example.com
+    - generic [ref=e11]: Account password
+    - textbox "Account password" [ref=e12]: [REDACTED PASSWORD]
+    - group [ref=e13]:
+      - generic [ref=e14]:
+        - checkbox "Send me release notes" [checked] [ref=e15]
+        - text: Send me release notes
+      - generic [ref=e16]:
+        - radio "Weekly digest" [checked] [ref=e17]
+        - text: Weekly digest
+      - generic [ref=e18]:
+        - radio "Daily digest" [ref=e19]
+        - text: Daily digest
+    - generic [ref=e20]: Time zone
+    - combobox "Time zone" [ref=e21]:
+      - option "UTC+00:00 London"
+      - option "UTC+01:00 Berlin" [selected]
+      - option "UTC-05:00 New York"
+    - generic [ref=e22]: Signature note
+    - textbox "Signature note" [ref=e23]: Sent from the quarterly review workstation.
+  - heading "Why these settings matter" [level=2] [ref=e24]
+  - paragraph [ref=e25]: A capture is an act of record. The state of every control on the page is part of what the page said, so each field above must appear in the bundle with its name and value — except the password, whose value is replaced by a redaction marker before it can reach any artifact.

@@ -1,0 +1,23 @@
+--- page 1 ---
+Getting Started with Projects
+Module 2 of the implementation journey. Watch the walkthrough, then complete the checklist below.
+Navigating your project
+The video below walks through the project workspace end to end.
+Touring Your Project Workspace · Open in a new tab
+Understanding the sandbox environment
+A short recording of the sandbox. There is no walkthrough behind this one.
+Understanding the Sandbox Environment · 4:11
+0:00
+Text recognized within visual asset asset-002: ra.> 0:004)Ls.
+Getting Started with Projects — Learning Journey lms_page.html
+WebShot Page 1 of 2
+--- page 2 ---
+Checklist
+Sign in and open your project from the Projects list.
+Post an update to the project feed.
+Upload one document to the Files tab.
+Where to get help
+Raise a project issue for anything the consultants need to answer, or read the knowledge base article
+on project issues. The module checklist is on the next page.
+Getting Started with Projects — Learning Journey lms_page.html
+WebShot Page 2 of 2

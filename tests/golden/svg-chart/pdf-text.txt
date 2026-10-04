@@ -1,0 +1,9 @@
+--- page 1 ---
+IMAGE DOCUMENT
+chart-source.svg
+Service Score
+Jan 82 Feb 87 Mar 91 Apr 95
+chart-source.svg
+Text recognized within visual asset asset-001: Service ScoreJan 82Feb 87Mar 91Apr 95
+chart-source.svg chart-source.svg
+WebShot Page 1 of 1

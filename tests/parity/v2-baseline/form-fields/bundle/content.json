@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "source": "file://<REPO>/tests/fixtures/form_page.html",
+  "metadata": {
+    "title": "Account Preferences Review",
+    "language": "en",
+    "description": "A settings form used to verify form-field fidelity and password redaction.",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "blocks": [
+    {
+      "id": "block-00001",
+      "locator": "body > main > h1",
+      "text": "Account Preferences Review",
+      "type": "heading",
+      "level": 1
+    },
+    {
+      "id": "block-00002",
+      "locator": "body > main > p:nth-of-type(1)",
+      "text": "This page verifies that every kind of form field a capture can encounter is preserved as a record: text, email, password, checkbox, radio, select, and textarea. The password value must never reach any published artifact.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00003",
+      "locator": "body > main > h2:nth-of-type(1)",
+      "text": "Profile",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00004",
+      "locator": "body > input#display-name",
+      "text": "",
+      "type": "form-value",
+      "name": "display_name",
+      "value": "Avery Fixture"
+    },
+    {
+      "id": "block-00005",
+      "locator": "body > input#contact-email",
+      "text": "",
+      "type": "form-value",
+      "name": "contact_email",
+      "value": "avery@example.com"
+    },
+    {
+      "id": "block-00006",
+      "locator": "body > input#account-password",
+      "text": "",
+      "type": "form-value",
+      "name": "account_password",
+      "value": "[REDACTED PASSWORD]"
+    },
+    {
+      "id": "block-00007",
+      "locator": "body > main > form > fieldset > label:nth-of-type(1) > input",
+      "text": "",
+      "type": "form-value",
+      "name": "release_notes_opt_in",
+      "value": "true"
+    },
+    {
+      "id": "block-00008",
+      "locator": "body > main > form > fieldset > label:nth-of-type(2) > input",
+      "text": "",
+      "type": "form-value",
+      "name": "digest_frequency",
+      "value": "true"
+    },
+    {
+      "id": "block-00009",
+      "locator": "body > main > form > fieldset > label:nth-of-type(3) > input",
+      "text": "",
+      "type": "form-value",
+      "name": "digest_frequency",
+      "value": "false"
+    },
+    {
+      "id": "block-00010",
+      "locator": "body > select#timezone",
+      "text": "UTC+00:00 London\nUTC+01:00 Berlin\nUTC-05:00 New York",
+      "type": "form-value",
+      "name": "timezone",
+      "value": "UTC+01:00 Berlin"
+    },
+    {
+      "id": "block-00011",
+      "locator": "body > textarea#signature-note",
+      "text": "",
+      "type": "form-value",
+      "name": "signature_note",
+      "value": "Sent from the quarterly review workstation."
+    },
+    {
+      "id": "block-00012",
+      "locator": "body > main > h2:nth-of-type(2)",
+      "text": "Why these settings matter",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00013",
+      "locator": "body > main > p:nth-of-type(2)",
+      "text": "A capture is an act of record. The state of every control on the page is part of what the page said, so each field above must appear in the bundle with its name and value — except the password, whose value is replaced by a redaction marker before it can reach any artifact.",
+      "type": "paragraph"
+    }
+  ],
+  "links": [],
+  "visual_assets": []
+}

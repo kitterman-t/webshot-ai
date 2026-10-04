@@ -1,0 +1,64 @@
+{
+  "bundle_format": 3,
+  "visual_assets": [
+    {
+      "id": "asset-001",
+      "file": "assets/asset-001.png",
+      "kind": "iframe",
+      "width": 734,
+      "height": 260,
+      "alt": "",
+      "aria_label": "",
+      "title": "Touring Your Project Workspace",
+      "caption": "",
+      "source_url": "about:blank",
+      "nearby_heading": "Navigating your project",
+      "ocr": {
+        "text": "",
+        "confidence": null,
+        "language": "eng",
+        "engine": "Tesseract"
+      },
+      "sha256": "8aa17f049f3620040880cec3a431070727133950a0721d894322f6b959769efe",
+      "frame_content": "dom"
+    },
+    {
+      "id": "asset-002",
+      "file": "assets/asset-002.png",
+      "kind": "video",
+      "width": 640,
+      "height": 240,
+      "alt": "",
+      "aria_label": "",
+      "title": "Understanding the Sandbox Environment",
+      "caption": "",
+      "source_url": "https://usw-input-videos.continuassets.example/sandbox-overview.mp4",
+      "nearby_heading": "Understanding the sandbox environment",
+      "ocr": {
+        "text": "ra\n.\n> 0:00\n4)\nLs\n.",
+        "confidence": 58.26,
+        "language": "eng",
+        "engine": "Tesseract"
+      },
+      "sha256": "2f2b0f18d78a10cc0cb382a9fef1c83c3a23451791b9469f07f6048f6f2a9bed",
+      "frame_content": null
+    }
+  ],
+  "form_fields": [],
+  "embedded_media": [
+    {
+      "media_type": "iframe",
+      "source_url": "about:blank",
+      "title": "Touring Your Project Workspace",
+      "tracks": [],
+      "locator": "body > main > div:nth-of-type(1) > iframe"
+    },
+    {
+      "media_type": "video",
+      "source_url": "https://usw-input-videos.continuassets.example/sandbox-overview.mp4",
+      "title": "Understanding the Sandbox Environment",
+      "tracks": [],
+      "locator": "body > main > div:nth-of-type(2) > video"
+    }
+  ]
+}

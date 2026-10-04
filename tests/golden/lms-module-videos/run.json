@@ -1,0 +1,10 @@
+{
+  "case": "lms-module-videos",
+  "kind": "video",
+  "argv": [
+    "<video capture of tests/fixtures/lms_page.html via a Guidde stand-in>"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

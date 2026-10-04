@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "source": "file://<REPO>/tests/fixtures/sample_data.json",
+  "metadata": {
+    "title": "sample_data.json",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "blocks": [
+    {
+      "id": "block-00001",
+      "locator": "body > main > p",
+      "text": "JSON DATA",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00002",
+      "locator": "body > main > h1",
+      "text": "sample_data.json",
+      "type": "heading",
+      "level": 1
+    },
+    {
+      "id": "block-00003",
+      "locator": "body > main > pre",
+      "text": "{\n  \"report\": \"Regional performance\",\n  \"period\": \"2026-Q2\",\n  \"currency\": \"USD\",\n  \"regions\": [\n    {\n      \"name\": \"North\",\n      \"revenue\": 1250000,\n      \"growth_percent\": 8.2\n    },\n    {\n      \"name\": \"South\",\n      \"revenue\": 980000,\n      \"growth_percent\": 6.4\n    }\n  ],\n  \"approved\": true\n}",
+      "type": "code"
+    }
+  ],
+  "links": [],
+  "visual_assets": []
+}

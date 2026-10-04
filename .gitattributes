@@ -1,0 +1,10 @@
+# Byte-compared test data: a checkout must hand the tests the bytes the
+# repository holds. `-text` turns off end-of-line conversion, which a Windows
+# checkout otherwise applies (core.autocrlf): it turned a fixture's `\n` into
+# `\r\n` and failed a byte comparison for a reason unrelated to the code under
+# test (docs/09 P10-29). `-text`, not `eol=lf`: one fixture is CRLF as captured
+# (tests/fixtures/guidde/subtitles-reference.vtt), and `eol=lf` would mark it
+# as text and let the next add renormalize it to LF.
+tests/fixtures/** -text
+tests/golden/** -text
+tests/parity/** -text

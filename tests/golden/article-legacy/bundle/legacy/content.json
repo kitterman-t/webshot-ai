@@ -1,0 +1,223 @@
+{
+  "schema_version": "1.0",
+  "source": "file://<REPO>/tests/fixtures/professional_page.html",
+  "metadata": {
+    "title": "WebShot Quality Review",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "blocks": [
+    {
+      "id": "block-00001",
+      "locator": "body > main > article > h1",
+      "text": "WebShot Quality Review",
+      "type": "heading",
+      "level": 1
+    },
+    {
+      "id": "block-00002",
+      "locator": "body > main > article > p",
+      "text": "A representative long-form report used to verify typography, tables, page breaks, headers, and footers.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00003",
+      "locator": "body > main > article > section:nth-of-type(1) > h2",
+      "text": "Executive summary",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00004",
+      "locator": "body > main > article > section:nth-of-type(1) > p",
+      "text": "Professional web-to-PDF output should preserve the substance of a page while removing controls and interruptions that only make sense in a browser.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00005",
+      "locator": "body > main > article > section:nth-of-type(1) > ul",
+      "text": "Readable hierarchy and spacing\nStable pagination\nAccessible document structure",
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Readable hierarchy and spacing",
+        "Stable pagination",
+        "Accessible document structure"
+      ]
+    },
+    {
+      "id": "block-00006",
+      "locator": "body > main > article > section:nth-of-type(2) > h2",
+      "text": "Quality indicators",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00007",
+      "locator": "body > main > article > section:nth-of-type(2) > table",
+      "text": "Indicator\tExpectation\nStructure\tAt least one valid, readable page\nNavigation\tPage numbers appear consistently\nContent\tNo clipped text or obstructive overlays",
+      "type": "table",
+      "caption": "",
+      "rows": [
+        [
+          {
+            "text": "Indicator",
+            "header": true,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "Expectation",
+            "header": true,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ],
+        [
+          {
+            "text": "Structure",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "At least one valid, readable page",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ],
+        [
+          {
+            "text": "Navigation",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "Page numbers appear consistently",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ],
+        [
+          {
+            "text": "Content",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "No clipped text or obstructive overlays",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ]
+      ]
+    },
+    {
+      "id": "block-00008",
+      "locator": "body > main > article > section:nth-of-type(2) > figure",
+      "text": "Text recognized within visual asset asset-001: Revenue 2026 ($M)\nQuarterly revenue increased from 1.2 million dollars in Q1 to 2.4 million dollars in Q4.",
+      "type": "figure",
+      "caption": "Quarterly revenue increased from 1.2 million dollars in Q1 to 2.4 million dollars in Q4.",
+      "assetIds": [
+        "asset-001"
+      ]
+    },
+    {
+      "id": "block-00009",
+      "locator": "body > main > article > section:nth-of-type(3) > h2",
+      "text": "Recommendations",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00010",
+      "locator": "body > main > article > section:nth-of-type(3) > p:nth-of-type(1)",
+      "text": "The capture workflow should make the reliable choice the easy choice. Defaults should suit common reports, while explicit controls should remain available for unusual layouts and authenticated applications.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00011",
+      "locator": "body > main > article > section:nth-of-type(3) > h3:nth-of-type(1)",
+      "text": "Before capture",
+      "type": "heading",
+      "level": 3
+    },
+    {
+      "id": "block-00012",
+      "locator": "body > main > article > section:nth-of-type(3) > p:nth-of-type(2)",
+      "text": "Wait for the page's meaningful readiness signal, load lazy content incrementally, and let web fonts and images settle. Preserve the original document tree so linked assets and inherited styles remain valid.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00013",
+      "locator": "body > main > article > section:nth-of-type(3) > h3:nth-of-type(2)",
+      "text": "During capture",
+      "type": "heading",
+      "level": 3
+    },
+    {
+      "id": "block-00014",
+      "locator": "body > main > article > section:nth-of-type(3) > p:nth-of-type(3)",
+      "text": "Use predictable paper geometry, repeat useful context in the header, and make navigation obvious with current and total page numbers. Avoid reintroducing hidden dialogs or stripping semantic structure.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00015",
+      "locator": "body > main > article > section:nth-of-type(3) > h3:nth-of-type(3)",
+      "text": "After capture",
+      "type": "heading",
+      "level": 3
+    },
+    {
+      "id": "block-00016",
+      "locator": "body > main > article > section:nth-of-type(3) > p:nth-of-type(4)",
+      "text": "Validate the PDF structure and page count before publishing the file. Review high-value documents visually to catch clipping, awkward breaks, and content that only a human can judge.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00017",
+      "locator": "body > main > article > section:nth-of-type(4) > h2",
+      "text": "Conclusion",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00018",
+      "locator": "body > main > article > section:nth-of-type(4) > p",
+      "text": "The resulting document should be ready to share without manual cleanup.",
+      "type": "paragraph"
+    }
+  ],
+  "links": [],
+  "visual_assets": [
+    {
+      "id": "asset-001",
+      "file": "assets/asset-001.png",
+      "kind": "canvas",
+      "width": 640,
+      "height": 240,
+      "alt": "",
+      "aria_label": "Quarterly revenue bar chart",
+      "title": "",
+      "caption": "Quarterly revenue increased from 1.2 million dollars in Q1 to 2.4 million dollars in Q4.",
+      "source_url": "",
+      "nearby_heading": "Quality indicators",
+      "ocr": {
+        "text": "Revenue 2026 ($M)",
+        "confidence": 96.75,
+        "language": "eng",
+        "engine": "Tesseract"
+      },
+      "sha256": "78f008f219af67b2e46ac846c82abaf4926b24d09fee3deed6b61000e9a98f2b"
+    }
+  ]
+}

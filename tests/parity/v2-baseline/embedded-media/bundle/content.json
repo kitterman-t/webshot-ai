@@ -1,0 +1,111 @@
+{
+  "schema_version": "1.0",
+  "source": "file://<REPO>/tests/fixtures/media_page.html",
+  "metadata": {
+    "title": "Embedded Media Review",
+    "language": "en",
+    "description": "Video and audio elements with caption tracks for embedded-media fidelity.",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "blocks": [
+    {
+      "id": "block-00001",
+      "locator": "body > main > h1",
+      "text": "Embedded Media Review",
+      "type": "heading",
+      "level": 1
+    },
+    {
+      "id": "block-00002",
+      "locator": "body > main > p:nth-of-type(1)",
+      "text": "A page's media elements are part of its record even when their streams cannot be archived: the source URL, the title, and every caption track are facts about what the page offered a reader.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00003",
+      "locator": "body > main > h2:nth-of-type(1)",
+      "text": "Training video",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00004",
+      "locator": "body > main > video",
+      "text": "",
+      "type": "embedded-media",
+      "mediaType": "video",
+      "sourceUrl": "file://<REPO>/tests/fixtures/sample-video.mp4",
+      "title": "Quarterly training video",
+      "tracks": [
+        {
+          "kind": "captions",
+          "language": "en",
+          "label": "English captions",
+          "url": "file://<REPO>/tests/fixtures/captions.vtt"
+        }
+      ]
+    },
+    {
+      "id": "block-00005",
+      "locator": "body > main > p:nth-of-type(2)",
+      "text": "The walkthrough covers the capture workflow end to end and is captioned in English for accessibility.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00006",
+      "locator": "body > main > h2:nth-of-type(2)",
+      "text": "Audio briefing",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00007",
+      "locator": "body > main > audio",
+      "text": "",
+      "type": "embedded-media",
+      "mediaType": "audio",
+      "sourceUrl": "file://<REPO>/tests/fixtures/sample-audio.mp3",
+      "title": "Operations audio briefing",
+      "tracks": [
+        {
+          "kind": "subtitles",
+          "language": "de",
+          "label": "German subtitles",
+          "url": "file://<REPO>/tests/fixtures/captions.vtt"
+        }
+      ]
+    },
+    {
+      "id": "block-00008",
+      "locator": "body > main > p:nth-of-type(3)",
+      "text": "The audio briefing summarizes the quarter in four minutes; a German subtitle track accompanies it.",
+      "type": "paragraph"
+    }
+  ],
+  "links": [],
+  "visual_assets": [
+    {
+      "id": "asset-001",
+      "file": "assets/asset-001.png",
+      "kind": "video",
+      "width": 320,
+      "height": 180,
+      "alt": "",
+      "aria_label": "Quarterly training video",
+      "title": "Quarterly training video",
+      "caption": "",
+      "source_url": "file://<REPO>/tests/fixtures/sample-video.mp4",
+      "nearby_heading": "Training video",
+      "ocr": {
+        "text": "",
+        "confidence": null,
+        "language": "eng",
+        "engine": "Tesseract"
+      },
+      "sha256": "63d372edf1d499e9b53b237bf0faa7729b7336c53dbd7a1957c5ade370be87ab"
+    }
+  ]
+}

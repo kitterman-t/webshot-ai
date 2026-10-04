@@ -1,0 +1,14 @@
+{
+  "case": "form-overlapping-passwords",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/form_overlapping_passwords.html",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Service Desk — Dashboard</title>
+<meta name="description" content="A dashboard of fixed-height grid panels whose lists scroll inside them.">
+<style>
+  /* docs/09 P16-14. A dashboard: a grid whose rows are all 220px tall, and
+     panels whose lists scroll inside them. On paper each panel prints the
+     top of its list. The row track, not the panel, sets the height, so
+     neither releasing the panel nor the boxes above it helps. WebShot leaves
+     the grid's rows to their content, and every item prints. */
+  body { font: 16px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+         color: #1d2738; max-width: 46rem; margin: 0 auto; padding: 2rem 1.5rem; }
+  .dashboard { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 220px; gap: 1rem; }
+  .panel { border: 1px solid #c6ccd8; padding: 0 .75rem; overflow-y: auto; }
+  .panel h2 { font-size: 1rem; }
+</style>
+</head>
+<body>
+<p>GRIDBASELINEALPHA: this week at the service desk.</p>
+<div class="dashboard" id="dashboard">
+  <section class="panel" id="tickets">
+    <h2>Tickets closed</h2>
+    <ul>
+        <li>Ticket 1: closed, reply sent within a day.</li>
+        <li>Ticket 2: closed, reply sent within a day.</li>
+        <li>Ticket 3: closed, reply sent within a day.</li>
+        <li>Ticket 4: closed, reply sent within a day.</li>
+        <li>Ticket 5: closed, reply sent within a day.</li>
+        <li>Ticket 6: closed, reply sent within a day.</li>
+        <li>Ticket 7: closed, reply sent within a day.</li>
+        <li>Ticket 8: closed, reply sent within a day.</li>
+        <li>Ticket 9: closed, reply sent within a day.</li>
+        <li>Ticket 10: closed, reply sent within a day.</li>
+        <li>Ticket 11: closed, reply sent within a day.</li>
+        <li>Ticket 12: closed, reply sent within a day.</li>
+        <li>Ticket 13: closed, reply sent within a day.</li>
+        <li>Ticket 14: closed, reply sent within a day.</li>
+        <li>Ticket 15: closed, reply sent within a day.</li>
+        <li>Ticket 16: closed, reply sent within a day.</li>
+        <li>Ticket 17: closed, reply sent within a day.</li>
+        <li>Ticket 18: closed, reply sent within a day.</li>
+        <li>Ticket 19: closed, reply sent within a day.</li>
+        <li>Ticket 20: closed, reply sent within a day.</li>
+        <li>Ticket 21: closed, reply sent within a day.</li>
+        <li>Ticket 22: closed, reply sent within a day.</li>
+        <li>Ticket 23: closed, reply sent within a day.</li>
+        <li>Ticket 24: closed, reply sent within a day.</li>
+        <li>GRIDLASTTICKETOMEGA: closed, reply sent within a day.</li>
+    </ul>
+  </section>
+  <section class="panel" id="visits">
+    <h2>Walk-in visits</h2>
+    <ul>
+        <li>Visit 1: closed, reply sent within a day.</li>
+        <li>Visit 2: closed, reply sent within a day.</li>
+        <li>Visit 3: closed, reply sent within a day.</li>
+        <li>Visit 4: closed, reply sent within a day.</li>
+        <li>Visit 5: closed, reply sent within a day.</li>
+        <li>Visit 6: closed, reply sent within a day.</li>
+        <li>Visit 7: closed, reply sent within a day.</li>
+        <li>Visit 8: closed, reply sent within a day.</li>
+        <li>Visit 9: closed, reply sent within a day.</li>
+        <li>Visit 10: closed, reply sent within a day.</li>
+        <li>Visit 11: closed, reply sent within a day.</li>
+        <li>Visit 12: closed, reply sent within a day.</li>
+        <li>Visit 13: closed, reply sent within a day.</li>
+        <li>Visit 14: closed, reply sent within a day.</li>
+        <li>Visit 15: closed, reply sent within a day.</li>
+        <li>Visit 16: closed, reply sent within a day.</li>
+        <li>Visit 17: closed, reply sent within a day.</li>
+        <li>Visit 18: closed, reply sent within a day.</li>
+        <li>Visit 19: closed, reply sent within a day.</li>
+        <li>Visit 20: closed, reply sent within a day.</li>
+        <li>Visit 21: closed, reply sent within a day.</li>
+        <li>Visit 22: closed, reply sent within a day.</li>
+        <li>Visit 23: closed, reply sent within a day.</li>
+        <li>Visit 24: closed, reply sent within a day.</li>
+        <li>GRIDLASTVISITSIGMA: closed, reply sent within a day.</li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>

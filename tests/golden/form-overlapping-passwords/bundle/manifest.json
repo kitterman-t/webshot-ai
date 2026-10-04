@@ -1,0 +1,130 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/form_overlapping_passwords.html",
+  "final_url": "file://<REPO>/tests/fixtures/form_overlapping_passwords.html",
+  "title": "Change your password",
+  "page_metadata": {
+    "title": "Change your password",
+    "language": "en",
+    "description": "A password-rotation form: two password fields whose values overlap.",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "Change your password",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../form-overlapping-passwords.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json"
+    ]
+  },
+  "content": {
+    "items": 14,
+    "tables": 0,
+    "links": 0,
+    "chunks": 12,
+    "text_characters": 559,
+    "visual_assets": 0,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 1157,
+      "sha256": "5846e4f2eca2fa44aeac7d43a910cdac2c7c702398c4257eb2bb24d4e9f8e7dc"
+    },
+    "assets.json": {
+      "bytes": 776,
+      "sha256": "92246367574279046def759842a2615979c1aa8e2f72b6e1aa3d1ec2454bb8cd"
+    },
+    "chunks.jsonl": {
+      "bytes": 3097,
+      "sha256": "9ce5b6e471f7bf09f73676d164e3fcd201e8552a2c57655ead3103e913c551cb"
+    },
+    "content.doctags": {
+      "bytes": 804,
+      "sha256": "6f74c70d5749981a7c34ccaceb56aabc824e1208e54ddad30b4b1822c3b2d42a"
+    },
+    "content.html": {
+      "bytes": 1381,
+      "sha256": "08acad3fbbbe706069da6f927dd97cfb4dfbf4023f38d640203c411965bd310e"
+    },
+    "content.json": {
+      "bytes": 5642,
+      "sha256": "a11c2db93993a1f20d741f4e04b4e95b4dd1263d4d75d7d594d6c86d0b89a428"
+    },
+    "content.md": {
+      "bytes": 564,
+      "sha256": "0e3e6c518cd21f7aafffa66ad0dcc4c9ffe369d75709bf7f9e332ca09122d11c"
+    },
+    "content.txt": {
+      "bytes": 559,
+      "sha256": "6a9d78e8c46ef337bbe9258e138e5cb04e5e4563c9793d6cf4d14250a010a98d"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/form_overlapping_passwords.html": {
+      "bytes": 4598,
+      "sha256": "2f46606ab38d06c37a7467f94f8499e4034d2fb0087b6fc9082507edafd7b9b1"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

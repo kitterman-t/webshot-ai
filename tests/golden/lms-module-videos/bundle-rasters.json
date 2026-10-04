@@ -1,0 +1,80 @@
+{
+  "assets/asset-001.png": {
+    "format": "PNG",
+    "width": 1468,
+    "height": 522,
+    "mode": "RGB"
+  },
+  "assets/asset-002.png": {
+    "format": "PNG",
+    "width": 1280,
+    "height": 482,
+    "mode": "RGB"
+  },
+  "assets/video-ExamplePlaybook0000001-step-001.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  },
+  "assets/video-ExamplePlaybook0000001-step-002.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  },
+  "assets/video-ExamplePlaybook0000001-step-003.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  },
+  "assets/video-ExamplePlaybook0000001-step-004.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  },
+  "assets/video-ExamplePlaybook0000001-step-005.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  },
+  "assets/video-ExamplePlaybook0000001-step-006.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  },
+  "assets/video-ExamplePlaybook0000001-step-007.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  },
+  "assets/video-ExamplePlaybook0000001-step-008.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  },
+  "assets/video-ExamplePlaybook0000001-step-009.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  },
+  "assets/video-ExamplePlaybook0000001-step-010.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  },
+  "assets/video-ExamplePlaybook0000001-step-011.png": {
+    "format": "PNG",
+    "width": 2,
+    "height": 2,
+    "mode": "RGBA"
+  }
+}

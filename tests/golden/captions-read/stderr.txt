@@ -1,0 +1,10 @@
+INFO: Opening <STANDIN>/captions_page.html
+INFO: Loading lazy content (up to 100 scroll steps)...
+INFO: Lazy-load pass finished after 4 step(s).
+INFO: Building AI-ready content bundle...
+INFO: Found 2 video(s): 0 documented as walkthroughs (0 step(s)), 1 captioned, 1 not transcribed.
+INFO: Rendering PDF...
+INFO: Embedded 14 bundle file(s) into the PDF
+INFO: Created AI bundle at <OUT>/captions-read.ai
+INFO: Created <OUT>/captions-read.pdf (1 page, <SIZE> KB)
+WARNING: asset-001 is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing.

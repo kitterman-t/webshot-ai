@@ -1,0 +1,10 @@
+# The shape `uv export` gave transformers while the lock forked it: one package,
+# two versions, each behind a platform marker. In uv.lock the vulnerable 5.8.1
+# was macOS-only, invisible to an audit on Linux; here it is Windows-only, so
+# that neither a Linux nor a macOS test host matches its marker (docs/09 P10-16).
+annotated-doc==0.0.5
+    # via typer
+transformers==5.8.1 ; sys_platform == 'win32'
+    # via docling-core
+transformers==5.15.1 ; sys_platform != 'win32'
+    # via docling-core

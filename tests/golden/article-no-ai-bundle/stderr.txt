@@ -1,0 +1,8 @@
+INFO: Opening file://<REPO>/tests/fixtures/professional_page.html
+INFO: Loading lazy content (up to 100 scroll steps)...
+INFO: Lazy-load pass finished after 5 step(s).
+INFO: Removed 4 non-document element(s).
+INFO: Rendering PDF...
+INFO: Created <OUT>/article-no-ai-bundle.pdf (2 pages, <SIZE> KB)
+INFO: Wrote capture report to <OUT>/report.json
+WARNING: Embedded videos were not read: their walkthroughs and the record of any media that could not be transcribed are written into the AI bundle, which this run does not build. Any video on the page is absent from this capture.

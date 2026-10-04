@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WebShot Quality Review</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; }
+    body { margin: 0; background: #eef2f7; }
+    body > header, nav, body > footer { padding: 18px 8%; background: #172033; color: white; }
+    nav { padding-top: 8px; padding-bottom: 8px; background: #2c3f5f; }
+    main { max-width: 780px; margin: 32px auto; padding: 48px; background: white; box-shadow: 0 8px 32px #1c2b4520; }
+    h1 { color: #173f73; font-size: 34px; }
+    h2 { color: #245b96; margin-top: 34px; }
+    h3 { margin: 28px 0 10px; }
+    .lede { color: #53657c; font-size: 19px; line-height: 1.55; }
+    p, li { line-height: 1.65; }
+    table { width: 100%; margin: 24px 0; }
+    th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+    th { background: #e8f1fb; }
+    figure { margin: 28px 0; }
+    figcaption { margin-top: 10px; color: #53657c; line-height: 1.5; }
+    .cookie-consent { position: fixed; z-index: 99; left: 0; right: 0; bottom: 0; padding: 22px; background: #111827; color: white; }
+    .page-section { margin-bottom: 28px; }
+    .new-page { break-before: page; }
+  </style>
+</head>
+<body>
+  <header>Example Corporation</header>
+  <nav>Overview &nbsp; Research &nbsp; Contact</nav>
+  <main>
+    <article>
+      <h1>WebShot Quality Review</h1>
+      <p class="lede">A representative long-form report used to verify typography, tables, page breaks, headers, and footers.</p>
+      <section class="page-section">
+        <h2>Executive summary</h2>
+        <p>Professional web-to-PDF output should preserve the substance of a page while removing controls and interruptions that only make sense in a browser.</p>
+        <ul><li>Readable hierarchy and spacing</li><li>Stable pagination</li><li>Accessible document structure</li></ul>
+      </section>
+      <section class="page-section">
+        <h2>Quality indicators</h2>
+        <table><thead><tr><th>Indicator</th><th>Expectation</th></tr></thead><tbody>
+          <tr><td>Structure</td><td>At least one valid, readable page</td></tr>
+          <tr><td>Navigation</td><td>Page numbers appear consistently</td></tr>
+          <tr><td>Content</td><td>No clipped text or obstructive overlays</td></tr>
+        </tbody></table>
+        <figure>
+          <canvas id="revenue-chart" width="640" height="240" role="img" aria-label="Quarterly revenue bar chart"></canvas>
+          <figcaption>Quarterly revenue increased from 1.2 million dollars in Q1 to 2.4 million dollars in Q4.</figcaption>
+        </figure>
+      </section>
+      <section class="page-section new-page">
+        <h2>Recommendations</h2>
+        <p>The capture workflow should make the reliable choice the easy choice. Defaults should suit common reports, while explicit controls should remain available for unusual layouts and authenticated applications.</p>
+        <h3>Before capture</h3>
+        <p>Wait for the page's meaningful readiness signal, load lazy content incrementally, and let web fonts and images settle. Preserve the original document tree so linked assets and inherited styles remain valid.</p>
+        <h3>During capture</h3>
+        <p>Use predictable paper geometry, repeat useful context in the header, and make navigation obvious with current and total page numbers. Avoid reintroducing hidden dialogs or stripping semantic structure.</p>
+        <h3>After capture</h3>
+        <p>Validate the PDF structure and page count before publishing the file. Review high-value documents visually to catch clipping, awkward breaks, and content that only a human can judge.</p>
+      </section>
+      <section class="page-section"><h2>Conclusion</h2><p>The resulting document should be ready to share without manual cleanup.</p></section>
+    </article>
+  </main>
+  <div class="cookie-consent" aria-label="Cookie consent">This overlay should not appear in clean output.</div>
+  <footer>Copyright Example Corporation</footer>
+  <script>
+    const canvas = document.getElementById('revenue-chart');
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#173f73'; context.font = 'bold 22px sans-serif'; context.fillText('Revenue 2026 ($M)', 20, 30);
+    const values = [1.2, 1.6, 2.0, 2.4];
+    values.forEach((value, index) => {
+      const x = 55 + index * 145; const height = value * 60;
+      context.fillStyle = '#4f8bc9'; context.fillRect(x, 195 - height, 75, height);
+      context.fillStyle = '#172033'; context.font = '16px sans-serif';
+      context.fillText(`Q${index + 1}`, x + 25, 220); context.fillText(value.toFixed(1), x + 24, 185 - height);
+    });
+  </script>
+</body>
+</html>

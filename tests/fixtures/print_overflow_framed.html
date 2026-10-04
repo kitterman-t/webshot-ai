@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Help Center — Embedded Form</title>
+<meta name="description" content="P16-1's pushed print column, holding an embedded frame instead of text.">
+<style>
+  /* docs/09 P16-19. P16-1's layout, with the column holding an embedded
+     form's frame. The page edge cuts the frame's lines exactly as it cut the
+     column's own text, but the text is in the frame's document, which the
+     clipping check did not measure, so nothing was reported.
+
+     The root hides its sideways overflow, as many print stylesheets do, so
+     Chromium has nothing to shrink to fit: P16-4's second clipping shape.
+     Without it, the capture's own OCR layer for the frame widens the page
+     enough for shrink-to-fit to carry the column back on (P16-19). */
+  body { font: 16px/1.6 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+         color: #1d2738; margin: 0; }
+  .lede { max-width: 40rem; margin: 1.5rem auto; padding: 0 1rem; }
+  iframe { width: 100%; height: 420px; border: 0; }
+  @media print {
+    html, body { overflow-x: hidden; }
+    .container { box-sizing: border-box; width: 750px; margin: 0 auto; padding: 0 15px; }
+    .row::after { content: ""; display: table; clear: both; }
+    .column { box-sizing: border-box; position: relative; float: left;
+              width: 600px; margin-left: 75px; left: 250px; padding: 0 15px; }
+  }
+</style>
+</head>
+<body>
+<p class="lede">FRAMEEDGEBASELINEALPHA: book an appointment with the form below.</p>
+<div class="container">
+  <div class="row">
+    <section class="column" id="content-column">
+      <iframe title="Appointment form" srcdoc="&lt;!doctype html&gt;&lt;style&gt;body{margin:0;font:16px/1.5 -apple-system,&#x27;Segoe UI&#x27;,Helvetica,Arial,sans-serif}p{text-align:justify}&lt;/style&gt;&lt;p&gt;The form asks for a name, a student number, the course, and a preferred time for the appointment. The form asks for a name, a student number, the course, and a preferred time for the appointment. The form asks for a name, a student number, the course, and a preferred time for the appointment. The form asks for a name, a student number, the course, and a preferred time for the appointment. The form asks for a name, a student number, the course, and a preferred time for the appointment. The form asks for a name, a student number, the course, and a preferred time for the appointment.&lt;/p&gt;"></iframe>
+    </section>
+  </div>
+</div>
+</body>
+</html>

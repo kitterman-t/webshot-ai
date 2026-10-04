@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "source": "file://<REPO>/tests/fixtures/structures_page.html",
+  "metadata": {
+    "title": "Field Guide to Document Structures",
+    "language": "en",
+    "description": "Definition lists, blockquotes, code, and ordered lists for extraction fidelity.",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "blocks": [
+    {
+      "id": "block-00001",
+      "locator": "body > main > h1",
+      "text": "Field Guide to Document Structures",
+      "type": "heading",
+      "level": 1
+    },
+    {
+      "id": "block-00002",
+      "locator": "body > main > p",
+      "text": "This page exercises the block types that long-form technical writing relies on: a definition list, a block quotation, an ordered procedure, an unordered checklist, and preformatted configuration text.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00003",
+      "locator": "body > main > h2:nth-of-type(1)",
+      "text": "Terminology",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00004",
+      "locator": "body > main > dl",
+      "text": "Capture\nThe act of recording what a page rendered for an authorized reader, without altering its substance.\nBundle\nThe machine-readable companion to the PDF: text, structure, chunks, and provenance in one directory.\nSentinel\nA string that exists only inside a raster, so its presence in the text proves recognition ran.",
+      "type": "definitions",
+      "entries": [
+        {
+          "term": "Capture",
+          "definition": "The act of recording what a page rendered for an authorized reader, without altering its substance."
+        },
+        {
+          "term": "Bundle",
+          "definition": "The machine-readable companion to the PDF: text, structure, chunks, and provenance in one directory."
+        },
+        {
+          "term": "Sentinel",
+          "definition": "A string that exists only inside a raster, so its presence in the text proves recognition ran."
+        }
+      ]
+    },
+    {
+      "id": "block-00005",
+      "locator": "body > main > h2:nth-of-type(2)",
+      "text": "Advice from the manual",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00006",
+      "locator": "body > main > blockquote",
+      "text": "Preserve the reading order first. A beautiful page that reads in the wrong order is a worse record than a plain page that reads correctly.",
+      "type": "blockquote"
+    },
+    {
+      "id": "block-00007",
+      "locator": "body > main > h2:nth-of-type(3)",
+      "text": "Procedure",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00008",
+      "locator": "body > main > ol",
+      "text": "Wait for the page's readiness signal before touching the DOM.\nRecord every structure the page used to say what it said.\nValidate the result before publishing anything.",
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Wait for the page's readiness signal before touching the DOM.",
+        "Record every structure the page used to say what it said.",
+        "Validate the result before publishing anything."
+      ]
+    },
+    {
+      "id": "block-00009",
+      "locator": "body > main > h2:nth-of-type(4)",
+      "text": "Pre-flight checklist",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00010",
+      "locator": "body > main > ul",
+      "text": "Fonts settled\nImages loaded\nOverlays accounted for",
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Fonts settled",
+        "Images loaded",
+        "Overlays accounted for"
+      ]
+    },
+    {
+      "id": "block-00011",
+      "locator": "body > main > h2:nth-of-type(5)",
+      "text": "Configuration",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00012",
+      "locator": "body > main > pre",
+      "text": "capture:\n  mode: clean\n  scroll: bounded\n  ocr: tesseract",
+      "type": "code"
+    }
+  ],
+  "links": [],
+  "visual_assets": []
+}

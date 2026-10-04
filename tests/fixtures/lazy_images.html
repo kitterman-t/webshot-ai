@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lazy images</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 2rem; }
+  .collapsed { display: none; }
+  .gap { height: 12000px; }
+</style>
+</head>
+<body>
+<h1>Lazy images</h1>
+<p>A lazy image inside a region the page never shows. It has no box, so it never starts loading.</p>
+<div class="collapsed"><img id="unshown" loading="lazy" src="unshown.png" width="200" height="100" alt="Never shown"></div>
+<p>A gap far longer than any lazy-loading margin.</p>
+<div class="gap"></div>
+<p>A lazy image the first screen does not reach.</p>
+<img id="below" loading="lazy" src="below.png" width="200" height="100" alt="Below the fold">
+</body>
+</html>

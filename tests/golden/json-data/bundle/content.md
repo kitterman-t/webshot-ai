@@ -1,0 +1,16 @@
+JSON data
+
+# sample\_data.json
+
+```
+{
+  "report": "Regional performance",
+  "period": "2026-Q2",
+  "currency": "USD",
+  "regions": [
+    {"name": "North", "revenue": 1250000, "growth_percent": 8.2},
+    {"name": "South", "revenue": 980000, "growth_percent": 6.4}
+  ],
+  "approved": true
+}
+```

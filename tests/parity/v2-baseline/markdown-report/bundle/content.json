@@ -1,0 +1,156 @@
+{
+  "schema_version": "1.0",
+  "source": "file://<REPO>/tests/fixtures/sample_report.md",
+  "metadata": {
+    "title": "Quarterly Operations Review",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "blocks": [
+    {
+      "id": "block-00001",
+      "locator": "body > main > p:nth-of-type(1)",
+      "text": "MARKDOWN DOCUMENT",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00002",
+      "locator": "body > h1#quarterly-operations-review",
+      "text": "Quarterly Operations Review",
+      "type": "heading",
+      "level": 1
+    },
+    {
+      "id": "block-00003",
+      "locator": "body > main > p:nth-of-type(2)",
+      "text": "This Markdown document verifies headings, links, tables, code, and relative images.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00004",
+      "locator": "body > h2#key-metrics",
+      "text": "Key metrics",
+      "type": "heading",
+      "level": 2
+    },
+    {
+      "id": "block-00005",
+      "locator": "body > main > table",
+      "text": "Metric\tQ1\tQ2\nTickets resolved\t1,240\t1,485\nSatisfaction\t92%\t95%",
+      "type": "table",
+      "caption": "",
+      "rows": [
+        [
+          {
+            "text": "Metric",
+            "header": true,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "Q1",
+            "header": true,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "Q2",
+            "header": true,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ],
+        [
+          {
+            "text": "Tickets resolved",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "1,240",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "1,485",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ],
+        [
+          {
+            "text": "Satisfaction",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "92%",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "95%",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ]
+      ]
+    },
+    {
+      "id": "block-00006",
+      "locator": "body > main > p:nth-of-type(3)",
+      "text": "Text recognized within visual asset asset-001: Service Score\nJan 82\nFeb 87\nMar 91\nApr 95",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00007",
+      "locator": "body > main > p:nth-of-type(4)",
+      "text": "See the project documentation for context.",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00008",
+      "locator": "body > main > pre",
+      "text": "{\"status\": \"healthy\", \"regions\": 4}",
+      "type": "code"
+    }
+  ],
+  "links": [
+    {
+      "text": "project documentation",
+      "url": "https://example.com/docs"
+    }
+  ],
+  "visual_assets": [
+    {
+      "id": "asset-001",
+      "file": "assets/asset-001.png",
+      "kind": "img",
+      "width": 640,
+      "height": 240,
+      "alt": "Service trend chart",
+      "aria_label": "",
+      "title": "",
+      "caption": "",
+      "source_url": "file://<REPO>/tests/fixtures/chart-source.svg",
+      "nearby_heading": "Key metrics",
+      "ocr": {
+        "text": "Service Score\nJan 82\nFeb 87\nMar 91\nApr 95",
+        "confidence": 96.05,
+        "language": "eng",
+        "engine": "Tesseract"
+      },
+      "sha256": "9e253d3bb6e5b87ec8c837368ad134d8c7ad16ecfee2ff0acd012d31ed518dbe"
+    }
+  ]
+}

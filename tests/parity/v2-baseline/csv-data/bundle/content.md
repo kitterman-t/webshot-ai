@@ -1,0 +1,17 @@
+---
+title: "sample_data.csv"
+source: "file://<REPO>/tests/fixtures/sample_data.csv"
+captured_at: "<TIMESTAMP>"
+schema_version: 1.0
+---
+
+TABULAR DATA
+
+# sample_data.csv
+
+| region | revenue | customers | growth |
+| --- | --- | --- | --- |
+| North | 1250000 | 4820 | 8.2% |
+| South | 980000 | 3910 | 6.4% |
+| East | 1430000 | 5210 | 11.1% |
+| West | 1175000 | 4385 | 7.8% |

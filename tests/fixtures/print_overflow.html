@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Help Center — Print Overflow</title>
+<meta name="description" content="A print stylesheet that lays a fixed-width column out past the edge of the page.">
+<style>
+  body { font: 16px/1.6 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+         color: #1d2738; margin: 0; }
+  .lede { max-width: 40rem; margin: 1.5rem auto; padding: 0 1rem; }
+  .column p { text-align: justify; }
+
+  /* The shape of docs/09 P16-1, reduced from the page it was measured on: a
+     print stylesheet that keeps a Bootstrap 3 grid. The container has a fixed
+     width and is centred; the content column has a fixed width, a margin, and
+     a push to the right. On a Letter page at WebShot's default scale the
+     column ends near 955px on a page 779px wide.
+
+     Chromium lays a too-wide page out again at its full width and scales it
+     down to fit, which would rescue a column that was merely wide. It cannot
+     rescue this one: widening the page moves the centred container right by
+     half of what it adds, so the column still ends about 90px past the edge,
+     and Chromium relays out only once. Every full line below is cut. */
+  @media print {
+    .container { box-sizing: border-box; width: 750px; margin: 0 auto; padding: 0 15px; }
+    .row::after { content: ""; display: table; clear: both; }
+    .column { box-sizing: border-box; position: relative; float: left;
+              width: 600px; margin-left: 75px; left: 250px; padding: 0 15px; }
+    .column p.edge { text-align: right; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Outside the grid, so it prints whole: the capture cannot pass by having
+     lost everything, and the text layer is shown to be readable at all. -->
+<p class="lede">The Help Center is in the Main Building, and
+PRINTBASELINEALPHA marks the one paragraph this page prints in full.</p>
+
+<div class="container">
+  <div class="row">
+    <section class="column" id="content-column">
+      <h2>Meet a tutor</h2>
+      <p>Tutors meet students in person and on video, and every session starts
+      from the draft the student brings rather than from a fixed lesson plan.
+      A session can cover an essay, a lab report, a thesis chapter, a personal
+      statement or a grant proposal, at any stage from notes to final polish.</p>
+      <p>Appointments are fifty minutes long and can be booked two weeks ahead.
+      Walk-in hours run every weekday afternoon while classes are in session,
+      and a student who arrives without a draft is still welcome to talk
+      through an assignment prompt, a reading, or a plan for the first page.</p>
+      <p>Tutors come from every level of study and many departments, and
+      several of them work in more than one language. They read for argument
+      and organization before grammar, and they leave the writing itself in
+      the hands of the student who brought it to the table.</p>
+      <!-- Set against the column's right edge, which the page does not reach:
+           present in the DOM and so in content.md, absent from the render. -->
+      <p class="edge">OFFPAGEOMEGA</p>
+    </section>
+  </div>
+</div>
+
+</body>
+</html>

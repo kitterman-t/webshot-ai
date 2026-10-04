@@ -1,0 +1,21 @@
+<doctag><title>Account Preferences Review</title>
+<text>This page verifies that every kind of form field a capture can encounter is preserved as a record: text, email, password, checkbox, radio, select, and textarea. The password value must never reach any published artifact.</text>
+<section_header_level_1>Profile</section_header_level_1>
+<text>Display name</text>
+<text>Avery Fixture</text>
+<text>Contact email</text>
+<text>avery@example.com</text>
+<text>Account password</text>
+<text>[REDACTED PASSWORD]</text>
+<checkbox_selected>Send me release notes</checkbox_selected>
+<text>Send me release notes</text>
+<checkbox_selected>Weekly digest</checkbox_selected>
+<text>Weekly digest</text>
+<checkbox_unselected>Daily digest</checkbox_unselected>
+<text>Daily digest</text>
+<text>Time zone</text>
+<text>Signature note</text>
+<text>Sent from the quarterly review workstation.</text>
+<section_header_level_1>Why these settings matter</section_header_level_1>
+<text>A capture is an act of record. The state of every control on the page is part of what the page said, so each field above must appear in the bundle with its name and value - except the password, whose value is replaced by a redaction marker before it can reach any artifact.</text>
+</doctag>

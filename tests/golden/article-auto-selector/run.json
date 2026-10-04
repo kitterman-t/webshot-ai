@@ -1,0 +1,19 @@
+{
+  "case": "article-auto-selector",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/professional_page.html",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>",
+    "--auto-selector",
+    "--exclude",
+    "table",
+    "--title",
+    "Auto selected"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

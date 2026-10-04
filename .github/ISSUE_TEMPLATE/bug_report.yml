@@ -1,0 +1,83 @@
+name: Bug report
+description: WebShot did something wrong, or failed on input it should handle.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Issues are public. Do not paste authentication state or private page content.**
+        That means storage-state files, cookies, tokens, passwords, the contents of an
+        `--auth-profile` directory, and the text, HTML or screenshots of any page you
+        had to sign in to see. If the bug only shows on a private page, reduce it to a
+        small synthetic page that still shows it.
+
+        A security problem, such as a credential reaching a PDF or bundle, goes through
+        [SECURITY.md](https://github.com/kitterman-t/webshot-ai/blob/master/SECURITY.md),
+        not a public issue.
+  - type: input
+    id: version
+    attributes:
+      label: WebShot version
+      description: The output of `webshot --version`.
+      placeholder: WebShot 3.0.0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15, Ubuntu 24.04, Windows 11
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: >-
+        The output of `python --version` in the environment WebShot runs in
+        (`uv run python --version` from a source checkout).
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: >-
+        The exact command you ran. Replace private URLs, file paths and profile
+        names with placeholders.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: >-
+        The exit code, the error message, and any warnings from the manifest or
+        the `--report` QA report. Leave out page content you would not post
+        publicly.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `webshot doctor`
+      description: >-
+        It lists tool versions and checks the output directory, whose path it
+        prints. Edit the path if it names something private.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Smallest input that reproduces it
+      description: >-
+        A small HTML file or a public URL that shows the problem, if you have
+        one. Every bug fix in this project ships with a fixture like that.

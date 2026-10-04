@@ -1,0 +1,14 @@
+{
+  "assets/asset-001.png": {
+    "format": "PNG",
+    "width": 1468,
+    "height": 522,
+    "mode": "RGB"
+  },
+  "assets/asset-002.png": {
+    "format": "PNG",
+    "width": 1280,
+    "height": 482,
+    "mode": "RGB"
+  }
+}

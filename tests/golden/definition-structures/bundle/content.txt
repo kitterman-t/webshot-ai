@@ -1,0 +1,35 @@
+Field Guide to Document Structures
+
+This page exercises the block types that long-form technical writing relies on: a definition list, a block quotation, an ordered procedure, an unordered checklist, and preformatted configuration text.
+
+Terminology
+
+- Capture
+    - The act of recording what a page rendered for an authorized reader, without altering its substance.
+- Bundle
+    - The machine-readable companion to the PDF: text, structure, chunks, and provenance in one directory.
+- Sentinel
+    - A string that exists only inside a raster, so its presence in the text proves recognition ran.
+
+Advice from the manual
+
+Preserve the reading order first. A beautiful page that reads in the wrong order is a worse record than a plain page that reads correctly.
+
+Procedure
+
+1. Wait for the page's readiness signal before touching the DOM.
+2. Record every structure the page used to say what it said.
+3. Validate the result before publishing anything.
+
+Pre-flight checklist
+
+- Fonts settled
+- Images loaded
+- Overlays accounted for
+
+Configuration
+
+capture:
+  mode: clean
+  scroll: bounded
+  ocr: tesseract

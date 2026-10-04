@@ -1,0 +1,16 @@
+{
+  "case": "article-capped-assets",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/professional_page.html",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>",
+    "--max-assets",
+    "0"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

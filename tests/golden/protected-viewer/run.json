@@ -1,0 +1,10 @@
+{
+  "case": "protected-viewer",
+  "kind": "protected",
+  "argv": [
+    "<protected-viewer assembly from tests/fixtures/viewer>"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Visuals below a scrolling box's fold</title>
+<style>
+  /* Chromium prints a scrolling box as it stands. Each box holds a chart
+     below its fold, so photographing the chart scrolls the box, and left
+     there the PDF printed neither of the box's sentences (docs/09 P16-12).
+     A capture now releases the light box for print before the harvest
+     (P16-10), so there it prints whole; the shadow box and the capped frame,
+     which no release reaches, show the restore. */
+  body { font: 16px/1.5 sans-serif; margin: 2rem; max-width: 40rem; }
+  .box { height: 6rem; overflow: auto; border: 1px solid #999; }
+  .spacer { height: 30rem; }
+</style>
+</head>
+<body>
+<h1>Visuals below a scrolling box's fold</h1>
+
+<div class="box">
+  <p>Top of the light box: printed where it starts.</p>
+  <div class="spacer"></div>
+  <svg role="img" aria-label="Light box chart" width="320" height="60"><text x="8" y="42" font-size="28" font-family="sans-serif">LIGHT BOX 3</text></svg>
+  <p>Bottom of the light box: printed only if it is scrolled.</p>
+</div>
+
+<div id="host"></div>
+
+<!-- A frame that cannot be grown for print, because its wrapper's height is
+     fixed. The harvest scrolls it to the chart below its fold, and it must
+     print from its top all the same. -->
+<div id="capped" style="height: 6rem; margin-top: 1rem;"><iframe title="Capped frame" style="border: 0; width: 100%; height: 100%; display: block;" srcdoc="<!doctype html><style>body { margin: 0; font: 16px/1.5 sans-serif; }</style><p>Top of the capped frame: printed where it starts.</p><div style='height: 30rem'></div><svg role='img' aria-label='Capped frame chart' width='320' height='60'><text x='8' y='42' font-size='28' font-family='sans-serif'>CAPPED FRAME 6</text></svg><p>Bottom of the capped frame: printed only if it is scrolled.</p>"></iframe></div>
+
+<!-- Far enough down that photographing it scrolls the window too. -->
+<div class="spacer"></div>
+<div class="spacer"></div>
+<svg role="img" aria-label="Page end chart" width="320" height="60"><text x="8" y="42" font-size="28" font-family="sans-serif">PAGE END 8</text></svg>
+
+<script>
+  document.getElementById('host').attachShadow({mode: 'open'}).innerHTML = `
+    <style>
+      .box { height: 6rem; overflow: auto; border: 1px solid #999; margin-top: 1rem; }
+      .spacer { height: 30rem; }
+    </style>
+    <div class="box">
+      <p>Top of the shadow box: printed where it starts.</p>
+      <div class="spacer"></div>
+      <svg role="img" aria-label="Shadow box chart" width="320" height="60"><text x="8" y="42" font-size="28" font-family="sans-serif">SHADOW BOX 4</text></svg>
+      <p>Bottom of the shadow box: printed only if it is scrolled.</p>
+    </div>`;
+</script>
+</body>
+</html>

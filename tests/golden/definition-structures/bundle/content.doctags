@@ -1,0 +1,31 @@
+<doctag><title>Field Guide to Document Structures</title>
+<text>This page exercises the block types that long-form technical writing relies on: a definition list, a block quotation, an ordered procedure, an unordered checklist, and preformatted configuration text.</text>
+<section_header_level_1>Terminology</section_header_level_1>
+<unordered_list><list_item>Capture</list_item>
+<list_item><unordered_list><list_item>The act of recording what a page rendered for an authorized reader, without altering its substance.</list_item>
+</unordered_list></list_item>
+<list_item>Bundle</list_item>
+<list_item><unordered_list><list_item>The machine-readable companion to the PDF: text, structure, chunks, and provenance in one directory.</list_item>
+</unordered_list></list_item>
+<list_item>Sentinel</list_item>
+<list_item><unordered_list><list_item>A string that exists only inside a raster, so its presence in the text proves recognition ran.</list_item>
+</unordered_list></list_item>
+</unordered_list>
+<section_header_level_1>Advice from the manual</section_header_level_1>
+<text>Preserve the reading order first. A beautiful page that reads in the wrong order is a worse record than a plain page that reads correctly.</text>
+<section_header_level_1>Procedure</section_header_level_1>
+<ordered_list><list_item>Wait for the page's readiness signal before touching the DOM.</list_item>
+<list_item>Record every structure the page used to say what it said.</list_item>
+<list_item>Validate the result before publishing anything.</list_item>
+</ordered_list>
+<section_header_level_1>Pre-flight checklist</section_header_level_1>
+<unordered_list><list_item>Fonts settled</list_item>
+<list_item>Images loaded</list_item>
+<list_item>Overlays accounted for</list_item>
+</unordered_list>
+<section_header_level_1>Configuration</section_header_level_1>
+<code><_unknown_>capture:
+  mode: clean
+  scroll: bounded
+  ocr: tesseract</code>
+</doctag>

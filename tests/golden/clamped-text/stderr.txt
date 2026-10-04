@@ -1,0 +1,11 @@
+INFO: Opening file://<REPO>/tests/fixtures/clamped_page.html
+INFO: Loading lazy content (up to 100 scroll steps)...
+INFO: Lazy-load pass finished after 4 step(s).
+INFO: Removed 1 non-document element(s).
+INFO: Released 2 element(s) whose CSS truncated their own text.
+INFO: Building AI-ready content bundle...
+INFO: Rendering PDF...
+INFO: Embedded 12 bundle file(s) into the PDF
+INFO: Created AI bundle at <OUT>/clamped-text.ai
+INFO: Created <OUT>/clamped-text.pdf (1 page, <SIZE> KB)
+INFO: Wrote capture report to <OUT>/report.json

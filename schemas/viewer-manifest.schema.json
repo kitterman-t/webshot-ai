@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/viewer-manifest.schema.json",
+  "$defs": {
+    "ViewerCapture": {
+      "additionalProperties": true,
+      "description": "`capture.json`: the protected-viewer policy record.\n\nOnly the invariants WebShot itself writes are fixed; the viewer metadata\nmerged in by the capture stage is open-ended by design.",
+      "properties": {
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "native_file_downloaded": {
+          "title": "Native File Downloaded",
+          "type": "boolean"
+        },
+        "download_restriction_respected": {
+          "title": "Download Restriction Respected",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "method",
+        "native_file_downloaded",
+        "download_restriction_respected"
+      ],
+      "title": "ViewerCapture",
+      "type": "object"
+    },
+    "ViewerContentCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "pages": {
+          "title": "Pages",
+          "type": "integer"
+        },
+        "chunks": {
+          "title": "Chunks",
+          "type": "integer"
+        },
+        "text_characters": {
+          "title": "Text Characters",
+          "type": "integer"
+        },
+        "ocr_words": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ocr Words"
+        },
+        "primary_ocr_text_characters": {
+          "title": "Primary Ocr Text Characters",
+          "type": "integer"
+        },
+        "alternate_ocr_pages": {
+          "title": "Alternate Ocr Pages",
+          "type": "integer"
+        },
+        "ocr_mean_confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ocr Mean Confidence"
+        }
+      },
+      "required": [
+        "pages",
+        "chunks",
+        "text_characters",
+        "primary_ocr_text_characters",
+        "alternate_ocr_pages",
+        "ocr_mean_confidence"
+      ],
+      "title": "ViewerContentCounts",
+      "type": "object"
+    },
+    "ViewerFileRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "bytes",
+        "sha256"
+      ],
+      "title": "ViewerFileRecord",
+      "type": "object"
+    },
+    "ViewerPdfRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "pages": {
+          "title": "Pages",
+          "type": "integer"
+        },
+        "source_pages": {
+          "title": "Source Pages",
+          "type": "integer"
+        },
+        "transcript_appendix_pages": {
+          "title": "Transcript Appendix Pages",
+          "type": "integer"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "searchable_ocr_layer": {
+          "title": "Searchable Ocr Layer",
+          "type": "boolean"
+        },
+        "text_layer_engine": {
+          "title": "Text Layer Engine",
+          "type": "string"
+        },
+        "pdfa": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pdfa"
+        },
+        "tagged": {
+          "title": "Tagged",
+          "type": "boolean"
+        },
+        "bookmarks": {
+          "title": "Bookmarks",
+          "type": "boolean"
+        },
+        "visible_transcript_appendix": {
+          "title": "Visible Transcript Appendix",
+          "type": "boolean"
+        },
+        "embedded_machine_readable_files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Embedded Machine Readable Files",
+          "type": "array"
+        },
+        "word_coordinates_embedded": {
+          "title": "Word Coordinates Embedded",
+          "type": "boolean"
+        },
+        "original_visual_pages_first": {
+          "title": "Original Visual Pages First",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "file",
+        "pages",
+        "source_pages",
+        "transcript_appendix_pages",
+        "bytes",
+        "sha256",
+        "searchable_ocr_layer",
+        "text_layer_engine",
+        "pdfa",
+        "tagged",
+        "bookmarks",
+        "visible_transcript_appendix",
+        "embedded_machine_readable_files",
+        "word_coordinates_embedded",
+        "original_visual_pages_first"
+      ],
+      "title": "ViewerPdfRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`manifest.json` on the protected-viewer path.",
+  "properties": {
+    "schema_version": {
+      "const": "1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "generator": {
+      "title": "Generator",
+      "type": "string"
+    },
+    "generator_version": {
+      "title": "Generator Version",
+      "type": "string"
+    },
+    "captured_at": {
+      "title": "Captured At",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "capture": {
+      "$ref": "#/$defs/ViewerCapture"
+    },
+    "pdf": {
+      "$ref": "#/$defs/ViewerPdfRecord"
+    },
+    "content": {
+      "$ref": "#/$defs/ViewerContentCounts"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ViewerFileRecord"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "generator",
+    "generator_version",
+    "captured_at",
+    "title",
+    "source",
+    "capture",
+    "pdf",
+    "content",
+    "files",
+    "warnings"
+  ],
+  "title": "ViewerManifest",
+  "type": "object"
+}

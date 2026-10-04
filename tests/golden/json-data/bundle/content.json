@@ -1,0 +1,83 @@
+{
+  "schema_name": "DoclingDocument",
+  "version": "1.10.0",
+  "name": "content",
+  "origin": {
+    "mimetype": "text/html",
+    "binary_hash": 16096262190338024833,
+    "filename": "content.html"
+  },
+  "furniture": {
+    "self_ref": "#/furniture",
+    "children": [],
+    "content_layer": "furniture",
+    "name": "_root_",
+    "label": "unspecified"
+  },
+  "body": {
+    "self_ref": "#/body",
+    "children": [
+      {
+        "$ref": "#/texts/0"
+      },
+      {
+        "$ref": "#/texts/1"
+      }
+    ],
+    "content_layer": "body",
+    "name": "_root_",
+    "label": "unspecified"
+  },
+  "groups": [],
+  "texts": [
+    {
+      "self_ref": "#/texts/0",
+      "parent": {
+        "$ref": "#/body"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "text",
+      "prov": [],
+      "orig": "JSON data",
+      "text": "JSON data"
+    },
+    {
+      "self_ref": "#/texts/1",
+      "parent": {
+        "$ref": "#/body"
+      },
+      "children": [
+        {
+          "$ref": "#/texts/2"
+        }
+      ],
+      "content_layer": "body",
+      "label": "title",
+      "prov": [],
+      "orig": "sample_data.json",
+      "text": "sample_data.json"
+    },
+    {
+      "self_ref": "#/texts/2",
+      "parent": {
+        "$ref": "#/texts/1"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "code",
+      "prov": [],
+      "orig": "{\n  \"report\": \"Regional performance\",\n  \"period\": \"2026-Q2\",\n  \"currency\": \"USD\",\n  \"regions\": [\n    {\"name\": \"North\", \"revenue\": 1250000, \"growth_percent\": 8.2},\n    {\"name\": \"South\", \"revenue\": 980000, \"growth_percent\": 6.4}\n  ],\n  \"approved\": true\n}",
+      "text": "{\n  \"report\": \"Regional performance\",\n  \"period\": \"2026-Q2\",\n  \"currency\": \"USD\",\n  \"regions\": [\n    {\"name\": \"North\", \"revenue\": 1250000, \"growth_percent\": 8.2},\n    {\"name\": \"South\", \"revenue\": 980000, \"growth_percent\": 6.4}\n  ],\n  \"approved\": true\n}",
+      "captions": [],
+      "references": [],
+      "footnotes": [],
+      "code_language": "JSON"
+    }
+  ],
+  "pictures": [],
+  "tables": [],
+  "key_value_items": [],
+  "form_items": [],
+  "pages": {}
+}

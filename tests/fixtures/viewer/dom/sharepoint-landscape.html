@@ -1,0 +1,57 @@
+<!doctype html>
+<!--
+  Structure-only reproduction of an authenticated SharePoint PDF viewer showing a
+  landscape deck, including the toolbar controls the landscape capture drives by
+  accessible name. Authored from the contract in webshot/protected/viewer.py —
+  see README.md in this directory. No tenant data.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Protected viewer fixture — landscape deck</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px system-ui, sans-serif; background: #f3f2f1; }
+  .viewer { position: relative; height: 620px; overflow: auto; background: #605e5c; }
+  .page { position: absolute; left: 50%; margin-left: -528px; width: 1056px;
+          height: 594px; background: #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+  .canvas-stand-in { width: 100%; height: 100%; background:
+      repeating-linear-gradient(90deg, #ffffff 0 40px, #f8f8f8 40px 80px); }
+  .pdf-toolbar { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+                 background: #201f1e; color: #ffffff; border-radius: 4px;
+                 display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+  .pdf-toolbar [role="menuitem"], .pdf-toolbar [role="menuitemcheckbox"] {
+      background: transparent; color: inherit; border: 0; padding: 4px 8px; }
+  .zoom-menu { position: fixed; bottom: 60px; left: 50%; background: #ffffff;
+               color: #201f1e; border: 1px solid #e1dfdd; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <div class="viewer" aria-label="fixture-deck.pdf" tabindex="0">
+    <div class="page" aria-label="Page 1." style="top: 13px">
+      <div class="canvas-stand-in"></div>
+    </div>
+    <div class="page" aria-label="Page 2." style="top: 620px">
+      <div class="canvas-stand-in"></div>
+    </div>
+    <div style="position:absolute; top: 1227px; height: 13px; width: 1px"></div>
+  </div>
+
+  <!-- Every control below is reached by role + exact accessible name, so the
+       names are the contract; the markup around them is not. -->
+  <div class="pdf-toolbar" role="menubar" aria-label="PDF toolbar">
+    <button type="button" role="menuitem" aria-label="Go to the previous page.">&#8593;</button>
+    <input type="text" role="textbox" value="1"
+           aria-label="Enter a value between 1 and 2. Press enter to jump to that page. Press escape to exit the input control.">
+    <span aria-label="Page 1 of 2">/ 2</span>
+    <button type="button" role="menuitem" aria-label="Go to the next page.">&#8595;</button>
+    <button type="button" role="menuitem"
+            aria-label="Change the current zoom level. Press enter to open the option menu and esc to close it.">100%</button>
+  </div>
+
+  <div class="zoom-menu" role="menu" aria-label="Zoom level">
+    <button type="button" role="menuitemcheckbox" aria-checked="false" aria-label="75%">75%</button>
+    <button type="button" role="menuitemcheckbox" aria-checked="true" aria-label="Window size">Window size</button>
+  </div>
+</body>
+</html>

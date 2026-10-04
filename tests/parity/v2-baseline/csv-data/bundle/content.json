@@ -1,0 +1,169 @@
+{
+  "schema_version": "1.0",
+  "source": "file://<REPO>/tests/fixtures/sample_data.csv",
+  "metadata": {
+    "title": "sample_data.csv",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "blocks": [
+    {
+      "id": "block-00001",
+      "locator": "body > main > p",
+      "text": "TABULAR DATA",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00002",
+      "locator": "body > main > h1",
+      "text": "sample_data.csv",
+      "type": "heading",
+      "level": 1
+    },
+    {
+      "id": "block-00003",
+      "locator": "body > main > table",
+      "text": "region\trevenue\tcustomers\tgrowth\nNorth\t1250000\t4820\t8.2%\nSouth\t980000\t3910\t6.4%\nEast\t1430000\t5210\t11.1%\nWest\t1175000\t4385\t7.8%",
+      "type": "table",
+      "caption": "",
+      "rows": [
+        [
+          {
+            "text": "region",
+            "header": true,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "revenue",
+            "header": true,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "customers",
+            "header": true,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "growth",
+            "header": true,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ],
+        [
+          {
+            "text": "North",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "1250000",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "4820",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "8.2%",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ],
+        [
+          {
+            "text": "South",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "980000",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "3910",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "6.4%",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ],
+        [
+          {
+            "text": "East",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "1430000",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "5210",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "11.1%",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ],
+        [
+          {
+            "text": "West",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "1175000",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "4385",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          },
+          {
+            "text": "7.8%",
+            "header": false,
+            "colspan": 1,
+            "rowspan": 1
+          }
+        ]
+      ]
+    }
+  ],
+  "links": [],
+  "visual_assets": []
+}

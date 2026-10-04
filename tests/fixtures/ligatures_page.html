@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Office flow: first staff notice</title>
+<style>
+  /* A font that ligates on every machine (fonts/README.md). The title above
+     also carries ligatures, because the running header prints it. */
+  @font-face { font-family: "Ligature Fixture"; src: url("fonts/ligature-fixture.ttf"); }
+  body { font: 16px/1.6 "Ligature Fixture"; color: #1d2738; max-width: 46rem;
+         margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* The ways a page re-enables ligatures past a `font-variant-ligatures` rule
+     (docs/09 P16-2). Each paragraph below has words of its own, so a failure
+     names the mechanism that got through. */
+
+  /* Typographic boilerplate: `font-feature-settings` outranks the
+     `font-variant-ligatures` rule whatever that rule's specificity. */
+  .boilerplate { font-feature-settings: "kern", "liga"; }
+  /* The same, beside a feature the page wants kept: a blanket
+     `font-feature-settings: "liga" 0` would drop the tabular numerals. */
+  .tabular { font-feature-settings: "tnum", "liga"; }
+  /* A more specific `!important` on the property itself. */
+  p.specific.specific { font-variant-ligatures: common-ligatures !important; }
+  /* Generated text is printed, and so is in the text layer. */
+  .generated::before { content: "Generated: fluent coffee. "; }
+</style>
+</head>
+<body>
+<h1>Office flow: first staff notice</h1>
+<p class="plain">Plain: the first office flow affects baffled staff.</p>
+<p class="boilerplate">Boilerplate: the official figures.</p>
+<p class="tabular">Tabular: fifty offers in 2024.</p>
+<p class="specific">Specific: an afflicted shuffle.</p>
+<p class="generated">After the generated text.</p>
+<div id="shadow-host"></div>
+<iframe title="Frame" style="border: 0; width: 100%; height: 4rem;"
+  srcdoc='<!doctype html><style>@font-face { font-family: "Ligature Fixture"; src: url("fonts/ligature-fixture.ttf"); } body { font: 16px "Ligature Fixture"; margin: 0; }</style><p>Framed: the difficult fjord offices.</p>'></iframe>
+<script>
+  // An open shadow root styles its own content: a document stylesheet does not
+  // reach inside it, and its own rule re-enables ligatures.
+  const shadow = document.getElementById('shadow-host').attachShadow({mode: 'open'});
+  shadow.innerHTML = '<style>p { font-feature-settings: "liga" 1; }</style>'
+    + '<p>Shadowed: a flawless affirmation.</p>';
+</script>
+</body>
+</html>

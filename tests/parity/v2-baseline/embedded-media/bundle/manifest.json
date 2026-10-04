@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/media_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/media_page.html",
+  "title": "Embedded Media Review",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../embedded-media.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true
+  },
+  "content": {
+    "blocks": 8,
+    "tables": 0,
+    "links": 0,
+    "chunks": 2,
+    "text_characters": 447,
+    "visual_assets": 1
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": "Tesseract"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 680,
+      "sha256": "edb5586c401df04d8cbf1736962aa159f3c0abaa7277d8825ace8e3c8f9bfd37"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 1461,
+      "sha256": "d9cf63ff6d7157191f7612122b2d62dcfbb29fa2b85663576fbd4fe6c95b3427"
+    },
+    "content.html": {
+      "bytes": 1340,
+      "sha256": "e38f92510be2734293c2def6bed7e4037aa69b1cc221ac053424a757b86a6d17"
+    },
+    "content.json": {
+      "bytes": 3234,
+      "sha256": "88206405d0a45d431877d199b4c4415a8f7cec54c6b560a37fe695998c663761"
+    },
+    "content.md": {
+      "bytes": 1048,
+      "sha256": "1b52c8e25683956ca180e17a5e2ddef54820244912bed7d86f7ef4ee5a118cb2"
+    },
+    "content.txt": {
+      "bytes": 448,
+      "sha256": "1f7da887326b3c3f6ac0c9f5ae402a3b6b1dea64f82a813272b1ecab41097967"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/media_page.html": {
+      "bytes": 1602,
+      "sha256": "ebc3652de506dbc993df2f9043742cb0349519552fe7748bab07c4835e17b863"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [
+    "asset-001 is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing."
+  ],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

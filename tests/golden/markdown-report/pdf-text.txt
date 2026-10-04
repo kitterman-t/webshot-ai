@@ -1,0 +1,15 @@
+--- page 1 ---
+MARKDOWN DOCUMENT
+Quarterly Operations Review
+This Markdown document verifies headings, links, tables, code, and relative images.
+Key metrics
+Metric Q1 Q2
+Tickets resolved 1,240 1,485
+Satisfaction 92% 95%
+Service Score
+Jan 82 Feb 87 Mar 91 Apr 95
+See the project documentation for context.
+{"status": "healthy", "regions": 4}
+Text recognized within visual asset asset-001: Service ScoreJan 82Feb 87Mar 91Apr 95
+Quarterly Operations Review sample_report.md
+WebShot Page 1 of 1

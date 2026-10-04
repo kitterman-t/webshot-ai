@@ -1,0 +1,33 @@
+version: 2
+
+# Upstream churn is the project's top risk (docs/07-risk-register.md R1), so
+# updates arrive as reviewable pull requests rather than as a surprise during a
+# release. Anything that changes recorded output must be re-recorded in its own
+# pull request — see CONTRIBUTING.md.
+
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      dev-tooling:
+        patterns:
+          - ruff
+          - mypy
+          - pytest*
+          - pip-audit
+          - pip-licenses
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci

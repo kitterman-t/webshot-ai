@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="240" viewBox="0 0 640 240" role="img" aria-labelledby="title description">
+  <title id="title">Service score trend</title>
+  <desc id="description">Service score increased from 82 in January to 95 in April.</desc>
+  <rect width="640" height="240" fill="white"/>
+  <text x="24" y="34" font-family="sans-serif" font-size="22" font-weight="700" fill="#173f73">Service Score</text>
+  <polyline points="70,170 230,135 390,105 550,65" fill="none" stroke="#4f8bc9" stroke-width="8"/>
+  <g font-family="sans-serif" font-size="16" fill="#172033" text-anchor="middle">
+    <text x="70" y="210">Jan 82</text><text x="230" y="210">Feb 87</text><text x="390" y="210">Mar 91</text><text x="550" y="210">Apr 95</text>
+  </g>
+</svg>

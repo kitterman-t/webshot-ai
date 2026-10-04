@@ -1,0 +1,29 @@
+- main [ref=e2]:
+  - paragraph [ref=e3]: Markdown document
+  - heading "Quarterly Operations Review" [level=1] [ref=e4]
+  - paragraph [ref=e5]: This Markdown document verifies headings, links, tables, code, and relative images.
+  - heading "Key metrics" [level=2] [ref=e6]
+  - table [ref=e7]:
+    - rowgroup [ref=e8]:
+      - row [ref=e9]:
+        - columnheader "Metric" [ref=e10]
+        - columnheader "Q1" [ref=e11]
+        - columnheader "Q2" [ref=e12]
+    - rowgroup [ref=e13]:
+      - row [ref=e14]:
+        - cell "Tickets resolved" [ref=e15]
+        - cell "1,240" [ref=e16]
+        - cell "1,485" [ref=e17]
+      - row [ref=e18]:
+        - cell "Satisfaction" [ref=e19]
+        - cell "92%" [ref=e20]
+        - cell "95%" [ref=e21]
+  - paragraph [ref=e22]:
+    - 'img "Service trend chart | Text recognized within visual asset: Service Score Jan 82 Feb 87 Mar 91 Apr 95" [ref=e23]'
+    - generic: "Text recognized within visual asset asset-001: Service Score Jan 82 Feb 87 Mar 91 Apr 95"
+  - paragraph [ref=e24]:
+    - text: See the
+    - link "project documentation" [ref=e25] [cursor=pointer]:
+      - /url: https://example.com/docs
+    - text: for context.
+  - code [ref=e27]: "{\"status\": \"healthy\", \"regions\": 4}"

@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "source": "file://<REPO>/tests/fixtures/sample_notes.txt",
+  "metadata": {
+    "title": "sample_notes.txt",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "blocks": [
+    {
+      "id": "block-00001",
+      "locator": "body > main > p",
+      "text": "TEXT DOCUMENT",
+      "type": "paragraph"
+    },
+    {
+      "id": "block-00002",
+      "locator": "body > main > h1",
+      "text": "sample_notes.txt",
+      "type": "heading",
+      "level": 1
+    },
+    {
+      "id": "block-00003",
+      "locator": "body > main > pre",
+      "text": "Incident Review Notes\n\nService restored: 2026-07-16 14:32 UTC\nAffected region: us-east\nRoot cause: expired upstream certificate\nResolution: certificate rotation and automated expiry alerting",
+      "type": "code"
+    }
+  ],
+  "links": [],
+  "visual_assets": []
+}

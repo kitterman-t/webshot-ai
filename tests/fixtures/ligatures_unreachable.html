@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Unreachable ligatures</title>
+<style>
+  @font-face { font-family: "Ligature Fixture"; src: url("fonts/ligature-fixture.ttf"); }
+  body { font: 16px/1.6 "Ligature Fixture"; color: #1d2738; margin: 2rem; }
+</style>
+</head>
+<body>
+<p>Reachable: this paragraph prints without ligatures.</p>
+<div id="closed-host"></div>
+<script>
+  // A closed shadow root cannot be read or styled from outside it, so no
+  // capture-side pass can turn its ligatures off. The text layer is the only
+  // place WebShot can find them — and must say so (docs/09 P16-2).
+  const closed = document.getElementById('closed-host').attachShadow({mode: 'closed'});
+  closed.innerHTML = '<style>p { font-feature-settings: "liga" 1; }</style>'
+    + '<p>Closed: the official offer.</p>';
+</script>
+</body>
+</html>

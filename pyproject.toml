@@ -1,0 +1,235 @@
+[build-system]
+requires = ["hatchling>=1.32.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "webshot"
+# Derived from `src/webshot/version.py`, which is the single place the released
+# version is written. Two literals is one too many: the manifest's
+# `generator_version`, `--version`, and the wheel's metadata all have to agree,
+# and the way they stop agreeing is someone bumping one of them (docs/09 P5-3).
+dynamic = ["version"]
+description = "Turn a web page or local document into a searchable PDF that carries an AI-ready bundle inside it."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+# NOTICE as well as LICENSE: Apache-2.0 section 4(d) asks that a redistribution
+# carry the NOTICE file, and listing it here puts it in the wheel and the sdist.
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Tim Kitterman" }]
+keywords = [
+    "pdf",
+    "pdf-a",
+    "playwright",
+    "web-capture",
+    "archiving",
+    "ocr",
+    "rag",
+    "llm",
+    "mcp",
+]
+# No `License ::` classifier: PEP 639 replaced them with the SPDX `license`
+# field above, and packaging tools may reject a project that declares both.
+# The operating systems and Python versions are the ones CI's `tests` matrix
+# runs on. Windows is best-effort (docs/04-spec.md §4), measured weekly rather
+# than on every change, so it is not claimed here.
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Archiving",
+    "Topic :: Text Processing :: Markup :: HTML",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "playwright>=1.59,<2",
+    # >=6 is required: the AF-embedding code already uses the EmbeddedFile API,
+    # which the previous >=4.2 floor did not guarantee (docs/05 task 0.1).
+    "pypdf>=6.19.0,<7",
+    "pydantic>=2.7,<3",
+    "Markdown>=3.6,<4",
+    # Pillow < 12.3 carries 25 known CVEs (pip-audit/OSV, Aug 2026); the
+    # protected path feeds it page images, so the floor is the fixed release.
+    "Pillow>=12.3,<13",
+    # The protected path's searchable PDF: img2pdf packs the captured pages
+    # losslessly and OCRmyPDF adds the invisible text layer. Core rather than an
+    # extra, because that text layer is not optional (docs/09 P1-2); OCRmyPDF
+    # 17.x is also what sets requires-python above (P1-1). They replace the
+    # hand-built reportlab sandwich, which is why reportlab is gone.
+    "img2pdf>=0.6,<1",
+    "ocrmypdf>=17.12.1,<18",
+    # Phase 2 extraction stack, pinned at or above the spike-verified versions
+    # (docs/09 S3-S5): nh3 sanitizes the snapshot; docling-slim's HTML backend
+    # builds the DoclingDocument (no torch — CI asserts it); chonkie
+    # size-splits chunks offline with its character tokenizer.
+    "nh3>=0.3.7",
+    "docling-slim[format-html]>=2.130.0",
+    "chonkie>=1.7.0",
+    # Not used by WebShot directly: docling-core's chunker package eagerly
+    # imports both at module import even when only HierarchicalChunker (no
+    # tokenizer, no network) is used. Nothing is ever downloaded. Recorded as
+    # a Phase 2 correction (docs/09 P2-2).
+    "tree-sitter>=0.26.0",
+    "huggingface-hub>=1",
+    # Phase 3 adapters/discovery stack, at the spike-verified versions (docs/09
+    # S5): MarkItDown converts every non-Markdown local data format to
+    # Markdown behind one bridge, replacing the bespoke parsers; Trafilatura
+    # reads the captured post-JS HTML for --auto-selector and page metadata.
+    "markitdown>=0.1.7,<0.2",
+    "trafilatura>=2.2,<3",
+    # Direct because spec §6.6 makes it WebShot's own guarantee, not an
+    # inherited one: every byte of untrusted XML is parsed here before any
+    # other parser sees it (docs/09 P3-2).
+    "defusedxml>=0.7.1,<0.8",
+]
+
+[project.optional-dependencies]
+# Extras are declared here as a stable contract; the phase that fills each one
+# is named in the comment (docs/05-implementation-plan.md).
+# DOCX/PPTX/XLSX inputs (docs/05 task 3.2). EPUB and ZIP need no extra —
+# MarkItDown's base install already converts them — but they are documented
+# with this group because archive safety and the fixtures arrived together.
+office = ["markitdown[docx,pptx,xlsx]>=0.1.8,<0.2"]
+# RapidOCR behind the OcrEngine protocol (docs/05 task 3.5): pip-only, no
+# system binary. rapidocr declares no inference backend of its own, so the
+# extra names onnxruntime explicitly rather than leaning on the copy magika
+# drags in through MarkItDown.
+ocr-rapid = ["rapidocr>=3.9,<4", "onnxruntime>=1.30.0"]
+# Docling's tokenizer-aware HybridChunker, refuted as the DEFAULT by spike S4
+# (downloads a HuggingFace tokenizer; ≈140 MB of extras). Installing this
+# equips the environment to re-chunk content.json downstream with it; the
+# default pipeline stays HierarchicalChunker + chonkie (ADR-0008) and never
+# imports any of it. tests/test_footprint.py holds the default install clean.
+chunk-hybrid = ["docling-core[chunking]>=2.92"]
+# Kept as a resolvable alias: `webshot[pdfa]` still installs, but OCRmyPDF and
+# img2pdf moved into the core dependencies in Phase 1 (docs/09 P1-2).
+pdfa = []
+# The official MCP Python SDK (MIT), v2 line: `MCPServer` is what the v1 line
+# called `FastMCP` (docs/09 P4-1). An extra rather than a core dependency
+# because it drags a whole HTTP server stack (starlette/uvicorn/httpx2) in for
+# transports v3.0 does not ship — `webshot mcp` uses stdio.
+mcp = ["mcp>=2.2.0,<3"]
+# The documentation site (docs/05 task 4.2). Build-time only: nothing in
+# `src/webshot` imports it, and CI builds the site with `--strict`.
+docs = [
+    "mkdocs>=1.6,<2",
+    "mkdocs-material>=9.7,<10",
+]
+dev = [
+    "pytest>=8.2",
+    "ruff>=0.16.9",
+    "mypy>=1.10",
+    "pip-licenses>=5",
+    "pip-audit>=2.7",
+    "hypothesis>=6.168.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/kitterman-t/webshot-ai"
+Documentation = "https://kitterman-t.github.io/webshot-ai/"
+Source = "https://github.com/kitterman-t/webshot-ai"
+Issues = "https://github.com/kitterman-t/webshot-ai/issues"
+Changelog = "https://github.com/kitterman-t/webshot-ai/blob/master/CHANGELOG.md"
+
+[project.scripts]
+webshot = "webshot.cli:main"
+
+[tool.hatch.version]
+path = "src/webshot/version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/webshot"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/webshot", "tests", "tools", "schemas", "docs", "README.md"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# Golden cases drive a real browser; the golden CI job runs them with -m golden.
+addopts = "-ra --strict-markers --strict-config -m 'not golden'"
+markers = [
+    "golden: golden-bundle harness tests (need chromium and are slower)",
+    "browser: tests that launch a real browser",
+]
+filterwarnings = ["error::DeprecationWarning:webshot.*"]
+
+[tool.ruff]
+target-version = "py311"
+src = ["src", "tests", "tools"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # comprehensions
+    "PIE", # misc lints
+    "RUF", # ruff-specific
+]
+ignore = [
+    "E501", # line length is formatter-managed
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src", "tools"]
+strict = false
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_return_any = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["img2pdf.*", "defusedxml.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Typed upstreams mypy must not descend into: numpy's stubs — reached through
+# Pillow, pikepdf/OCRmyPDF, docling-core, and chonkie now that numpy arrived
+# as a Phase 2 transitive, and again through markitdown's magika in Phase 3 —
+# use PEP 695 `type` statements, which our python_version floor (3.11) cannot
+# parse. Checking upstream internals is not this repo's job; their APIs stay
+# Any at our call sites, same as before.
+module = [
+    "PIL.*",
+    "ocrmypdf.*",
+    "docling.*",
+    "docling_core.*",
+    "chonkie.*",
+    "markitdown.*",
+    "trafilatura.*",
+    "rapidocr.*",
+    "openpyxl.*",
+    "pptx.*",
+]
+follow_imports = "skip"
+ignore_missing_imports = true
+
+[tool.uv]
+package = true
+
+[dependency-groups]
+dev = [
+    "pytest-xdist>=3.8.0",
+]

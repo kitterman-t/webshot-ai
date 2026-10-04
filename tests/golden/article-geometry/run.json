@@ -1,0 +1,24 @@
+{
+  "case": "article-geometry",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/professional_page.html",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>",
+    "--landscape",
+    "--format",
+    "A4",
+    "--scale",
+    "1.0",
+    "--margin",
+    "12mm",
+    "--media",
+    "screen",
+    "--prefer-css-page-size"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

@@ -1,0 +1,28 @@
+{
+  "bundle_format": 3,
+  "visual_assets": [
+    {
+      "id": "asset-001",
+      "file": "assets/asset-001.png",
+      "kind": "img",
+      "width": 640,
+      "height": 240,
+      "alt": "Service trend chart",
+      "aria_label": "",
+      "title": "",
+      "caption": "",
+      "source_url": "file://<REPO>/tests/fixtures/chart-source.svg",
+      "nearby_heading": "Key metrics",
+      "ocr": {
+        "text": "Service Score\nJan 82\nFeb 87\nMar 91\nApr 95",
+        "confidence": 96.03,
+        "language": "eng",
+        "engine": "Tesseract"
+      },
+      "sha256": "ca08a783b849f02cadaee55ce89bd7d9d6a96e60974ce757588721c6051cd63a",
+      "frame_content": null
+    }
+  ],
+  "form_fields": [],
+  "embedded_media": []
+}

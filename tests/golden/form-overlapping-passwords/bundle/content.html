@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Change your password</title>
+</head>
+<body>
+
+  <main>
+    <h1>Change your password</h1>
+
+    
+    <form>
+      <label>Current password</label>
+      <input type="password" id="current-password" name="current_password" value="[REDACTED PASSWORD]">
+
+      <label>New password</label>
+      <input type="password" id="new-password" name="new_password" value="[REDACTED PASSWORD]">
+
+      <label>Account</label>
+      <input type="text" id="confirm-account" name="account" value="live@example.com">
+
+      
+      
+      
+      
+
+      <label>Display mode</label>
+      <select id="display-mode" name="display_mode">
+        
+        
+        
+      </select>
+
+      <label><input type="checkbox" id="notify" name="notify" checked=""> Email me about sign-ins</label>
+
+      <label>Recovery note</label>
+      <textarea id="recovery-note" name="recovery_note" rows="2">live recovery note</textarea>
+    </form>
+
+    
+
+    <h2>What the capture must contain</h2>
+    <p>Both password values are replaced by a redaction marker before they can
+    reach any published artifact, and so is every fragment of one. The account
+    field is ordinary form state and is recorded with its value, which is what
+    makes the absence of the passwords a measurement rather than an empty
+    bundle.</p>
+  </main>
+
+
+
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Unlabeled visuals</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 2rem; max-width: 40rem; }
+  svg, video, canvas, iframe { display: block; margin: 1rem 0; border: 0; }
+  video { background: #222; }
+</style>
+</head>
+<body>
+<h1>Unlabeled visuals</h1>
+<p>An icon the page gave no text alternative.</p>
+<svg width="120" height="60"><rect width="120" height="60" fill="#1f6feb"/></svg>
+<p>A chart named by its own title element.</p>
+<svg width="200" height="60"><title>Weekly visits chart</title><rect width="200" height="60" fill="#2da44e"/></svg>
+<p>A recording with no title and no label.</p>
+<video width="320" height="180"></video>
+<p>A recording the page labelled.</p>
+<video width="320" height="180" aria-label="Onboarding recording"></video>
+<p>A drawing with no label.</p>
+<canvas width="160" height="60"></canvas>
+<p>A sandboxed frame with no title.</p>
+<iframe sandbox srcdoc="<p>Inside a sandboxed frame.</p>" width="300" height="80"></iframe>
+<p>Another sandboxed frame with no title.</p>
+<iframe sandbox srcdoc="<p>Inside another sandboxed frame.</p>" width="300" height="80"></iframe>
+</body>
+</html>

@@ -1,0 +1,13 @@
+INFO: Opening file://<REPO>/tests/fixtures/lms_page.html
+INFO: Loading lazy content (up to 100 scroll steps)...
+INFO: Lazy-load pass finished after 4 step(s).
+INFO: Removed 1 non-document element(s).
+INFO: Building AI-ready content bundle...
+INFO: Found 2 video(s): 1 documented as walkthroughs (11 step(s)), 0 captioned, 1 not transcribed.
+INFO: Rendering PDF...
+INFO: Appended 3 walkthrough page(s) to the PDF.
+INFO: Embedded 16 bundle file(s) into the PDF
+INFO: Created AI bundle at <OUT>/lms-module-videos.ai
+INFO: Created <OUT>/lms-module-videos.pdf (5 pages, <SIZE> KB)
+WARNING: asset-002 is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing.
+WARNING: Guidde playbook ExamplePlaybook0000001 times its last narration cue at 91.1s against a stated duration of 81.4s; the timings are reported as Guidde published them.

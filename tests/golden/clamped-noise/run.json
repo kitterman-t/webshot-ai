@@ -1,0 +1,14 @@
+{
+  "case": "clamped-noise",
+  "kind": "cli",
+  "argv": [
+    "tests/fixtures/clamped_noise.html",
+    "--output",
+    "<OUT>",
+    "--report",
+    "<OUT>"
+  ],
+  "exit_code": 0,
+  "bundle_present": true,
+  "pdf_present": true
+}

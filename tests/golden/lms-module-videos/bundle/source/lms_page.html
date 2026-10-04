@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Getting Started with Projects — Learning Journey</title>
+<meta name="description" content="Module 2 of the Example Org onboarding journey.">
+<style>
+  body { font: 16px/1.6 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+         color: #1d2738; max-width: 46rem; margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 1.9rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.3rem; margin: 2rem 0 .5rem; }
+  p.lede { color: #4a5568; margin-top: 0; }
+  .player { border: 1px solid #c6ccd8; border-radius: 8px; overflow: hidden;
+            background: #eef1f6; margin: 1rem 0; }
+  .player iframe { display: block; width: 100%; height: 260px; border: 0; }
+  .player .caption { font-size: .85rem; color: #5b6578; padding: .5rem .75rem;
+                     border-top: 1px solid #c6ccd8; background: #fff; }
+  footer { margin-top: 3rem; font-size: .85rem; color: #5b6578; }
+</style>
+</head>
+<body>
+
+<main>
+  <h1>Getting Started with Projects</h1>
+  <p class="lede">Module 2 of the implementation journey. Watch the walkthrough,
+  then complete the checklist below.</p>
+
+  <h2>Navigating your project</h2>
+  <p>The video below walks through the project workspace end to end.</p>
+
+  <!-- A lazily-hydrated player: the id lives in `data-src` until the reader
+       scrolls it into view. This is the shape that made the detection question
+       worth a spike — the URL is present in the markup either way. -->
+  <div class="player">
+    <iframe
+      title="Touring Your Project Workspace"
+      src="about:blank"
+      data-src="https://embed.app.guidde.com/playbooks/ExamplePlaybook0000001?autoplay=true"
+      loading="lazy"></iframe>
+    <p class="caption">Touring Your Project Workspace ·
+      <a href="https://app.guidde.com/share/playbooks/ExamplePlaybook0000001">Open in a new tab</a>
+    </p>
+  </div>
+
+  <h2>Understanding the sandbox environment</h2>
+  <p>A short recording of the sandbox. There is no walkthrough behind this one.</p>
+
+  <!-- The second video type: a plain media file with no track elements and no
+       authored text behind it. `preload="none"` keeps the fixture hermetic —
+       the element is still detected, and its duration is legitimately unknown
+       until something plays it, which is the null case worth exercising. -->
+  <div class="player">
+    <video
+      title="Understanding the Sandbox Environment"
+      src="https://usw-input-videos.continuassets.example/sandbox-overview.mp4"
+      preload="none"
+      controls
+      width="640" height="240"></video>
+    <p class="caption">Understanding the Sandbox Environment · 4:11</p>
+  </div>
+
+  <h2>Checklist</h2>
+  <ul>
+    <li>Sign in and open your project from the Projects list.</li>
+    <li>Post an update to the project feed.</li>
+    <li>Upload one document to the Files tab.</li>
+  </ul>
+
+  <h2>Where to get help</h2>
+  <p>Raise a project issue for anything the consultants need to answer, or read
+  the <a href="https://help.example.com/Portal/Login.aspx?ReturnUrl=/Portal/KB/ArticleDet?ID=1234"
+  target="_blank" rel="noopener">knowledge base article on project issues</a>.
+  The <a href="checklist.html">module checklist</a> is on the next page.</p>
+</main>
+
+<footer>Example Org onboarding journey · Module 2 of 6</footer>
+
+</body>
+</html>

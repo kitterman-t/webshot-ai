@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Visuals past the cap, in a frame</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 2rem; }
+  svg, iframe { display: block; margin: 1rem 0; border: 0; }
+</style>
+</head>
+<body>
+<h1>Visuals past the cap, in a frame</h1>
+<p>Two charts in the page, then a frame the page can script holding two more
+charts, a hidden one and an icon. The frame is itself a visual, so the page
+shows five visual assets.</p>
+<svg width="200" height="100" aria-label="Top chart one"><rect width="200" height="100" fill="#1f6feb"/></svg>
+<svg width="200" height="100" aria-label="Top chart two"><rect width="200" height="100" fill="#2da44e"/></svg>
+<iframe width="320" height="300" srcdoc="<!doctype html><body style='margin:0'>
+<svg width='200' height='100' aria-label='Framed chart one' style='display:block'><rect width='200' height='100' fill='#bf3989'/></svg>
+<svg width='200' height='100' aria-label='Framed chart two' style='display:block'><rect width='200' height='100' fill='#9a6700'/></svg>
+<svg width='200' height='100' aria-label='Framed hidden chart' style='display:none'><rect width='200' height='100'/></svg>
+<svg width='16' height='16' aria-label='Framed icon' style='display:block'><rect width='16' height='16'/></svg>
+</body>"></iframe>
+</body>
+</html>

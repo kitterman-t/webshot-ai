@@ -1,0 +1,135 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/sample_data.csv",
+  "final_url": "file://<REPO>/tests/fixtures/sample_data.csv",
+  "title": "sample_data.csv",
+  "page_metadata": {
+    "title": "sample_data.csv",
+    "language": "en",
+    "description": "",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "sample_data.csv",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../csv-data.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json",
+      "tables/table-001.csv"
+    ]
+  },
+  "content": {
+    "items": 3,
+    "tables": 1,
+    "links": 0,
+    "chunks": 2,
+    "text_characters": 225,
+    "visual_assets": 0,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 983,
+      "sha256": "4d33616de273c008d480c38cc8dfcbd3a88654893d7644084ca1f05871198305"
+    },
+    "assets.json": {
+      "bytes": 93,
+      "sha256": "254f1ebdc290bd2774d0677739798ca1744f2582c0f98139b06bcc045604d36e"
+    },
+    "chunks.jsonl": {
+      "bytes": 583,
+      "sha256": "7198494a21f44f82192426783bcf38a1c0e2fa03c6154fe74a9ccb7825a63f7a"
+    },
+    "content.doctags": {
+      "bytes": 335,
+      "sha256": "903f8bfd63e6949db5f8cbf80fd296f0ba9bd5c1fd95e624ab6e67fd896117e3"
+    },
+    "content.html": {
+      "bytes": 642,
+      "sha256": "28375439015532cf608018d54190dd32f4f5fd66335281c828d7eadbf5ab46b2"
+    },
+    "content.json": {
+      "bytes": 18102,
+      "sha256": "d1872eff96f3b88dc197bb0074470626dd03d3b3c9a4b8b7a86a0404559ec453"
+    },
+    "content.md": {
+      "bytes": 228,
+      "sha256": "9fa0b7fa410e0e4ec79067b0772a6007dd133b91d6b4ecb8e8fca2607244813f"
+    },
+    "content.txt": {
+      "bytes": 225,
+      "sha256": "638087bded6f0be0673d3fc9e080239169f9efc52b48abe301e72d9196adab68"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/sample_data.csv": {
+      "bytes": 126,
+      "sha256": "a554cd69807d2ebd8069f2ee57d36a606dc24c20f9868c3f22b6c7f7cc8b0cd4"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "tables/table-001.csv": {
+      "bytes": 126,
+      "sha256": "a554cd69807d2ebd8069f2ee57d36a606dc24c20f9868c3f22b6c7f7cc8b0cd4"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

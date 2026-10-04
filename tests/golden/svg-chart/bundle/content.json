@@ -1,0 +1,126 @@
+{
+  "schema_name": "DoclingDocument",
+  "version": "1.10.0",
+  "name": "content",
+  "origin": {
+    "mimetype": "text/html",
+    "binary_hash": 2063888197554591086,
+    "filename": "content.html"
+  },
+  "furniture": {
+    "self_ref": "#/furniture",
+    "children": [],
+    "content_layer": "furniture",
+    "name": "_root_",
+    "label": "unspecified"
+  },
+  "body": {
+    "self_ref": "#/body",
+    "children": [
+      {
+        "$ref": "#/texts/0"
+      },
+      {
+        "$ref": "#/texts/1"
+      },
+      {
+        "$ref": "#/texts/2"
+      }
+    ],
+    "content_layer": "body",
+    "name": "_root_",
+    "label": "unspecified"
+  },
+  "groups": [],
+  "texts": [
+    {
+      "self_ref": "#/texts/0",
+      "parent": {
+        "$ref": "#/body"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "text",
+      "prov": [],
+      "orig": "Image document",
+      "text": "Image document"
+    },
+    {
+      "self_ref": "#/texts/1",
+      "parent": {
+        "$ref": "#/body"
+      },
+      "children": [
+        {
+          "$ref": "#/pictures/0"
+        }
+      ],
+      "content_layer": "body",
+      "label": "title",
+      "prov": [],
+      "orig": "chart-source.svg",
+      "text": "chart-source.svg"
+    },
+    {
+      "self_ref": "#/texts/2",
+      "parent": {
+        "$ref": "#/body"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "caption",
+      "prov": [],
+      "orig": "chart-source.svg",
+      "text": "chart-source.svg"
+    }
+  ],
+  "pictures": [
+    {
+      "self_ref": "#/pictures/0",
+      "parent": {
+        "$ref": "#/texts/1"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "picture",
+      "prov": [],
+      "captions": [
+        {
+          "$ref": "#/texts/2"
+        }
+      ],
+      "references": [],
+      "footnotes": [],
+      "annotations": [
+        {
+          "kind": "misc",
+          "content": {
+            "webshot": {
+              "asset_id": "asset-001",
+              "file": "assets/asset-001.png",
+              "kind": "img",
+              "sha256": "b5610addb0c1a8573309f1dbddec705dd097bade84030874c0e6dd0fe617cc97",
+              "alt": "chart-source",
+              "caption": "chart-source.svg",
+              "nearby_heading": "chart-source.svg",
+              "ocr": {
+                "confidence": 96.03,
+                "language": "eng",
+                "engine": "Tesseract"
+              }
+            }
+          }
+        },
+        {
+          "kind": "description",
+          "text": "Service Score\nJan 82\nFeb 87\nMar 91\nApr 95",
+          "provenance": "webshot-ocr"
+        }
+      ]
+    }
+  ],
+  "tables": [],
+  "key_value_items": [],
+  "form_items": [],
+  "pages": {}
+}

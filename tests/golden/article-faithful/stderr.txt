@@ -1,0 +1,9 @@
+INFO: Opening file://<REPO>/tests/fixtures/professional_page.html
+INFO: Loading lazy content (up to 100 scroll steps)...
+INFO: Lazy-load pass finished after 5 step(s).
+INFO: Building AI-ready content bundle...
+INFO: Rendering PDF...
+INFO: Embedded 13 bundle file(s) into the PDF
+INFO: Created AI bundle at <OUT>/article-faithful.ai
+INFO: Created <OUT>/article-faithful.pdf (3 pages, <SIZE> KB)
+INFO: Wrote capture report to <OUT>/report.json

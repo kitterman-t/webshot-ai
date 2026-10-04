@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Help Center — Embedded Form</title>
+<meta name="description" content="P16-1's pushed print column holding an embedded frame, where the capture's OCR text layer moved the printed layout.">
+<style>
+  /* docs/09 P16-20. P16-1's layout, with the column holding an embedded
+     form's frame. Printed bare, Chromium lays the too-wide page out at 954px.
+     The capture harvests the frame as a visual asset and puts its recognized
+     text after it. That layer used to be 600px wide from the frame's right
+     edge, and the page was printed at 1168px, shrunk by a further 18%, because
+     of a layer nobody can see. The column is positioned, so it is the layer's
+     containing block. */
+  body { font: 16px/1.6 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+         color: #1d2738; margin: 0; }
+  .lede { max-width: 40rem; margin: 1.5rem auto; padding: 0 1rem; }
+  iframe { width: 100%; height: 420px; border: 0; }
+  @media print {
+    .container { box-sizing: border-box; width: 750px; margin: 0 auto; padding: 0 15px; }
+    .row::after { content: ""; display: table; clear: both; }
+    .column { box-sizing: border-box; position: relative; float: left;
+              width: 600px; margin-left: 75px; left: 250px; padding: 0 15px; }
+  }
+</style>
+</head>
+<body>
+<p class="lede">OCRLAYERBASELINE: book an appointment with the form below.</p>
+<div class="container">
+  <div class="row">
+    <section class="column" id="content-column">
+      <iframe title="Appointment form" srcdoc="&lt;!doctype html&gt;&lt;style&gt;body{margin:0;font:16px/1.5 -apple-system,&#x27;Segoe UI&#x27;,Helvetica,Arial,sans-serif}&lt;/style&gt;&lt;p&gt;The form asks for a name, a student number, the course, and a preferred time for the appointment.&lt;/p&gt;"></iframe>
+    </section>
+  </div>
+</div>
+</body>
+</html>

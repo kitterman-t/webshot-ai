@@ -1,0 +1,9 @@
+INFO: Opening file://<REPO>/tests/fixtures/form_page.html
+INFO: Loading lazy content (up to 100 scroll steps)...
+INFO: Lazy-load pass finished after 4 step(s).
+INFO: Building AI-ready content bundle...
+INFO: Rendering PDF...
+INFO: Embedded 12 bundle file(s) into the PDF
+INFO: Created AI bundle at <OUT>/form-fields.ai
+INFO: Created <OUT>/form-fields.pdf (1 page, <SIZE> KB)
+INFO: Wrote capture report to <OUT>/report.json

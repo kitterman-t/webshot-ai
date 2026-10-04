@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/sample_data.csv",
+  "final_url": "file://<REPO>/tests/fixtures/sample_data.csv",
+  "title": "sample_data.csv",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../csv-data.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true
+  },
+  "content": {
+    "blocks": 3,
+    "tables": 1,
+    "links": 0,
+    "chunks": 1,
+    "text_characters": 155,
+    "visual_assets": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 983,
+      "sha256": "4d33616de273c008d480c38cc8dfcbd3a88654893d7644084ca1f05871198305"
+    },
+    "chunks.jsonl": {
+      "bytes": 493,
+      "sha256": "579712ae6f8d3564cdeed43cb0497520c8fe0ec5213e30e023632d8372574e33"
+    },
+    "content.html": {
+      "bytes": 805,
+      "sha256": "ff23c1b213bc9f5377e8f23c75a1de811bb735dd9d18d497a41744d5a4a1c66b"
+    },
+    "content.json": {
+      "bytes": 3705,
+      "sha256": "efc408bdfebff8847dc2289f37376bd8027f3502e43d49daaeb186e3aaef6455"
+    },
+    "content.md": {
+      "bytes": 371,
+      "sha256": "5d5b068b6bd40aa436f3249af0e8c56296182b15d37ca0d460012614c3be534b"
+    },
+    "content.txt": {
+      "bytes": 156,
+      "sha256": "4010fc88b6e8f2e0a8083124ec822c12a5a7fe8eaf70507c9b99c8248f9a2001"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/sample_data.csv": {
+      "bytes": 126,
+      "sha256": "a554cd69807d2ebd8069f2ee57d36a606dc24c20f9868c3f22b6c7f7cc8b0cd4"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "tables/table-001.csv": {
+      "bytes": 126,
+      "sha256": "a554cd69807d2ebd8069f2ee57d36a606dc24c20f9868c3f22b6c7f7cc8b0cd4"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

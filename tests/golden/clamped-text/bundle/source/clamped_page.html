@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Release Notes — Portfolio Planning</title>
+<meta name="description" content="A page whose body text is truncated by CSS rather than by its markup.">
+<style>
+  body { font: 16px/1.6 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+         color: #1d2738; max-width: 46rem; margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 1.9rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.25rem; margin: 2rem 0 .5rem; }
+  p.lede { color: #4a5568; margin-top: 0; }
+
+  /* Shape one: a line clamp. The element is a -webkit-box and the browser
+     stops painting after the third line. `innerText` still returns all of it,
+     which is the whole difficulty — the DOM is complete and the render is not. */
+  .summary {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+
+  /* Shape two: a collapsed container. Same effect by a different mechanism —
+     a max-height shorter than the content, with the overflow clipped. */
+  .collapse {
+    max-height: 4.5em;
+    overflow: hidden;
+    border-left: 3px solid #c6ccd8;
+    padding-left: .75rem;
+  }
+
+  /* Shape three: a clamp that never bites. Its content is shorter than the
+     allowance, so nothing is clipped and nothing should be released — the
+     recorded `Released 2` in stderr.txt is what holds that. */
+  .roomy {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 8;
+    overflow: hidden;
+  }
+
+  footer { margin-top: 3rem; font-size: .85rem; color: #5b6578; }
+</style>
+</head>
+<body>
+
+<main>
+  <h1>Portfolio Planning — Release Notes</h1>
+  <p class="lede">Everything below is present in the DOM. Two of the three
+  blocks are truncated by CSS alone.</p>
+
+  <h2>Summary</h2>
+  <!-- Sentinels are single unbroken tokens on purpose: PDF text extraction
+       inserts line breaks at layout boundaries, so a multi-word sentinel can be
+       split across a newline and fail a substring test for a reason that has
+       nothing to do with clamping. -->
+  <p class="summary">Portfolio planning gained a scenario comparison view in
+  this release, so a planner can hold two funding shapes side by side without
+  duplicating the portfolio. The capacity model now reconciles against the
+  resource calendar nightly rather than on demand, which removes the stale
+  figures that made the old comparison hard to trust. Allocation rounding moved
+  from the request to the plan, and the audit trail records who changed a
+  scenario as well as when. The fourth line of this paragraph is where the
+  clamp bites: CLAMPEDLINECLAMPOMEGA is present in the document and is not
+  painted, because the browser stops after three lines and clips the rest of
+  the box without removing any of it from the tree.</p>
+
+  <h2>Known issues</h2>
+  <div class="collapse">
+    <p>Scenario comparison does not yet carry custom attributes across a copy,
+    so a scenario cloned from a plan with custom fields loses them silently.
+    The workaround is to re-apply the attribute set after cloning.</p>
+    <p>Nightly reconciliation runs in the tenant's own timezone, which means a
+    portfolio spanning regions sees one region's figures lag by a day.
+    CLAMPEDCOLLAPSESIGMA marks the part of this list a reader never sees,
+    because the container is four and a half lines tall and the content is
+    considerably taller than that.</p>
+  </div>
+
+  <h2>Unaffected</h2>
+  <p>This paragraph is not clamped by anything, and UNCLAMPEDBASELINEALPHA
+  should appear in both the extracted text and the rendered page whether or not
+  the clamp release works. It is here so the case cannot pass by accident on a
+  capture that dropped every block.</p>
+  <h2>Roomy</h2>
+  <p class="roomy">ROOMYCLAMPNEVERBITES — this block sets a line clamp of eight
+  lines and holds two, so the clamp is present and clips nothing.</p>
+</main>
+
+<footer>Portfolio Planning · release notes · internal</footer>
+
+</body>
+</html>

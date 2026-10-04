@@ -1,0 +1,79 @@
+{
+  "page_count": 5,
+  "page_sizes": [
+    [
+      612.0,
+      792.0
+    ],
+    [
+      612.0,
+      792.0
+    ],
+    [
+      612.0,
+      792.0
+    ],
+    [
+      612.0,
+      792.0
+    ],
+    [
+      612.0,
+      792.0
+    ]
+  ],
+  "outline": [
+    "Original visual document",
+    [
+      "Source page 1",
+      "Source page 2"
+    ],
+    "AI-readable transcript appendix",
+    [
+      "Transcript for source page 1",
+      "Transcript for source page 2"
+    ]
+  ],
+  "attachments": [
+    {
+      "name": "webshot-ai-chunks.jsonl",
+      "af_relationship": "/Data",
+      "subtype": "/application/jsonl",
+      "description": "Retrieval-ready page-scoped text chunks"
+    },
+    {
+      "name": "webshot-ai-content.json",
+      "af_relationship": "/Data",
+      "subtype": "/application/json",
+      "description": "Page-addressable OCR text, word coordinates, and confidence"
+    },
+    {
+      "name": "webshot-ai-content.txt",
+      "af_relationship": "/Data",
+      "subtype": "/text/plain",
+      "description": "Plain-text OCR transcript organized by source page"
+    },
+    {
+      "name": "webshot-ai-readme.txt",
+      "af_relationship": "/Data",
+      "subtype": "/text/plain",
+      "description": "Guide to the PDF's AI-accessibility layers"
+    },
+    {
+      "name": "webshot-capture.json",
+      "af_relationship": "/Data",
+      "subtype": "/application/json",
+      "description": "Capture provenance and protected-viewer policy record"
+    }
+  ],
+  "metadata": {
+    "/Creator": "WebShot <VERSION>",
+    "/Producer": "pikepdf 10.12.0",
+    "/Title": "Quarterly Operations Review",
+    "/Subject": "Self-contained AI-ready document with original visual pages, positioned OCR, transcript appendix, and embedded structured data",
+    "/Keywords": "AI-ready, OCR, machine-readable transcript, embedded JSON, word coordinates, charts, tables, images",
+    "/WebShotAIReady": "true",
+    "/WebShotSourcePages": "2",
+    "/WebShotEmbeddedFiles": "webshot-ai-readme.txt, webshot-ai-content.json, webshot-ai-content.txt, webshot-ai-chunks.jsonl, webshot-capture.json"
+  }
+}

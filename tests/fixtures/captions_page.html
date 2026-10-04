@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Caption Track Review</title>
+  <meta name="description" content="A captions track and a subtitles track, on separate media elements, for caption-reading fidelity.">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; margin: 0; background: #f5f7fa; }
+    main { max-width: 720px; margin: 32px auto; padding: 40px; background: white; }
+    h1 { color: #173f73; }
+    h2 { color: #245b96; margin-top: 30px; }
+    video { display: block; background: #0b1524; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Caption Track Review</h1>
+    <p>A media element can declare a record of what is said and a translation of
+    it. They are different facts, and a bundle that stored them alike would let a
+    translation be quoted as the source.</p>
+
+    <!-- Its own page rather than a second track on `media_page.html`: that
+         fixture is the input a frozen v2 parity baseline was recorded from, and
+         `tests/parity/v2-baseline/README.md` says the baselines can never be
+         re-recorded. Editing the fixture would therefore break a comparison
+         nothing can repair. The two tracks point at DIFFERENT VTT files on
+         purpose — sharing one made an implementation that ignored `kind`
+         produce identical text either way, so no test could tell the
+         transcript from the translation. -->
+
+    <h2>Training video</h2>
+    <video src="sample-video.mp4" width="320" height="180" preload="none"
+           title="Quarterly training video" aria-label="Quarterly training video">
+      <track kind="captions" srclang="en" label="English captions" src="captions.vtt">
+    </video>
+    <p>The walkthrough covers the capture workflow end to end and is captioned in
+    English for accessibility.</p>
+
+    <h2>Audio briefing</h2>
+    <audio src="sample-audio.mp3" preload="none" title="Operations audio briefing">
+      <track kind="subtitles" srclang="de" label="German subtitles" src="subtitles-de.vtt">
+    </audio>
+    <p>The audio briefing summarizes the quarter in four minutes; a German
+    subtitle track accompanies it.</p>
+  </main>
+</body>
+</html>

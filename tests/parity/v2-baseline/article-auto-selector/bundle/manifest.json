@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/professional_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/professional_page.html",
+  "title": "Auto selected",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../article-auto-selector.pdf",
+    "pages": 2,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true
+  },
+  "content": {
+    "blocks": 17,
+    "tables": 0,
+    "links": 0,
+    "chunks": 2,
+    "text_characters": 1499,
+    "visual_assets": 1
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": "Tesseract"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 2489,
+      "sha256": "d6bc761d65c7f8ec9532d632f92f6f1e9318f4adb0dab069ae4af57883b8a86f"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 2540,
+      "sha256": "ae1d4de91c37e119e811552cf593e5aad1859b7956d4bbddc10699cec18dd6c4"
+    },
+    "content.html": {
+      "bytes": 21277,
+      "sha256": "79e7953e71644a48f8027ef766b8089f36129722efa9a7f0ec499acf8da10915"
+    },
+    "content.json": {
+      "bytes": 5599,
+      "sha256": "a682f7e35f090c83150093bda228e75d24cc01df6791d8007ca4e7337fea32ab"
+    },
+    "content.md": {
+      "bytes": 1980,
+      "sha256": "84621a98b62a646e8c9d984633013a55b29ce48d5410221eabea895ed2dd1a12"
+    },
+    "content.txt": {
+      "bytes": 1500,
+      "sha256": "f270752482a0142d99cc7302f5632153eb913a6fed662f4aaf79183f3aa09d5f"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/professional_page.html": {
+      "bytes": 4814,
+      "sha256": "a5cde0166764c3362939d652dd49ab3a7ab37ea0bd7118c6ef4d0c2d34368e89"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

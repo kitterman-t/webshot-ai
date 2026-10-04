@@ -1,0 +1,121 @@
+# The documentation site (docs/05 task 4.2).
+#
+# `docs_dir` is the existing `docs/` tree rather than a second one: the user
+# guide lives in `docs/guide/`, and the design package — spec, architecture,
+# ADRs — is published alongside it rather than duplicated. The migration guide
+# and the capture-ethics policy are linked where they already are, for the same
+# reason.
+#
+# Build with `uv run mkdocs build --strict`; CI runs it as a blocking job, so a
+# broken link fails the build rather than shipping.
+
+site_name: WebShot
+site_description: >-
+  Turn a web page or local document into a searchable PDF that carries an
+  AI-ready bundle inside it.
+site_url: https://kitterman-t.github.io/webshot-ai/
+repo_url: https://github.com/kitterman-t/webshot-ai
+repo_name: kitterman-t/webshot-ai
+edit_uri: edit/master/docs/
+copyright: Copyright 2026 Tim Kitterman. Licensed under Apache-2.0.
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+
+# Every page is in the nav or listed in `not_in_nav` below, and every link has
+# to resolve: `--strict` turns these warnings into a failed build, which is the
+# point of running it in CI.
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+# The spike report and the LMS capture proposal are working records rather than
+# reading material: the design documents cite their P-entries by number, so they
+# are still built and those links still resolve, but they are not offered in
+# the navigation.
+not_in_nav: |
+  /09-spike-report.md
+  /13-lms-capture-proposal.md
+
+nav:
+  - Home: guide/index.md
+  - Using WebShot:
+      - Quickstart: guide/quickstart.md
+      - CLI reference: guide/cli.md
+      - Configuration: guide/configuration.md
+      - Signed-in and protected: guide/signed-in.md
+      - Troubleshooting: guide/troubleshooting.md
+  - Consuming captures:
+      - Bundle format 3: guide/bundle-format.md
+      - MCP server: guide/mcp.md
+      - Migrating from v2: migration-v2-to-v3.md
+  - Policy:
+      - Security model: guide/security.md
+      - Capture ethics: 11-capture-ethics.md
+  - Design package:
+      - Overview: README.md
+      - 01 Scope: 01-scope.md
+      - 02 Architecture: 02-architecture.md
+      - 03 Components: 03-components.md
+      - 04 Specification: 04-spec.md
+      - 05 Implementation plan: 05-implementation-plan.md
+      - 06 Quality and testing: 06-quality-and-testing.md
+      - 07 Risk register: 07-risk-register.md
+      - 08 Roadmap and ideas: 08-roadmap-and-ideas.md
+      - 10 Traceability matrix: 10-traceability-matrix.md
+  - Decisions:
+      - ADR index: adr/index.md
+      - 0001 OSS-first policy: adr/0001-oss-first-policy.md
+      - 0002 Keep Playwright capture core: adr/0002-keep-playwright-capture-core.md
+      - 0003 Adopt OCRmyPDF: adr/0003-adopt-ocrmypdf.md
+      - 0004 Adopt docling-slim: adr/0004-adopt-docling-slim.md
+      - 0005 Adopt MarkItDown adapters: adr/0005-adopt-markitdown-adapters.md
+      - 0006 License policy: adr/0006-license-policy.md
+      - 0007 PDF embedding via pypdf: adr/0007-pdf-embedding-pypdf.md
+      - 0008 OCR engine abstraction: adr/0008-ocr-engine-abstraction.md
+      - 0009 MCP server: adr/0009-mcp-server.md
+      - 0010 Validation gates: adr/0010-validation-gates.md

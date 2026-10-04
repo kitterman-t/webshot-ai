@@ -1,0 +1,203 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/media_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/media_page.html",
+  "title": "Embedded Media Review",
+  "page_metadata": {
+    "title": "Embedded Media Review",
+    "language": "en",
+    "description": "Video and audio elements with caption tracks for embedded-media fidelity.",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "Embedded Media Review",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../embedded-media.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json"
+    ]
+  },
+  "content": {
+    "items": 6,
+    "tables": 0,
+    "links": 0,
+    "chunks": 5,
+    "text_characters": 448,
+    "visual_assets": 1,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": "Tesseract"
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 680,
+      "sha256": "edb5586c401df04d8cbf1736962aa159f3c0abaa7277d8825ace8e3c8f9bfd37"
+    },
+    "assets.json": {
+      "bytes": 1516,
+      "sha256": "ca0fde86acc774acae8fed6b2dcb364937a775209bd0530573e18d26ee162a9e"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 2852,
+      "sha256": "fd02260caeb36488c0bb3c46cadfe1e1592e085a08a328a53a54559912247497"
+    },
+    "content.doctags": {
+      "bytes": 613,
+      "sha256": "ae13c13ea158ff0b3b48b9a4125c088df4b53c4c96fe41ce64a5626d307e5f7f"
+    },
+    "content.html": {
+      "bytes": 1196,
+      "sha256": "a247ebfa27c3b5b06b0f847ebdc84dcff98f42337beda7bf17d78be64be4e252"
+    },
+    "content.json": {
+      "bytes": 3244,
+      "sha256": "c90f02c8338e907ff6307aaa539a826d598385b97cbaa76f74a89845156a871f"
+    },
+    "content.md": {
+      "bytes": 1351,
+      "sha256": "209d09079d639642ac0544316f624eeb5048d1e28c3c3fbd8ab5f8aab948a4a9"
+    },
+    "content.txt": {
+      "bytes": 1332,
+      "sha256": "dc7d6c52b93ba76524abdde7d5fe7a42b409fbc31e479be941b41beb3a99bcc7"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/media_page.html": {
+      "bytes": 1602,
+      "sha256": "ebc3652de506dbc993df2f9043742cb0349519552fe7748bab07c4835e17b863"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [
+    "asset-001 is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing.",
+    "1 request for the page's resources failed (texttrack 1), so the PDF and the bundle may lack what it would have loaded."
+  ],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context.",
+  "videos": [
+    {
+      "provider": "media-element",
+      "media_kind": "video",
+      "title": "Quarterly training video",
+      "source_url": "file://<REPO>/tests/fixtures/sample-video.mp4",
+      "duration_seconds": null,
+      "poster_url": null,
+      "poster_asset": "asset-001",
+      "caption_tracks": [
+        "captions:en"
+      ],
+      "tracks": [
+        {
+          "kind": "captions",
+          "srclang": "en",
+          "label": "English captions",
+          "source_url": "file://<REPO>/tests/fixtures/captions.vtt",
+          "readable": false,
+          "cues": 0,
+          "truncated": false,
+          "total_cues": 0,
+          "role": "unreadable"
+        }
+      ],
+      "locator": "body > main > video",
+      "transcribed": false,
+      "transcript_provenance": null,
+      "note": "This media is NOT transcribed. It declares caption track(s) and the browser could not read them — the track loaded with an error, which a cross-origin caption file does when the page itself was opened from a file:// URL. A transcript for this media exists and is absent from this bundle for that reason, not because none was written."
+    },
+    {
+      "provider": "media-element",
+      "media_kind": "audio",
+      "title": "Operations audio briefing",
+      "source_url": "file://<REPO>/tests/fixtures/sample-audio.mp3",
+      "duration_seconds": null,
+      "poster_url": null,
+      "poster_asset": null,
+      "caption_tracks": [
+        "subtitles:de"
+      ],
+      "tracks": [
+        {
+          "kind": "subtitles",
+          "srclang": "de",
+          "label": "German subtitles",
+          "source_url": "file://<REPO>/tests/fixtures/captions.vtt",
+          "readable": false,
+          "cues": 0,
+          "truncated": false,
+          "total_cues": 0,
+          "role": "unreadable"
+        }
+      ],
+      "locator": "body > main > audio",
+      "transcribed": false,
+      "transcript_provenance": null,
+      "note": "This media is NOT transcribed. It declares caption track(s) and the browser could not read them — the track loaded with an error, which a cross-origin caption file does when the page itself was opened from a file:// URL. A transcript for this media exists and is absent from this bundle for that reason, not because none was written."
+    }
+  ],
+  "video_tally": {
+    "total": 2,
+    "documented_walkthroughs": 0,
+    "transcribed_media": 0,
+    "untranscribed_media": 2
+  }
+}

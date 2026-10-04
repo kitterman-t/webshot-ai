@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Journey</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 2rem; }
+  .chakra-accordion__button { display:block; width:100%; text-align:left; padding:.4rem;
+        border:1px solid #ccc; background:#fff; margin:.15rem 0; font:inherit; }
+  .chakra-accordion__panel { margin-left:1rem; }
+  /* Chakra collapses by animating height with overflow hidden. It does NOT
+     unmount, so the text stays in innerText — which is why aria-expanded is
+     the only sound witness that an expansion took. */
+  .chakra-accordion__panel[data-collapsed="true"] { height:0; overflow:hidden; }
+  [role="article"] { display:block; padding:.3rem; border:1px dashed #bbb; margin:.1rem 0; }
+  nav a { margin-right: 1rem; }
+  #modal { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000;
+           display:flex; align-items:center; justify-content:center; }
+  #modal[hidden] { display:none; }
+  #modal > div { background:#fff; padding:1.5rem; }
+</style>
+</head>
+<body>
+<!--
+  A stand-in for one Continu journey. Every behaviour is measured — docs/13 P9
+  for the structure and hazards, and the live-session answers recorded as P11
+  for the markup, the completion modal, the readiness gap and the collapse
+  semantics. tools/golden/journey_standin.py maps each one to what it catches.
+
+  No data-testid, and aria-label only where production has it (track rows).
+-->
+
+<!-- P11-1: raised on EVERY visit to a completed journey, and completion is the
+     walker's precondition. It intercepts clicks two ways on purpose: an
+     overlay, so a real click fails actionability, and a state guard, so a
+     scripted .click() returns cleanly and does nothing — which is the symptom
+     that cost the measuring session several minutes. -->
+<!--
+  Decoys. Both carry text a document-wide resolver matches, neither is the
+  control the walk means, and both sit earlier in DOM order than the dialog —
+  which is where a portalled modal leaves page chrome. Without them the scoped
+  resolvers in walk.py are load-bearing on nothing: reverting either to its
+  document-wide form left every test green, which is the same
+  fixture-cannot-fail trap docs/09 P10-5 is about.
+-->
+<div id="decoys">
+  <button id="decoy-details">View Journey Details</button>
+  <button id="decoy-back">Back to Journey Overview</button>
+</div>
+
+<div id="modal" role="dialog" aria-modal="true">
+  <div>
+    <h2>You Did It!</h2>
+    <p>You successfully completed your Journey!</p>
+    <button id="return-dashboard">Return to Dashboard</button>
+    <button id="view-details">View Journey Details</button>
+  </div>
+</div>
+
+<nav>
+  <a href="/explore">Explore</a>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/workshops">Workshops</a>
+  <a href="/help">Help</a>
+</nav>
+
+<h1 id="heading">Loading</h1>
+<div id="progress" class="css-boybh8"><p class="chakra-text css-0">Your Progress</p><p class="chakra-text css-0">100%</p></div>
+<div id="view"></div>
+<div id="module-view" hidden></div>
+<div id="foot" hidden>
+  <button id="back-journey">&#8592; Back to Journey</button>
+  <button id="back-track">Back to Track</button>
+  <button id="show-contents">Show Track Contents</button>
+  <button id="cancel">Cancel</button>
+  <!-- Both traversal controls P12 measured, and the walk touches neither.
+       "Next in Journey" is the untested progress mutator; "Next in Track" is
+       its module-level sibling and was not written down before P12. -->
+  <button id="next-track">Next in Track</button>
+  <button id="next-journey">Next in Journey</button>
+</div>
+
+<script>
+window.__opened_modules = [];
+window.__decoy_clicks = [];
+window.__next_in_journey_clicks = 0;
+window.__next_in_track_clicks = 0;
+window.__returned_to_dashboard = 0;
+
+// Assessments are REAL on this journey — measured. The walk must record the
+// type so the capture stage has something to refuse with.
+const M = (title, duration, type = "article") => ({
+  title, duration, type,
+  // A distinctive per-module token, so a capture landing in the wrong
+  // directory is visible rather than plausible.
+  body: `MODULEBODY${title.replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, 18)} — `
+      + "the body of this module, captured into its own PDF and bundle.",
+});
+
+const DATA = {
+  title: "Example Guided Onboarding",
+  sections: [
+    { title: "Groundwork", tracks: [
+      { title: "Guided Onboarding Groundwork", groups: [
+        { title: "1. Introduction",
+          prose: "How the guided onboarding is sequenced, and who owns each step.",
+          modules: [M("The Help Portal", "5 mins"), M("Navigating Your Implementation", "2 mins")] },
+        { title: "2. Environments",
+          prose: "The environments you are given and what each one is for.",
+          modules: [M("Understanding the Sandbox Environment", "6 mins")] },
+      ]},
+      { title: "Understanding Your Example Environment", groups: [
+        { title: "1. Orientation",
+          prose: "Where things live once the environment is handed over.",
+          modules: [M("An Overview of the Example Environments", "4 mins"),
+                    M("Environments Quiz", "Less than a minute", "assessment"),
+                    M("Overview of the Project Application", "9 mins")] },
+      ]},
+    ]},
+    { title: "Key Configurations", tracks: [
+      { title: "Project Management Essentials", groups: [
+        { title: "1. Getting Started",
+          prose: "The first configuration pass, in the order it must happen.",
+          modules: [M("Project Management Overview", "7 mins")] },
+        { title: "2. Planning",
+          prose: "Plans, tasks and the relationship between them.",
+          modules: [M("Building a Project Plan", "8 mins"), M("Task Management", "3 mins")] },
+        { title: "3. Reporting",
+          prose: "What the reporting layer can see once planning is in place.",
+          modules: [M("Projects Reporting", "5 mins")] },
+      ]},
+    ]},
+  ],
+};
+
+// P11-5: allowMultiple at both levels — expanding one does NOT collapse its
+// siblings. Sets rather than a single index, deliberately.
+const expanded = new Set();
+// Lazily mounted panels. P9-4 measured a collapsed journey with no track name
+// in it at all; P11-2 measured content SURVIVING a later collapse. Both are
+// true of the same component: the panel mounts on first expand and is then
+// retained, height-collapsed.
+const mounted = new Set();
+
+let view = { name: "journey", section: null, track: null };
+// React `useId` is stable for a component instance, not across a remount — and
+// each track visit unmounts the journey view and mounts it again. The epoch
+// changes with the view, so a panel id captured before a track visit is dead
+// after it. docs/13 lists `aria-controls` as safe to key on; it is safe to
+// READ, not to carry across a navigation.
+let idEpoch = 0;
+let modalOpen = true;
+let progressPercent = 100;
+
+function key(...parts) { return parts.join("-"); }
+
+// Every css-* class is an Emotion hash that changes with any style edit, so it
+// changes here on every render. A walker that keys on one breaks immediately,
+// which is the point.
+let hashCounter = 0;
+function emotionHash() { return "css-" + (hashCounter++).toString(36) + "x9"; }
+
+function icon() {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "12"); svg.setAttribute("height", "12");
+  svg.setAttribute("aria-hidden", "true");
+  return svg;
+}
+
+// -------------------------------------------------------------------------- //
+// The accordion pool.
+//
+// P9-4: a reference captured before an expansion addressed a *different* node
+// afterwards — no error, no visible change. React reconciliation reuses DOM
+// nodes for the same position, so #view owns a pool that is only ever grown
+// and rebound, never replaced. The pool is shared by BOTH views, which is what
+// makes the rebind silent: a handle to section 2 becomes group 2 on the way
+// into a track.
+//
+// Every handler reads dataset at CLICK time, from the node, so a stale handle
+// acts on whatever that node now represents.
+// -------------------------------------------------------------------------- //
+function ensurePool(count) {
+  const view = document.getElementById("view");
+  while (view.children.length < count) {
+    const wrap = document.createElement("div");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.appendChild(icon());
+    // Measured shape: the first <p> is the title, the second is the completion
+    // word. `textContent` on the button therefore reads "GroundworkCompleted",
+    // which is the bug this models — and the second <p> is completion state in
+    // plain text, which P9-6 recorded as unreadable.
+    button.appendChild(document.createElement("p"));
+    const status = document.createElement("p");
+    status.textContent = "Completed";
+    button.appendChild(status);
+    button.addEventListener("click", () => onAccordionClick(button));
+    const panel = document.createElement("div");
+    wrap.appendChild(button);
+    wrap.appendChild(panel);
+    view.appendChild(wrap);
+  }
+  return view;
+}
+
+function onAccordionClick(button) {
+  if (modalOpen) return;                 // returns cleanly, changes nothing
+  const id = button.dataset.key;
+  if (!id) return;                       // a stale handle on a retired pool slot
+  if (expanded.has(id)) expanded.delete(id);
+  else {
+    // Opt-in, and measured NOT to happen: P11-5 recorded allowMultiple at both
+    // levels, so siblings stay open. Kept because it is the cheapest way to
+    // prove the per-node count assertion can fail at all. Reached by putting
+    // "solo" in the path.
+    if (location.pathname.includes("solo")) {
+      Array.from(expanded).forEach((other) => {
+        if (other[0] === id[0]) expanded.delete(other);
+      });
+    }
+    expanded.add(id); mounted.add(id);
+  }
+  render();
+}
+
+function bindAccordion(wrap, id, index, label, panelBuilder) {
+  const button = wrap.children[0];
+  const panel = wrap.children[1];
+  wrap.hidden = false;
+  button.hidden = false;
+  // React useId output and Emotion hashes: both change on every render, so
+  // nothing may key on either.
+  button.id = `accordion-button-:r${(hashCounter++).toString(36)}:`;
+  button.className = "chakra-accordion__button " + emotionHash();
+  button.dataset.index = String(index);
+  button.dataset.key = id;
+  button.setAttribute("aria-expanded", expanded.has(id) ? "true" : "false");
+  const panelId = `accordion-panel-${id}-e${idEpoch}`;
+  button.setAttribute("aria-controls", panelId);
+  button.querySelector("p").textContent = label;
+
+  if (mounted.has(id)) {
+    panel.hidden = false;
+    panel.id = panelId;
+    panel.className = "chakra-accordion__panel " + emotionHash();
+    // Chakra height-collapses; it does not unmount. The content stays in
+    // innerText after a collapse, which is why aria-expanded is the only sound
+    // witness that an expansion took.
+    panel.dataset.collapsed = expanded.has(id) ? "false" : "true";
+    panel.replaceChildren();
+    panelBuilder(panel);
+  } else {
+    // Never expanded, so never mounted: a collapsed journey holds no track
+    // name at all (P9-4).
+    panel.hidden = true;
+    panel.removeAttribute("id");
+    panel.replaceChildren();
+  }
+}
+
+function retire(wrap) {
+  wrap.hidden = true;
+  const button = wrap.children[0];
+  button.hidden = true;
+  button.className = "";
+  button.dataset.key = "";
+  button.removeAttribute("data-index");
+  wrap.children[1].hidden = true;
+  wrap.children[1].removeAttribute("id");
+}
+
+// The button dispatches on WHICH button it is, not on what it is labelled —
+// which is what the real application does, and what makes a duplicated title a
+// test of the walker rather than of this file. If this resolved the label back
+// to a track the way an earlier version did, a document-scoped click would look
+// correct here and be wrong in production.
+function trackButton(label, s, t) {
+  const stack = document.createElement("div");
+  stack.className = "chakra-stack " + emotionHash();
+  const button = document.createElement("button");
+  button.type = "button";
+  button.setAttribute("aria-label", label);      // the title lives here, not in the text
+  button.className = emotionHash();
+  button.dataset.s = String(s);
+  button.dataset.t = String(t);
+  button.appendChild(icon());
+  button.addEventListener("click", () => {
+    if (modalOpen) return;
+    openTrackAt(Number(button.dataset.s), Number(button.dataset.t));
+  });
+  stack.appendChild(button);
+  return stack;
+}
+
+// Opt-in: the same track title in two different sections — ordinary courseware
+// naming. P11-5 keeps every section expanded, so an earlier section's track row
+// is still in the DOM and wins on DOM order. "dupe" in the path.
+function trackTitle(track, t) {
+  return location.pathname.includes("dupe") && t === 0 ? "Overview" : track.title;
+}
+
+// No role, no data-testid, no inner button, cursor:auto — a module row is a
+// plain div with a React-style click handler and three <p>s: title, duration,
+// type. Nothing about it is findable by affordance, which is why the walk
+// matches on shape.
+// Opt-in, and NOT measured: the three ways the type cell stops saying
+// `article` or `assessment` without anything else changing. Under a denylist
+// of one string all three read as safe-to-open, and neither self-check can see
+// them — a structural DOM change is identical on both enumeration passes.
+// Reached by putting "types" in the path.
+// Opt-in: two modules in DIFFERENT groups with the same title and the same
+// body. Groups are index-addressed so this is legitimate, and it is the case
+// that makes a chunk without its journey path indistinguishable from another
+// module's — same heading, same text, same per-bundle id. "twins" in the path.
+function twinned(mod) {
+  if (!location.pathname.includes("twins")) return mod;
+  if (mod.title === "The Help Portal"
+      || mod.title === "Understanding the Sandbox Environment") {
+    // Duration too: the module view renders it into the body, so twinning the
+    // title alone left the two chunk sets differing by one line — and the test
+    // would then have passed for a reason that has nothing to do with paths.
+    return { ...mod, title: "Overview", duration: "5 mins",
+             body: "MODULEBODYOVERVIEW — the same words under two different groups." };
+  }
+  return mod;
+}
+
+function typeCells(mod) {
+  if (!location.pathname.includes("types")) return [mod.title, mod.duration, mod.type];
+  if (mod.title === "The Help Portal") {
+    return [mod.title, mod.duration, ""];                    // the cell renders empty
+  }
+  if (mod.title === "Navigating Your Implementation") {
+    return [mod.title, mod.duration, "quiz"];                // a vocabulary this build does not know
+  }
+  if (mod.title === "Understanding the Sandbox Environment") {
+    return [mod.title, mod.duration, mod.type, "New"];       // a FOURTH <p>, appended after the type
+  }
+  return [mod.title, mod.duration, mod.type];
+}
+
+function moduleRow(mod) {
+  const row = document.createElement("div");
+  row.className = emotionHash();
+  for (const value of typeCells(mod)) {
+    const p = document.createElement("p");
+    p.textContent = value;
+    row.appendChild(p);
+  }
+  row.addEventListener("click", () => {
+    if (modalOpen) return;
+    // Recorded, never prevented. An Assessment opens exactly as readily as an
+    // Article here — refusing is the walker's job, and a stand-in that made it
+    // impossible would be testing the fixture instead of the walker.
+    window.__opened_modules.push(mod.title);
+    openModuleAt(mod.s, mod.t, mod.g, mod.m);
+  });
+  return row;
+}
+
+// P11-2: a track view is not ready when the click returns. The title has
+// changed and the body is a shell; the accordions arrive later. A fixed wait is
+// the wrong tool — a walker must poll for them.
+let trackFillTimer = null;
+let trackPending = false;
+function openTrackAt(s, t) {
+  view = { name: "track", section: s, track: t };
+  idEpoch += 1;
+  // Opt-in, and NOT measured: P9-8 and P11-5 both recorded a journey holding at
+  // 100% across every open. This models the failure the safety rule exists for,
+  // so the refusal has something real to refuse. Reached by "drift" in the path.
+  if (location.pathname.includes("drift")) {
+    document.getElementById("progress").textContent =
+      "Your Progress " + (progressPercent += 1) + "%";
+  }
+  document.title = DATA.sections[s].tracks[t].title;   // title moves immediately...
+  trackPending = true;
+  render();                                            // ...and the body is a shell
+  clearTimeout(trackFillTimer);
+  trackFillTimer = setTimeout(() => { trackPending = false; render(); }, 250);
+}
+
+// A module view: a heading, a body, and the affordances P12 measured on one.
+// Not ready the instant the click returns, for the same reason a track view is
+// not (P11-2).
+let moduleFillTimer = null;
+let modulePending = false;
+function openModuleAt(s, t, g, m) {
+  view = { name: "module", section: s, track: t, group: g, module: m };
+  idEpoch += 1;
+  const mod = twinned(DATA.sections[s].tracks[t].groups[g].modules[m]);
+  document.title = mod.title;
+  modulePending = true;
+  render();
+  clearTimeout(moduleFillTimer);
+  moduleFillTimer = setTimeout(() => { modulePending = false; render(); }, 150);
+}
+
+function renderModule(root) {
+  const { section: s, track: t, group: g, module: m } = view;
+  const mod = twinned(DATA.sections[s].tracks[t].groups[g].modules[m]);
+  document.getElementById("heading").textContent = mod.title;
+  document.getElementById("foot").hidden = false;
+  root.replaceChildren();
+  if (modulePending) return;                     // the shell, before the body
+  const body = document.createElement("div");
+  body.className = "fr-view " + emotionHash();
+  const lede = document.createElement("p");
+  lede.textContent = mod.body;
+  body.appendChild(lede);
+  const meta = document.createElement("p");
+  meta.textContent = `${mod.duration} · ${mod.type} · Onboarding Team`;
+  body.appendChild(meta);
+  // A genuine anchor to the documentation portal, in the Login.aspx?ReturnUrl
+  // shape that must be preserved verbatim and never followed.
+  // One image every module carries, and one only the first module carries.
+  // The corpus dedupe needs both: many-references and exactly-one.
+  const solo = mod.title === "The Help Portal" || mod.title === "Overview";
+  // The single-module image goes FIRST where it appears, so that module's
+  // asset-001 is a different picture from every other module's asset-001.
+  // A dedupe keyed on filename collapses the two; keyed on content it does
+  // not, and that difference is the point.
+  if (solo) {
+    const only = document.createElement("img");
+    only.src = "/unique.png";
+    only.alt = "A diagram used by exactly one module";
+    only.width = 48; only.height = 48;
+    body.appendChild(only);
+  }
+  const shared = document.createElement("img");
+  shared.src = "/shared.png";
+  shared.alt = "A diagram that recurs across modules";
+  shared.width = 48; shared.height = 48;
+  body.appendChild(shared);
+  const link = document.createElement("a");
+  link.href = "https://help.example.com/Portal/Login.aspx"
+            + "?ReturnUrl=/Portal/KB/ArticleDet?ID=1234";
+  link.target = "_blank";
+  link.textContent = "An Overview of the Example Environments";
+  body.appendChild(link);
+  root.appendChild(body);
+}
+
+function render() {
+  const heading = document.getElementById("heading");
+  const items = [];
+  const pool = document.getElementById("view");
+  const moduleView = document.getElementById("module-view");
+  if (view.name === "module") {
+    // The accordion pool is left alone rather than cleared. Emptying it here
+    // destroyed the node identity the reuse hazard depends on, and the walk
+    // then found no accordions at all on the way back.
+    pool.hidden = true;
+    moduleView.hidden = false;
+    renderModule(moduleView);
+    return;
+  }
+  pool.hidden = false;
+  moduleView.hidden = true;
+  moduleView.replaceChildren();
+  if (view.name === "journey") {
+    heading.textContent = DATA.title;
+    document.getElementById("foot").hidden = true;
+    DATA.sections.forEach((section, s) => {
+      items.push({
+        id: `s-${s}`, index: s, label: section.title,
+        build: (panel) => section.tracks.forEach(
+          (track, t) => panel.appendChild(trackButton(trackTitle(track, t), s, t))),
+      });
+    });
+    // document.title is NOT restored: it keeps the last track's name (P9-4).
+  } else {
+    const track = DATA.sections[view.section].tracks[view.track];
+    heading.textContent = track.title;
+    document.getElementById("foot").hidden = false;
+    if (!trackPending) {
+      track.groups.forEach((group, g) => {
+        items.push({
+          id: `g-${view.section}-${view.track}-${g}`, index: g, label: group.title,
+          build: (panel) => {
+            const stack = document.createElement("div");
+            stack.className = "chakra-stack " + emotionHash();
+            panel.appendChild(stack);
+            // The description is a Froala block, and it CAN be empty.
+            const wrap = document.createElement("div");
+            const prose = document.createElement("div");
+            prose.className = "fr-view " + emotionHash();
+            prose.textContent = group.prose;
+            wrap.appendChild(prose);
+            stack.appendChild(wrap);
+            // Opt-in, and NOT measured: the structure moving under the walk.
+            // Once every group in this track is open, the first group quietly
+            // loses a module — which is exactly what the per-node count
+            // assertion exists to catch, and the only thing that CAN move it,
+            // since a collapsed panel keeps its rows (P11-4). "shift" in path.
+            const shifting =
+              location.pathname.includes("shift") &&
+              g === 0 &&
+              // Only where a later group exists to trigger it: in a one-group
+              // track the condition is already true at first read, which would
+              // be content loss rather than the drift being modelled.
+              track.groups.length > 1 &&
+              track.groups.every((_, i) =>
+                expanded.has(`g-${view.section}-${view.track}-${i}`));
+            const modules = shifting ? group.modules.slice(0, -1) : group.modules;
+            modules.forEach((mod, m) => stack.appendChild(
+              moduleRow({ ...twinned(mod), s: view.section, t: view.track, g, m })));
+          },
+        });
+      });
+    }
+  }
+  const view_ = ensurePool(items.length);
+  items.forEach((item, i) =>
+    bindAccordion(view_.children[i], item.id, item.index, item.label, item.build));
+  for (let i = items.length; i < view_.children.length; i++) retire(view_.children[i]);
+}
+
+document.getElementById("decoy-details").addEventListener("click", () => {
+  window.__decoy_clicks.push("View Journey Details");      // and the modal stays up
+});
+document.getElementById("decoy-back").addEventListener("click", () => {
+  window.__decoy_clicks.push("Back to Journey Overview");  // and the view does not change
+});
+document.getElementById("view-details").addEventListener("click", () => {
+  modalOpen = false;
+  document.getElementById("modal").hidden = true;
+  render();
+});
+document.getElementById("return-dashboard").addEventListener("click", () => {
+  window.__returned_to_dashboard += 1;          // the dismissal that navigates away
+  document.body.replaceChildren(document.createTextNode("Dashboard"));
+});
+document.getElementById("back-track").addEventListener("click", () => {
+  if (view.name !== "module") return;
+  clearTimeout(moduleFillTimer);
+  openTrackAt(view.section, view.track);
+});
+document.getElementById("back-journey").addEventListener("click", () => {
+  clearTimeout(trackFillTimer);
+  view = { name: "journey", section: null, track: null };
+  idEpoch += 1;
+  render();
+});
+document.getElementById("show-contents").addEventListener("click", () => render());
+document.getElementById("cancel").addEventListener("click", () => {});
+document.getElementById("next-journey").addEventListener("click", () => {
+  window.__next_in_journey_clicks += 1;
+});
+document.getElementById("next-track").addEventListener("click", () => {
+  window.__next_in_track_clicks += 1;
+});
+
+render();
+</script>
+</body>
+</html>

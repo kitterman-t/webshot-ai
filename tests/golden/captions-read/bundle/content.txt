@@ -1,0 +1,27 @@
+Caption Track Review
+
+A media element can declare a record of what is said and a translation of it. They are different facts, and a bundle that stored them alike would let a translation be quoted as the source.
+
+Training video
+
+The walkthrough covers the capture workflow end to end and is captioned in English for accessibility.
+
+Audio briefing
+
+The audio briefing summarizes the quarter in four minutes; a German subtitle track accompanies it.
+
+
+Video transcript: Quarterly training video
+
+Transcribed from the captions track the page shipped (en); the publisher wrote these words. The same text is at videos/media-01/transcript.txt, and videos/media-01/transcript.vtt carries it on the media's own clock so a timestamp can be cited.
+
+Source: <STANDIN>/sample-video.mp4
+
+Welcome to the quarterly capture workflow review.
+Every page element you see becomes part of the record.
+
+Audio not transcribed: Operations audio briefing
+
+This media is NOT transcribed. It declares track(s), but none of them is kind="captions" — what it has is a translation rather than a transcription of what is said. The text is kept and named in the manifest as a translation, and is deliberately not inlined into content.md, so nothing downstream can retrieve it as though it were the source.
+
+Source: <STANDIN>/sample-audio.mp3

@@ -1,0 +1,8 @@
+- main [ref=e2]:
+  - heading "Embedded Media Review" [level=1] [ref=e3]
+  - paragraph [ref=e4]: "A page's media elements are part of its record even when their streams cannot be archived: the source URL, the title, and every caption track are facts about what the page offered a reader."
+  - heading "Training video" [level=2] [ref=e5]
+  - generic "Quarterly training video" [ref=e6]
+  - paragraph [ref=e7]: The walkthrough covers the capture workflow end to end and is captioned in English for accessibility.
+  - heading "Audio briefing" [level=2] [ref=e8]
+  - paragraph [ref=e9]: The audio briefing summarizes the quarter in four minutes; a German subtitle track accompanies it.

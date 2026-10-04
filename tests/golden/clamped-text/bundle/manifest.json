@@ -1,0 +1,130 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "file://<REPO>/tests/fixtures/clamped_page.html",
+  "final_url": "file://<REPO>/tests/fixtures/clamped_page.html",
+  "title": "Release Notes — Portfolio Planning",
+  "page_metadata": {
+    "title": "Release Notes — Portfolio Planning",
+    "language": "en",
+    "description": "A page whose body text is truncated by CSS rather than by its markup.",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "Portfolio Planning — Release Notes",
+    "author": "",
+    "date": "",
+    "sitename": ""
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../clamped-text.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json"
+    ]
+  },
+  "content": {
+    "items": 11,
+    "tables": 0,
+    "links": 0,
+    "chunks": 6,
+    "text_characters": 1777,
+    "visual_assets": 0,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": true,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 2129,
+      "sha256": "d61c254b24acc5014b911fd6bd05e9a94a142f995ca0286b6f504acb7a68b9cd"
+    },
+    "assets.json": {
+      "bytes": 93,
+      "sha256": "254f1ebdc290bd2774d0677739798ca1744f2582c0f98139b06bcc045604d36e"
+    },
+    "chunks.jsonl": {
+      "bytes": 3252,
+      "sha256": "d55745029af4b4017b4363b7854c290ee0fb06c18d41631f2fa145d10ecbbc80"
+    },
+    "content.doctags": {
+      "bytes": 2074,
+      "sha256": "478bd41df14b0d14f819ea757335e7607ba62556295bb392fca5c1a84f474cdb"
+    },
+    "content.html": {
+      "bytes": 2186,
+      "sha256": "9047a99414364eb7be6988b857cef0e3e4ac818ad9a352fc26619bc775b4e464"
+    },
+    "content.json": {
+      "bytes": 7346,
+      "sha256": "db8fd3d79d7db38397e3218013e0d85cac95fc0834a905d6ffa66f8800e807d4"
+    },
+    "content.md": {
+      "bytes": 1791,
+      "sha256": "bbd92ab2620a0b9148d23c240b9a571debc74cfb85ada7c420b8c033388b6b7e"
+    },
+    "content.txt": {
+      "bytes": 1777,
+      "sha256": "99e04e9f31bb6b654b8edd7d64c0b0271b62f679e6400b5e08d2ca4adc3bf8d5"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "source/clamped_page.html": {
+      "bytes": 4005,
+      "sha256": "5e40b7904e45f745a4ea98028667c48341a7106ca8cb093dcb4c84b74cb06a90"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  },
+  "warnings": [],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
+}

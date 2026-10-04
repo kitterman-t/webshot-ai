@@ -1,0 +1,37 @@
+{
+  "bundle_format": 3,
+  "visual_assets": [],
+  "form_fields": [
+    {
+      "name": "current_password",
+      "value": "[REDACTED PASSWORD]",
+      "locator": "input#current-password"
+    },
+    {
+      "name": "new_password",
+      "value": "[REDACTED PASSWORD]",
+      "locator": "input#new-password"
+    },
+    {
+      "name": "account",
+      "value": "live@example.com",
+      "locator": "input#confirm-account"
+    },
+    {
+      "name": "display_mode",
+      "value": "Dense",
+      "locator": "select#display-mode"
+    },
+    {
+      "name": "notify",
+      "value": "true",
+      "locator": "input#notify"
+    },
+    {
+      "name": "recovery_note",
+      "value": "live recovery note",
+      "locator": "textarea#recovery-note"
+    }
+  ],
+  "embedded_media": []
+}

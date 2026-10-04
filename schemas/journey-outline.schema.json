@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kitterman-t/webshot-ai/schemas/journey-outline.schema.json",
+  "$defs": {
+    "JourneyNodeV1": {
+      "additionalProperties": false,
+      "description": "One node of an enumerated journey (docs/13, five levels — P9-1).\n\n`listed` is what the application said this node held when it was read a\nsecond time; `children` is what the walk actually recorded. Both are\npublished because the capture pass is required to compare them per node,\nand a consumer handed only a total cannot (docs/13).",
+      "properties": {
+        "node_id": {
+          "title": "Node Id",
+          "type": "string"
+        },
+        "level": {
+          "enum": [
+            "journey",
+            "section",
+            "track",
+            "group",
+            "module"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "ordinal": {
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "prose": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prose"
+        },
+        "module_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Module Type"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration"
+        },
+        "listed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Listed"
+        },
+        "children": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/JourneyNodeV1"
+          },
+          "title": "Children",
+          "type": "array"
+        }
+      },
+      "required": [
+        "node_id",
+        "level",
+        "ordinal",
+        "title"
+      ],
+      "title": "JourneyNodeV1",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`outline.json` — what a `--dry-run` enumeration of one journey produced.\n\nThis is the contract the capture pass is checked against, which is why it\nis a published schema before any capture exists to read it: a module in\nthis manifest and not captured is an error, and one captured but absent\nhere is an error, so its shape has to be fixed first.",
+  "properties": {
+    "outline_format": {
+      "const": 1,
+      "title": "Outline Format",
+      "type": "integer"
+    },
+    "generator": {
+      "title": "Generator",
+      "type": "string"
+    },
+    "generator_version": {
+      "title": "Generator Version",
+      "type": "string"
+    },
+    "enumerated_at": {
+      "title": "Enumerated At",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "journey_id": {
+      "title": "Journey Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "progress_before": {
+      "title": "Progress Before",
+      "type": "string"
+    },
+    "progress_after": {
+      "title": "Progress After",
+      "type": "string"
+    },
+    "module_count": {
+      "title": "Module Count",
+      "type": "integer"
+    },
+    "determinism_findings": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Determinism Findings"
+    },
+    "count_findings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Count Findings",
+      "type": "array"
+    },
+    "root": {
+      "$ref": "#/$defs/JourneyNodeV1"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "outline_format",
+    "generator",
+    "generator_version",
+    "enumerated_at",
+    "source",
+    "journey_id",
+    "title",
+    "progress_before",
+    "progress_after",
+    "module_count",
+    "determinism_findings",
+    "count_findings",
+    "root",
+    "warnings"
+  ],
+  "title": "JourneyOutlineV1",
+  "type": "object"
+}

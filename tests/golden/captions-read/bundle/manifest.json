@@ -1,0 +1,214 @@
+{
+  "bundle_format": 3,
+  "generator": "WebShot",
+  "generator_version": "<VERSION>",
+  "captured_at": "<TIMESTAMP>",
+  "source": "<STANDIN>/captions_page.html",
+  "final_url": "<STANDIN>/captions_page.html",
+  "title": "Caption Track Review",
+  "page_metadata": {
+    "title": "Caption Track Review",
+    "language": "en",
+    "description": "A captions track and a subtitles track, on separate media elements, for caption-reading fidelity.",
+    "author": "",
+    "keywords": "",
+    "canonicalUrl": "",
+    "publishedTime": ""
+  },
+  "discovered_metadata": {
+    "title": "Caption Track Review",
+    "author": "",
+    "date": "",
+    "sitename": "<STANDIN>"
+  },
+  "content_discovery": {
+    "strategy": "full-page",
+    "selector": null
+  },
+  "auth_mode": "none",
+  "source_response": {
+    "http_status": 200,
+    "content_type": "text/html"
+  },
+  "pdf": {
+    "file": "../captions-read.pdf",
+    "pages": 1,
+    "bytes": -1,
+    "sha256": "<PDF-SHA256>",
+    "tagged": true,
+    "bookmarks": true,
+    "embedded_files": [
+      "README.txt",
+      "content.json",
+      "content.md",
+      "content.txt",
+      "content.html",
+      "chunks.jsonl",
+      "assets.json",
+      "links.json",
+      "structured-data.json",
+      "accessibility.yaml",
+      "content.doctags",
+      "capture.json",
+      "videos/media-01/transcript.txt",
+      "videos/media-01/transcript.vtt"
+    ]
+  },
+  "content": {
+    "items": 6,
+    "tables": 0,
+    "links": 0,
+    "chunks": 5,
+    "text_characters": 446,
+    "visual_assets": 1,
+    "ocr_words": 0
+  },
+  "ocr": {
+    "enabled": false,
+    "language": "eng",
+    "page_segmentation_mode": 11,
+    "engine": null
+  },
+  "tool_versions": {
+    "webshot": "<VERSION>",
+    "playwright": "<VERSION>",
+    "chromium": "<VERSION>",
+    "markitdown": "<VERSION>",
+    "trafilatura": "<VERSION>",
+    "docling_slim": "<VERSION>",
+    "docling_core": "<VERSION>",
+    "chonkie": "<VERSION>",
+    "nh3": "<VERSION>",
+    "tesseract": "<VERSION>"
+  },
+  "files": {
+    "accessibility.yaml": {
+      "bytes": 676,
+      "sha256": "3d02c7528691c7367a08f30957fcc0f34241b3b5dc94e9e765242c7bee1612b4"
+    },
+    "assets.json": {
+      "bytes": 1417,
+      "sha256": "92008421d1fc48c701fbda3473c82348193c3dc09c9c2ce6b4666cac37571694"
+    },
+    "assets/asset-001.png": {
+      "bytes": -1,
+      "sha256": "<RASTER-SHA256>"
+    },
+    "chunks.jsonl": {
+      "bytes": 2640,
+      "sha256": "47adb328094a9730fac359f3c6a5997ee7fb59d28a47342501236f400aceefad"
+    },
+    "content.doctags": {
+      "bytes": 611,
+      "sha256": "d835c7889ef7e6c805a50e8f131bf5f242a98628238f2d199b0d5069fd30cffd"
+    },
+    "content.html": {
+      "bytes": 1203,
+      "sha256": "9ccd1b6973bd91bfac472a2ca0e5e888d4cdb3a6b24552307365a98edfd9e2f8"
+    },
+    "content.json": {
+      "bytes": 3240,
+      "sha256": "15f0b95f25cd8a5a38c8f07894494f6aff22d9109dbb1ab7584d207a43af2644"
+    },
+    "content.md": {
+      "bytes": 1329,
+      "sha256": "95316c46a1f2567fed0c9a329530785365a2cda287b6bc950d9a6d33ae56efbd"
+    },
+    "content.txt": {
+      "bytes": 1310,
+      "sha256": "260b66a7c6f7f3542a7529152d9ad5ac25f57684d23728d3de1fc425a1a4cc4c"
+    },
+    "links.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "structured-data.json": {
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    "videos/media-01/transcript.txt": {
+      "bytes": 105,
+      "sha256": "89c78b5f47fc5cf044f5e7ee42980117e7eecef14b1438229a68c9463c943791"
+    },
+    "videos/media-01/transcript.vtt": {
+      "bytes": 319,
+      "sha256": "7de36230e727aa2b6bbf5f28fd67f51006aa88ef5374dfc47e9f6dbf55453b2c"
+    },
+    "videos/media-02/translation-de.vtt": {
+      "bytes": 336,
+      "sha256": "7c65fec771712651a14d8a61a9ce117acb5452219956b527eeda91714844f697"
+    }
+  },
+  "warnings": [
+    "asset-001 is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing."
+  ],
+  "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context.",
+  "videos": [
+    {
+      "provider": "media-element",
+      "media_kind": "video",
+      "title": "Quarterly training video",
+      "source_url": "<STANDIN>/sample-video.mp4",
+      "duration_seconds": null,
+      "poster_url": null,
+      "poster_asset": "asset-001",
+      "caption_tracks": [
+        "captions:en"
+      ],
+      "tracks": [
+        {
+          "kind": "captions",
+          "srclang": "en",
+          "label": "English captions",
+          "source_url": "<STANDIN>/captions.vtt",
+          "readable": true,
+          "cues": 2,
+          "truncated": false,
+          "total_cues": 2,
+          "role": "transcript"
+        }
+      ],
+      "locator": "body > main > video",
+      "transcribed": true,
+      "transcript_provenance": "authored",
+      "note": null,
+      "directory": "videos/media-01"
+    },
+    {
+      "provider": "media-element",
+      "media_kind": "audio",
+      "title": "Operations audio briefing",
+      "source_url": "<STANDIN>/sample-audio.mp3",
+      "duration_seconds": null,
+      "poster_url": null,
+      "poster_asset": null,
+      "caption_tracks": [
+        "subtitles:de"
+      ],
+      "tracks": [
+        {
+          "kind": "subtitles",
+          "srclang": "de",
+          "label": "German subtitles",
+          "source_url": "<STANDIN>/subtitles-de.vtt",
+          "readable": true,
+          "cues": 2,
+          "truncated": false,
+          "total_cues": 2,
+          "role": "translation"
+        }
+      ],
+      "locator": "body > main > audio",
+      "transcribed": false,
+      "transcript_provenance": null,
+      "note": "This media is NOT transcribed. It declares track(s), but none of them is kind=\"captions\" — what it has is a translation rather than a transcription of what is said. The text is kept and named in the manifest as a translation, and is deliberately not inlined into content.md, so nothing downstream can retrieve it as though it were the source.",
+      "directory": "videos/media-02"
+    }
+  ],
+  "video_tally": {
+    "total": 2,
+    "documented_walkthroughs": 0,
+    "transcribed_media": 1,
+    "untranscribed_media": 1
+  }
+}

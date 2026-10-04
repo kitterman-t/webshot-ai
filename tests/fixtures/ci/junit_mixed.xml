@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="1" skipped="2" tests="5"><testcase classname="test_sample" name="test_passes" /><testcase classname="test_sample" name="test_fails"><failure message="AssertionError: capture failed with exit 5 | piped&#10;assert 5 == 0">def test_fails():
+&gt;       assert 5 == 0, "capture failed with exit 5 | piped"
+E       AssertionError: capture failed with exit 5 | piped
+E       assert 5 == 0
+
+test_sample.py:12: AssertionError</failure></testcase><testcase classname="test_sample" name="test_errors_in_setup"><error message="failed on setup with &quot;AttributeError: module 'os' has no attribute 'O_NOFOLLOW'&quot;">@pytest.fixture
+    def broken_setup():
+&gt;       raise AttributeError("module 'os' has no attribute 'O_NOFOLLOW'")
+E       AttributeError: module 'os' has no attribute 'O_NOFOLLOW'
+
+test_sample.py:6: AttributeError</error></testcase><testcase classname="test_sample" name="test_skipped_one"><skipped type="pytest.skip" message="tesseract is not installed">test_sample.py:17: tesseract is not installed</skipped></testcase><testcase classname="test_sample" name="test_skipped_two"><skipped type="pytest.skip" message="tesseract is not installed">test_sample.py:21: tesseract is not installed</skipped></testcase></testsuite></testsuites>

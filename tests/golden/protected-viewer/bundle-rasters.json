@@ -1,0 +1,14 @@
+{
+  "pages/page-001.png": {
+    "format": "PNG",
+    "width": 1275,
+    "height": 1650,
+    "mode": "RGB"
+  },
+  "pages/page-002.png": {
+    "format": "PNG",
+    "width": 1275,
+    "height": 1650,
+    "mode": "RGB"
+  }
+}
