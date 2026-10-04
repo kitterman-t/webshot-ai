@@ -26,11 +26,11 @@ from tools.golden.harness import (
     asset_digest_failures,
     chunk_digest_failures,
     chunk_pointer_failures,
+    comparable,
     compare,
     default_entrypoint,
     environment,
     manifest_digest_failures,
-    portable,
     profile_for,
     read_snapshot,
     run_case,
@@ -89,9 +89,8 @@ def main(argv: list[str] | None = None) -> int:
                 *asset_digest_failures(run),
             ]
             problems = [problem for problem in problems if problem]
-            if profile == "portable":
-                expected = portable(expected, ocr_pdf_text=case.ocr_pdf_text)
-                actual = portable(actual, ocr_pdf_text=case.ocr_pdf_text)
+            expected = comparable(expected, profile, ocr_pdf_text=case.ocr_pdf_text)
+            actual = comparable(actual, profile, ocr_pdf_text=case.ocr_pdf_text)
             problems.extend(compare(expected, actual))
             if problems:
                 failures.append(case.id)

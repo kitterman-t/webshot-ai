@@ -8,16 +8,17 @@ Two comparison profiles exist (docs/06-quality-and-testing.md):
 
 `strict`
     Everything is byte-compared after the volatile-value normalization below:
-    timestamps, absolute paths, tool versions, and the PDF's own byte size and
-    checksum.  Raster assets are compared by format and dimensions rather than
-    pixel bytes.  This is the profile that catches refactoring mistakes, and it
-    is used whenever the current environment matches the one the golden was
-    recorded in.
+    timestamps, absolute paths, tool versions (the manifest's `tool_versions`,
+    and the OCRmyPDF and pikepdf versions in the OCR engine and PDF producer
+    strings), and the PDF's own byte size and checksum.  Raster assets are
+    compared by format and dimensions rather than pixel bytes.  This is the
+    profile that catches refactoring mistakes, and it is used whenever the
+    current environment matches the one the golden was recorded in.
 
 `portable`
     Everything `strict` does, plus: OCR-derived text, confidences, and counts
-    become placeholders, and the versions in the PDF producer and OCR engine
-    strings are masked.  Tesseract and Chromium legitimately produce different
+    become placeholders, and the Chromium version in the PDF producer string
+    is masked.  Tesseract and Chromium legitimately produce different
     pixels and different words across versions, so a machine that differs from
     the recording environment checks structure rather than recognition output.
     OCR is still proven to work — by the per-case sentinel assertions, which
@@ -78,7 +79,9 @@ SKIA_RE = re.compile(r"Skia/PDF m\d+")
 #: manifest's `text_layer_engine`, and pikepdf rewrites the PDF producer when
 #: OCRmyPDF saves. They are the Skia string's counterparts on that path, so a
 #: dependency bump that changes nothing but these is not an output change
-#: (docs/09 P20-11).
+#: (docs/09 P20-11). Unlike Skia's, they are masked on `strict` too: the
+#: recorded environment holds no OCRmyPDF or pikepdf version, so updating
+#: either leaves the recording machine on `strict` (docs/09 P20-12).
 OCR_ENGINE_VERSION_RE = re.compile(
     r"\b(OCRmyPDF|pikepdf) \d+(?:\.\d+)+(?:(?:a|b|rc)\d+)?(?:\.post\d+)?(?:\.dev\d+)?"
 )
@@ -832,6 +835,20 @@ def _mask_ocr_pdf_text(files: dict[str, str]) -> dict[str, str]:
     return result
 
 
+def _mask_ocr_engine_versions(text: str) -> str:
+    return OCR_ENGINE_VERSION_RE.sub(r"\1 <VERSION>", text)
+
+
+def comparable(
+    files: dict[str, str], profile: str, *, ocr_pdf_text: bool = False
+) -> dict[str, str]:
+    """A snapshot reduced to what `profile` compares; `check.py` applies it to
+    the recorded and the captured side alike."""
+    if profile == "portable":
+        return portable(files, ocr_pdf_text=ocr_pdf_text)
+    return {name: _mask_ocr_engine_versions(text) for name, text in files.items()}
+
+
 def portable(files: dict[str, str], *, ocr_pdf_text: bool = False) -> dict[str, str]:
     """Reduce a snapshot to what is stable across Tesseract/Chromium versions.
 
@@ -874,8 +891,7 @@ def portable(files: dict[str, str], *, ocr_pdf_text: bool = False) -> dict[str, 
             rf"\g<1>{MASKED_OCR_CONFIDENCE}\g<3>", text
         )
         text = SKIA_RE.sub("Skia/PDF <VERSION>", text)
-        text = OCR_ENGINE_VERSION_RE.sub(r"\1 <VERSION>", text)
-        return text
+        return _mask_ocr_engine_versions(text)
 
     result = {name: scrub(name, text) for name, text in files.items()}
 

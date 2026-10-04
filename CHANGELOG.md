@@ -257,6 +257,11 @@ which records the measurements behind each change.
   `OCRmyPDF 17.12.1` and `pikepdf 10.12.0` and the check called it a real
   change. Both versions are now masked; the tool names are still compared.
   See docs/09 P20-11.
+- **The same bump no longer fails on the machine that recorded the goldens.**
+  The strict profile still compared those two versions, and the recorded
+  environment does not include them, so an OCRmyPDF update kept that machine
+  on `strict` and failed there. Both profiles now mask them. See docs/09
+  P20-12.
 - **No message tells a user to `pip install webshot`.** WebShot is not on
   PyPI, and `webshot` there is an unrelated project, so the office, RapidOCR,
   MCP and doctor hints that said `pip install 'webshot[...]'` would have
