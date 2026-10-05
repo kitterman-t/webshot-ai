@@ -96,6 +96,9 @@ class CaptureSettings(_Section):
     scroll_delay: float | None = None
     user_agent: str | None = None
     allow_http_errors: bool | None = None
+    #: `--require-content`: an empty capture exits 5 instead of warning. A
+    #: policy, like `[ocr] require`, so a settings file is where it belongs.
+    require_content: bool | None = None
     max_assets: int | None = None
     css: ExpandedPath | None = None
     #: Positive sense of `--no-ai-bundle`.
@@ -104,6 +107,7 @@ class CaptureSettings(_Section):
     #: Positive sense of `--no-embed-bundle`.
     embed_bundle: bool | None = None
     embed_assets: bool | None = None
+    local_paths: Literal["absolute", "relative"] | None = None
     #: Positive sense of `--no-videos`.
     videos: bool | None = None
     video_assets: bool | None = None
@@ -259,6 +263,7 @@ SETTINGS: dict[tuple[str, str], SettingTarget] = {
     ("capture", "allow_http_errors"): SettingTarget(
         "allow_http_errors", "allow_http_errors"
     ),
+    ("capture", "require_content"): SettingTarget("require_content", "require_content"),
     ("capture", "max_assets"): SettingTarget("max_assets", "max_assets"),
     ("capture", "css"): SettingTarget("extra_css", "css"),
     ("capture", "ai_bundle"): SettingTarget("ai_bundle", "no_ai_bundle", invert=True),
@@ -267,6 +272,7 @@ SETTINGS: dict[tuple[str, str], SettingTarget] = {
         "embed_bundle", "no_embed_bundle", invert=True
     ),
     ("capture", "embed_assets"): SettingTarget("embed_assets", "embed_assets"),
+    ("capture", "local_paths"): SettingTarget("local_paths", "local_paths"),
     ("capture", "videos"): SettingTarget("videos", "no_videos", invert=True),
     ("capture", "video_assets"): SettingTarget("video_assets", "video_assets"),
     ("pdf", "format"): SettingTarget("paper_format", "paper_format"),

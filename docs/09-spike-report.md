@@ -1097,6 +1097,8 @@ front door.** See P4-13.
 - **`::127.0.0.1`** (IPv4-compatible IPv6) normalises to `::7f00:1`, which
   `is_global` calls public. `ipv4_mapped` was unwrapped; `::/96` and 6to4 were
   not.
+  *Extended by P10-30:* NAT64's well-known prefix and IPv4-translated were two
+  more such forms, and `fec0::/10` a range `is_global` also calls public.
 - **Malformed bundle JSON escaped as `JSONDecodeError`, `AttributeError`, or a
   pydantic `ValidationError`** from `query_chunks` and `list_assets`, carrying
   file fragments into the agent's context. Only `manifest.json` had been
@@ -5403,6 +5405,79 @@ under `tests/` to none in those three trees, and all 726 of their files check ou
 byte-identical to their blobs. `eol=lf` was not an option: it marks the files as
 text, and the `.vtt` would be renormalized on the next add.
 
+### P10-30 — NAT64, IPv4-translated and site-local IPv6 addresses were classified public (2026-10-04)
+
+`netpolicy.is_internal` classifies an IPv6 address that spells an IPv4 one as
+that IPv4 address. P4-12 taught it three such spellings: IPv4-mapped,
+IPv4-compatible and 6to4. Every other IPv6 address went to `is_global`. On
+master at 3679fc7, under Python 3.12.14, it returned `False` (public) for all
+four of these:
+
+| Address | What it reaches |
+|---|---|
+| `64:ff9b::a9fe:a9fe` | `169.254.169.254`, the cloud metadata endpoint, through NAT64's well-known prefix (RFC 6052) |
+| `64:ff9b::7f00:1` | `127.0.0.1`, the same way |
+| `::ffff:0:7f00:1` | `127.0.0.1`, IPv4-translated (RFC 2765, SIIT) |
+| `fec0::1` | deprecated site-local (RFC 3879), the IPv6 counterpart of RFC 1918 |
+
+`is_global` reports `True` for `64:ff9b::/96` and `::ffff:0:0:0/96` whatever
+they carry, and for `fec0::/10`, which the special-purpose registry no longer
+lists. Measured identically on Python 3.11.16, 3.12.14, 3.13.12 and 3.14.8.
+The same classifier answers MCP guardrail (c) for the source and for
+`final_url` (spec §6.8c), the capture's subresource and WebSocket gate
+(P4-13, P8-10), which `--block-private-requests` turns on outside MCP, and the
+video asset downloads (P7-6). Whether a request to one of these addresses
+reaches the IPv4 target depends on a translator on the capture machine's
+network, which WebShot cannot see. It was not measured end to end; the
+classifier's job is to answer for the address a page names.
+
+Crawl4AI's GHSA-4qqr-vv2q-cmr5 (CVE-2026-53754, fixed in 0.8.8) is the same
+class: NAT64, 6to4, IPv4-mapped, IPv4-compatible and `::` reached
+`169.254.169.254` past its filter. Gotenberg's `pkg/gotenberg/outbound.go`
+(main, read 2026-10-04) refuses both NAT64 prefixes, 6to4, Teredo, `::/96`
+and `fec0::/10` outright.
+
+**The fix.** NAT64's well-known prefix and IPv4-translated join the forms that
+are unwrapped: the carried IPv4 address is classified, so the metadata endpoint
+is refused and a public destination stays reachable
+(`64:ff9b::93.184.216.34` is public, as `93.184.216.34` is). WebShot unwraps
+rather than refusing the range as Gotenberg does, as it already did for 6to4
+(P4-12): on an IPv6-only network, NAT64's well-known prefix is how a public
+IPv4 site is reached. The multicast rule applies to the unwrapped address, so
+`64:ff9b::efff:fffa` (SSDP) is refused. Three IPv6 ranges are now refused
+whole, before any unwrapping: `fec0::/10`, `64:ff9b:1::/48` and `2001::/32`.
+
+**Two the task named were already refused, and unwrapping them would have
+opened them.** Local-use NAT64 (`64:ff9b:1::/48`, RFC 8215) and Teredo
+(`2001::/32`, RFC 4380) are not global by Python's registry on all four
+versions above, so master already refused `64:ff9b:1::a9fe:a9fe` and the
+Teredo address whose client is `169.254.169.254`. It refused
+`64:ff9b:1::93.184.216.34` and a Teredo address with the public client
+`93.184.216.34` too. Classifying them by what they carry, as the five
+spellings are, would have turned those two refusals into acceptances. Neither
+can be unwrapped faithfully anyway: inside the /48 the operator picks the
+prefix length, so where the IPv4 address sits (RFC 6052 §2.2) is a fact about
+the deployment, not the address; and a Teredo address is a tunnel endpoint
+carrying a server and an obfuscated client address. Both ranges are named so
+that their refusal no longer rests on Python's copy of the registry alone.
+
+**Tests.** `tests/test_mcp_boundaries.py`. `INTERNAL_SPELLINGS` gains the four
+addresses above, `64:ff9b::169.254.169.254`, `::ffff:0:a9fe:a9fe`,
+`64:ff9b::efff:fffa`, `64:ff9b:1::a9fe:a9fe` and the same address at the
+/48's own offset (`64:ff9b:1:a9fe:a9:fe00::`), the Teredo address carrying
+`169.254.169.254`, and `::`. The source check, the redirect check and the
+operator opt-in run over each. Against master's `netpolicy.py`, 14 of those
+cases fail: the seven NAT64, IPv4-translated and site-local spellings, under
+the source check and under the redirect check. The local-use NAT64, Teredo and
+`::` spellings pass on master and are pinned here.
+`test_an_ipv6_address_carrying_a_public_ipv4_one_is_classified_by_its_form`
+holds the public half: the five spellings carrying `93.184.216.34` are public,
+and the /48 and Teredo carrying it are not. `test_public_targets_still_pass`
+gains `https://[64:ff9b::93.184.216.34]/`. No golden moves.
+
+Not in scope: DNS rebinding, which docs/guide/mcp.md already names as outside
+this guardrail.
+
 ## P14 — a signed-in reading page, captured from a browser export (2026-09-06)
 
 Captures of a signed-in reading page, exported from the browser and captured for
@@ -5419,7 +5494,8 @@ captured it: **exit 0, 1 page, 35.4 KB, `text_characters: 0`, `items: 0`,
 `warnings: []`**, `content.md` and `content.txt` one byte each, `chunks.jsonl`
 empty. Nothing in the report or the manifest says the capture is empty. The
 "absence must not read as success" trap in CLAUDE.md, in the pipeline's own
-output. Flagged for a fix with a fixture; not fixed here.
+output. Flagged for a fix with a fixture; not fixed here. Fixed in P22-2, which
+also found that the web path records `text_characters: 1` for such a page, not 0.
 
 ### P14-2 — Tesseract on an icon-heavy diagram
 
@@ -5660,6 +5736,131 @@ heading is the document's. None of the eleven other feedback views had one.
 
 One further fact from the same run: the chunker's behaviour is WebShot's, not
 the site's. A heading whose section has no body reaches no chunk.
+
+### P14-56 — a subscript was split from its base on every text surface but the PDF
+
+A statistics course writes H₀ and Hₐ as `H<sub>0</sub>`: 24 subscripts across
+six pages. The PDF drew H₀, and its text layer read "H0". The bundle did not: `content.md` read
+`**null hypothesis (H** **0** **):**`, and `content.txt` and `chunks.jsonl`
+read "H 0". A search for "H0" found the PDF and nothing in the bundle, and a
+word check comparing the bundle with the page refused all six ("content.txt is
+missing 12 words in order, first: ['H0', 'Ha', …]"). `content.json` was lossless: the "0"
+is its own text item with `formatting.script` "sub".
+
+Two upstream facts combine. docling-slim 2.130's HTML backend normalizes each
+text node with `" ".join(text.split())`, so whether whitespace separated a node
+from the next one is gone before any item exists. docling-core 2.96 then joins
+an inline group's parts with a space, in the Markdown, plain-text and chunking
+serializers alike, and joins the parts of an element it flattens into one
+string (a heading, a table cell) with a space as well.
+
+The fact therefore has to travel through the backend in the text itself. The
+bridge, the only module that imports docling, now marks the parsed copy of the
+page before conversion: U+FDD0 at the start of a sub/superscript's text where
+nothing separates it from the text before, and U+FDD1 at the end where nothing
+separates it from the text after. Both are Unicode noncharacters, kept by the
+standard for a program's internal use. After conversion the bridge removes
+every marker from every text item and table cell, notes which items they
+opened or closed, and removes the backend's space beside a marker inside a
+flattened string. Its inline serializer then joins touching parts with
+nothing. A plain script takes the emphasis, link and inline-code backticks of
+the text it touches, and each stretch is wrapped once, because wrapping each
+part on its own gives `**(H**0**)**`, which the word check and any search read
+as two words. A script with a link or emphasis of its own keeps it: the first
+version took the neighbour's wrapping regardless, and review found it turned
+`claim<sup><a href="#fn1">1</a></sup>` into "claim1" in Markdown with no
+warning. It is now `claim[1](#fn1)`, and `H<sub><em>1</em></sub>` is `H*1*`. The six pages now read `**null hypothesis (H0):**`,
+`| **Null hypothesis (H0)** |` and `**H0**: μ = 300` in Markdown, and "(H0)" in
+`content.txt` and every chunk. A script the source spaced keeps its space:
+`note <sup>1</sup>` is still "note 1".
+
+Markdown keeps no subscript markup. GFM has none, `~0~` is strikethrough in
+GFM, and `H<sub>0</sub>` reads "H", "sub", "0" to every word-based search,
+which is the defect again. `content.json` keeps the script for a reader that
+needs it, and "H0" is what a browser's own text and the PDF's text layer say.
+
+Two traps were measured on the way. Given bytes that declare no encoding and
+carry the markers, BeautifulSoup's charset detection chose cp775 or cp949 and
+garbled the text around them. A WebShot snapshot always declares UTF-8, but the
+marked copy now opens with a byte-order mark, so detection has nothing to
+guess. docling also hashes its input for `content.json`'s
+`origin.binary_hash`, and the marked bytes moved it. The input document is now
+the page as given and only the backend parses the marked copy, so on all six
+pages `content.json` is byte-identical to the one delivered before. In
+`content.md` and `content.txt` only lines holding a subscript changed; in
+`chunks.jsonl` only the text of a chunk holding one, and that chunk's own
+digest. No chunk id, item list or heading moved.
+
+No golden case contains `<sub>` or `<sup>`, and the corpus check passed with
+nothing re-recorded. `tests/fixtures/script_joins.html` holds the measured
+markup, a flattened heading, a table header cell whose subscript is not bold
+while its base is, and a spaced superscript; its tests in
+`tests/test_docling_bridge.py` failed on master. Not changed: docling's space
+between other inline parts, as in `<b>Note</b>: text`, which still reads
+"**Note** : text". `<b>H</b><sub>2</sub>O` gives
+`**H2**O`, because the source's own emphasis ends inside the word. A page that
+already carries U+FDD0 or U+FDD1 keeps docling's spacing and says so in
+`warnings`; a marker found in a field the bridge does not rejoin is removed,
+with a warning.
+
+### P14-61 — a local capture's bundle named the capture machine's folders
+
+A page rendered from a local HTML file records that file's absolute `file:`
+URL as its `source`, and every image and link the browser resolved against it
+as a `file:` URL under the same directory. Measured on 2026-10-04 by
+extracting the embedded files of 134 delivered PDFs rendered from local
+copies, **132** carried `file:///Users/<user>/…` paths:
+
+| embedded file | where |
+|---|---|
+| `capture.json` | `source` and `final_url`, always equal |
+| `README.txt` | the "Captured from:" line |
+| `assets.json` | `visual_assets[].source_url`, every local image |
+| `links.json` | `[].url`: attachment links and in-page anchors |
+
+No other embedded file and no text layer carried it. On any other machine the
+path names nothing, and on the capturing one it puts the user's name and folder
+layout into every deliverable. WebShot's own golden harness already treats the
+checkout path as a fact about the recording machine (P7-13).
+
+Rewriting the fields after the capture is not an option: the embedded
+`assets.json` and `links.json` are byte-identical to the sidecar files whose
+SHA-256 the manifest records, and `report.json`'s `manifest_sha256` covers the
+manifest, so a caller fixing them afterwards re-implements the bundle's
+bookkeeping. The capture has to write them that way.
+
+`--local-paths relative` (default `absolute`) makes a capture of a local file
+record each `file:` URL under the source file's directory relative to it, as
+it writes the record: `source` and `final_url` as `./<page>.html`, images as
+`./<file>`, the attachment link as `./attachments/<name>`, an in-page anchor
+as `./<page>.html#section`. That is what the page's own HTML said before the
+browser resolved it. The rewrite covers `assets.json` (images, embedded media
+and its tracks), `links.json`, `page_metadata.canonicalUrl`, the `legacy/`
+files, `capture.json`, `README.txt` and the manifest. The original encoding
+is kept segment by segment, and a URL is matched by its decoded path. A
+`file://localhost` URL counts as local, any other host does not. A dot segment
+that could climb out is not rewritten.
+
+The manifest and `capture.json` then carry `"local_paths": "relative"`, and
+`README.txt` says so under "Captured from:". Without the flag the key is
+absent and every byte is what it was, so no golden moved. A `file:` URL
+outside the directory cannot be written relative without naming the folders
+above it. It is kept and counted in a warning. A last pass then reads every
+file the bundle holds, and the records the manifest adds, for the directory in
+either spelling (a `file:` URL under it, or its filesystem path), and names
+any file that still holds it in a warning. That catches a field the rewrite
+does not list, or page text quoting the path. The `source/` copy of the input
+is the caller's own file and is not read. The warnings count and name bundle
+files, never the path itself, because a warning is copied into the bundle.
+The QA report keeps absolute paths (it describes the run on this machine) and
+publishes `options.local_paths` only when it is `relative`. The PDF's own
+link annotations are Chromium's and are not rewritten. The flag is refused
+with `--protected-viewer` on a local source, whose bundle it does not reach.
+
+`tests/test_local_paths.py` fails on a tree without the option. The fixture
+`tests/fixtures/local_paths/records.json` has 15 URL shapes Chromium resolves
+under an invented capture path with a space in it, and `page.html` is a page
+that produces them.
 
 ## P16 — public pages, and a print layout that loses text (2026-09-27)
 
@@ -7375,3 +7576,134 @@ two strict snapshots that differ only in those versions, one that names a
 different engine, and two that differ only in the Chromium version. `check.py`
 now reduces both sides through the same `comparable` function the test calls.
 No golden moves.
+
+## P22: a sign-in wall and an empty page, both captured as a success (2026-10-04)
+
+P14-1 flagged an empty page that exited 0 with no warning. docs/04-spec.md §5
+item 4 had promised exit 4 for a redirect to a sign-in page since v3.0, and the
+pipeline raised it only for a 401 or a 403. Both were measured on master
+(3679fc7) with the fixtures in `tests/fixtures/landing/`, served from two
+loopback servers whose ports make them two origins. A 302 from one to the
+other's sign-in page exited 0, and the bundle held the sign-in form's 133
+characters as the page. The empty app shell exited 0 with `warnings: []`.
+
+Three tools were read for their approach, and no code was taken from any of
+them. Crawl4AI's `antibot_detector.py` (Apache-2.0) layers status codes, page
+markers and a structural check, and its docstring says false positives are
+cheap because a fallback fetch rescues them. Bellingcat's auto-archiver
+(`antibot_extractor_enricher.py`, MIT) matches URL words such as `login` and
+visible phrases such as "please log in", and skips the page. Browsertrix's
+`--failOnContentCheck` (AGPL-3.0, so its interface only) lets site-specific
+behaviours fail a crawl. WebShot has no fallback, and it captures pages a
+person chose, so a false positive costs that person a capture. The wall check
+therefore keeps the spec's two signals and adds no keywords. The empty check
+is a warning, and a failure only when the caller opts in.
+
+### P22-1: a redirect to a sign-in page on another origin exits 4
+
+`capture/landing.py` compares the first URL of the navigation's redirect
+chain, as Chromium spelled it, with `page.url`. Only when the scheme, host or
+port differs does it read the page, looking for a visible password field in
+the document and its open shadow roots. Visible means laid out with a size,
+not hidden by CSS, and not parked off the page. Both signals together exit 4,
+with guidance that names `--storage-state` and `--auth-profile`, and says to
+give the landed page's address directly if that page is the one meant. A
+capture that was not redirected never reads the page, so it pays nothing.
+
+The check runs after every wait and after `--interactive-auth`'s prompt, so a
+person who signed in is not refused. One wait needed its own handling. A
+sign-in page has none of the page's elements, so under `--wait-for` an expired
+session timed out first and exited 3, "never became visible". That sent the
+reader to the selector when the session was the problem, the same defect
+`journey/walk.py` corrects for its progress figure. A `--wait-for` timeout on a
+sign-in wall is now exit 4. Under `--interactive-auth` it stays 3, because that
+wait comes before the prompt and the wall is expected there.
+
+Each signal has a fixture that holds it without the other. The sign-in page
+asked for directly is captured. A redirect to an article whose header holds a
+collapsed sign-in form and an off-page autofill trap is captured too. The rule
+can still refuse a real page: one on another origin that shows a sign-in box
+beside its content, reached when `example.com` sends the browser to
+`www.example.com`. The message covers that case, because giving the landed
+address directly captures it.
+
+A page that cannot be read is not a page without a wall. The first version
+returned the same "no wall" for both, so a navigation that destroyed the
+document mid-read let the capture through with no warning; review caught it.
+`sign_in_wall` now returns a `WallCheck` with a landed URL or a reason it
+could not read. It reads twice, the second time after the document loads,
+taking the URL again, because the usual cause is a navigation still in
+flight. Two failures are a manifest warning that the check did not run.
+
+Not detected, and said in the spec: a sign-in page on the same origin, a
+password field inside a frame, and a sign-in flow that asks for the user name
+on one page and the password on the next. The last is how several large
+identity providers work, so the first page of their flow is captured as a page.
+It is not empty, so P22-2 does not catch it either.
+
+**Tests.** `tests/test_landing.py`: the origin rule as a table (scheme, host,
+port, a default port spelled out, a host in capitals, `file:`, an invalid
+port), and three captures through the real CLI: the wall (exit 4, the report's
+`error`, nothing published), the page asked for directly (exit 0) and the
+hidden fields (exit 0). A stand-in page whose read fails twice, once, and once
+before moving back to the first origin covers the retry. A real capture
+whose page read throws carries the warning in the manifest and the report. The `--wait-for` case runs through `convert_url_to_pdf`,
+because the wait's limit is the operation timeout, a build constant the command
+line cannot shorten. No golden moves: no corpus case is redirected across
+origins.
+
+### P22-2: an empty capture is a warning, and under `--require-content` exit 5
+
+After the bundle and the video enrichment, and before the render, the pipeline
+checks the bundle's own counts. If `content.txt` holds fewer than 50
+characters of text, the page showed no visual and there is no video record,
+the manifest and the QA report carry a warning. "Showed" counts the visuals
+past `--max-assets` and those whose capture failed, as well as the saved
+assets; `capture_visual_assets` now returns that count. Review caught the
+first version counting saved assets only, which said "no image" of a
+picture-only page under `--max-assets 0` and refused it under
+`--require-content`. The same fix found `failed` already in use further down
+that function for the scroll restore, which would have reset the new count
+to 0; the test of a failed capture is what showed it. It says what the capture holds,
+what usually causes it, and which flags address it. 50 is the figure Crawl4AI
+uses for minimal visible text. The fixtures put realistic pages on each side of
+it. The app shell holds 0 characters. A page stuck on "Loading…" holds 10;
+docling writes the ellipsis as three full stops. A help-desk notice of one
+heading and one sentence holds 64, and is not flagged. A page that is only a
+diagram holds 0 characters and one visual asset, and is not flagged either.
+The golden corpus's smallest page holds 202, so no golden moves.
+
+`--require-content` makes the same finding exit 5, raised before the render, so
+neither the PDF nor the bundle is published. 5 rather than 3 by the line §3
+draws: the page loaded and the capture ran, and what came out cannot be taken
+as the page. The check reads the bundle, so `--require-content` with
+`--no-ai-bundle` is refused as contradictory (exit 2). As with `--require-ocr`
+and `--no-ocr` (P8-66), whichever of the pair the command line names wins over
+a setting that contradicts it. The protected-viewer path publishes from inside
+its builder and checks its pages against the viewer's count, so there the flag
+is warned-and-ignored. The QA report's `options` carries `require_content:
+true` only when it was on, so every existing report keeps its bytes. The flag
+is also `[capture] require_content` and `WEBSHOT_CAPTURE_REQUIRE_CONTENT`.
+
+One measurement did not match P14-1. On master the empty shell records
+`text_characters: 1`, the newline `content.txt` ends with. `text_characters` is
+that file's length (P20-4), and `content.txt` has been the text plus one
+newline since the docling swap (b1b967b, 2026-08-19). So a web-path capture of
+an empty page after that commit records 1, while P14-1, measured on 2026-09-06,
+recorded 0. The page P14-1 captured is not in the repository, so the
+difference cannot be re-measured here. `text_characters` is left as defined: changing it
+would move every golden for a documented field. The check instead reads the
+text without the newline, carried as `AIBundleResult.page_text_characters`
+and not published.
+
+Not covered: a `--no-ai-bundle` run, which records no counts at all, and the
+protected path.
+
+**Tests.** `tests/test_landing.py`: the threshold at 49 and 50, a picture or a
+video with no text, the warning against the failure, the contradiction, the
+precedence in both directions, the protected-path warning, and real captures of
+all four fixtures, plus the picture-only page under `--max-assets 0`.
+`tests/test_asset_cap.py` asserts the returned count past the cap and for
+captures that fail. The empty shell under `--require-content` exits 5 and leaves
+no PDF, bundle, staging directory or temporary file. `tests/test_exit_codes.py`
+now reaches 5 through a real invocation as well.

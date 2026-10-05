@@ -18,6 +18,17 @@ which records the measurements behind each change.
 
 ### Added
 
+- **`--local-paths relative` keeps the capture machine's folders out of a
+  local capture's bundle.** A page rendered from a local file recorded its own
+  absolute `file:` URL, and every image and link under it, in `capture.json`,
+  `README.txt`, `assets.json` and `links.json`, so each deliverable carried the
+  capturing user's name and folder layout. With the option those URLs are
+  written relative to the page's directory (`./page.html`, `./images/a.png`)
+  as the bundle is written, so the manifest's digests still describe its
+  files. A URL outside that directory is kept and counted in a warning, and a
+  last pass names any bundle file that still spells the directory. The default
+  is unchanged. See docs/09 P14-61.
+
 - **`webshot journey <URL>` walks a training journey and captures every module
   in it.** A journey on Continu, a learning-management platform, is a
   single-page application: five levels of accordion — journey, section, track,
@@ -147,6 +158,16 @@ which records the measurements behind each change.
 
 ### Security
 
+- **NAT64, IPv4-translated and site-local IPv6 addresses are internal.** The
+  private-network check classified `64:ff9b::a9fe:a9fe`, the NAT64 spelling of
+  the cloud metadata endpoint `169.254.169.254`, as public, along with
+  `64:ff9b::7f00:1`, `::ffff:0:7f00:1` and `fec0::1`. It now classifies an
+  IPv6 address in either translation form as the IPv4 address it carries, so a
+  public site reached through NAT64 stays reachable, and refuses deprecated
+  site-local `fec0::/10` whole. Local-use NAT64 and Teredo were already
+  refused and are now named, so that no longer depends on Python's address
+  registry. This covers MCP captures, `--block-private-requests` and the video
+  asset downloads. See docs/09 P10-30.
 - **pyjwt 2.15.1 and urllib3 2.8.0**, up from 2.13.0 and 2.7.0, which clears
   16 published advisories the vulnerability audit reported against the lock.
 - **Authentication profiles are owner-only on Windows too.** There the CLI's
@@ -242,6 +263,27 @@ which records the measurements behind each change.
   rather than beforehand.
 
 ### Fixed
+
+- **A redirect to a sign-in page on another site exits 4.** The spec promised
+  this since 3.0, and only a 401 or 403 did it: a site that sent a browser with
+  no session to its identity provider was captured, sign-in form and all, with
+  exit 0. The run now exits 4 when the page it lands on is on another origin
+  and shows a password field, and says to pass `--storage-state` or
+  `--auth-profile`. A `--wait-for` that times out on such a page is exit 4 too,
+  not 3. A sign-in page asked for directly is still captured. See docs/09
+  P22-1.
+- **An empty capture is no longer a silent success.** A page that rendered no
+  image, no video and fewer than 50 characters of text, such as an app shell
+  whose script never ran, now carries a manifest warning saying so. The new
+  `--require-content` (also `[capture] require_content`) makes it exit 5
+  instead, with nothing published. See docs/09 P14-1 and P22-2.
+- **A subscript or superscript stays on the word it belongs to.**
+  `H<sub>0</sub>` read "H0" in the PDF's text layer but "H 0" in `content.txt`
+  and every chunk, and `**(H** **0** **)**` in `content.md`, because the
+  docling backend and serializers join inline parts with a space. The bridge
+  now carries "nothing separated these" through the conversion, so the text
+  surfaces read "H0" and a search finds the bundle as well as the PDF;
+  `content.json` still records the script. See docs/09 P14-56.
 
 - **Tesseract no longer stalls when several pages are read at once.** WebShot
   recognizes pages and assets in parallel, and an OpenMP build of Tesseract

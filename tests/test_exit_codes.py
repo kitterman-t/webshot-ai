@@ -1,12 +1,12 @@
 """docs/04-spec.md §3: one exit code per failure, and v3 never exits 1.
 
 Phase 5.1's audit is only real if every code in the table is exercised, so this
-file covers all ten.  Seven of them — 0, 2, 3, 4, 6, 8, 9 — are reached by
+file covers all ten.  Eight of them — 0, 2, 3, 4, 5, 6, 8, 9 — are reached by
 running the actual command line against a fixture or a loopback server, which
 is the only kind of proof that also covers the wiring between the pipeline, the
 CLI and the QA report.  The two that a faithful trigger cannot reach without
-either a real SharePoint tenant (5) or a deliberately corrupt PDF/A (7) are
-fault-injected at the real function that classifies them.
+either a real SharePoint tenant (5's page-count check) or a deliberately
+corrupt PDF/A (7) are fault-injected at the real function that classifies them.
 
 The second half of the audit is the QA report: before Phase 5 a failing run
 wrote no report, so `exit_code` was 0 in every report that existed.  Every case
@@ -640,6 +640,24 @@ def test_five_is_a_composition_that_does_not_add_up(tmp_path: Path) -> None:
     (pages / "page-003.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     with pytest.raises(CaptureIntegrityError):
         _verified_pages(pages, 2)
+
+
+@pytest.mark.browser
+def test_five_is_also_an_empty_capture_under_require_content(tmp_path: Path) -> None:
+    """The route to 5 a command line can take (spec §5 item 14, docs/09 P22-2)."""
+    empty = REPO_ROOT / "tests" / "fixtures" / "landing" / "empty_shell.html"
+    code, written = _run(
+        tmp_path,
+        str(empty),
+        "--output",
+        str(tmp_path / "empty.pdf"),
+        "--no-ocr",
+        "--require-content",
+    )
+    assert code == 5
+    assert written["exit_code"] == 5
+    assert "--require-content was given" in str(written["error"])
+    assert not (tmp_path / "empty.pdf").exists()
 
 
 def test_seven_is_a_pdf_that_cannot_be_published(tmp_path: Path) -> None:

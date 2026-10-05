@@ -227,7 +227,16 @@ async def capture_visual_assets(
     #: contain, and this function is where the promise is either kept or
     #: quietly broken (docs/09 P8-44).
     require_ocr: bool = False,
-) -> tuple[list[VisualAsset], list[str]]:
+) -> tuple[list[VisualAsset], list[str], int]:
+    """Save the visuals the page shows, and say what was left out.
+
+    Returns the saved assets, the warnings, and how many visuals the bundle
+    does not hold although the page may show them: those past `--max-assets`,
+    and those whose capture failed. A failure can come before the element was
+    judged visible, so it is counted rather than assumed hidden. The
+    empty-capture check reads this, because "no image" is false of a page
+    whose pictures were capped away (docs/09 P22-2).
+    """
     assets_directory.mkdir(parents=True, exist_ok=True)
     warnings: list[str] = []
     assets: list[VisualAsset] = []
@@ -248,6 +257,8 @@ async def capture_visual_assets(
     over_cap = 0
     #: Why the candidates past the cap in a frame could not be counted.
     uncounted: list[str] = []
+    #: Candidates whose capture raised, shown or not.
+    capture_failures = 0
 
     for index in range(len(found)):
         element = _locate(page, found[index]["frames"], index)
@@ -419,6 +430,7 @@ async def capture_visual_assets(
                 },
             )
         except PlaywrightError as exc:
+            capture_failures += 1
             warnings.append(f"Could not capture visual element {index + 1}: {exc}")
     if over_cap:
         # "At least" when a frame could not be counted: the number is then a
@@ -449,4 +461,4 @@ async def capture_visual_assets(
             f"put back ({problem}), so a scrolling box or a frame may print "
             "scrolled to a visual rather than where the page had it."
         )
-    return assets, warnings
+    return assets, warnings, over_cap + capture_failures

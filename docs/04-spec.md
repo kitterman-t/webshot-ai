@@ -41,10 +41,12 @@ this document listed a flag (`--custom-css`) that does not exist.
 | `--report`, `--debug-screenshot`, `--verbose`, `--version` | unchanged | `--report` schema v2 |
 | *(new)* `--ocr-engine` | new | `tesseract` (default) or `rapid` (RapidOCR, `webshot[ocr-rapid]`, pip-only). `--ocr-psm` is Tesseract-specific and is warned-and-ignored under `--ocr-engine rapid`; `--ocr-engine rapid` is itself warned-and-ignored on `--protected-viewer`, whose text layer and word coordinates come from OCRmyPDF/Tesseract. Per-asset records name the engine that produced them |
 | *(new)* `--require-ocr` | new | missing OCR becomes exit 6; without it, degradation is a manifest warning. Checked before the browser opens, against the engine that will actually run — Tesseract on `--protected-viewer`, whatever `--ocr-engine` names elsewhere. `--require-ocr` with `--no-ocr` is contradictory → exit 2. Also `[ocr] require` / `WEBSHOT_OCR_REQUIRE` |
+| *(new)* `--require-content` | web path | an empty capture becomes exit 5 with nothing published; without it, an empty capture is a manifest warning (§5 item 14). Reads the bundle's counts, so `--require-content` with `--no-ai-bundle` is contradictory → exit 2. Warned-and-ignored on `--protected-viewer`, which checks its pages against the viewer's page count instead. Also `[capture] require_content` / `WEBSHOT_CAPTURE_REQUIRE_CONTENT` (docs/09 P22-2) |
 | *(new)* `--pdfa` | **protected path only** | web path rejected — PDF/A conversion strips Chromium's tags (spike-proven, ADR-0010 / docs/09 S7) |
 | *(new)* `--validate-pdf` (optionally `=strict`) | veraPDF if available | validates against the flavour the file itself declares; absent veraPDF → warning; a file declaring no PDF/A → warning (nothing to validate); non-conformant → report + warning; `strict` → exit 7 |
 | *(new)* `--no-embed-bundle` | web path | by default the bundle is carried inside the PDF as associated files, so one file is the whole deliverable; this restores the PDF-plus-directory shape |
 | *(new)* `--embed-assets` | web path | also embed the binary visual assets (larger file; the images are already visible in the rendered pages and `assets.json` carries their recognized text) |
+| *(new)* `--local-paths` `relative` (default `absolute`) | web path, local sources | records a local source's `source` and `final_url`, and every `file:` URL under the source file's directory that the bundle records (images and media in `assets.json`, `links.json`, `page_metadata.canonicalUrl`, the `legacy/` files, `README.txt`), relative to that directory (`./page.html`, `./images/a.png`) instead of as the capturing machine's absolute paths; the manifest and the embedded `capture.json` then say `local_paths: "relative"`, and without the flag that key is absent and the bundle is byte for byte what it was. Written that way rather than rewritten afterwards, so every digest describes the bytes the bundle holds. A `file:` URL outside the directory is kept and counted in a warning, and a bundle file that still names the directory anywhere is named in a warning. The PDF's own link annotations and the QA report keep their paths. Refused with `--protected-viewer` on a local source, whose bundle it does not reach (docs/09 P14-61) |
 | *(new)* `--no-videos` | web path | skips reading the walkthroughs of videos embedded in the page. Enrichment is on by default because on a page whose procedure lives inside a player the walkthrough *is* the content; with this flag the capture is exactly what it was before the feature existed, including every byte of the bundle. A page with no embedded video pays one DOM read |
 | *(new)* `--video-assets` | web path | also downloads each embedded video's step clips and source recording into the bundle. Off by default, and not for size: an agent cannot watch a video, the stills and the narration already carry the procedure, and unplayable media is bulk rather than content. Warned-and-ignored where there is no bundle to write into (`--no-ai-bundle`, `--protected-viewer`) |
 | *(new)* `--legacy-bundle` | **ships in v3.0, removed in v3.1** | emits v2-format artifacts under `legacy/` inside the bundle, listed in the manifest with `legacy: true` |
@@ -179,8 +181,8 @@ capture plus the verdict that made it exit 7.
 | 0 | success |
 | 2 | usage / config error |
 | 3 | navigation or readiness failure (timeout, unreachable host, refused status) |
-| 4 | authentication required (HTTP 401/403), or the auth material was rejected |
-| 5 | capture integrity failure (e.g., protected page-count mismatch) |
+| 4 | authentication required (HTTP 401/403, or a redirect to a sign-in page, §5 item 4), or the auth material was rejected |
+| 5 | capture integrity failure (e.g., protected page-count mismatch, or an empty capture under `--require-content`, §5 item 14) |
 | 6 | OCR required but unavailable (only when OCR explicitly required) |
 | 7 | PDF render/validation failure |
 | 8 | bundle build/publish failure |
@@ -211,8 +213,10 @@ place the table is written down — `--help`'s epilogue and
 `tests/test_exit_codes.py` both read it, and that test also asserts this table
 lists exactly the same codes.
 
-**Coverage.** Every code is exercised. 0, 2, 3, 4, 6 and 9 are reached by a real
-`webshot` invocation against a fixture or a loopback server. 5, 7 and 8 are
+**Coverage.** Every code is exercised. 0, 2, 3, 4, 5, 6 and 9 are reached by a
+real `webshot` invocation against a fixture or a loopback server: 4 by a 401
+and by a redirect to a sign-in page on a second loopback origin, 5 by an empty
+page under `--require-content` (docs/09 P22). 5's other trigger, 7 and 8 are
 driven through the real code that classifies them with the fault injected: a
 faithful trigger needs a SharePoint tenant that lies about its page count, a
 PDF/A corrupted on purpose, or a disk that fills between the staging write and
@@ -302,6 +306,21 @@ there with its reason, and the run's job summary lists every skip.
    landing on an authentication wall (password field present, different
    origin) exits 4 with guidance. `--allow-http-errors` governs 4xx/5xx
    capture, as in v2.
+   Both signals, and only both: the page the browser ended on has a
+   different scheme, host or port from the first URL of the navigation, and
+   a password field in its document or an open shadow root is visible (laid
+   out, not hidden by CSS, not parked off the page). A sign-in page asked for
+   directly is captured, and so is a redirect to a page whose password fields
+   are hidden. The check runs after every wait and after `--interactive-auth`'s
+   prompt; under `--wait-for`, a wait that times out on such a page is exit 4
+   rather than 3. A landed page that cannot be read, tried twice, is a
+   manifest warning that the check did not run, never a pass. The guidance
+   names `--storage-state` and `--auth-profile`,
+   and says to give the landed page's address directly if it is the page
+   meant. Detection only: nothing is submitted to the page (docs/11). Not
+   detected: a sign-in page on the same origin, a password field inside a
+   frame, and a sign-in flow that asks for the user name before it shows a
+   password field (docs/09 P22-1).
 5. **Overlay policy (was undocumented in v2):** `clean` mode hides
    cookie/consent overlays and records the hidden-element count in the
    manifest; `faithful` mode hides nothing. Capture is an act of record —
@@ -427,6 +446,16 @@ there with its reason, and the run's job summary lists every skip.
     beside the record that holds its confidence, and the v2.2 layout under
     `legacy/` keeps the form v2.2 wrote. No confidence threshold keeps
     recognized text off a reading surface (docs/09 P20-4).
+14. **An empty capture:** a capture whose `content.txt` holds fewer than 50
+    characters of text, not counting the newline the file ends with, whose
+    page showed no visual (saved, past `--max-assets`, or failed to save) and
+    which has no embedded video, MUST carry a manifest warning
+    saying so and naming the remedies. `--require-content` makes it exit 5
+    instead, refused before the render, so neither the PDF nor the bundle is
+    published. The check reads the bundle, so it does not run under
+    `--no-ai-bundle`, where nothing records a count either. The figure is the
+    one Crawl4AI's structural check uses for minimal text; a one-sentence page
+    clears it (docs/09 P14-1, P22-2).
 
 ## 6. Security requirements (carried forward and new; all MUST)
 
@@ -464,7 +493,7 @@ rule below is a MUST, is deny-by-default, and has a test that proves the refusal
 |---|---|
 | 6.8a | Filesystem reads are confined to the configured roots, resolved **through symlinks**. Refused: an absolute path outside every root, `..` traversal, and a symlink inside a root pointing out of it. `~` is not expanded in caller-supplied paths. A `file:` URL that names a host other than `localhost` is refused, because the check reads the path and on Windows that URL is a UNC path on the named machine (docs/09 P10-24). Paths a *manifest* names are validated identically — a bundle's own records describe a captured page |
 | 6.8b | Captures write only under `[mcp] output_root`. No MCP parameter selects an output path; the destination is computed from the server's root and the source's slug |
-| 6.8c | MCP-initiated captures refuse private, loopback, and link-local targets by default — RFC1918, 127/8, 169.254/16, ::1, fd00::/8, and, because the rule is `not is_global` rather than an enumeration, CGNAT and the documentation, benchmarking and future-use blocks too (docs/09 P4-11). A host is classified under **every** reading it has — the strict literal, the `inet_aton`/WHATWG legacy literal a browser applies, and the resolver's — and one internal reading refuses it, because the readings disagree in both directions (`0177.0.0.1` is loopback to a browser and public to `getaddrinfo`). Every address a name resolves to is checked; an unresolvable name is refused rather than attempted. Opt-in with `[mcp] allow_private_networks = true` for the legitimate localhost-dashboard case. After the capture, `final_url` is checked against the same policy, and a capture that redirected inward is **not published**. The rule also applies to what the *page* fetches: an MCP capture aborts every request to an internal address, because a guardrail that checks only the top-level URL is one an attacker walks around with an `iframe` or a `fetch()` (docs/09 P4-13). **The CLI is unchanged** — it is human-driven |
+| 6.8c | MCP-initiated captures refuse private, loopback, and link-local targets by default — RFC1918, 127/8, 169.254/16, ::1, fd00::/8, and, because the rule is `not is_global` rather than an enumeration, CGNAT and the documentation, benchmarking and future-use blocks too (docs/09 P4-11). An IPv6 address that spells an IPv4 one — IPv4-mapped, IPv4-compatible, 6to4, NAT64's well-known prefix `64:ff9b::/96`, or IPv4-translated — is classified as that IPv4 address, and `fec0::/10`, `64:ff9b:1::/48` and Teredo `2001::/32` are refused whole (docs/09 P4-12, P10-30). A host is classified under **every** reading it has — the strict literal, the `inet_aton`/WHATWG legacy literal a browser applies, and the resolver's — and one internal reading refuses it, because the readings disagree in both directions (`0177.0.0.1` is loopback to a browser and public to `getaddrinfo`). Every address a name resolves to is checked; an unresolvable name is refused rather than attempted. Opt-in with `[mcp] allow_private_networks = true` for the legitimate localhost-dashboard case. After the capture, `final_url` is checked against the same policy, and a capture that redirected inward is **not published**. The rule also applies to what the *page* fetches: an MCP capture aborts every request to an internal address, because a guardrail that checks only the top-level URL is one an attacker walks around with an `iframe` or a `fetch()` (docs/09 P4-13). **The CLI is unchanged** — it is human-driven |
 | 6.8d | No tool takes a credential-bearing parameter. Auth profiles are referenced by **name** only, resolved through `[mcp.auth_profiles]`; a path-, JSON-, or whitespace-shaped value is refused before the lookup, and an argument the tool never declared is rejected rather than silently dropped |
 | 6.8e | A profile whose first run needs a person is refused with the `webshot --interactive-auth` command to run; so is a profile that is not owner-only by §6.3's test — the directory's mode bits on POSIX, every entry's owner and DACL on Windows — and the refusal names the entry and the fix (§6.3, enforced here) |
 | 6.8f | One capture at a time per server instance, queued, with progress notifications |

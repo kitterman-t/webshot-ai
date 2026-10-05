@@ -101,6 +101,14 @@ class CaptureOptions:
     #: recognized text, so the pixels are a second copy for callers who want
     #: to re-inspect them, not a default that doubles the file.
     embed_assets: bool = False
+    #: How the bundle records a local source's location and the local files
+    #: its page used: as the absolute `file:` URLs the browser resolved, or
+    #: relative to the source file's own directory, so a bundle that travels
+    #: does not carry this machine's user name and folder layout (docs/09
+    #: P14-61). Absolute by default, so a capture that does not ask is what it
+    #: always was. The QA report, which describes the run on this machine,
+    #: keeps absolute paths either way.
+    local_paths: Literal["absolute", "relative"] = "absolute"
     #: Read the walkthrough of every video embedded in the page and write it
     #: into the bundle and the PDF appendix. On by default: on a page whose
     #: procedure lives inside a player, the walkthrough *is* the content, and a
@@ -130,6 +138,12 @@ class CaptureOptions:
     #: manifest says what it lacks. A caller that is building a searchable
     #: archive needs the opposite, and cannot get it from a warning.
     require_ocr: bool = False
+    #: Turn an empty or nearly empty capture from a manifest warning into exit
+    #: 5, with nothing published (docs/04-spec.md §5 item 14). Off by default
+    #: for the reason `require_ocr` is: the warning already says what the
+    #: capture lacks. A caller filing captures unattended needs the failure,
+    #: because a warning in a file nobody opens is how P14-1 went unnoticed.
+    require_content: bool = False
     ocr_language: str = "eng"
     ocr_psm: int = 11
     ocr_engine: Literal["tesseract", "rapid"] = "tesseract"
@@ -270,6 +284,15 @@ class CaptureOptions:
                 "missing recognition a failure, the other asks for no "
                 "recognition at all."
             )
+        if self.require_content and not self.ai_bundle:
+            # The check reads the bundle's own counts, so without a bundle it
+            # has nothing to read. Running the capture anyway would publish
+            # a PDF the flag promised to check and never did.
+            raise UsageError(
+                "--require-content and --no-ai-bundle contradict each other: "
+                "the content check reads the counts the AI bundle records, and "
+                "--no-ai-bundle builds none."
+            )
         if self.video_assets and not self.videos:
             # Contradictory rather than redundant: one asks for the videos'
             # own media and the other switches video enrichment off entirely,
@@ -283,6 +306,22 @@ class CaptureOptions:
             raise UsageError(
                 "--legacy-bundle emits v2-format artifacts inside the AI bundle, "
                 "which --no-ai-bundle disables; use one or the other."
+            )
+        if self.local_paths not in ("absolute", "relative"):
+            raise UsageError(
+                f"--local-paths must be absolute or relative, not {self.local_paths!r}."
+            )
+        if (
+            self.local_paths == "relative"
+            and self.protected_viewer
+            and self.source[:5].lower() == "file:"
+        ):
+            # The protected-viewer bundle is written by its own builder, which
+            # this convention does not reach; accepting the flag there would
+            # promise relative paths in a bundle that records absolute ones.
+            raise UsageError(
+                "--local-paths relative applies to the web capture path; the "
+                "--protected-viewer bundle records a local source's absolute path."
             )
         if self.extra_css and not self.extra_css.is_file():
             raise UsageError(f"CSS file does not exist: {self.extra_css}")

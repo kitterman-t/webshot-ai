@@ -22,7 +22,7 @@ import asyncio
 import json
 import shutil
 from collections.abc import Iterable, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from functools import cache
 from importlib.metadata import version as package_version
@@ -50,6 +50,7 @@ from ..extract.exports import write_chunks, write_exports
 from ..ocr.engine import OcrEngine
 from ..ocr.tesseract import OCRPage, complete_text
 from ..version import VERSION as GENERATOR_VERSION
+from .localpaths import LocalPathRecorder
 from .manifest import BUNDLE_FORMAT, VIEWER_SCHEMA_VERSION
 from .publish import (
     EmbeddedPayload,
@@ -150,12 +151,21 @@ class AIBundleResult:
     staging_directory: Path
     final_directory: Path
     assets: list[VisualAsset]
+    #: Visuals the page may show that `assets` does not hold: past
+    #: `--max-assets`, or whose capture failed. Not published; the
+    #: empty-capture check reads it (docs/09 P22-2).
+    unsaved_visuals: int
     page_metadata: dict[str, Any]
     item_count: int
     table_count: int
     link_count: int
     chunk_count: int
+    #: The length of `content.txt`, as the manifest publishes it (docs/09 P20-4).
     text_characters: int
+    #: The same text without the newline `content.txt` ends with, so 0 for a
+    #: page with no text, where `text_characters` is 1. Not published: it is
+    #: what the empty-capture check reads (docs/09 P22-2).
+    page_text_characters: int
     #: Words recognized across `assets`, counted once. Both the manifest and
     #: the QA report read it from here rather than recomputing it, which is
     #: what "one definition" in `ocr_word_count` is actually worth.
@@ -245,6 +255,7 @@ async def create_ai_bundle(
     auth_mode: AuthMode = "none",
     legacy_bundle: bool = False,
     prior_warnings: Sequence[str] = (),
+    local_paths: LocalPathRecorder | None = None,
 ) -> AIBundleResult:
     """Build the bundle. `prior_warnings` are the capture's own, carried in.
 
@@ -253,9 +264,14 @@ async def create_ai_bundle(
     cannot honour, a lazy-load pass that hit its limit — would otherwise reach
     only the QA report, which would make where a warning appears a fact about
     which function raised it rather than about what it says.
+
+    `local_paths` rewrites the resolved `file:` URLs this function records
+    as it writes them (docs/09 P14-61). It never touches `assets` or the
+    extracted blocks themselves, which later stages still read.
     """
+    recorder = local_paths or LocalPathRecorder(source)
     staging_directory.mkdir(parents=True, exist_ok=False)
-    assets, warnings = await capture_visual_assets(
+    assets, warnings, unsaved_visuals = await capture_visual_assets(
         page,
         staging_directory / "assets",
         max_assets=max_assets,
@@ -297,17 +313,25 @@ async def create_ai_bundle(
 
     blocks = extracted["blocks"]
     form_fields, embedded_media = _fidelity_records(blocks)
+    # Copies, so the records are written as the bundle records them while the
+    # captured objects keep the URLs the later stages resolve against.
+    recorded_assets = [
+        replace(asset, source_url=recorder.record(asset.source_url)) for asset in assets
+    ]
+    recorded_links = recorder.record_links(extracted["links"])
     write_json(
         staging_directory / "assets.json",
         {
             "bundle_format": BUNDLE_FORMAT,
-            "visual_assets": [asdict(asset) for asset in assets],
+            "visual_assets": [asdict(asset) for asset in recorded_assets],
             "form_fields": form_fields,
-            "embedded_media": embedded_media,
+            "embedded_media": [
+                recorder.record_media(media, "source_url") for media in embedded_media
+            ],
         },
     )
     (staging_directory / "links.json").write_text(
-        json.dumps(extracted["links"], ensure_ascii=False, indent=2) + "\n",
+        json.dumps(recorded_links, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -319,18 +343,34 @@ async def create_ai_bundle(
     (staging_directory / "accessibility.yaml").write_text(
         accessibility or "# Not available\n", encoding="utf-8", newline="\n"
     )
+    page_metadata = dict(extracted["metadata"])
+    if page_metadata.get("canonicalUrl"):
+        page_metadata["canonicalUrl"] = recorder.record(page_metadata["canonicalUrl"])
     if legacy_bundle:
         legacy_directory = staging_directory / "legacy"
         legacy_directory.mkdir()
+        recorded_source = recorder.record(source)
+        recorded_blocks = [
+            recorder.record_media(block, "sourceUrl")
+            if block["type"] == "embedded-media"
+            else block
+            for block in blocks
+        ]
         (legacy_directory / "content.json").write_text(
             legacy.legacy_content_json(
-                source, extracted["metadata"], blocks, extracted["links"], assets
+                recorded_source,
+                page_metadata,
+                recorded_blocks,
+                recorded_links,
+                recorded_assets,
             ),
             encoding="utf-8",
             newline="\n",
         )
         (legacy_directory / "chunks.jsonl").write_text(
-            legacy.legacy_chunks_jsonl(blocks, assets, source),
+            legacy.legacy_chunks_jsonl(
+                recorded_blocks, recorded_assets, recorded_source
+            ),
             encoding="utf-8",
             newline="\n",
         )
@@ -343,13 +383,15 @@ async def create_ai_bundle(
         staging_directory=staging_directory,
         final_directory=final_directory,
         assets=assets,
+        unsaved_visuals=unsaved_visuals,
         ocr_words=ocr_word_count(assets),
-        page_metadata=extracted["metadata"],
+        page_metadata=page_metadata,
         item_count=extraction.item_count,
         table_count=table_count,
         link_count=len(extracted["links"]),
         chunk_count=len(chunk_records),
         text_characters=len(extraction.text),
+        page_text_characters=len(extraction.text.strip()),
         ocr_enabled=ocr,
         ocr_settings=ocr_engine.applied_settings(language=ocr_language, psm=ocr_psm),
         auth_mode=auth_mode,
@@ -364,6 +406,7 @@ def embed_provenance(
     source: str,
     final_url: str,
     title: str,
+    local_paths: str | None = None,
 ) -> dict[str, Any]:
     """Provenance for the copy of the bundle that travels inside the PDF.
 
@@ -380,6 +423,9 @@ def embed_provenance(
         "captured_at": datetime.now(UTC).isoformat(),
         "source": source,
         "final_url": final_url,
+        # Only when set, as in the manifest: a reader holding only the PDF
+        # must be able to tell `./page.html` was written relative on purpose.
+        **({"local_paths": local_paths} if local_paths else {}),
         "title": title,
         "page_metadata": result.page_metadata,
         "auth_mode": result.auth_mode,
@@ -436,6 +482,7 @@ def finalize_ai_bundle(
     videos: Sequence[dict[str, Any]] = (),
     video_tally: dict[str, int] | None = None,
     video_appendix: dict[str, Any] | None = None,
+    local_paths: str | None = None,
 ) -> None:
     manifest: dict[str, Any] = {
         "bundle_format": BUNDLE_FORMAT,
@@ -444,6 +491,9 @@ def finalize_ai_bundle(
         "captured_at": datetime.now(UTC).isoformat(),
         "source": source,
         "final_url": final_url,
+        # Present only under `--local-paths relative` (docs/09 P14-61), so a
+        # capture that did not ask for it is byte for byte what it was.
+        **({"local_paths": local_paths} if local_paths else {}),
         "title": title,
         # The page's own metadata, as the DOM declared it — description,
         # author, keywords, canonical URL, published time. v2 carried this in

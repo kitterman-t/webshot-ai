@@ -47,6 +47,28 @@ owner-only before using it, and refuses one it cannot. Keep profiles outside
 version control, never share them, and use a separate profile for each trust
 boundary, such as each organization you sign in to.
 
+## When the session is missing or expired
+
+A site that does not recognize the browser usually does one of three things,
+and WebShot reports each one rather than capturing it as the page:
+
+- It answers 401 or 403. The run exits 4.
+- It redirects to a sign-in page on another site, such as an identity
+  provider. When that page shows a password field, the run exits 4 and names
+  the page it landed on. With `--wait-for`, a wait that times out on that page
+  is exit 4 as well, not exit 3. If the page it landed on is what you meant
+  to capture, give that address directly.
+- It serves an empty page or an app shell that never renders. The capture
+  succeeds with a manifest warning that it is empty or nearly empty: fewer
+  than 50 characters of text, and no image or video. Add `--require-content`
+  to make that exit 5 instead, with nothing published, which is what an
+  unattended job wants.
+
+Three cases are not caught, and are captured as a page: a sign-in page on the
+site's own address, a sign-in form inside a frame, and the first page of a
+sign-in flow that asks for your user name before it shows a password field.
+Check the PDF of the first capture after a session changes.
+
 ## Protected PDF viewers
 
 `--protected-viewer` captures a document that is shown only inside an

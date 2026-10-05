@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Planning a data project</title>
+  <meta name="description" content="An article whose header carries a collapsed sign-in dropdown. Its password field is in the DOM but not shown, so a redirect here is not a sign-in wall.">
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; color: #172033; margin: 0; }
+    header { display: flex; justify-content: space-between; padding: 12px 32px; background: #173f73; color: white; }
+    #account-menu { display: none; }
+    .offscreen { position: absolute; left: -10000px; top: 0; }
+    main { max-width: 720px; margin: 32px auto; padding: 0 32px; }
+  </style>
+</head>
+<body>
+  <header>
+    <span>Data Notes</span>
+    <button type="button" aria-controls="account-menu">Account</button>
+    <form id="account-menu">
+      <input name="user" type="text" aria-label="User name">
+      <input name="pass" type="password" aria-label="Password">
+    </form>
+    <input class="offscreen" name="autofill-trap" type="password" tabindex="-1" aria-hidden="true">
+  </header>
+  <main>
+    <h1>Planning a data project</h1>
+    <p>Every project starts with a question someone needs answered. Write it
+    down before collecting any data, and agree with the people who asked it on
+    what a useful answer would look like.</p>
+    <p>Then list the sources that could answer it, who owns each one, and how
+    often each is refreshed.</p>
+  </main>
+</body>
+</html>

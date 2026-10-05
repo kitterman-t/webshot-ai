@@ -20,6 +20,11 @@ versions rather than assumed (docs/09 S3 and the Phase 2 corrections):
 - The backend does not record image URIs on `PictureItem`s, so pictures are
   matched to harvested assets by document order, with a hard count check —
   a mismatch raises rather than mis-attributing OCR text.
+- The backend strips every text node and keeps no record of where the source
+  had whitespace, and docling-core's serializers join the parts of an inline
+  group with a space, so "H<sub>0</sub>" reached every text surface as
+  "H 0". Where a sub/superscript touches the text beside it is carried through
+  the backend as two marker characters (docs/09 P14-56).
 """
 
 from __future__ import annotations
@@ -28,7 +33,7 @@ import json
 import re
 import warnings
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from html.parser import HTMLParser
 from io import BytesIO
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -176,6 +181,173 @@ class _SnapshotFacts(HTMLParser):
         )
 
 
+#: Two Unicode noncharacters, which the standard keeps for a program's internal
+#: use: the first opens a sub/superscript's text that touches the text before
+#: it, the second closes one that touches the text after it.
+JOINED_BEFORE = "\ufdd0"
+JOINED_AFTER = "\ufdd1"
+_JOIN_MARKS = (JOINED_BEFORE, JOINED_AFTER)
+#: A marker with the space the backend put beside it, which the source never
+#: had: a marker is written only where no whitespace separated the two.
+_JOIN_MARK_RE = re.compile(f" ?{JOINED_BEFORE}|{JOINED_AFTER} ?")
+
+#: Stands in for a part's text, to read what a serializer wraps text in.
+_WRAPPER_PROBE = "\x00"
+
+_SCRIPT_TAGS = frozenset({"sub", "sup"})
+#: Elements a line of text runs through. Text either side of one is one run,
+#: so a sub/superscript can touch it; any other element (a block, a line
+#: break, an image) separates the two.
+_INLINE_TAGS = _SCRIPT_TAGS | frozenset(
+    {
+        "a",
+        "abbr",
+        "b",
+        "bdi",
+        "bdo",
+        "big",
+        "cite",
+        "code",
+        "data",
+        "del",
+        "dfn",
+        "em",
+        "font",
+        "i",
+        "ins",
+        "kbd",
+        "label",
+        "mark",
+        "q",
+        "s",
+        "samp",
+        "small",
+        "span",
+        "strike",
+        "strong",
+        "time",
+        "tt",
+        "u",
+        "var",
+        "wbr",
+    }
+)
+
+
+class _ScriptJoins(HTMLParser):
+    """Where each `<sub>`/`<sup>` touches the text beside it, as insertions.
+
+    A script whose text starts with no whitespace between it and the text
+    before it gets `JOINED_BEFORE` at the start of its text; one whose text
+    ends with no whitespace before the text after it gets `JOINED_AFTER` at
+    the end. Offsets are into the parsed string, and a marker goes inside the
+    script's innermost text, never into a text node of its own, which the
+    backend would make an item of.
+    """
+
+    def __init__(self, source: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self._line_starts = [0, *(match.end() for match in re.finditer("\n", source))]
+        self.marks: set[tuple[int, str]] = set()
+        self._last = ""  # the run's last character so far; "" after a separator
+        #: Per open script: the character it follows, and where its text
+        #: starts with which character, once it has any.
+        self._open: list[tuple[str, tuple[int, str] | None]] = []
+        self._text_open = False
+        self._text_end = 0
+        #: Where a closed script's text ended, until the next character says
+        #: whether the script touches it.
+        self._after_at: int | None = None
+
+    def _event(self) -> int:
+        line, column = self.getpos()
+        offset = self._line_starts[line - 1] + column
+        if self._text_open:
+            # Text runs up to the next event, so this is where it ended.
+            self._text_end = offset
+            self._text_open = False
+        return offset
+
+    def _separate(self) -> None:
+        self._last = ""
+        self._after_at = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._event()
+        if tag in _SCRIPT_TAGS:
+            self._open.append((self._last, None))
+        elif tag not in _INLINE_TAGS:
+            self._separate()
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._event()
+        if tag not in _INLINE_TAGS:
+            self._separate()
+
+    def handle_endtag(self, tag: str) -> None:
+        self._event()
+        if tag in _SCRIPT_TAGS and self._open:
+            before, first = self._open.pop()
+            if first is None:
+                return
+            offset, character = first
+            if before and not before.isspace() and not character.isspace():
+                self.marks.add((offset, JOINED_BEFORE))
+            if self._last and not self._last.isspace():
+                self._after_at = self._text_end
+        elif tag not in _INLINE_TAGS:
+            self._separate()
+
+    def handle_data(self, data: str) -> None:
+        offset = self._event()
+        if not data:
+            return
+        if self._after_at is not None:
+            if not data[0].isspace():
+                self.marks.add((self._after_at, JOINED_AFTER))
+            self._after_at = None
+        if self._open:
+            self._open = [
+                (before, first or (offset, data[0])) for before, first in self._open
+            ]
+            self._text_open = True
+        self._last = data[-1]
+
+    def handle_comment(self, data: str) -> None:
+        self._event()
+
+
+def mark_script_joins(html: str) -> str:
+    """`html` with each sub/superscript's touching edges marked for the backend.
+
+    The backend normalizes every text node with `" ".join(text.split())`,
+    which drops the one fact the serializers would need: whether "H" and its
+    "0" had whitespace between them. Characters survive it, so the fact
+    travels as one, and `extract` removes every marker once the document is
+    built. A marked page opens with a byte-order mark: given bytes with no
+    declared encoding, the backend's charset detection read the markers' bytes
+    as cp775 or cp949 and garbled the text around them.
+    """
+    parser = _ScriptJoins(html)
+    parser.feed(html)
+    parser.close()
+    if not parser.marks:
+        return html
+    marked = html
+    for offset, mark in sorted(parser.marks, reverse=True):
+        marked = marked[:offset] + mark + marked[offset:]
+    return "\ufeff" + marked
+
+
+def _marked(text: str) -> bool:
+    return JOINED_BEFORE in text or JOINED_AFTER in text
+
+
+def unmark_joins(text: str) -> str:
+    """`text` with each join marker, and the space the backend put beside it, removed."""
+    return _JOIN_MARK_RE.sub("", text)
+
+
 def _aligned(
     items: Sequence[_Item], facts: Sequence[_Fact]
 ) -> list[tuple[_Item, _Fact]] | None:
@@ -233,36 +405,76 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     from docling_core.transforms.serializer.markdown import (
         MarkdownAnnotationSerializer,
         MarkdownDocSerializer,
+        MarkdownInlineSerializer,
         MarkdownTableSerializer,
     )
     from docling_core.transforms.serializer.plain_text import PlainTextDocSerializer
     from docling_core.types.doc.document import (
+        CodeItem,
         ContentLayer,
         DocItem,
         DoclingDocument,
+        Formatting,
+        InlineGroup,
         PictureDescriptionData,
         PictureMiscData,
+        Script,
+        TextItem,
     )
     from docling_core.types.doc.labels import DocItemLabel
+
+    extraction_warnings: list[str] = []
 
     # The <title> tag would become a second, metadata-derived title item; the
     # page's own headings are the record. The element's shape is owned by
     # standalone_document, which defines the regex next to itself (the tag is
     # ours — body markup cannot contain <title>, it is not in the sanitizer's
     # allowlist).
-    docling_input = TITLE_ELEMENT_RE.sub("", sanitized_html, count=1).encode("utf-8")
+    docling_html = TITLE_ELEMENT_RE.sub("", sanitized_html, count=1)
+    # A page that carries the markers itself would have its own characters
+    # read as joins and removed, so it keeps the backend's spacing instead.
+    markable = not any(mark in docling_html for mark in _JOIN_MARKS)
+    if not markable:
+        extraction_warnings.append(
+            "the page contains U+FDD0 or U+FDD1, the characters WebShot uses to "
+            "keep a subscript or superscript joined to the text it touches, so "
+            "content.md, content.txt and chunks.jsonl separate each one from "
+            "its neighbours with a space (docs/09 P14-56)."
+        )
+    docling_input = docling_html.encode("utf-8")
     try:
+        # The input document is the page as given, so `content.json`'s origin
+        # hash is the page's; the backend parses the marked copy.
         in_doc = InputDocument(
             path_or_stream=BytesIO(docling_input),
             format=InputFormat.HTML,
             backend=HTMLDocumentBackend,
             filename="content.html",
         )
+        parsed = mark_script_joins(docling_html) if markable else docling_html
         document: DoclingDocument = HTMLDocumentBackend(
-            in_doc=in_doc, path_or_stream=BytesIO(docling_input)
+            in_doc=in_doc, path_or_stream=BytesIO(parsed.encode("utf-8"))
         ).convert()
     except Exception as exc:
         raise BundleBuildError(f"docling could not parse the snapshot: {exc}") from exc
+
+    # Take the join markers back out before anything reads a text, keeping
+    # which items they opened or closed. A marker inside a text, where the
+    # backend flattened an element into one string (a heading, a table cell),
+    # takes the backend's space with it, which joins those two in place.
+    joined_before: set[str] = set()
+    joined_after: set[str] = set()
+    if markable:
+        for item in document.texts:
+            if item.text.startswith(JOINED_BEFORE):
+                joined_before.add(item.self_ref)
+            if item.text.endswith(JOINED_AFTER):
+                joined_after.add(item.self_ref)
+            item.text = unmark_joins(item.text)
+            item.orig = unmark_joins(item.orig)
+        for table in document.tables:
+            for cell in table.data.table_cells:
+                cell.text = unmark_joins(cell.text)
 
     facts = _SnapshotFacts()
     facts.feed(sanitized_html)
@@ -278,8 +490,6 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             item.text
         ):
             item.content_layer = ContentLayer.BODY
-
-    extraction_warnings: list[str] = []
 
     # Attach <table><caption> text the backend did not keep.
     aligned_tables = _aligned(document.tables, facts.table_captions)
@@ -429,6 +639,146 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         )
         return serializer
 
+    def _wrapper(
+        serializer: Any, formatting: Formatting | None, hyperlink: Any
+    ) -> tuple[str, str]:
+        """What `serializer` writes either side of text with this formatting.
+
+        Read from the serializer itself, so it is "**" for Markdown's bold,
+        "[" and "](url)" for a link, and nothing at all for plain text.
+        """
+        probe = serializer.post_process(
+            text=_WRAPPER_PROBE, formatting=formatting, hyperlink=hyperlink
+        )
+        prefix, found, suffix = str(probe).partition(_WRAPPER_PROBE)
+        return (prefix, suffix) if found else ("", "")
+
+    def _touching(left: SerializationResult, right: SerializationResult) -> bool:
+        return bool(
+            (left.spans and left.spans[-1].item.self_ref in joined_after)
+            or (right.spans and right.spans[0].item.self_ref in joined_before)
+        )
+
+    def _unwrapped(
+        part: SerializationResult, serializer: Any
+    ) -> tuple[tuple[Formatting, Any, str], str, bool] | None:
+        """A part's wrapping, the text inside it, and whether it is a script.
+
+        The wrapping is its emphasis, its link, and an inline code item's
+        backticks. None for a part that is not one plain text or code item,
+        which is kept whole.
+        """
+        source = part.spans[0].item if len(part.spans) == 1 else None
+        # A heading, list item or formula is a TextItem too, and none of them
+        # is wrapped the way a run of text or inline code is.
+        if not isinstance(source, TextItem) or type(source) not in (TextItem, CodeItem):
+            return None
+        code = isinstance(source, CodeItem)
+        ticks = (
+            "`"
+            if code and getattr(serializer.params, "format_code_blocks", False)
+            else ""
+        )
+        prefix, suffix = _wrapper(serializer, source.formatting, source.hyperlink)
+        prefix, suffix = prefix + ticks, ticks + suffix
+        text = part.text
+        if (
+            len(text) < len(prefix) + len(suffix)
+            or not text.startswith(prefix)
+            or not text.endswith(suffix)
+        ):
+            return None
+        formatting = source.formatting or Formatting()
+        return (
+            (
+                formatting.model_copy(update={"script": Script.BASELINE}),
+                source.hyperlink,
+                ticks,
+            ),
+            text[len(prefix) : len(text) - len(suffix)],
+            formatting.script != Script.BASELINE,
+        )
+
+    def _joined_text(run: list[SerializationResult], serializer: Any) -> str:
+        """One run of touching parts as the text it was in the source.
+
+        Each part is unwrapped to the text inside its emphasis, link and
+        backticks; a plain sub/superscript then takes the wrapping of the
+        text it touches, and each stretch of one wrapping is wrapped once. Wrapping
+        each part on its own gives "**(H**0" or "`a``1`", where no reader sees
+        one word.
+        """
+        if len(run) == 1:
+            whole: str = run[0].text
+            return whole
+        pieces = [(_unwrapped(part, serializer), part.text) for part in run]
+        wrappings = [found[0] if found else None for found, _ in pieces]
+        plain = (Formatting(), None, "")
+        for index, (found, _) in enumerate(pieces):
+            # Only a plain script takes its neighbour's wrapping. One with a
+            # link or emphasis of its own keeps it: a footnote marker
+            # `word<sup><a href="#fn1">1</a></sup>` stays a link.
+            if found and found[2] and found[0] == plain:
+                before = wrappings[index - 1] if index else None
+                after = wrappings[index + 1] if index + 1 < len(pieces) else None
+                wrappings[index] = before or after or found[0]
+        out: list[str] = []
+        stretch: list[str] = []
+        current: tuple[Formatting, Any, str] | None = None
+        for (found, text), wrapping in [
+            *zip(pieces, wrappings, strict=True),
+            ((None, ""), None),
+        ]:
+            if stretch and current is not None and wrapping != current:
+                formatting, hyperlink, ticks = current
+                prefix, suffix = _wrapper(serializer, formatting, hyperlink)
+                out.append(f"{prefix}{ticks}{''.join(stretch)}{ticks}{suffix}")
+                stretch = []
+            if found is None or wrapping is None:
+                out.append(text)
+            else:
+                stretch.append(found[1])
+                current = wrapping
+        return "".join(out)
+
+    class _JoinedInline(MarkdownInlineSerializer):
+        """docling's inline group, without the space it puts beside a sub/superscript.
+
+        docling-core joins an inline group's parts with a space. Where the
+        source had none, beside a sub/superscript, the parts join with
+        nothing, so "H<sub>0</sub>" reads "H0" in content.md, content.txt and
+        chunks.jsonl, as it does in the PDF's text layer (docs/09 P14-56). A
+        group with no such join is joined exactly as docling joins it.
+        """
+
+        def serialize(
+            self,
+            *,
+            item: InlineGroup,
+            doc_serializer: Any,
+            doc: DoclingDocument,
+            list_level: int = 0,
+            visited: set[str] | None = None,
+            **kwargs: Any,
+        ) -> SerializationResult:
+            parts = doc_serializer.get_parts(
+                item=item,
+                list_level=list_level,
+                is_inline_scope=True,
+                visited=visited if visited is not None else set(),
+                **kwargs,
+            )
+            runs: list[list[SerializationResult]] = []
+            for part in (part for part in parts if part.text):
+                if runs and _touching(runs[-1][-1], part):
+                    runs[-1].append(part)
+                else:
+                    runs.append([part])
+            return create_ser_result(
+                text=" ".join(_joined_text(run, doc_serializer) for run in runs),
+                span_source=parts,
+            )
+
     class _TableProvider(ChunkingSerializerProvider):
         def get_serializer(self, doc: DoclingDocument) -> ChunkingDocSerializer:
             # Full-fidelity table text: the default triplet serialization drops
@@ -438,6 +788,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                     doc=doc,
                     table_serializer=MarkdownTableSerializer(),
                     annotation_serializer=_MarkedOcr(),
+                    inline_serializer=_JoinedInline(),
                 )
             )
 
@@ -529,29 +880,77 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         # which are the serializers' own, and the OCR marked.
         markdown = (
             _unpadded(
-                MarkdownDocSerializer(doc=document, annotation_serializer=_MarkedOcr())
+                MarkdownDocSerializer(
+                    doc=document,
+                    annotation_serializer=_MarkedOcr(),
+                    inline_serializer=_JoinedInline(),
+                )
             )
             .serialize()
             .text
         )
         text = (
             _unpadded(
-                PlainTextDocSerializer(doc=document, annotation_serializer=_MarkedOcr())
+                PlainTextDocSerializer(
+                    doc=document,
+                    annotation_serializer=_MarkedOcr(),
+                    inline_serializer=_JoinedInline(),
+                )
             )
             .serialize()
             .text
         )
         doctags = _doctags()
 
+    surfaces = {
+        "content.json": dump_json(document_dict),
+        "content.md": markdown.rstrip() + "\n",
+        "content.txt": text.rstrip() + "\n",
+        "content.doctags": doctags.rstrip() + "\n",
+    }
+    tables = [
+        [[cell.text for cell in row] for row in table.data.grid]
+        for table in document.tables
+    ]
+    if markable:
+        # Only the text items and table cells had their markers taken out. One
+        # that reached any other field never joined anything, so it goes, and
+        # the record says where, rather than deliver a character the page
+        # never had.
+        leaked = [name for name, value in surfaces.items() if _marked(value)]
+        if any(_marked(cell) for grid in tables for row in grid for cell in row):
+            leaked.append("tables")
+        if any(
+            _marked(seed.text) or any(map(_marked, seed.headings)) for seed in seeds
+        ):
+            leaked.append("chunks.jsonl")
+        if leaked:
+            surfaces = {name: unmark_joins(value) for name, value in surfaces.items()}
+            tables = [
+                [[unmark_joins(cell) for cell in row] for row in grid]
+                for grid in tables
+            ]
+            seeds = [
+                replace(
+                    seed,
+                    text=unmark_joins(seed.text),
+                    headings=tuple(map(unmark_joins, seed.headings)),
+                )
+                for seed in seeds
+            ]
+            extraction_warnings.append(
+                "a subscript or superscript's join marker reached a field WebShot "
+                f"does not rejoin ({', '.join(leaked)}); it was removed there, and "
+                "that text may separate the script from its neighbours with a "
+                "space (docs/09 P14-56)."
+            )
+
     return ExtractionResult(
-        document_json=dump_json(document_dict),
-        markdown=markdown.rstrip() + "\n",
-        text=text.rstrip() + "\n",
-        doctags=doctags.rstrip() + "\n",
-        tables=[
-            [[cell.text for cell in row] for row in table.data.grid]
-            for table in document.tables
-        ],
+        document_json=surfaces["content.json"],
+        markdown=surfaces["content.md"],
+        text=surfaces["content.txt"],
+        doctags=surfaces["content.doctags"],
+        tables=tables,
         chunk_seeds=seeds,
         item_count=len(document.texts) + len(document.tables) + len(document.pictures),
         picture_count=len(document.pictures),

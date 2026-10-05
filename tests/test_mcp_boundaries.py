@@ -25,6 +25,7 @@ docs/09 P4-10 and P4-11 record what this replaced.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import sys
 from pathlib import Path
@@ -374,6 +375,23 @@ INTERNAL_SPELLINGS = [
     "http://[::127.0.0.1]/",
     "http://[0:0:0:0:0:0:7f00:1]/",
     "http://[2002:7f00:1::]/",
+    # Two more ways, which `is_global` calls public whatever they carry:
+    # NAT64's well-known prefix and IPv4-translated (docs/09 P10-30).
+    "http://[64:ff9b::a9fe:a9fe]/latest/meta-data/",
+    "http://[64:ff9b::169.254.169.254]/",
+    "http://[64:ff9b::7f00:1]/",
+    "http://[::ffff:0:7f00:1]/",
+    "http://[::ffff:0:a9fe:a9fe]/",
+    "http://[64:ff9b::efff:fffa]:1900/",
+    # Ranges refused whole: deprecated site-local, which `is_global` calls
+    # public; local-use NAT64, carrying 169.254.169.254 at two of the offsets
+    # RFC 6052 allows; and Teredo, its client 169.254.169.254 (docs/09 P10-30).
+    "http://[fec0::1]/",
+    "http://[64:ff9b:1::a9fe:a9fe]/",
+    "http://[64:ff9b:1:a9fe:a9:fe00::]/",
+    "http://[2001:0:4136:e378:8000:63bf:5601:5601]/",
+    # Unspecified: the last form in Crawl4AI's GHSA-4qqr-vv2q-cmr5.
+    "http://[::]/",
 ]
 
 
@@ -408,12 +426,53 @@ def test_the_operator_opt_in_covers_the_same_set(url: str) -> None:
 
 @pytest.mark.parametrize(
     "url",
-    ["https://93.184.216.34/", "https://example.com/a", "http://example.com:8080/"],
-    ids=["public-literal", "public-name", "public-port"],
+    [
+        "https://93.184.216.34/",
+        "https://example.com/a",
+        "http://example.com:8080/",
+        "https://[64:ff9b::93.184.216.34]/",
+    ],
+    ids=["public-literal", "public-name", "public-port", "public-nat64"],
 )
 def test_public_targets_still_pass(url: str) -> None:
     """Deny-by-default has to stay usable, or it gets turned off."""
     policy.check_http_target(url, allow_private=False, resolver=only_public)
+
+
+@pytest.mark.parametrize(
+    ("address", "internal"),
+    [
+        ("::ffff:93.184.216.34", False),
+        ("::93.184.216.34", False),
+        ("2002:5db8:d822::", False),
+        ("64:ff9b::93.184.216.34", False),
+        ("::ffff:0:93.184.216.34", False),
+        ("64:ff9b:1::93.184.216.34", True),
+        ("2001:0:4136:e378:8000:63bf:a247:27dd", True),
+    ],
+    ids=[
+        "mapped",
+        "compatible",
+        "6to4",
+        "nat64",
+        "translated",
+        "nat64-local-use",
+        "teredo",
+    ],
+)
+def test_an_ipv6_address_carrying_a_public_ipv4_one_is_classified_by_its_form(
+    address: str, internal: bool
+) -> None:
+    """Five forms *are* the IPv4 address they carry, and two ranges are refused
+    whole whatever they carry.
+
+    The public half of the matrix above: unwrapping NAT64 and IPv4-translated
+    must classify what they carry, not refuse the form, and naming local-use
+    NAT64 and Teredo must not have been done by unwrapping them, which would
+    have opened these two (docs/09 P10-30). The Teredo client is
+    93.184.216.34, obfuscated as RFC 4380 specifies.
+    """
+    assert netpolicy.is_internal(ipaddress.ip_address(address)) is internal
 
 
 @pytest.mark.parametrize(

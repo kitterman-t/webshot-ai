@@ -40,10 +40,18 @@ from .bundle.build import (
     embed_provenance,
     finalize_ai_bundle,
 )
+from .bundle.localpaths import LocalPathRecorder
 from .bundle.manifest import BUNDLE_FORMAT
 from .bundle.publish import announce_replacements, publish_ai_bundle, sha256_file
 from .bundle.videos import VideoEnrichment, enrich_with_videos
 from .capture.discover import read_page
+from .capture.landing import (
+    WallCheck,
+    empty_capture_message,
+    requested_url,
+    sign_in_wall,
+    sign_in_wall_message,
+)
 from .capture.prepare import (
     BASE_PRINT_CSS,
     CLEAN_PRINT_CSS,
@@ -63,6 +71,7 @@ from .config import CaptureOptions, CaptureResult
 from .errors import (
     AuthenticationError,
     BundleBuildError,
+    CaptureIntegrityError,
     EnvironmentFailure,
     NavigationError,
     OcrUnavailableError,
@@ -248,6 +257,14 @@ def ignored_option_warnings(options: CaptureOptions) -> list[str]:
                 f"--ocr-engine {options.ocr_engine} was ignored: the "
                 "protected-viewer PDF's text layer and word coordinates are "
                 "produced by OCRmyPDF and Tesseract."
+            )
+        if options.require_content:
+            # That path checks its own output against the viewer's page count
+            # (spec §2.2) and publishes from inside the builder, so there is
+            # no point between the counts and the publication to refuse at.
+            warnings.append(
+                "--require-content was ignored: the protected-viewer path "
+                "checks its pages against the viewer's own page count instead."
             )
         if options.legacy_bundle:
             warnings.append(
@@ -576,6 +593,10 @@ async def capture_open_page(
         warnings.extend(fitted.warnings)
         clock.mark("capture")
 
+        # How the bundle spells this machine's paths. Inactive, and so the
+        # identity, unless `--local-paths relative` was asked for a local
+        # source (docs/09 P14-61).
+        local_paths = LocalPathRecorder(options.source, options.local_paths)
         if options.ai_bundle:
             ai_staging_directory = ai_final_directory.with_name(
                 f".{ai_final_directory.name}.{os.getpid()}.staging"
@@ -606,6 +627,7 @@ async def capture_open_page(
                     auth_mode=options.auth_mode,
                     legacy_bundle=options.legacy_bundle,
                     prior_warnings=warnings,
+                    local_paths=local_paths,
                 )
             # The bundle's list is now the superset, so replace rather
             # than extend — otherwise the carried-in ones appear twice.
@@ -645,6 +667,24 @@ async def capture_open_page(
                     enrichment.tally["untranscribed_media"],
                 )
                 clock.mark("videos")
+
+        if ai_result:
+            # After the videos, which count as content, and before RENDER: under
+            # --require-content nothing has been published yet, so refusing here
+            # leaves no PDF and no bundle behind (docs/04-spec.md §5 item 14).
+            empty = empty_capture_message(
+                page_text_characters=ai_result.page_text_characters,
+                # Every visual the page showed, saved or not: a page whose
+                # pictures were capped away or failed to save is not empty.
+                visuals=len(ai_result.assets) + ai_result.unsaved_visuals,
+                videos=len(ai_result.videos),
+                required=options.require_content,
+            )
+            if empty and options.require_content:
+                raise CaptureIntegrityError(empty)
+            if empty:
+                warnings.append(empty)
+                ai_result.warnings.append(empty)
 
         if options.debug_screenshot:
             options.debug_screenshot.parent.mkdir(parents=True, exist_ok=True)
@@ -745,6 +785,21 @@ async def capture_open_page(
             warnings.append(message)
             if ai_result:
                 ai_result.warnings.append(message)
+        if ai_result and local_paths.active:
+            # Last before embedding, which copies the warnings into
+            # `capture.json`: every file the bundle publishes is written by now,
+            # and these are the records the manifest adds to them.
+            for message in local_paths.warnings(
+                ai_result.staging_directory,
+                (
+                    ai_result.page_metadata,
+                    asdict(discovered),
+                    ai_result.videos,
+                    ai_result.video_appendix,
+                ),
+            ):
+                warnings.append(message)
+                ai_result.warnings.append(message)
         # Measured once, before the attachments are added — embedding does
         # not touch the structure tree, and `finalize_ai_bundle` needs the
         # same answer the README is given or the two disagree again.
@@ -761,12 +816,13 @@ async def capture_open_page(
                     collect_payloads(
                         ai_result.staging_directory,
                         title=title,
-                        source=options.source,
+                        source=local_paths.record(options.source),
                         provenance=embed_provenance(
                             ai_result,
-                            source=options.source,
-                            final_url=final_url,
+                            source=local_paths.record(options.source),
+                            final_url=local_paths.record(final_url),
                             title=title,
+                            local_paths=local_paths.convention,
                         ),
                         include_assets=options.embed_assets,
                         videos=ai_result.videos,
@@ -775,6 +831,7 @@ async def capture_open_page(
                         # surfaces in one deliverable and they contradicted
                         # each other under --no-tagged-pdf (docs/09 P8-21).
                         tagged=pdf_is_tagged,
+                        local_paths=local_paths.convention,
                     ),
                     title=title,
                     bundle_format=BUNDLE_FORMAT,
@@ -789,8 +846,9 @@ async def capture_open_page(
                     pdf_file_name=options.output.name,
                     pages=pages,
                     pdf_bytes=size,
-                    source=options.source,
-                    final_url=final_url,
+                    source=local_paths.record(options.source),
+                    final_url=local_paths.record(final_url),
+                    local_paths=local_paths.convention,
                     title=title,
                     # What the file has, not what was asked for (docs/05 1.1).
                     tagged=pdf_is_tagged,
@@ -965,6 +1023,9 @@ async def _capture(
                     f"{options.source} could not be reached: {exc}"
                     f"{certificate_hint(str(exc))}"
                 ) from exc
+            # Chromium's spelling of what was asked for, which `page.url` is
+            # compared with to tell a redirect to another origin (spec §5.4).
+            requested = requested_url(response, materialized.browser_url)
             if response:
                 http_status = response.status
                 content_type = response.headers.get("content-type", "")
@@ -990,9 +1051,27 @@ async def _capture(
                         state="visible"
                     )
                 except PlaywrightTimeoutError as exc:
+                    # A sign-in page has none of the page's elements, so an
+                    # expired session under --wait-for times out here before
+                    # the wall check below can run. Exit 3 would send the
+                    # reader to the selector when the session is the problem.
+                    # Not under --interactive-auth, whose wall is expected
+                    # until the person signs in after this wait.
+                    wall = (
+                        await sign_in_wall(page, requested)
+                        if materialized.kind == "web" and not options.interactive_auth
+                        else WallCheck()
+                    )
+                    if wall.landed:
+                        raise AuthenticationError(
+                            sign_in_wall_message(
+                                options.source, wall.landed, interactive=False
+                            )
+                        ) from exc
+                    unread = f" {wall.unread}" if wall.unread else ""
                     raise NavigationError(
                         f"--wait-for {options.wait_for_selector!r} never became "
-                        f"visible on {options.source}."
+                        f"visible on {options.source}.{unread}"
                     ) from exc
             if options.wait_after_load_s:
                 await asyncio.sleep(options.wait_after_load_s)
@@ -1013,6 +1092,25 @@ async def _capture(
                 await page.wait_for_load_state("domcontentloaded")
                 if options.wait_after_load_s:
                     await asyncio.sleep(options.wait_after_load_s)
+
+            # After every wait and after interactive sign-in, so a redirect a
+            # script makes once the page has loaded is seen, and so a person
+            # who did sign in is not refused. Before both capture paths: a
+            # sign-in page is not a page of the document either of them wants.
+            if materialized.kind == "web":
+                wall = await sign_in_wall(page, requested)
+                if wall.landed:
+                    raise AuthenticationError(
+                        sign_in_wall_message(
+                            options.source,
+                            wall.landed,
+                            interactive=options.interactive_auth,
+                        )
+                    )
+                if wall.unread:
+                    # A check that could not run has not passed (CLAUDE.md),
+                    # so the manifest says so rather than nothing.
+                    warnings.append(wall.unread)
 
             if options.protected_viewer:
                 title = (
