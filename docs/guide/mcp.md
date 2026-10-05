@@ -238,10 +238,11 @@ publish rather than a deletion after the fact.
 
 By default an MCP capture refuses any target that is private, loopback, or
 link-local: RFC1918 (`10/8`, `172.16/12`, `192.168/16`), `127/8`, `169.254/16`,
-`::1`, `fd00::/8` — plus carrier-grade NAT, IPv4-mapped IPv6, multicast, and the
-reserved blocks, because a default that errs toward refusal can be opened by an
-operator who knows their network, and one that errs toward reachability cannot
-be closed afterwards.
+`::1`, `fd00::/8` — plus carrier-grade NAT, multicast, the reserved blocks,
+deprecated site-local `fec0::/10`, and any IPv6 address that carries an internal
+IPv4 one (IPv4-mapped, NAT64, 6to4 and the other transition forms), because a
+default that errs toward refusal can be opened by an operator who knows their
+network, and one that errs toward reachability cannot be closed afterwards.
 
 Names are resolved and **every** address they answer with is checked, so one
 public answer cannot launder a loopback one. A name that cannot be resolved is

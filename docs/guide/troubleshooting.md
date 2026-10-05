@@ -50,8 +50,8 @@ a script can tell a bad flag from a timeout.
 |---|---|---|
 | 2 | usage or configuration error | a bad flag combination, a missing `--css` file, an invalid `webshot.toml`, or a second run against an output path already locked |
 | 3 | navigation or readiness failure | the page never loaded, the host was unreachable, or `--wait-for` never matched |
-| 4 | authentication required, or the auth material was rejected | the page answered 401 or 403 |
-| 5 | capture integrity failure | the protected page-count invariant did not hold |
+| 4 | authentication required, or the auth material was rejected | the page answered 401 or 403, or the site redirected to a sign-in page on another site |
+| 5 | capture integrity failure | the protected page-count invariant did not hold, or `--require-content` met an empty capture |
 | 6 | OCR was required and unavailable | `--require-ocr` with no working engine |
 | 7 | PDF render or validation failure | `--validate-pdf=strict` against a non-conformant file |
 | 8 | bundle build or publish failure | the extraction bridge could not parse the snapshot |

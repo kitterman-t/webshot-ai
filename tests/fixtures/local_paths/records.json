@@ -1,0 +1,21 @@
+{
+  "note": "Synthetic. URLs in the shape Chromium resolves them when a page is rendered from file:// (measured on 132 delivered PDFs, docs/09 P14-61): each relative reference in the page becomes an absolute file: URL under the page's own directory, percent-encoded. The capture path is invented and holds a space, as Google Drive's \"My Drive\" does. `recorded` is what --local-paths relative must write; null means the URL is recorded as it was and counted in the warning.",
+  "source": "file:///capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes/example.org_two-boxes_AbC12.html",
+  "cases": [
+    {"what": "the page itself", "url": "file:///capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes/example.org_two-boxes_AbC12.html", "recorded": "./example.org_two-boxes_AbC12.html"},
+    {"what": "an image, its encoding kept", "url": "file:///capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes/ADA_R-456_Query%20result.png", "recorded": "./ADA_R-456_Query%20result.png"},
+    {"what": "a download beside the page", "url": "file:///capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes/attachments/Reference-guide_-Two-boxes.docx", "recorded": "./attachments/Reference-guide_-Two-boxes.docx"},
+    {"what": "a jump within the page", "url": "file:///capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes/example.org_two-boxes_AbC12.html#outliers", "recorded": "./example.org_two-boxes_AbC12.html#outliers"},
+    {"what": "a query string", "url": "file:///capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes/data.csv?v=2", "recorded": "./data.csv?v=2"},
+    {"what": "the same directory spelled with localhost", "url": "file://localhost/capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes/figure.png", "recorded": "./figure.png"},
+    {"what": "the same directory, encoded differently", "url": "file:///capture machine/webshot/output/readings/example-course/AbC12-two-boxes/figure.png", "recorded": "./figure.png"},
+    {"what": "a notebook in a subdirectory", "url": "file:///capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes/notebook-1/example.org_nb_E5TwS.html#encoding", "recorded": "./notebook-1/example.org_nb_E5TwS.html#encoding"},
+    {"what": "a sibling item's directory", "url": "file:///capture%20machine/webshot/output/readings/example-course/XyZ34-other/attachments/x.docx", "recorded": null},
+    {"what": "a directory whose name only starts the same", "url": "file:///capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes-instructions/attachments/x.docx", "recorded": null},
+    {"what": "a dot segment that climbs out", "url": "file:///capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes/../XyZ34-other/x.png", "recorded": null},
+    {"what": "a remote share", "url": "file://server/capture%20machine/webshot/output/readings/example-course/AbC12-two-boxes/figure.png", "recorded": null},
+    {"what": "the web", "url": "https://learn.example.org/example-course", "recorded": "https://learn.example.org/example-course"},
+    {"what": "a data URI", "url": "data:image/png;base64,iVBORw0KGgo=", "recorded": "data:image/png;base64,iVBORw0KGgo="},
+    {"what": "nothing", "url": "", "recorded": ""}
+  ]
+}

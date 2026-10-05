@@ -65,10 +65,12 @@ Settings can also come from a TOML file and from the environment, in the order
 | `--css` | `CSS` |  | additional UTF-8 CSS file to inject |
 | `--user-agent` | `USER_AGENT` |  | override Chromium's native user-agent |
 | `--allow-http-errors` | — | off | capture the page even when the server answers with an HTTP error status (400 or above); without it such an answer fails the run with exit 3, or exit 4 for 401 and 403 |
+| `--require-content` | — | off | fail with exit 5, publishing nothing, when the capture holds no image, no video and fewer than 50 characters of text, instead of warning about it; needs the AI bundle, whose counts it reads |
 | `--debug-screenshot` | `DEBUG_SCREENSHOT` |  | save the prepared full page as a PNG |
 | `--no-ai-bundle` | — | off | only create the PDF; omit semantic text, chunks, tables, assets, and provenance |
 | `--no-embed-bundle` | — | off | do not carry the bundle inside the PDF; the PDF stays a rendering and the bundle stays a separate directory |
 | `--embed-assets` | — | off | also embed the binary visual assets in the PDF (larger file; the images are already visible in the rendered pages) |
+| `--local-paths` | `absolute` \| `relative` | `absolute` | how the bundle records a local source and the local files its page used: absolute file:// URLs (default), or relative to the source file's directory, so the bundle does not carry this machine's folder layout; the PDF's own link annotations and the QA report are not changed |
 | `--legacy-bundle` | — | off | also emit v2-format content.json and chunks.jsonl under legacy/ inside the bundle (listed in the manifest with legacy: true); ships in v3.0, removed in v3.1 — see docs/migration-v2-to-v3.md |
 | `--ai-bundle-dir` | `AI_BUNDLE_DIR` |  | AI bundle directory (default: output path with an .ai suffix) |
 | `--no-videos` | — | off | do not read the videos embedded in the page: no walkthrough steps, caption transcripts, or record of untranscribed media in the bundle, and no walkthrough pages appended to the PDF |

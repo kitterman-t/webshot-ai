@@ -316,6 +316,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--require-content",
+        action="store_true",
+        help=(
+            "fail with exit 5, publishing nothing, when the capture holds no "
+            "image, no video and fewer than 50 characters of text, instead of "
+            "warning about it; needs the AI bundle, whose counts it reads"
+        ),
+    )
+    parser.add_argument(
         "--debug-screenshot", type=Path, help="save the prepared full page as a PNG"
     )
     parser.add_argument(
@@ -337,6 +346,18 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "also embed the binary visual assets in the PDF (larger file; the "
             "images are already visible in the rendered pages)"
+        ),
+    )
+    parser.add_argument(
+        "--local-paths",
+        choices=("absolute", "relative"),
+        default="absolute",
+        help=(
+            "how the bundle records a local source and the local files its page "
+            "used: absolute file:// URLs (default), or relative to the source "
+            "file's directory, so the bundle does not carry this machine's folder "
+            "layout; the PDF's own link annotations and the QA report are not "
+            "changed"
         ),
     )
     parser.add_argument(
@@ -510,6 +531,11 @@ def apply_settings(
     # the setting it contradicts is dropped.
     if "require_ocr" in named and args.require_ocr:
         overrides.pop("no_ocr", None)
+    # The same pair again, for the content check and the bundle it reads.
+    if "no_ai_bundle" in named and args.no_ai_bundle:
+        overrides.pop("require_content", None)
+    if "require_content" in named and args.require_content:
+        overrides.pop("no_ai_bundle", None)
     for dest, value in overrides.items():
         setattr(args, dest, value)
     return config
@@ -602,12 +628,14 @@ def options_from_args(args: argparse.Namespace) -> CaptureOptions:
         extra_css=args.css.resolve() if args.css else None,
         user_agent=args.user_agent,
         allow_http_errors=args.allow_http_errors,
+        require_content=args.require_content,
         debug_screenshot=args.debug_screenshot.resolve()
         if args.debug_screenshot
         else None,
         ai_bundle=not args.no_ai_bundle,
         embed_bundle=not args.no_embed_bundle,
         embed_assets=args.embed_assets,
+        local_paths=args.local_paths,
         legacy_bundle=args.legacy_bundle,
         ai_bundle_directory=args.ai_bundle_dir.resolve()
         if args.ai_bundle_dir

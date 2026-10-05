@@ -44,6 +44,7 @@ max_scrolls = 100
 scroll_delay = 0.25
 user_agent = "…"
 allow_http_errors = false
+require_content = false        # --require-content: an empty capture becomes exit 5
 max_assets = 50
 css = "./print-tweaks.css"
 ai_bundle = true               # the positive sense of --no-ai-bundle

@@ -263,7 +263,7 @@ def test_recognized_text_stays_off_the_page_in_every_tree(tmp_path: Path) -> Non
 
 
 async def _harvest(page: Any, directory: Path) -> list[VisualAsset]:
-    assets, _ = await capture_visual_assets(
+    assets, _, _ = await capture_visual_assets(
         page,
         directory / "assets",
         max_assets=50,

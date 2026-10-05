@@ -40,8 +40,8 @@ Exit codes (spec §3) → tests, completed in Phase 5.1 (`tests/test_exit_codes.
 | 0 | a real capture of a fixture; the QA report carries `exit_code: 0` and **no** `error` key |
 | 2 | `--pdfa` on the web path, `--require-ocr --no-ocr`, a destination the lock cannot be created beside, and a second run against a held output path; the report's `options` is null when the options are what failed |
 | 3 | a loopback server that never answers, under `--timeout 2` |
-| 4 | a loopback server that answers 401 |
-| 5 | the protected path's page-count and sequence checks, driven with a planted mismatch |
+| 4 | a loopback server that answers 401, and a redirect from one loopback origin to a sign-in page on another (`tests/test_landing.py`, spec §5 item 4) |
+| 5 | the protected path's page-count and sequence checks, driven with a planted mismatch, and an empty page under `--require-content`, end to end, with nothing published (spec §5 item 14) |
 | 6 | `--require-ocr` with Tesseract off PATH; refused before the browser opens, so no PDF is produced |
 | 7 | `validate_pdf()` against a truncated file, and `--validate-pdf=strict` end to end with veraPDF's verdict injected |
 | 8 | a failure injected at the real publication swap (`publish_ai_bundle`), with the rollback and the report real — no command-line route remains, because the lock refuses an impossible destination up front (docs/09 P5-10) |

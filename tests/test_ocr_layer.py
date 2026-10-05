@@ -122,7 +122,7 @@ async def _print(fixture: Path, directory: Path) -> Printed:
             await page.add_style_tag(content=BASE_PRINT_CSS)
             await page.emulate_media(media="print")
             bare = await printed_width(page, options)
-            assets, warnings = await capture_visual_assets(
+            assets, warnings, _ = await capture_visual_assets(
                 page,
                 directory / "assets",
                 max_assets=10,

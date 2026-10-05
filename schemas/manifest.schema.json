@@ -829,6 +829,11 @@
       "title": "Final Url",
       "type": "string"
     },
+    "local_paths": {
+      "const": "relative",
+      "title": "Local Paths",
+      "type": "string"
+    },
     "title": {
       "title": "Title",
       "type": "string"

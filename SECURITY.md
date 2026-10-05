@@ -168,8 +168,11 @@ becomes a retry loop.
   server's own `output_root`, at a name computed from the source.
 - **Private, loopback and link-local targets are refused**, and the rule is
   `not is_global` rather than an enumeration, so CGNAT and the documentation,
-  benchmarking and future-use blocks are covered too. A host is classified under
-  *every* reading it has — the strict literal, the legacy literal a browser
+  benchmarking and future-use blocks are covered too. An IPv6 address that
+  spells an IPv4 one (IPv4-mapped, IPv4-compatible, 6to4, NAT64 or
+  IPv4-translated) is classified as that IPv4 address, and deprecated
+  site-local, local-use NAT64 and Teredo are refused whole. A host is
+  classified under *every* reading it has — the strict literal, the legacy literal a browser
   applies, and the resolver's — because those readings disagree in both
   directions. Every address a name resolves to is checked, and an unresolvable
   name is refused rather than attempted. After the capture, `final_url` is

@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import Error as PlaywrightError
+from playwright.async_api import Locator, async_playwright
 
 from webshot.capture.visuals import capture_visual_assets
 from webshot.ocr.tesseract import TesseractEngine
@@ -36,7 +37,7 @@ def _harvest(
             try:
                 page = await browser.new_page()
                 await page.goto(fixture.as_uri())
-                assets, warnings = await capture_visual_assets(
+                assets, warnings, unsaved = await capture_visual_assets(
                     page,
                     directory / "assets",
                     max_assets=max_assets,
@@ -47,7 +48,11 @@ def _harvest(
                 )
             finally:
                 await browser.close()
-        return {"labels": [a.aria_label for a in assets], "warnings": warnings}
+        return {
+            "labels": [a.aria_label for a in assets],
+            "warnings": warnings,
+            "unsaved": unsaved,
+        }
 
     return asyncio.run(run())
 
@@ -57,6 +62,7 @@ def test_hidden_and_tiny_candidates_take_no_place(tmp_path: Path) -> None:
     harvested = _harvest(tmp_path, max_assets=50)
     assert harvested["labels"] == ["First chart", "Second chart", "Third chart"]
     assert harvested["warnings"] == []
+    assert harvested["unsaved"] == 0
 
 
 @pytest.mark.browser
@@ -67,6 +73,8 @@ def test_the_warning_counts_the_visuals_the_cap_left_out(tmp_path: Path) -> None
         "The page shows 1 more visual asset than the limit of 2 (--max-assets); "
         "it was not captured."
     ]
+    # Returned as well as written, for the empty-capture check (docs/09 P22-2).
+    assert harvested["unsaved"] == 1
 
 
 @pytest.mark.browser
@@ -77,6 +85,31 @@ def test_a_cap_of_zero_counts_every_visual(tmp_path: Path) -> None:
         "The page shows 3 more visual assets than the limit of 0 (--max-assets); "
         "they were not captured."
     ]
+    assert harvested["unsaved"] == 3
+
+
+@pytest.mark.browser
+def test_a_visual_whose_capture_failed_is_counted_as_unsaved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed capture is a picture the bundle lacks, not a page without one.
+
+    Counted for the empty-capture check, which must not say "no image" of a
+    page whose images could not be saved (docs/09 P22-2).
+    """
+
+    async def refuse(self: Locator, **_: Any) -> bytes:
+        raise PlaywrightError("element is not attached to the DOM")
+
+    monkeypatch.setattr(Locator, "screenshot", refuse)
+    harvested = _harvest(tmp_path, max_assets=50)
+    assert harvested["labels"] == []
+    assert len(harvested["warnings"]) == 3, harvested["warnings"]
+    assert all(
+        warning.startswith("Could not capture visual element")
+        for warning in harvested["warnings"]
+    )
+    assert harvested["unsaved"] == 3
 
 
 @pytest.mark.browser

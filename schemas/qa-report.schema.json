@@ -410,6 +410,11 @@
           "title": "Embed Assets",
           "type": "boolean"
         },
+        "local_paths": {
+          "const": "relative",
+          "title": "Local Paths",
+          "type": "string"
+        },
         "css": {
           "anyOf": [
             {
@@ -477,6 +482,11 @@
         },
         "require_ocr": {
           "title": "Require Ocr",
+          "type": "boolean"
+        },
+        "require_content": {
+          "const": true,
+          "title": "Require Content",
           "type": "boolean"
         },
         "ocr_language": {

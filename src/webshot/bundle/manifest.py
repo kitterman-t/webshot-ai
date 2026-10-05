@@ -40,6 +40,33 @@ class _Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
+def _relative_or_absent(schema: dict[str, Any]) -> None:
+    """Publish `local_paths` as the one string it can be, never as a null.
+
+    The writers put the key in only when a capture recorded its local paths
+    relative (`--local-paths relative`, docs/09 P14-61), so that a capture
+    which did not ask is byte for byte what it always was. A null is therefore
+    a document no producer emits, and the schema should not bless one (the
+    same reasoning as `QaReport.error`, docs/09 P5-10).
+    """
+    schema.pop("anyOf", None)
+    schema.pop("default", None)
+    schema["type"] = "string"
+    schema["const"] = "relative"
+
+
+def _true_or_absent(schema: dict[str, Any]) -> None:
+    """Publish an opt-in gate as `true` or not at all, never as `false`.
+
+    The report writes the key only when the gate was on, so a run without it
+    is byte for byte what it was before the gate existed, and the schema should
+    not bless a `false` no producer emits (as `_relative_or_absent`).
+    """
+    schema.pop("default", None)
+    schema["type"] = "boolean"
+    schema["const"] = True
+
+
 # --------------------------------------------------------------------------- #
 # Web path — content.json
 # --------------------------------------------------------------------------- #
@@ -758,6 +785,13 @@ class WebManifestV3(_Contract):
     captured_at: str
     source: str
     final_url: str
+    #: `relative` when `source`, `final_url` and every local file URL the
+    #: bundle records are written relative to the source file's own directory
+    #: (`./page.html`) rather than as this machine's absolute `file:` URLs.
+    #: Absent otherwise. docs/09 P14-61.
+    local_paths: Literal["relative"] | None = Field(
+        default=None, json_schema_extra=_relative_or_absent
+    )
     title: str
     # The page's own metadata as the DOM declared it. v2 carried this inside
     # content.json; the DoclingDocument that replaced it has no slot for DOM
@@ -989,6 +1023,12 @@ class ResolvedOptions(_Contract):
     #: expect to find the content in there.
     embed_bundle: bool
     embed_assets: bool
+    #: `relative` under `--local-paths relative`, and absent otherwise, as in
+    #: the manifest. The report's own `source` and `final_url` stay absolute
+    #: either way: it describes the run on the machine that made it.
+    local_paths: Literal["relative"] | None = Field(
+        default=None, json_schema_extra=_relative_or_absent
+    )
     css: str | None
     user_agent: str | None
     allow_http_errors: bool
@@ -1012,12 +1052,32 @@ class ResolvedOptions(_Contract):
     #: merely happened to work — which is the whole question the flag
     #: exists to answer.
     require_ocr: bool
+    #: Whether an empty capture was a failure rather than a warning
+    #: (`--require-content`, docs/04-spec.md §5 item 14), for the reason
+    #: `require_ocr` is published. Present only when it was on.
+    require_content: bool = Field(default=False, json_schema_extra=_true_or_absent)
     ocr_language: str
     ocr_page_segmentation_mode: int
     ocr_engine: str
     pdfa: bool
     validate_pdf: str | None
     auth_mode: Literal["none", "storage-state", "auth-profile"]
+
+    @model_serializer(mode="wrap")
+    def _drop_unset_later_options(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
+        """Serialize `local_paths` and `require_content` only when they say something.
+
+        Absent means the default, so every report written before the options
+        existed, and every one written without them, keeps its exact bytes.
+        """
+        written: dict[str, Any] = dict(handler(self))
+        if written.get("local_paths") is None:
+            written.pop("local_paths", None)
+        if not written.get("require_content"):
+            written.pop("require_content", None)
+        return written
 
 
 class ReportCounts(_Contract):

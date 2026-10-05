@@ -190,11 +190,16 @@ The manifest is the provenance record and the checksum table:
 }
 ```
 
-Four fields are worth knowing about:
+Five fields are worth knowing about:
 
 - **`final_url`** is where the browser actually ended up. It differs from
   `source` when the page redirected, and that difference is often the whole
   story.
+- **`local_paths`** appears only on a capture of a local file made with
+  `--local-paths relative`, and is then `"relative"`: `source`, `final_url`
+  and every local file the bundle records are written relative to the source
+  file's own directory (`./page.html`). See
+  [below](#sharing-a-bundle-captured-from-a-local-file).
 - **`content_discovery`** records *which* strategy chose the captured region —
   `explicit`, `trafilatura`, `static-selectors`, or `full-page` — so a
   surprising capture can be explained rather than guessed at.
@@ -271,6 +276,35 @@ at rest is as sensitive as the content it came from. Handle a bundle you intend
 to share the way you would handle the source material, and if that is not
 acceptable for a given provider, the answer is not to share that bundle rather
 than to edit the provenance out of it.
+
+## Sharing a bundle captured from a local file
+
+A page rendered from `file://` is recorded where it was: `source` and
+`final_url` are the file's absolute URL, and every image and link the browser
+resolved against it is a `file:` URL under the same directory. Those values are
+true, and they also carry the capturing user's name and folder layout into
+`manifest.json`, the embedded `capture.json` and `README.txt`, `assets.json` and
+`links.json`, where on any other machine they name nothing.
+
+`--local-paths relative` records them relative to the source file's directory
+instead — `./page.html`, `./images/figure.png`, `./attachments/guide.docx`,
+`./page.html#section` — which is what the page's own HTML said before the
+browser resolved it, and the manifest and `capture.json` carry
+`"local_paths": "relative"` so a relative `source` reads as a convention rather
+than a truncated value. The values are written that way, not edited afterwards,
+so `files`, `pdf.sha256` and the QA report's `manifest_sha256` describe the
+bytes the bundle holds.
+
+What it does not do, each of which the capture says rather than hides:
+
+- A `file:` URL **outside** the source's directory cannot be written relative
+  without naming the folders above it, so it is kept and counted in a warning.
+- Any bundle file that still names the directory — a field the rewrite does not
+  cover, or page text that quotes the path — is named in a warning. The
+  `source/` copy of the input is the caller's own file and is not checked.
+- The PDF's own link annotations are Chromium's, and keep their absolute
+  `file:` URIs. The QA report describes the run on the capturing machine and
+  keeps its paths too.
 
 ## Migrating from format 2
 

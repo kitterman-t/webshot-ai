@@ -309,3 +309,105 @@ def test_every_heading_reaches_a_chunk(body: str) -> None:
     records = build_chunk_records(result.chunk_seeds)
     assert _headings_missing_from(page, records) == []
     _heading_only_records_anchor_at_their_heading(result, records)
+
+
+def _script_page_result() -> Any:
+    page = (FIXTURES / "script_joins.html").read_text(encoding="utf-8")
+    return extract(page, [])
+
+
+def test_a_subscript_stays_on_its_base_in_every_text_surface() -> None:
+    """P14-56: a course page writes H0 as `H<sub>0</sub>`. docling-core joined the
+    inline parts with a space, so content.md read "(H** **0** **)", and
+    content.txt and every chunk "H 0", while the PDF's text layer read "H0":
+    a search for "H0" found the PDF and nothing in the bundle."""
+    result = _script_page_result()
+    assert "Your null hypothesis (H0): the program" in result.text
+    assert "| Null hypothesis (H0) |" in result.text
+    # A sub/superscript takes the emphasis of the base it is attached to, so
+    # the bold is one span around one word, not "**(H**0**)**". Chunks are
+    # serialized as Markdown.
+    chunks = "\n".join(seed.text for seed in result.chunk_seeds)
+    for surface in (result.markdown, chunks):
+        assert "Your **null hypothesis (H0):** the program" in surface
+        assert "| **Null hypothesis (H0)** |" in surface
+    for surface in (result.markdown, result.text, chunks):
+        assert "H sub a (Ha)." in surface
+    # Flattened by the backend into one string: a heading, a table's cells.
+    assert "## Testing H0 by hand" in result.markdown
+    assert "Testing H0 by hand" in result.text.splitlines()
+    assert result.tables == [
+        [["", "Null hypothesis (H0)"], ["Claims", "There is no effect."]]
+    ]
+    assert result.warnings == []
+
+
+def test_a_script_the_source_spaced_keeps_its_space() -> None:
+    """Only a join the source had is kept: "note <sup>1</sup>" stays apart."""
+    result = _script_page_result()
+    for surface in (result.markdown, result.text):
+        assert "The area is x2, as the note 1 says." in surface
+
+
+def test_a_script_with_its_own_link_or_emphasis_keeps_it() -> None:
+    """Review of P14-56: a script took its neighbour's wrapping even when it
+    had its own, so a footnote marker's link was dropped ("claim1", no
+    warning). It still joins its base with no space, wrapped on its own terms."""
+    result = _script_page_result()
+    chunks = "\n".join(seed.text for seed in result.chunk_seeds)
+    for surface in (result.markdown, chunks):
+        assert "A cited claim[1](#fn1) and" in surface
+        assert "formatted H*1* keep" in surface
+    assert "A cited claim1 and a formatted H1 keep their own." in result.text
+    assert result.warnings == []
+
+
+def test_content_json_keeps_the_script_and_carries_no_marker(monkeypatch) -> None:
+    """The DoclingDocument stays the lossless record: the subscript is still
+    its own item with its formatting, the origin hash is the page's own, and
+    the only change from docling's document is a space docling put inside a
+    string it flattened. No join marker reaches any surface."""
+    from webshot.extract import docling_bridge
+
+    result = _script_page_result()
+    surfaces = [result.document_json, result.markdown, result.text, result.doctags]
+    surfaces += [seed.text for seed in result.chunk_seeds]
+    surfaces += [cell for grid in result.tables for row in grid for cell in row]
+    for surface in surfaces:
+        assert docling_bridge.JOINED_BEFORE not in surface
+        assert docling_bridge.JOINED_AFTER not in surface
+        assert "\ufeff" not in surface
+
+    monkeypatch.setattr(docling_bridge, "mark_script_joins", lambda html: html)
+    unmarked = json.loads(_script_page_result().document_json)
+    document = json.loads(result.document_json)
+    assert document["origin"] == unmarked["origin"]
+    assert len(document["texts"]) == len(unmarked["texts"])
+    for item, plain in zip(document["texts"], unmarked["texts"], strict=True):
+        assert item.get("formatting") == plain.get("formatting")
+        assert item["text"].replace(" ", "") == plain["text"].replace(" ", "")
+    subscripts = [
+        item["text"]
+        for item in document["texts"]
+        if item["label"] == "text"
+        and (item.get("formatting") or {}).get("script") == "sub"
+    ]
+    assert subscripts == ["0", "a", "0", "1"]
+
+
+def test_a_page_without_scripts_is_parsed_as_given() -> None:
+    page = (FIXTURES / "empty_section_heading.html").read_text(encoding="utf-8")
+    from webshot.extract.docling_bridge import mark_script_joins
+
+    assert mark_script_joins(page) is page
+
+
+def test_a_page_carrying_the_markers_keeps_docling_spacing_and_says_so() -> None:
+    """A page with U+FDD0 of its own cannot be marked without losing it."""
+    page = (
+        '<html><head><meta charset="utf-8"></head><body><h1>T</h1>'
+        "<p>H<sub>0</sub> and \ufdd0 kept</p></body></html>"
+    )
+    result = extract(page, [])
+    assert "H 0 and \ufdd0 kept" in result.text
+    assert any("U+FDD0" in warning for warning in result.warnings)
