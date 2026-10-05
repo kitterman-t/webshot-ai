@@ -131,7 +131,7 @@ dev = [
     "mypy>=1.10",
     "pip-licenses>=5",
     "pip-audit>=2.7",
-    "hypothesis>=6.168.1",
+    "hypothesis>=6.168.3",
 ]
 
 [project.urls]
