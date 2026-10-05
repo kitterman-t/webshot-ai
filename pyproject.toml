@@ -127,8 +127,8 @@ docs = [
 ]
 dev = [
     "pytest>=8.2",
-    "ruff>=0.16.9",
-    "mypy>=1.10",
+    "ruff>=0.16.10",
+    "mypy>=2.4.0",
     "pip-licenses>=5",
     "pip-audit>=2.7",
     "hypothesis>=6.168.1",
