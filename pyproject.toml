@@ -73,7 +73,7 @@ dependencies = [
     # builds the DoclingDocument (no torch — CI asserts it); chonkie
     # size-splits chunks offline with its character tokenizer.
     "nh3>=0.3.7",
-    "docling-slim[format-html]>=2.130.0",
+    "docling-slim[format-html]>=2.132.0",
     "chonkie>=1.7.0",
     # Not used by WebShot directly: docling-core's chunker package eagerly
     # imports both at module import even when only HierarchicalChunker (no
