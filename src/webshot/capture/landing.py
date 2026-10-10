@@ -19,6 +19,7 @@ the line docs/11 draws around access controls.
 from __future__ import annotations
 
 import contextlib
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -86,6 +87,37 @@ def crossed_origin(requested: str, landed: str) -> bool:
     """
     asked, reached = _origin(requested), _origin(landed)
     return asked is not None and reached is not None and asked != reached
+
+
+#: A path that names a site's home page itself: asking for it is asking for
+#: the home page.
+_INDEX_FILE = re.compile(r"/(?:index|default)\.(?:html?|php|aspx?)$", re.IGNORECASE)
+
+
+def landed_on_home_page(requested: str, landed: str) -> bool:
+    """Whether the browser went from a page of a site to that site's home page.
+
+    The same origin only: another origin is the sign-in wall's rule (P22-1).
+    A signed-out browser sent from a page that needs a session to the home
+    page was captured as that page, with only the generic "nearly empty"
+    warning to say anything was wrong (docs/09 P23-5). A page asked for as the
+    home page, or as its index file, is not one.
+    """
+    if _origin(requested) is None or _origin(requested) != _origin(landed):
+        return False
+    asked = _INDEX_FILE.sub("/", urlsplit(requested).path).rstrip("/")
+    return bool(asked) and urlsplit(landed).path in ("", "/")
+
+
+def home_page_message(requested: str, landed: str) -> str:
+    """The manifest warning for `landed_on_home_page`."""
+    return (
+        f"The browser was sent from {requested} to the site's home page "
+        f"({landed}), so this is a capture of the home page, not of the page "
+        "asked for. A site does this with a page that needs a sign-in or no "
+        "longer exists. If the home page is what you meant, give its address "
+        "directly."
+    )
 
 
 def requested_url(response: Any, fallback: str) -> str:

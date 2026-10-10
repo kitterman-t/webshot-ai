@@ -326,6 +326,10 @@ there with its reason, and the run's job summary lists every skip.
    check refused an automated browser and that this is not a sign-in page; a
    403 that names nothing gives both readings. The QA report records the
    status and `final_url` of any refused status (docs/09 P23-3).
+   A page that sends the browser from the address asked for to its own
+   site's home page (same origin, the path dropped to `/`) is captured with a
+   manifest warning that says so; asking for the root or its index file is
+   not such a move (docs/09 P23-5).
 5. **Overlay policy (was undocumented in v2):** `clean` mode hides
    cookie/consent overlays and records the hidden-element count in the
    manifest; `faithful` mode hides nothing. Capture is an act of record —
