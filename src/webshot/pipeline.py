@@ -48,6 +48,7 @@ from .capture.discover import read_page
 from .capture.landing import (
     WallCheck,
     empty_capture_message,
+    refused_status_message,
     requested_url,
     sign_in_wall,
     sign_in_wall_message,
@@ -1030,19 +1031,25 @@ async def _capture(
                 http_status = response.status
                 content_type = response.headers.get("content-type", "")
             if response and response.status >= 400 and not options.allow_http_errors:
-                message = (
-                    f"The server returned HTTP {response.status} for {options.source}. "
-                    "Use --allow-http-errors only if that page is intentional."
-                )
-                # 401 and 403 are the far end saying who you are is the
-                # problem, which is exactly what spec §3 code 4 is for; every
-                # other refused status is the page never becoming available.
+                # 401 and 403 are the far end refusing this browser, which is
+                # exactly what spec §3 code 4 is for; every other refused
+                # status is the page never becoming available.
                 if response.status in (401, 403):
                     raise AuthenticationError(
-                        f"{message} A capture of a signed-in page needs "
-                        "--storage-state or --auth-profile."
+                        refused_status_message(
+                            options.source, response.status, response.headers
+                        ),
+                        # The report records what was answered, as it would
+                        # for a page that was captured (docs/09 P23-3).
+                        http_status=response.status,
+                        final_url=page.url,
                     )
-                raise NavigationError(message)
+                raise NavigationError(
+                    f"The server returned HTTP {response.status} for {options.source}. "
+                    "Use --allow-http-errors only if that page is intentional.",
+                    http_status=response.status,
+                    final_url=page.url,
+                )
 
             if options.wait_for_selector:
                 LOGGER.info("Waiting for %s", options.wait_for_selector)

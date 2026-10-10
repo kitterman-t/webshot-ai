@@ -179,6 +179,15 @@ async def _count_shown_from(
     return shown, problems
 
 
+#: How long the harvest waits for a visual it has just found. Every call on a
+#: locator waits for its element, by default for the context's whole
+#: operation timeout (300 s), and one the page has removed since (an ad slot
+#: refilled, an ad frame reloaded) never comes back: a news page's capture
+#: sat in this loop for more than seven minutes, five minutes per vanished
+#: visual (docs/09 P23-2). An element still on the page resolves at once.
+FOUND_ELEMENT_TIMEOUT_MS = 5_000
+
+
 def _locate(page: Page, frames: Sequence[str], index: int) -> Locator:
     """The visual the harvest numbered `index`, inside the frames it named.
 
@@ -186,6 +195,15 @@ def _locate(page: Page, frames: Sequence[str], index: int) -> Locator:
     only way into a frame's document.
     """
     return _scope(page, frames).locator(f"[data-webshot-visual-index='{index}']")
+
+
+async def _gone(element: Locator) -> bool:
+    """Whether the page no longer holds the visual: `count` does not wait."""
+    try:
+        return await element.count() == 0
+    except PlaywrightError:
+        # Its frame is gone too.
+        return True
 
 
 @dataclass(slots=True)
@@ -269,7 +287,7 @@ async def capture_visual_assets(
             # visuals after them (docs/09 P20-3).
             if not await element.is_visible():
                 continue
-            box = await element.bounding_box()
+            box = await element.bounding_box(timeout=FOUND_ELEMENT_TIMEOUT_MS)
             if not box or box["width"] < 32 or box["height"] < 24:
                 continue
             if len(assets) >= max_assets:
@@ -304,14 +322,16 @@ async def capture_visual_assets(
                         caption: figure?.querySelector('figcaption')?.innerText?.trim() || '',
                         sourceUrl: element.currentSrc || element.src || element.getAttribute('src') || (getComputedStyle(element).backgroundImage !== 'none' ? getComputedStyle(element).backgroundImage : '')
                     };
-                }"""
+                }""",
+                timeout=FOUND_ELEMENT_TIMEOUT_MS,
             )
             asset_id = f"asset-{len(assets) + 1:03d}"
             image_path = assets_directory / f"{asset_id}.png"
             rendered_canvas = ""
             if metadata["kind"] == "canvas":
                 rendered_canvas = await element.evaluate(
-                    "canvas => canvas.toDataURL('image/png')"
+                    "canvas => canvas.toDataURL('image/png')",
+                    timeout=FOUND_ELEMENT_TIMEOUT_MS,
                 )
                 _, encoded = rendered_canvas.split(",", 1)
                 image_path.write_bytes(base64.b64decode(encoded))
@@ -360,11 +380,6 @@ async def capture_visual_assets(
                 sha256=sha256_file(image_path),
                 frame_content="screenshot" if metadata["kind"] == "iframe" else None,
             )
-            assets.append(asset)
-            if asset.kind == "video":
-                warnings.append(
-                    f"{asset_id} is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing."
-                )
             # No warning for an iframe here. Every iframe had one, saying its
             # content "may only be available through the screenshot", which a
             # frame the snapshot reads is not. Only the snapshot, which runs
@@ -428,10 +443,29 @@ async def capture_visual_assets(
                     "renderedCanvas": rendered_canvas,
                     "ocrStyle": OCR_TEXT_STYLE,
                 },
+                timeout=FOUND_ELEMENT_TIMEOUT_MS,
             )
+            # Listed only now that the page carries its id. Listed before
+            # this step, a visual the page removed after its screenshot was
+            # both a saved asset and a failure, with nothing in the page or
+            # the snapshot pointing at it (docs/09 P23-2).
+            assets.append(asset)
+            if asset.kind == "video":
+                warnings.append(
+                    f"{asset_id} is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing."
+                )
         except PlaywrightError as exc:
             capture_failures += 1
-            warnings.append(f"Could not capture visual element {index + 1}: {exc}")
+            (assets_directory / f"asset-{len(assets) + 1:03d}.png").unlink(
+                missing_ok=True
+            )
+            if await _gone(element):
+                warnings.append(
+                    f"Visual element {index + 1} was removed by the page while it "
+                    "was being captured, so it is in neither the PDF nor the bundle."
+                )
+            else:
+                warnings.append(f"Could not capture visual element {index + 1}: {exc}")
     if over_cap:
         # "At least" when a frame could not be counted: the number is then a
         # floor, and saying it plainly would make it read as the total.
