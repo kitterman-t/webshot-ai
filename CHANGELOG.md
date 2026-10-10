@@ -168,6 +168,10 @@ which records the measurements behind each change.
   refused and are now named, so that no longer depends on Python's address
   registry. This covers MCP captures, `--block-private-requests` and the video
   asset downloads. See docs/09 P10-30.
+- **docling-slim 2.132.0**, up from 2.130.0, which clears seven published
+  advisories the vulnerability audit reported against the lock. `content.json`
+  now keeps a source em dash in an item's `orig`; the text surfaces are
+  unchanged. See docs/09 P10-31.
 - **pyjwt 2.15.1 and urllib3 2.8.0**, up from 2.13.0 and 2.7.0, which clears
   16 published advisories the vulnerability audit reported against the lock.
 - **Authentication profiles are owner-only on Windows too.** There the CLI's

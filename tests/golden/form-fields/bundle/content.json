@@ -326,7 +326,7 @@
       "content_layer": "body",
       "label": "text",
       "prov": [],
-      "orig": "A capture is an act of record. The state of every control on the page is part of what the page said, so each field above must appear in the bundle with its name and value - except the password, whose value is replaced by a redaction marker before it can reach any artifact.",
+      "orig": "A capture is an act of record. The state of every control on the page is part of what the page said, so each field above must appear in the bundle with its name and value — except the password, whose value is replaced by a redaction marker before it can reach any artifact.",
       "text": "A capture is an act of record. The state of every control on the page is part of what the page said, so each field above must appear in the bundle with its name and value - except the password, whose value is replaced by a redaction marker before it can reach any artifact."
     }
   ],
