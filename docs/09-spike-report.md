@@ -5478,6 +5478,27 @@ gains `https://[64:ff9b::93.184.216.34]/`. No golden moves.
 Not in scope: DNS rebinding, which docs/guide/mcp.md already names as outside
 this guardrail.
 
+### P10-31 — docling-slim 2.132 keeps the source's dash in `orig` (2026-10-10)
+
+docling-slim 2.130.0, the locked version, carries seven published advisories
+(PYSEC-2026-4189 to -4192, -4194, -4195 and CVE-2026-105748), fixed in 2.131.0
+and 2.132.0, and the vulnerability scan failed on every pull request until it
+moved. Dependabot's bump to `>=2.132.0` (locked at 2.132.0) failed the golden
+corpus on two cases, the same two on a GitHub-hosted runner (portable
+profile) and on the recording Mac (strict profile): `form-fields` and
+`clamped-text`.
+
+In each, one text item's `orig` in `content.json` changed from a hyphen to the
+em dash the fixture actually holds (`ROOMYCLAMPNEVERBITES — this block…` in
+`clamped_page.html`, `…with its name and value — except the password…` in
+`form_page.html`), and the manifest's record of `content.json` grew by the two
+bytes that the em dash takes over a hyphen in UTF-8, with its digest. `text`,
+and with it `content.md`, `content.txt`, the chunks and the PDF, is unchanged:
+the hyphen there is the text normalization the surfaces read, and `orig` is
+docling's record of the source, which is now exact. The goldens were
+re-recorded for those six lines only; the new digests equal the ones the
+hosted runner computed.
+
 ## P14 — a signed-in reading page, captured from a browser export (2026-09-06)
 
 Captures of a signed-in reading page, exported from the browser and captured for
