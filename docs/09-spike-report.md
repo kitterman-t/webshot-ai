@@ -7728,3 +7728,137 @@ all four fixtures, plus the picture-only page under `--max-assets 0`.
 captures that fail. The empty shell under `--require-content` exits 5 and leaves
 no PDF, bundle, staging directory or temporary file. `tests/test_exit_codes.py`
 now reaches 5 through a real invocation as well.
+
+## P23: one course module's linked pages (2026-10-10)
+
+Capturing everything one course module linked to (ten news articles, three
+videos and the pages around them) failed on four pages in ways the capture
+itself caused. Each was reproduced against the live page and again with a
+fixture before anything changed. Master was 02c9775.
+
+### P23-1: a page that enforces Trusted Types exited 5
+
+Both video watch pages from one large video site ended with `Page.evaluate:
+TypeError: Failed to execute 'parseFromString' on 'DOMParser': This document
+requires 'TrustedHTML' assignment` while the bundle was being built. The site
+sends `Content-Security-Policy: require-trusted-types-for 'script'`, and under
+that policy every string handed to an HTML parser throws unless a Trusted
+Types policy made it. The snapshot built its inert working document by parsing
+an empty page with `DOMParser.parseFromString`, so the whole capture exited 5.
+No other string sink is in the code the capture injects; `importNode`, which
+copies each element with its attributes, is not a sink.
+
+The inert document is now made with `document.implementation.createHTMLDocument`,
+which takes no markup. Creating a Trusted Types policy instead was rejected: a
+page can restrict policy names with `trusted-types`, so that path can be
+refused too, and it would leave a WebShot policy on the page. The document
+still loads nothing. Measured in Chromium, an image, a stylesheet, a video and
+its poster added to either kind of document made no request, which is the
+property the inert copy exists for (rewriting `<img src>` to bundle paths must
+fire no request).
+
+The watch page now captures: exit 0, 29 pages, 27,525 characters of text.
+`tests/fixtures/trusted_types_page.html` carries the policy in a `<meta>`, and
+`tests/test_trusted_types.py` captures it from disk and from a loopback server
+that sends the policy as a header with the `<meta>` taken out. Both fail on
+master with the same error.
+
+### P23-2: a frame or a picture the page removed ended or stalled the capture
+
+A news site's commentary page, full of ad frames, failed in five of six runs
+on 2026-10-10. The first exited 5 after 84 s with `Frame.evaluate: Frame was
+detached`. Four sat at "Building AI-ready content bundle..." until they were
+stopped (after more than 7 minutes, 600 s, 420 s and 330 s; the first of
+those with `--timeout 90`, which bounds navigation only). One finished in
+under 150 s. A statistics site's calculator page, also carrying ad frames,
+hung the same way in one run of two. These are two defects.
+
+**A frame removed mid-release.** The release of clipped text (P16-17) lists
+the frames the page can script, then scripts each one, and a frame the page
+removed in between raised. The step before it in the log, "Removed 11
+non-document element(s)", is where the first run stopped. The ligature and
+clipping stages already skipped a detached frame. The release now does the
+same when `frame.is_detached()`, and any other failure there still ends the
+capture: a broken script in a live frame is a bug, not an ad.
+`tests/test_detached_frames.py` makes the race certain (list the frames,
+remove one, release over the stale list) and fails on master with the live
+error, word for word.
+
+**A picture removed mid-harvest.** A run that hung was given a task dump at
+180 s. The harvest of visual assets was waiting in `Locator.evaluate`, inside
+`wait_for_selector`, at its last step for one visual: writing the asset id
+into the page. Every locator call waits for its element, by default for the
+context's operation timeout, which is 300 s in a capture. A visual the page
+removed after it was found (an ad slot refilled, an ad frame reloaded) never
+comes back, so each one cost five minutes. The harvest's calls on a visual it
+has just found now wait at most 5 s (`FOUND_ELEMENT_TIMEOUT_MS`); one still on
+the page resolves at once. And the asset was listed before that last step, so
+a visual removed after its screenshot was both a saved asset and a counted
+failure, with nothing in the page or the snapshot pointing at it. It is now
+listed only after the last step; otherwise its file is deleted and the
+warning says the page removed it. `tests/test_vanishing_visuals.py` removes a
+chart the moment its screenshot is taken, with the capture's 300 s default.
+On master's harvest that one chart cost 300.3 s, and it was listed as
+`asset-002`, file and all, while the same run counted it as a failure. With
+the fix it costs one 5 s wait, and the run took 7 s. On the live page, three
+runs with both fixes exited 0, after 117 s, 31 s and 110 s; the first and
+third named 5 and 4 visuals the page had removed, each of which had been a
+300 s wait.
+
+Not done: a deadline for the whole bundle stage, which the report of the hang
+asked for. The measured stall was the 300 s wait per vanished visual. Each now
+costs at most 5 s, but a page that removed hundreds of visuals would still be
+slow. A `page.evaluate` whose script never settles has no timeout either;
+none was seen. Two observations are left as found. The accessibility snapshot
+was withheld in two of the runs that finished ("a frame's password fields
+could not be read"), because a frame that detached between the snapshot and
+the password read cannot be asked for its values. That is the rule of P8-8
+and P16-6 doing its job, and reading the values before the snapshot as well
+would narrow it. And a run that is killed leaves its `.lock` files and its
+`.ai.<pid>.staging` directory beside the output, and nothing removes them or
+mentions them on the next run.
+
+### P23-3: a bot check was reported as a sign-in wall
+
+Four public pages answered headless Chromium with 403, and WebShot exited 4
+saying "A capture of a signed-in page needs --storage-state or
+--auth-profile". Each opens in an ordinary browser that is signed in to
+nothing, so the advice sent the person the wrong way. The responses, read
+again on 2026-10-10:
+
+| Page | Status | What identifies the refusal |
+|---|---|---|
+| a business magazine's article | 403 | `server: DataDome`, `x-datadome: protected`, empty body |
+| a newspaper's front page | 403 | `server: DataDome`, `x-datadome: protected`, empty body |
+| a flash-card site's set | 403 | `cf-mitigated: challenge`, `server: cloudflare`, title "Captcha Challenge…" |
+| a law firm's home page | 403 | `server: cloudflare` and `cf-ray` only, body "403 Forbidden" |
+
+Cloudflare marks its challenge in `cf-mitigated`, and DataDome answers as the
+`server`: the same two sites' `robots.txt`, which they served (200), came from
+their own servers (`istio-envoy`, `envoy`) with no DataDome header. Only
+`server: DataDome` is matched; `x-datadome` was never seen without it. Those
+two markers now name
+the check in the message (`automation_refusal`): "the response came from …,
+which refused an automated browser: this is a bot check, not a sign-in page",
+with the path that works, which is to save the page from the person's own
+browser and capture the saved file. The last page's 403 names nothing, and a
+bare 403 from a CDN cannot be told from a refused sign-in, so its message now
+gives both readings rather than one. A 401 keeps the sign-in advice. Page
+text is not read: P22 declined keywords because a page that mentions a
+challenge would be refused for it, and the headers are enough here. Akamai's
+"Access Denied" page was suggested and is not matched, because no page in
+this capture showed it.
+
+The exit code stays 4. Spec §3 defines it as the far end refusing, which a
+bot check is, and a script that branches on it keeps working.
+
+The failure report recorded `http_status: null` and `final_url: null` for
+these runs, although the pipeline had read the status before it raised. The
+error now carries both (`WebShotError.http_status`, `.final_url`), and the
+failure report records them, for every refused status: 401 and 403 (exit 4)
+and the rest (exit 3).
+
+**Tests.** `tests/test_refusals.py`: the markers as a table, including a
+protected site's own answer and a bare CDN 403, and real captures from a
+loopback server that answers as each live 403 did, asserting the message, the
+exit code, `http_status` and `final_url`.

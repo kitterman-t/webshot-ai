@@ -321,6 +321,11 @@ there with its reason, and the run's job summary lists every skip.
    detected: a sign-in page on the same origin, a password field inside a
    frame, and a sign-in flow that asks for the user name before it shows a
    password field (docs/09 P22-1).
+   A 401 or 403 exits 4 as well. When the response names a bot check
+   (`cf-mitigated: challenge`, or `server: DataDome`), the message says a bot
+   check refused an automated browser and that this is not a sign-in page; a
+   403 that names nothing gives both readings. The QA report records the
+   status and `final_url` of any refused status (docs/09 P23-3).
 5. **Overlay policy (was undocumented in v2):** `clean` mode hides
    cookie/consent overlays and records the hidden-element count in the
    manifest; `faithful` mode hides nothing. Capture is an act of record —

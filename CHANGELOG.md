@@ -268,6 +268,24 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **A page that enforces Trusted Types is captured.** A site that sends
+  `require-trusted-types-for 'script'` made the bundle stage throw on its
+  first `DOMParser` call, and the capture exited 5. Large video sites' watch
+  pages do this. The inert copy the bundle reads is now made without parsing
+  a string. See docs/09 P23-1.
+- **A frame or a picture the page removes no longer ends or stalls a
+  capture.** An ad frame removed while clipped text was being released ended
+  the capture with exit 5, and a picture removed while the bundle was being
+  built made the harvest wait five minutes for it, once per picture. The
+  frame is skipped, the picture costs at most 5 s and is named in a warning,
+  and an asset is listed only once it is fully captured. See docs/09 P23-2.
+- **A bot check is no longer reported as a sign-in wall.** A 403 from
+  Cloudflare's challenge (`cf-mitigated: challenge`) or from DataDome
+  (`server: DataDome`) now says a bot check refused an automated browser, and
+  that saving the page from your own browser and capturing the file works,
+  instead of asking for `--storage-state`. A 403 that names no check gives
+  both readings. Still exit 4. The failure report records the HTTP status and
+  final URL of every refused status, where it said null. See docs/09 P23-3.
 - **A redirect to a sign-in page on another site exits 4.** The spec promised
   this since 3.0, and only a 401 or 403 did it: a site that sent a browser with
   no session to its identity provider was captured, sign-in form and all, with

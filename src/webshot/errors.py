@@ -37,13 +37,24 @@ class WebShotError(RuntimeError):
 
     exit_code = 5
 
-    def __init__(self, *args: object, result: CaptureResult | None = None) -> None:
+    def __init__(
+        self,
+        *args: object,
+        result: CaptureResult | None = None,
+        http_status: int | None = None,
+        final_url: str | None = None,
+    ) -> None:
         super().__init__(*args)
         #: The partial capture this failure interrupted, when there is one.
         #: `--validate-pdf=strict` is the case that matters: the file was
         #: published and veraPDF did run, so its QA report can carry the
         #: findings that explain the exit code rather than only the message.
         self.result = result
+        #: What the navigation answered, when it answered before the failure.
+        #: A refused status was known and the failure report still recorded
+        #: `http_status: null` and `final_url: null` (docs/09 P23-3).
+        self.http_status = http_status
+        self.final_url = final_url
 
 
 class UsageError(WebShotError):

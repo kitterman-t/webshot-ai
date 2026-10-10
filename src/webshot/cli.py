@@ -732,6 +732,8 @@ def _record_failure(
                 error=message,
                 exit_code=exit_code,
                 duration_seconds=round(time.monotonic() - started, 2),
+                http_status=getattr(exc, "http_status", None),
+                final_url=getattr(exc, "final_url", None),
             )
     except (OSError, ImportError) as report_exc:  # pragma: no cover
         LOGGER.warning("Could not write the capture report: %s", report_exc)

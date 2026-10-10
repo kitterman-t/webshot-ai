@@ -385,9 +385,15 @@ async def extract_semantic_content(
             // filter removes. An element survives if it is visible itself,
             // keeps media alive regardless, or contains something that does
             // (visibility:hidden ancestors can have visible descendants).
+            //
+            // The inert document is made, not parsed. A page whose policy
+            // says `require-trusted-types-for 'script'` makes every string
+            // handed to an HTML parser throw, `DOMParser.parseFromString`
+            // included, and the whole capture exited 5 on a video site's
+            // watch page (docs/09 P23-1). `createHTMLDocument` takes no
+            // markup, and its document has no browsing context either.
             const keepTags = new Set(['AUDIO', 'VIDEO', 'TRACK', 'SOURCE', 'OBJECT', 'EMBED']);
-            const inert = new DOMParser().parseFromString(
-                '<!doctype html><html><body></body></html>', 'text/html');
+            const inert = document.implementation.createHTMLDocument('');
             const clone = inert.body;
             const elements = [];        // the flat tree's elements, in reading order
             const kept = new WeakSet();

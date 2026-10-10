@@ -19,6 +19,7 @@ the line docs/11 draws around access controls.
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -170,6 +171,54 @@ def sign_in_wall_message(source: str, landed: str, *, interactive: bool) -> str:
         "--storage-state, or use --auth-profile (add --interactive-auth to sign "
         "in once). If the page it landed on is what you meant to capture, give "
         "that address directly."
+    )
+
+
+def automation_refusal(headers: Mapping[str, str]) -> str | None:
+    """Which bot check answered instead of the site, read off the response.
+
+    Each marker was read off a live 403 that an ordinary browser, signed in to
+    nothing, was not shown (docs/09 P23-3): Cloudflare's challenge says so in
+    `cf-mitigated`, and DataDome answers as the `server`. Only a marker that
+    names the check counts. A bare 403 from a CDN can be anything, and a
+    keyword in the page's text would refuse a real page that mentions one
+    (docs/09 P22). None when no marker is present.
+    """
+    lowered = {name.lower(): value.strip().lower() for name, value in headers.items()}
+    if lowered.get("cf-mitigated") == "challenge":
+        return "Cloudflare's bot challenge (cf-mitigated: challenge)"
+    if lowered.get("server") == "datadome":
+        return "DataDome's bot protection (server: DataDome)"
+    return None
+
+
+def refused_status_message(source: str, status: int, headers: Mapping[str, str]) -> str:
+    """What exit 4 says about a 401 or 403, and what to do about it.
+
+    A 403 was always explained as a missing sign-in, and four public pages
+    that open in any browser without one were refused by a bot check (docs/09
+    P23-3), so the advice sent the person the wrong way.
+    """
+    refused = f"The server returned HTTP {status} for {source}."
+    check = automation_refusal(headers)
+    if check:
+        return (
+            f"{refused} The response came from {check}, which refused an "
+            "automated browser: this is a bot check, not a sign-in page. To "
+            "capture the page, open it in your own browser, save it there, and "
+            "capture the saved file."
+        )
+    hint = "Use --allow-http-errors only if that page is intentional."
+    if status == 401:
+        return (
+            f"{refused} {hint} A capture of a signed-in page needs "
+            "--storage-state or --auth-profile."
+        )
+    return (
+        f"{refused} {hint} If the page needs a sign-in, a capture of it needs "
+        "--storage-state or --auth-profile. If it opens without one in your own "
+        "browser, the site refused an automated browser instead: save the page "
+        "from that browser and capture the saved file."
     )
 
 

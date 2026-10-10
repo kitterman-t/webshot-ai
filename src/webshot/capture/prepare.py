@@ -824,9 +824,19 @@ async def release_clamped_text(page: Page) -> int:
     released, moved = await _release_in(page)
     scriptable = await _scriptable_frames(page)
     for frame in scriptable:
-        in_frame, moved_in_frame = await _release_in(frame)
-        if in_frame:
-            await frame.evaluate(ADOPT_STYLESHEET_SCRIPT, RELEASE_PRINT_CSS)
+        try:
+            in_frame, moved_in_frame = await _release_in(frame)
+            if in_frame:
+                await frame.evaluate(ADOPT_STYLESHEET_SCRIPT, RELEASE_PRINT_CSS)
+        except PlaywrightError:
+            if not frame.is_detached():
+                raise
+            # Removed by the page between being listed and being released, as
+            # ad slots are: it prints nothing, so it needs nothing. Before
+            # this, one such frame ended the capture with exit 5 (docs/09
+            # P23-2). Any other failure here is still one.
+            LOGGER.debug("A frame went away before it could be released: %s", frame.url)
+            continue
         released += in_frame
         moved += moved_in_frame
     for frame in page.frames[1:]:

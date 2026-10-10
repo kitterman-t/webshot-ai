@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Trusted Types enforced, as some large video sites send it: every string
+     handed to an HTML sink (innerHTML, DOMParser.parseFromString, an inline
+     event handler attribute) throws unless a policy made it. -->
+<meta http-equiv="Content-Security-Policy" content="require-trusted-types-for 'script'">
+<title>Trusted Types fixture</title>
+</head>
+<body>
+<main>
+<h1>Measuring river flow</h1>
+<p>A gauging station records the water level every fifteen minutes.</p>
+<p>The rating curve turns each level into a discharge.</p>
+<button type="button" onclick="this.textContent = 'pressed'">Show the curve</button>
+<a href="#notes" onmouseover="void 0">Field notes</a>
+<p id="notes">Readings after a flood are checked against a current meter.</p>
+</main>
+</body>
+</html>

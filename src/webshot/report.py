@@ -226,6 +226,8 @@ def build_failure_report(
     error: str,
     exit_code: int,
     duration_seconds: float,
+    http_status: int | None = None,
+    final_url: str | None = None,
 ) -> QaReport:
     """Assemble the report for a run that never reached publication.
 
@@ -238,16 +240,21 @@ def build_failure_report(
 
     `options` is null only when the failure was the options themselves — a
     `webshot.toml` that would not parse, or a combination the model refuses.
+
+    `http_status` and `final_url` are what the navigation answered, when it
+    answered before the failure: a refused status is known, and a report that
+    said null for it hid the one fact that explains the failure (docs/09
+    P23-3).
     """
     return QaReport(
         schema_version="2",
         source=source,
-        final_url=None,
+        final_url=final_url,
         output=str(options.output) if options else None,
         title=None,
         pages=None,
         bytes=None,
-        http_status=None,
+        http_status=http_status,
         content_type="",
         duration_seconds=duration_seconds,
         timings={},
@@ -292,6 +299,8 @@ def write_failure_report(
     error: str,
     exit_code: int,
     duration_seconds: float,
+    http_status: int | None = None,
+    final_url: str | None = None,
 ) -> None:
     """Write the QA report for a run that failed (docs/04-spec.md §3, §2.3)."""
     _write(
@@ -302,6 +311,8 @@ def write_failure_report(
             error=error,
             exit_code=exit_code,
             duration_seconds=duration_seconds,
+            http_status=http_status,
+            final_url=final_url,
         ),
     )
 
