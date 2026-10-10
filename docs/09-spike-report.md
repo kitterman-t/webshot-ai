@@ -7862,3 +7862,62 @@ and the rest (exit 3).
 protected site's own answer and a bare CDN 403, and real captures from a
 loopback server that answers as each live 403 did, asserting the message, the
 exit code, `http_status` and `final_url`.
+
+### P23-4: a capture of a saved page cannot say where the page came from (not changed)
+
+P23-3's advice for a page behind a bot check is to save it from the person's
+own browser and capture the saved file. Done for four pages in this capture,
+the saved HTML carried a `<base href>` to the original address, and the PDF's
+header and the bundle's provenance still named the scratch file: `source` is
+the path that was given, and there is no way to say more. `--title` exists,
+and nothing like it for the address, so each PDF needed a banner made by hand.
+
+Recorded, not built, because what a capture records as its source is evidence.
+A `--source-url` would be the caller's statement, not something WebShot
+loaded, so it needs its own field (beside `source`, never replacing it), a
+header line that says the page was captured from a saved copy, and a schema
+change; and a fallback to `<link rel=canonical>` or `<base href>` would put
+the page's own claim where WebShot's record is. Worth doing as its own change.
+
+### P23-5: a page that sent the browser to its site's home page passed as the page
+
+A chat assistant's shared page answered a signed-out browser with 200 and,
+from its script, replaced its address with the site's root. The capture
+exited 0, of the home page, and its only warning was P22-2's "nearly empty".
+P22-1 covers a move to another origin; this is the same origin with the whole
+path dropped. Now a manifest warning (`landed_on_home_page`) says the browser
+was sent from the address asked for to the site's home page, that a site does
+this with a page that needs a sign-in or no longer exists, and to give the
+home page's address directly if it is the one meant. Asking for the home page,
+or for its index file (`/index.html`, `/default.aspx`), is not a move. It is a
+warning and not a failure: the home page is a page, and someone may mean it.
+The live page now carries it. `tests/test_home_page_landing.py` holds the
+rule as a table and captures a script move and a 302 to the root, which warn,
+and the root, its index file and an ordinary page, which do not.
+
+### P23-6: recognized text from decorative pictures reaches the text layer (not changed)
+
+On a policy news page, a 240 by 160 picture was read as "$524 / my / a / ———"
+at a mean confidence of 18 %, and a 40 by 40 icon as "r{ MN / P(t)" at 49 %;
+both are in `content.md` and the PDF's text layer. A paywall banner was read
+at 92 %, and that one is real text. The capture's author counted such blocks
+on 10 of 13 captures. A confidence floor alone would not separate them: the
+icon's noise scored 49 %. A rule that combines a floor, the share of words a
+dictionary knows and the picture's size could, but it changes what every
+golden capture with recognized text holds, so it needs measuring against the
+corpus first. P20-8 decided where the layer's text goes, not what goes in it.
+
+### P23-7: a catalog record printed its content and bundled none (not changed)
+
+A university library's public catalog record (an Angular application) printed
+two pages with the title, authors, abstract and subjects, and its bundle was
+empty: `content.html` 111 bytes, no title, no links, an empty accessibility
+tree, and the "capture is empty" warning, which then describes the PDF
+wrongly. The record has no shadow roots: read after 8 s, the page held 2,823
+characters of text in ordinary elements. With `--delay 12`, or with
+`--wait-for prm-full-view`, the bundle held 12,616 bytes and the right title.
+So the bundle read the page before the application had drawn it, and the PDF
+was printed after it had: the two describe different moments. Not changed:
+the fix belongs with readiness (a check that the printed text and the
+bundle's agree, or a second read when they do not), and it needs a fixture
+that renders late. The empty-capture warning could at least name `--delay`.

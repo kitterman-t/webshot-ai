@@ -48,6 +48,8 @@ from .capture.discover import read_page
 from .capture.landing import (
     WallCheck,
     empty_capture_message,
+    home_page_message,
+    landed_on_home_page,
     refused_status_message,
     requested_url,
     sign_in_wall,
@@ -1118,6 +1120,8 @@ async def _capture(
                     # A check that could not run has not passed (CLAUDE.md),
                     # so the manifest says so rather than nothing.
                     warnings.append(wall.unread)
+                if landed_on_home_page(requested, page.url):
+                    warnings.append(home_page_message(requested, page.url))
 
             if options.protected_viewer:
                 title = (

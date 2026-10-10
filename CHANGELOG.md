@@ -273,6 +273,11 @@ which records the measurements behind each change.
   first `DOMParser` call, and the capture exited 5. Large video sites' watch
   pages do this. The inert copy the bundle reads is now made without parsing
   a string. See docs/09 P23-1.
+- **A page that sends the browser to its own site's home page is named.** A
+  page that answered a signed-out browser by moving it to the site's root
+  was captured as that page, with only the "nearly empty" warning. A
+  manifest warning now says the capture is of the home page. See docs/09
+  P23-5.
 - **A frame or a picture the page removes no longer ends or stalls a
   capture.** An ad frame removed while clipped text was being released ended
   the capture with exit 5, and a picture removed while the bundle was being
