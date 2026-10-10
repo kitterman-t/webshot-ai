@@ -205,6 +205,22 @@ If it broke once it can break again. Add the smallest fixture that reproduces
 it under `tests/fixtures/`, and let the golden corpus or a unit test hold the
 line. No test may touch the public internet.
 
+## Where changes come from
+
+WebShot is developed in a private repository, alongside material that cannot
+be published, and this repository is its public release. The two are kept in
+step automatically:
+
+- **Pull requests from the `sync/from-webshot` branch** carry the maintainer's
+  changes from the development repository. Their commit lists the changes it
+  brings and ends with a `Synced-From:` line naming the commit there. Review
+  them like any other pull request; a fix to one is made in the development
+  repository and arrives as an update to the same branch.
+- **Pull requests opened here**, yours included, are reviewed and merged here
+  as usual, and then carried back to the development repository. Nothing about
+  contributing changes because of it.
+- **Dependency updates** come from Dependabot in this repository.
+
 ## Commits and pull requests
 
 - Conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,

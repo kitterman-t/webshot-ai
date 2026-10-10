@@ -64,6 +64,11 @@ jobs:
     # repository settings turns the gate on without touching this file — the
     # same "publication is a setting, not a code change" shape as docs.yml.
     environment: release
+    # Releases are cut from the public repository only. The same file lives in
+    # the private repository WebShot is developed in, where a tag would
+    # otherwise publish a second, divergent release; and a fork has no
+    # business publishing one either.
+    if: github.repository == 'kitterman-t/webshot-ai'
     env:
       UV_PYTHON: "3.12"
     steps:
