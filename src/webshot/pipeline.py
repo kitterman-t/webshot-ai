@@ -1053,6 +1053,9 @@ async def _capture(
         # it a usage error tells an operator their command line is wrong while
         # the mount is what is broken (docs/09 P5-10).
         raise EnvironmentFailure(str(exc)) from exc
+    # What the converter could not carry onto the page (docs/09 P27): first,
+    # because it is a fact about the source, before any about the capture.
+    warnings.extend(materialized.warnings)
     protected_capture_directory: Path | None = None
     ai_final_directory = options.ai_bundle_directory or options.output.with_suffix(
         ".ai"

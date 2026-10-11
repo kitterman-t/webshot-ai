@@ -268,6 +268,18 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **A slide's text box with an equation in it reaches the page.** PowerPoint
+  wraps such a box in `mc:AlternateContent`, beside a picture of it for older
+  readers, and python-pptx reads neither, so the slide came out as its title
+  alone with no warning. WebShot now rewrites the deck before MarkItDown reads
+  it: the box itself in place of the wrapper, each equation as LaTeX through
+  the converter MarkItDown uses for Word, SmartArt as its text, and the
+  characters of an equation the converter refuses, with a warning. Word
+  equations are converted one at a time, so one MarkItDown cannot read no
+  longer takes every other equation in the file with it. Embedded objects,
+  chart types python-pptx cannot read, and Word charts and SmartArt are named
+  in the manifest's warnings. If MarkItDown cannot open the rewritten file,
+  WebShot reads it as it was and says so. See docs/09 P27.
 - **Clean mode hides the ad units an ad network writes into the article.** On
   a statistics site's calculator page, an in-article video player ("My Latest
   Videos") sat inside the main content, so selecting the region kept it. The
