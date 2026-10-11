@@ -446,8 +446,137 @@ def test_a_rewrite_the_reader_cannot_open_falls_back_to_the_file_as_it_is(
     assert _decoded(converted.markdown) == _markitdown_alone("equation_deck.pptx")
     assert len(converted.warnings) == 1
     assert converted.warnings[0].startswith(
-        "equation_deck.pptx could not be read once its equations, "
+        "The file could not be read once its equations, "
         "AlternateContent and SmartArt were made readable ("
     )
     assert "AttributeError" in converted.warnings[0]
     assert "\n" not in converted.warnings[0]
+
+
+# --------------------------------------------------------------------------- #
+# Inside a zip (docs/09 P29)
+# --------------------------------------------------------------------------- #
+
+#: `equation_archive.zip`'s members, and the fixture each holds byte for byte.
+ARCHIVED = {
+    "slides/equation_deck.pptx": "equation_deck.pptx",
+    "reports/equation_report.docx": "equation_report.docx",
+}
+
+ARCHIVE_MARKDOWN = f"""Content from the zip file `equation_archive.zip`:
+
+## File: slides/equation_deck.pptx
+
+{DECK_MARKDOWN}
+
+## File: reports/equation_report.docx
+
+{REPORT_MARKDOWN}"""
+
+ARCHIVE_WARNINGS = tuple(
+    f"slides/equation_deck.pptx: {warning}" for warning in DECK_WARNINGS
+) + tuple(f"reports/equation_report.docx: {warning}" for warning in REPORT_WARNINGS)
+
+
+def _zip(path: Path, members: dict[str, bytes]) -> Path:
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, payload in members.items():
+            archive.writestr(name, payload)
+    return path
+
+
+@needs_office
+def test_a_zipped_deck_and_word_file_read_as_they_do_on_their_own() -> None:
+    """Each member's page is the file's own page, encoding and all, and each of
+    its warnings comes back with the member's name in front of it."""
+    from webshot.acquire.markitdown_bridge import to_markdown
+
+    converted = to_markdown(FIXTURES / "equation_archive.zip", suffix=".zip")
+    assert _decoded(converted.markdown) == ARCHIVE_MARKDOWN
+    for name in ARCHIVED.values():
+        alone = to_markdown(FIXTURES / name, suffix=Path(name).suffix)
+        assert alone.markdown in converted.markdown, name
+    assert converted.warnings == ARCHIVE_WARNINGS
+
+
+@needs_office
+def test_member_warnings_reach_the_materialized_source() -> None:
+    from webshot.acquire.adapters import materialize_source
+
+    materialized = materialize_source((FIXTURES / "equation_archive.zip").as_uri())
+    try:
+        assert materialized.warnings == list(ARCHIVE_WARNINGS)
+    finally:
+        materialized.cleanup()
+
+
+@needs_office
+def test_a_zip_nested_in_a_zip_names_both(tmp_path: Path) -> None:
+    from webshot.acquire.markitdown_bridge import to_markdown
+
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as archive:
+        archive.writestr("deck.pptx", (FIXTURES / "equation_deck.pptx").read_bytes())
+    outer = _zip(tmp_path / "outer.zip", {"inner.zip": inner.getvalue()})
+
+    converted = to_markdown(outer, suffix=".zip")
+    assert "SENTINEL PPTX EQUATION QUOKKA" in converted.markdown
+    assert converted.warnings == tuple(
+        f"inner.zip: deck.pptx: {warning}" for warning in DECK_WARNINGS
+    )
+
+
+@needs_office
+def test_a_member_the_reader_cannot_open_rewritten_is_read_as_it_is(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fallback is the file's own, so a member gets it too, and says so."""
+    from webshot.acquire import markitdown_bridge
+
+    monkeypatch.setattr(
+        ooxml,
+        "UNDERSTOOD",
+        ooxml.UNDERSTOOD | {"http://schemas.microsoft.com/office/powerpoint/2010/main"},
+    )
+    alone = markitdown_bridge.to_markdown(
+        FIXTURES / "equation_deck.pptx", suffix=".pptx"
+    )
+    converted = markitdown_bridge.to_markdown(
+        FIXTURES / "equation_archive.zip", suffix=".zip"
+    )
+    assert alone.markdown in converted.markdown
+    assert alone.warnings[0].startswith("The file could not be read once")
+    assert converted.warnings == (
+        f"slides/equation_deck.pptx: {alone.warnings[0]}",
+        *(f"reports/equation_report.docx: {warning}" for warning in REPORT_WARNINGS),
+    )
+
+
+def test_a_member_whose_part_is_refused_is_left_out_and_named(tmp_path: Path) -> None:
+    """A member is not parsed past what WebShot refuses (spec §6.6), as a file
+    on its own is not; the rest of the archive is still read, and the manifest
+    says which member is missing and why."""
+    from webshot.acquire.markitdown_bridge import to_markdown
+
+    slide = '<?xml version="1.0"?><!DOCTYPE p:sld [<!ENTITY boom "x">]>' + _slide(
+        "<mc:AlternateContent/>"
+    )
+    source = _zip(
+        tmp_path / "mixed.zip",
+        {"hostile.pptx": _deck(slide), "notes.txt": b"SENTINEL ZIP NEIGHBOUR"},
+    )
+    converted = to_markdown(source, suffix=".zip")
+    assert "SENTINEL ZIP NEIGHBOUR" in converted.markdown
+    assert "hostile" not in converted.markdown
+    assert converted.warnings == (
+        "hostile.pptx is not in the page: ppt/slides/slide1.xml declares XML "
+        "entities or external references, which WebShot refuses to parse "
+        "(EntitiesForbidden; docs/04-spec.md §6.6).",
+    )
+
+
+def test_an_archive_with_no_office_member_has_no_warning() -> None:
+    from webshot.acquire.markitdown_bridge import to_markdown
+
+    for name in ("sample_archive.zip", "markup_archive.zip"):
+        assert to_markdown(FIXTURES / name, suffix=".zip").warnings == (), name

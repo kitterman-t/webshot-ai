@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -40,6 +41,7 @@ CASES = (
     ("sample_archive.zip", "zip", "SENTINEL ZIP MEMBER OKAPI", None),
     ("equation_deck.pptx", "pptx", "SENTINEL PPTX EQUATION QUOKKA", "pptx"),
     ("equation_report.docx", "docx", "SENTINEL DOCX EQUATION WOMBAT", "mammoth"),
+    ("equation_archive.zip", "zip", "SENTINEL PPTX EQUATION QUOKKA", "pptx"),
     ("markup_deck.pptx", "pptx", "SENTINEL PPTX MARKUP CASSOWARY", "pptx"),
     ("markup_report.docx", "docx", "SENTINEL DOCX MARKUP DUGONG", "mammoth"),
     ("markup_workbook.xlsx", "xlsx", "SENTINEL XLSX MARKUP GECKO", "openpyxl"),
@@ -49,7 +51,7 @@ CASES = (
 
 #: The warnings each fixture's manifest must carry: what the converter could
 #: not carry onto the page (docs/09 P27). A fixture not named here must have
-#: no warning that names a slide or the document body.
+#: no warning that names a slide or the document body, in a member or not.
 EXPECTED_WARNINGS = {
     "equation_deck.pptx": [
         "Slide 5: an equation could not be converted to LaTeX, so its "
@@ -64,6 +66,22 @@ EXPECTED_WARNINGS = {
         "its characters are given in document order without its layout ('a+b').",
     ],
 }
+# The same two files inside a zip, each warning under its member's name
+# (docs/09 P29).
+EXPECTED_WARNINGS["equation_archive.zip"] = [
+    f"{member}: {warning}"
+    for name, member in (
+        ("equation_deck.pptx", "slides/equation_deck.pptx"),
+        ("equation_report.docx", "reports/equation_report.docx"),
+    )
+    for warning in EXPECTED_WARNINGS[name]
+]
+
+#: A warning that says what a deck's or a Word file's reader could not carry,
+#: whether the file was captured on its own or as a member of a zip.
+CONVERSION_WARNING = re.compile(
+    r"^(?:[^:]+\.(?:pptx|docx): )?(?:Slide |The notes of slide |The document body)"
+)
 
 
 def _capture(fixture: Path, workdir: Path) -> tuple[Path, Path]:
@@ -131,9 +149,7 @@ def test_office_fixture_round_trips(
 
     # ...and what it could not read is said, in the order it was found.
     conversion = [
-        warning
-        for warning in manifest["warnings"]
-        if warning.startswith(("Slide ", "The notes of slide ", "The document body"))
+        warning for warning in manifest["warnings"] if CONVERSION_WARNING.match(warning)
     ]
     assert conversion == EXPECTED_WARNINGS.get(name, []), manifest["warnings"]
 

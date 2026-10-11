@@ -294,6 +294,14 @@ which records the measurements behind each change.
   chart types python-pptx cannot read, and Word charts and SmartArt are named
   in the manifest's warnings. If MarkItDown cannot open the rewritten file,
   WebShot reads it as it was and says so. See docs/09 P27.
+- **A deck or Word file inside a zip reads as it does on its own.** The zip
+  reader handed each member straight to MarkItDown, so a zipped deck lost its
+  wrapped text boxes, equations and SmartArt, and a zipped Word file every
+  equation, with no warning. A member now goes through the same rewrite and
+  fallback as a file, and its warnings reach the manifest under its path in
+  the zip, as in `slides/deck.pptx: Slide 5: …`. A member WebShot refuses to
+  parse is left out and named, and the rest of the zip is still read. See
+  docs/09 P29.
 - **Clean mode hides the ad units an ad network writes into the article.** On
   a statistics site's calculator page, an in-article video player ("My Latest
   Videos") sat inside the main content, so selecting the region kept it. The
