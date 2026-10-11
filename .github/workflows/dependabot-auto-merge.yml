@@ -1,0 +1,37 @@
+# Lets a Dependabot pull request merge itself once every required check passes.
+#
+# Dependency updates are made in this repository only, and a green bump that
+# waits for someone to press the button is a bump that does not happen: a
+# security update once sat five days that way. The required checks are the
+# gate; this only asks GitHub to merge when they pass. A bump that changes
+# captured output fails the golden corpus and waits for a person, as it must.
+#
+# `pull_request`, never `pull_request_target`: the job runs with the token of
+# the pull request's own event, which a fork's pull request makes read-only,
+# and it runs only for pull requests Dependabot opened in this repository.
+# A merge armed by this token is performed by GitHub Actions, so it starts no
+# push-triggered workflow; the next merge by a person or the sync does.
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  auto-merge:
+    name: arm auto-merge for Dependabot
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]'
+      && github.repository == 'kitterman-t/webshot-ai'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Turn on auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --merge "$PR"

@@ -59,17 +59,19 @@ from .capture.prepare import (
     BASE_PRINT_CSS,
     CLEAN_PRINT_CSS,
     NOISE_SELECTORS,
+    LazyLoadPass,
     _wait_for_fonts_and_images,
     has_scrolling_tables,
     hide_elements,
     hide_obstructive_overlays,
     isolate_content,
+    lazy_load_warning,
     release_clamped_text,
     release_wide_tables,
     scroll_to_load,
     select_main_content,
 )
-from .capture.session import launch_context
+from .capture.session import CrashWatch, launch_context
 from .config import CaptureOptions, CaptureResult
 from .errors import (
     AuthenticationError,
@@ -394,6 +396,43 @@ def _manifest_checksum(bundle_directory: Path) -> str | None:
     return sha256_file(manifest) if manifest.is_file() else None
 
 
+def renderer_crash_message(
+    step: str, lazy: LazyLoadPass | None, max_scrolls: int | None
+) -> str:
+    """What to say when the page's renderer crashed mid-capture (docs/09 P23-8).
+
+    The bare error named the call that found the renderer gone, which on a
+    video watch page was the snapshot's `Page.evaluate` although the renderer
+    had died during the visual harvest before it, and it offered nothing to
+    try. What WebShot knows is the step, and how much of the page the
+    lazy-load pass had loaded if it finished; why the renderer crashed it
+    cannot see. `max_scrolls` is None when the capture did not scroll.
+    """
+    loaded = ""
+    if lazy is not None:
+        loaded = (
+            f" Here the lazy-load pass had scrolled {lazy.steps} step(s) and left "
+            f"the page {lazy.height:,} px tall."
+        )
+    smaller = ["a --selector that keeps only the content"]
+    if max_scrolls is not None:
+        smaller[:0] = [
+            f"a lower --max-scrolls (this run allowed {max_scrolls})",
+            "--no-scroll",
+        ]
+    listed = (
+        f"{', '.join(smaller[:-1])}, or {smaller[-1]}"
+        if len(smaller) > 1
+        else smaller[0]
+    )
+    return (
+        f"The browser's process for this page crashed while {step}, so nothing "
+        "was captured. WebShot cannot see why; on a long page the usual cause "
+        "is memory, which grows with everything the page has loaded."
+        f"{loaded} A smaller capture usually completes: {listed}."
+    )
+
+
 #: The pipeline's stages, in the order they run. Declared rather than spelled
 #: at each call site: `clock.mark("captur")` would otherwise ship a bogus key
 #: into every QA report with nothing to catch it, and the golden harness masks
@@ -487,16 +526,25 @@ async def capture_open_page(
     ai_staging_directory: Path | None = None
     ai_result: AIBundleResult | None = None
     enrichment = VideoEnrichment()
+    crash = CrashWatch(page)
+    lazy: LazyLoadPass | None = None
     try:
         if options.scroll:
-            _, reached_bottom = await scroll_to_load(
-                page, options.max_scrolls, options.scroll_delay_s
+            crash.step = "loading the page's lazy content"
+            lazy = await scroll_to_load(
+                page,
+                options.max_scrolls,
+                options.scroll_delay_s,
+                # What the capture will hide below, so that a feed growing only
+                # there does not hold the pass to --max-scrolls (docs/09 P23-8).
+                noise=NOISE_SELECTORS if options.mode == "clean" else (),
+                excluded=options.exclude_selectors,
             )
-            if not reached_bottom:
-                warnings.append(
-                    f"Lazy-load scrolling reached the {options.max_scrolls}-step safety limit."
-                )
+            lazy_message = lazy_load_warning(lazy, options.max_scrolls)
+            if lazy_message:
+                warnings.append(lazy_message)
 
+        crash.step = "preparing the page for print"
         warnings.extend(await _wait_for_fonts_and_images(page))
         title = (
             options.document_title
@@ -607,6 +655,7 @@ async def capture_open_page(
             if ai_staging_directory.exists():
                 shutil.rmtree(ai_staging_directory)
             LOGGER.info("Building AI-ready content bundle...")
+            crash.step = "building the AI bundle"
             # An OSError here is the bundle failing to be *built* — an
             # unwritable destination, a full disk — which spec §3 gives its
             # own code rather than leaving to the generic environment one.
@@ -638,6 +687,7 @@ async def capture_open_page(
             clock.mark("extract")
 
         if ai_result and options.videos:
+            crash.step = "reading the page's videos"
             # After the bundle, because enrichment writes into its staging
             # directory and inlines each walkthrough into the `content.md`
             # the extraction stage just produced; before RENDER, because
@@ -693,6 +743,8 @@ async def capture_open_page(
             options.debug_screenshot.parent.mkdir(parents=True, exist_ok=True)
             await page.screenshot(path=str(options.debug_screenshot), full_page=True)
 
+        crash.step = "rendering the PDF"
+
         await render_pdf(
             page,
             options,
@@ -716,6 +768,7 @@ async def capture_open_page(
         # the page a second time and narrows the viewport, and the PDF is
         # already written. Before embedding, which copies the warnings into
         # `capture.json` (docs/09 P16-1).
+        crash.step = "checking the printed page for clipped text"
         for clipped in clipping_warnings(await find_clipped_text(page, options)):
             warnings.append(clipped)
             if ai_result:
@@ -946,7 +999,23 @@ async def capture_open_page(
         if strict_failure:
             raise PdfValidationError(strict_failure, result=result)
         return result
+    except (PlaywrightError, PdfValidationError) as exc:
+        # `render_pdf` reports any failure of `page.pdf()` as exit 7, a crash
+        # included, so a renderer that died in an earlier step and was found
+        # gone only by the print read as a page Chromium could not print.
+        found = exc if isinstance(exc, PlaywrightError) else exc.__cause__
+        if isinstance(found, PlaywrightError) and crash.caused(found):
+            step = crash.crashed_in or crash.step
+            message = renderer_crash_message(
+                step, lazy, options.max_scrolls if options.scroll else None
+            )
+            # A crash while printing is still a render failure (docs/09 P8-59).
+            if step == "rendering the PDF":
+                raise PdfValidationError(message) from exc
+            raise CaptureIntegrityError(message) from exc
+        raise
     finally:
+        crash.close()
         # Owned here because they are created here. The caller cleans up what it
         # created — the browser, the materialized source — and nothing else.
         temporary_output.unlink(missing_ok=True)

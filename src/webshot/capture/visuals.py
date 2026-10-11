@@ -25,6 +25,7 @@ from ..bundle.publish import sha256_file
 from ..errors import OcrUnavailableError
 from ..ocr.engine import OcrEngine, OCRResult
 from .prepare import OCR_TEXT_DECLARATIONS
+from .session import renderer_crashed
 from .snapshot import FLAT_TREE_JS, HARVEST_MARKERS, READING_ORDER_JS
 
 VISUAL_SELECTOR = "img, svg, canvas, video, [role='img'], iframe, [data-webshot-background-asset='true']"
@@ -455,6 +456,10 @@ async def capture_visual_assets(
                     f"{asset_id} is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing."
                 )
         except PlaywrightError as exc:
+            # Not a visual's failure: every call after a crash fails, and each
+            # was read as a picture the page had removed (docs/09 P23-8).
+            if renderer_crashed(page, exc):
+                raise
             capture_failures += 1
             (assets_directory / f"asset-{len(assets) + 1:03d}.png").unlink(
                 missing_ok=True

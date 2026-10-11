@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 
 from playwright.async_api import Error as PlaywrightError
@@ -322,34 +323,179 @@ async def _wait_for_fonts_and_images(page: Page, timeout_s: float = 30.0) -> lis
     return warnings
 
 
+#: How long the content a capture keeps must stand still, while only regions
+#: it removes go on growing, before the lazy-load pass stops short of a page
+#: that never ends (docs/09 P23-8). Steps and seconds both: a step is
+#: `--scroll-delay` plus a measurement, and what the pass waits for is a
+#: network fetch. On a video site's watch page each continuation of the kept
+#: list of recommendations arrived within three steps (0.99 s) of the window
+#: passing the end of the list.
+REMOVED_GROWTH_STEPS = 5
+REMOVED_GROWTH_SECONDS = 2.0
+
+#: One step's measurement. The document's height drives the original rule: the
+#: pass ends when the window has reached the bottom and the height has held
+#: still. The rest is only measured when the capture will remove something
+#: (clean mode's page chrome, `--exclude`), and says whether the page is still
+#: growing anywhere the capture keeps.
+#:
+#: A comment feed under a video never ends: each time the window nears the
+#: bottom the page appends more, so the height never holds and the pass ran to
+#: `--max-scrolls` every time. Clean mode then removed the feed, which by step
+#: 100 held 89% of the page's elements, and every later stage carried them:
+#: the renderer grew from 0.4 to 1.0 GB over the pass and peaked at 2.5 GB
+#: while the visuals were harvested (docs/09 P23-8).
+#:
+#: Kept means outside every element the capture will hide, matched as
+#: `hide_elements` matches them, in the document's own tree, and counted into
+#: open shadow roots, where a component's content lives. `keptBottom` is the
+#: lowest box among kept elements with no element children: a container's box
+#: stretches with whatever its column holds, the removed feed included, and a
+#: leaf's does not. `regions` sizes each outermost removed element, so the
+#: warning can name the one that grew rather than guess.
+LAZY_LOAD_STATE_JS = """({noise, excluded}) => {
+    const state = {
+        y: window.scrollY,
+        viewport: window.innerHeight,
+        height: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+        kept: null, keptBottom: 0, regions: {},
+    };
+    if (!noise.length && !excluded.length) return state;
+    const matched = selectors => {
+        if (!selectors.length) return new Set();
+        try { return new Set(document.querySelectorAll(selectors.join(','))); } catch {}
+        const found = new Set();
+        for (const selector of selectors) {
+            try { for (const element of document.querySelectorAll(selector)) found.add(element); }
+            catch {}  // hide_elements names an invalid selector; this only measures
+        }
+        return found;
+    };
+    const chrome = matched(noise);
+    const cut = matched(excluded);
+    const removed = new Set([...chrome, ...cut]);
+    const filter = {acceptNode: node =>
+        removed.has(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT};
+    let kept = 0;
+    let bottom = 0;
+    const walk = root => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, filter);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            kept += 1;
+            if (node.shadowRoot) walk(node.shadowRoot);
+            if (node.firstElementChild) continue;
+            const rect = node.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) bottom = Math.max(bottom, rect.bottom);
+        }
+    };
+    walk(document.body);
+    state.kept = kept;
+    state.keptBottom = bottom + window.scrollY;
+    for (const element of removed) {
+        let above = element.parentElement;
+        while (above && !removed.has(above)) above = above.parentElement;
+        if (above) continue;
+        const name = element.localName + (element.id ? `#${element.id}` : '');
+        const by = cut.has(element) ? 'exclude' : 'clean';
+        const key = `${by} ${name}`;
+        const size = element.getElementsByTagName('*').length + 1;
+        state.regions[key] = {name, by, size: (state.regions[key]?.size || 0) + size};
+    }
+    return state;
+}"""
+
+
+@dataclass(frozen=True, slots=True)
+class LazyLoadPass:
+    """What the lazy-load pass did, for the log, the manifest and a crash report."""
+
+    steps: int
+    #: `bottom`: the window reached the end of a page that stopped growing.
+    #: `removed-growth`: the page was still growing, only inside regions the
+    #: capture removes. `limit`: `--max-scrolls` ran out first.
+    ended: Literal["bottom", "removed-growth", "limit"]
+    #: The document's height at the last step, in CSS pixels.
+    height: int
+    #: For `removed-growth`: each removed region that grew while the kept
+    #: content stood still, as (name, what removes it: `clean` or `exclude`).
+    growing: tuple[tuple[str, str], ...] = ()
+    #: For `removed-growth`: the steps the kept content held still for.
+    steady_steps: int = 0
+
+
+@dataclass(slots=True)
+class _Steady:
+    """Since when the kept content has held still with the window past its end."""
+
+    step: int
+    since: float
+    kept: int
+    regions: dict[str, Any]
+
+
 async def scroll_to_load(
-    page: Page, max_scrolls: int, delay_s: float
-) -> tuple[int, bool]:
-    """Incrementally scroll through the page to activate viewport-based lazy loading."""
+    page: Page,
+    max_scrolls: int,
+    delay_s: float,
+    *,
+    noise: Sequence[str] = (),
+    excluded: Sequence[str] = (),
+) -> LazyLoadPass:
+    """Incrementally scroll through the page to activate viewport-based lazy loading.
+
+    `noise` and `excluded` are the selectors the capture will hide (clean
+    mode's page chrome, and `--exclude`). Growth inside what they match does
+    not keep the pass going once the rest of the page has stopped changing.
+    """
     LOGGER.info("Loading lazy content (up to %d scroll steps)...", max_scrolls)
     stable_steps = 0
     previous_height = 0
-    reached_bottom = False
+    ended: Literal["bottom", "removed-growth", "limit"] = "limit"
+    growing: tuple[tuple[str, str], ...] = ()
+    steady: _Steady | None = None
+    steady_steps = 0
     steps = 0
+    height = 0
+    selectors = {"noise": list(noise), "excluded": list(excluded)}
 
-    for steps in range(1, max_scrolls + 1):  # noqa: B007 — reported after the loop
-        metrics = await page.evaluate(
-            """() => ({
-                y: window.scrollY,
-                viewport: window.innerHeight,
-                height: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)
-            })"""
-        )
-        if metrics["y"] + metrics["viewport"] >= metrics["height"] - 4:
-            stable_steps = (
-                stable_steps + 1 if metrics["height"] == previous_height else 0
-            )
+    for steps in range(1, max_scrolls + 1):
+        state = await page.evaluate(LAZY_LOAD_STATE_JS, selectors)
+        height = state["height"]
+        bottom = state["y"] + state["viewport"]
+        if bottom >= height - 4:
+            stable_steps = stable_steps + 1 if height == previous_height else 0
             if stable_steps >= 3:
-                reached_bottom = True
+                ended = "bottom"
                 break
         else:
             stable_steps = 0
-        previous_height = metrics["height"]
+        previous_height = height
+        # `kept` is None when the capture removes nothing: every part of the
+        # page is kept, and only the rule above can end the pass.
+        if state["kept"] is not None:
+            now = time.monotonic()
+            passed = bottom >= state["keptBottom"] - 4
+            if not passed:
+                steady = None
+            elif steady is None or state["kept"] != steady.kept:
+                steady = _Steady(steps, now, state["kept"], state["regions"])
+            elif (
+                steps - steady.step >= REMOVED_GROWTH_STEPS
+                and now - steady.since >= REMOVED_GROWTH_SECONDS
+            ):
+                # Growth the pass has seen, not inferred from the height: a
+                # page whose kept content grows somewhere this count cannot
+                # see (a closed shadow root) has no removed region growing,
+                # and keeps scrolling as before.
+                growing = tuple(
+                    (region["name"], region["by"])
+                    for key, region in state["regions"].items()
+                    if region["size"] > steady.regions.get(key, {"size": 0})["size"]
+                )
+                if growing:
+                    ended = "removed-growth"
+                    steady_steps = steps - steady.step
+                    break
         await page.evaluate(
             "window.scrollBy(0, Math.max(320, window.innerHeight * 0.8))"
         )
@@ -357,7 +503,48 @@ async def scroll_to_load(
 
     await page.evaluate("window.scrollTo(0, 0)")
     LOGGER.info("Lazy-load pass finished after %d step(s).", steps)
-    return steps, reached_bottom
+    return LazyLoadPass(
+        steps=steps,
+        ended=ended,
+        height=height,
+        growing=growing,
+        steady_steps=steady_steps,
+    )
+
+
+def lazy_load_warning(result: LazyLoadPass, max_scrolls: int) -> str | None:
+    """The manifest warning for a lazy-load pass that did not reach the page's end."""
+    if result.ended == "limit":
+        return f"Lazy-load scrolling reached the {max_scrolls}-step safety limit."
+    if result.ended == "bottom":
+        return None
+    chrome = [name for name, by in result.growing if by == "clean"]
+    cut = [name for name, by in result.growing if by == "exclude"]
+    where = []
+    if chrome:
+        where.append(f"{_listed(chrome)}, which clean mode removes as page chrome")
+    if cut:
+        where.append(f"{_listed(cut)}, which --exclude removes")
+    message = (
+        f"The lazy-load pass stopped after {result.steps} step(s) with the page "
+        f"still growing: it grew only inside {' and '.join(where)}, and the "
+        "content the capture keeps did not change over the last "
+        f"{result.steady_steps} steps. Whatever more the page would have added "
+        "there was not loaded."
+    )
+    if chrome:
+        message += (
+            " --mode faithful keeps that part of the page and scrolls on, up to "
+            "--max-scrolls."
+        )
+    return message
+
+
+def _listed(names: Sequence[str], shown: int = 3) -> str:
+    """Names joined for a sentence, with the rest counted."""
+    rest = len(names) - shown
+    head = ", ".join(names[:shown])
+    return f"{head} and {rest} more" if rest > 0 else head
 
 
 @dataclass(frozen=True, slots=True)

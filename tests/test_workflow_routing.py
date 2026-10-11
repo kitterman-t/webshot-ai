@@ -30,6 +30,7 @@ EXPRESSION_TOKENS = {"${{", "}}", "matrix.os", "==", "&&", "||"}
 EXPECTED = {
     "ci.yml",
     "claude-review.yml",
+    "dependabot-auto-merge.yml",
     "docs.yml",
     "release.yml",
     "windows-smoke.yml",

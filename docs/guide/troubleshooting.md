@@ -99,6 +99,22 @@ Lazy-loading pages need the scroll pass. If the manifest warns that scrolling
 "reached the safety limit", raise `--max-scrolls`, or slow it with
 `--scroll-delay` so content has time to load.
 
+Some pages never end: a comment feed appends more each time the window nears
+the bottom. When the only part still growing is one the capture removes (clean
+mode's page chrome, such as `#comments`, or an `--exclude`), the pass stops
+once everything else has held still for a few seconds, and a warning names the
+part that was still growing. To keep that part, use `--mode faithful`; the
+pass then scrolls on, up to `--max-scrolls`.
+
+### The run stops with "The browser's process for this page crashed"
+
+The browser's renderer for the page died, and nothing was captured (exit 5).
+WebShot cannot see why, but on a long page it is usually memory: everything
+the scroll pass loads stays in the page for the rest of the capture. The
+message names the step it happened in and how far the scroll pass went.
+Capture less of the page: a lower `--max-scrolls`, `--no-scroll`, or a
+`--selector` for just the content.
+
 ### Content that loads late is missing
 
 WebShot does not wait for the network to go quiet, because analytics,
