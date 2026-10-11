@@ -17,7 +17,7 @@ import logging
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
-from weakref import WeakKeyDictionary
+from weakref import WeakKeyDictionary, WeakSet
 
 from playwright.async_api import (
     Browser,
@@ -122,6 +122,58 @@ async def devtools(page: Page) -> CDPSession:
         session = await page.context.new_cdp_session(page)
         _DEVTOOLS[page] = session
     return session
+
+
+#: Pages whose renderer crashed, as Playwright's `crash` event reported it.
+_CRASHED: WeakSet[Page] = WeakSet()
+
+#: Playwright's words for a call that was in flight, or made, after the page's
+#: renderer crashed. Read beside the event because the two arrive separately,
+#: and the call's rejection can reach Python before the event does.
+TARGET_CRASHED = "Target crashed"
+
+
+def renderer_crashed(page: Page, exc: BaseException | None = None) -> bool:
+    """Whether the page's renderer has crashed, by the event or by the error.
+
+    A stage that turns a failed call into a warning has to ask this first: a
+    crashed renderer fails every call after it, and the visual harvest read
+    each of those failures as a picture the page had removed, so the crash
+    surfaced only at the next call nothing caught (docs/09 P23-8).
+    """
+    return page in _CRASHED or (exc is not None and TARGET_CRASHED in str(exc))
+
+
+class CrashWatch:
+    """Which step of a capture was running when the page's renderer crashed.
+
+    A crash came out as `Page.evaluate: Target crashed`, which names the call
+    that found the renderer gone rather than what it was doing, and offers
+    nothing to try (docs/09 P23-8). The capture names its step here as it
+    goes, and the `crash` event records the step it arrived in.
+    """
+
+    # No `__slots__`: Playwright keeps the wrapper of a bound-method handler
+    # on the method's instance, which is how `remove_listener` finds it.
+
+    def __init__(self, page: Page) -> None:
+        self._page = page
+        self.step = "preparing the page"
+        self.crashed_in: str | None = None
+        page.on("crash", self._crashed)
+
+    def _crashed(self, page: Page) -> None:
+        _CRASHED.add(page)
+        if self.crashed_in is None:
+            self.crashed_in = self.step
+
+    def caused(self, exc: BaseException) -> bool:
+        """Whether `exc` is the crash, however it was reported."""
+        return self.crashed_in is not None or renderer_crashed(self._page, exc)
+
+    def close(self) -> None:
+        """Stop watching: a journey captures many modules on one page."""
+        self._page.remove_listener("crash", self._crashed)
 
 
 async def _install_request_policy(

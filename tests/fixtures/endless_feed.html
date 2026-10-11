@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Harbour station log</title>
+<!--
+  docs/09 P23-8. A page whose comment feed never ends, beside content that
+  does, laid out as a video watch page is: the log and its comments in one
+  column, a list of related logs in the other.
+
+  The related list loads three more batches of twenty, each a 600 ms "fetch"
+  after the window nears its end, and then stops. The comment feed, which
+  clean mode removes (`#comments` is page chrome), appends ten comments every
+  time the window nears its end, for ever, so the page never has a bottom.
+
+  The fragment picks a variant:
+    #shadow  the related list lives in an open shadow root
+    #still   the comment feed does not grow
+-->
+<style>
+  body { font: 16px/1.5 Georgia, serif; margin: 0; padding: 1rem; }
+  .columns { display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; align-items: start; }
+  .related { display: block; height: 90px; border-bottom: 1px solid #bbb; }
+  .comment { height: 120px; border-bottom: 1px dotted #999; }
+  .sentinel { height: 24px; color: #666; }
+</style>
+</head>
+<body>
+<div class="columns">
+  <div class="primary">
+    <main>
+      <h1>Harbour station log</h1>
+      <p>The tide gauge at the north pier read 3.2 metres at the morning check,
+      and the harbour master closed the outer berth until the swell eased.</p>
+      <p>Two pilot boats were out before noon. The relief keeper logged the fog
+      signal test at 14:00, and the lamp was cleaned and trimmed at dusk.</p>
+    </main>
+    <section id="comments">
+      <h2>Comments</h2>
+      <div id="feed"></div>
+      <div class="sentinel" id="more-comments">Loading comments</div>
+    </section>
+  </div>
+  <div class="secondary">
+    <h2>More from the station</h2>
+    <div id="related-home"></div>
+  </div>
+</div>
+<script>
+(() => {
+  const variant = location.hash.slice(1);
+  const home = document.getElementById('related-home');
+  let root = home;
+  if (variant === 'shadow') {
+    const host = document.createElement('station-related');
+    home.appendChild(host);
+    root = host.attachShadow({mode: 'open'});
+  }
+  const list = document.createElement('ul');
+  list.id = 'related';
+  root.appendChild(list);
+  const more = document.createElement('div');
+  more.className = 'sentinel';
+  more.textContent = 'Loading more logs';
+  root.appendChild(more);
+
+  let next = 1;
+  const addRelated = count => {
+    for (let i = 0; i < count; i += 1, next += 1) {
+      const item = document.createElement('li');
+      item.className = 'related';
+      item.textContent = `Related log ${next}`;
+      list.appendChild(item);
+    }
+  };
+  addRelated(20);
+
+  // Asked again after each batch, because an observer only reports a change:
+  // a sentinel still in view after a batch would otherwise never load the next.
+  let batches = 0;
+  let fetching = false;
+  const nearEnd = () => more.isConnected
+    && more.getBoundingClientRect().top < window.innerHeight + 200;
+  const fetchMore = () => {
+    if (fetching || batches === 3 || !nearEnd()) return;
+    fetching = true;
+    setTimeout(() => {
+      addRelated(20);
+      batches += 1;
+      fetching = false;
+      if (batches === 3) more.remove();
+      else fetchMore();
+    }, 600);
+  };
+  new IntersectionObserver(fetchMore, {rootMargin: '200px'}).observe(more);
+
+  if (variant === 'still') return;
+  const feed = document.getElementById('feed');
+  const sentinel = document.getElementById('more-comments');
+  let comment = 1;
+  const moreComments = () => {
+    while (sentinel.getBoundingClientRect().top < window.innerHeight + 200) {
+      for (let i = 0; i < 10; i += 1, comment += 1) {
+        const item = document.createElement('div');
+        item.className = 'comment';
+        item.textContent = `Comment ${comment}: the fog signal was loud tonight.`;
+        feed.appendChild(item);
+      }
+    }
+  };
+  window.addEventListener('scroll', moreComments, {passive: true});
+  moreComments();
+})();
+</script>
+</body>
+</html>

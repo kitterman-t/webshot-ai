@@ -7921,3 +7921,106 @@ was printed after it had: the two describe different moments. Not changed:
 the fix belongs with readiness (a check that the printed text and the
 bundle's agree, or a second read when they do not), and it needs a fixture
 that renders late. The empty-capture warning could at least name `--delay`.
+
+### P23-8: an endless comment feed held the lazy-load pass, and the renderer crashed in the harvest
+
+P23-1's watch page then captured, but not every time. Each run scrolled to the
+100-step limit, and some ended during "Building AI-ready content bundle..."
+with `Page.evaluate: Target crashed`, exit 5. On master 2aa70c7 one run in two
+crashed; on f8edaac two plain runs in seven did. The suspect was the
+renderer's memory, so it was measured before anything changed: the renderer's
+`phys_footprint` sampled every 250 ms, and DevTools' `Performance.getMetrics`
+at each stage's start and end. Ten runs carrying that harness in-process did
+not crash, so the crash itself was caught by a sampler outside the process.
+The table is one run's; the harvest's peak is the range over every run.
+
+| After | DOM nodes | JS heap | Renderer |
+|---|---|---|---|
+| loading | 29,731 | 71 MB | 0.41 GB |
+| the lazy-load pass, 100 steps | 280,810 | 365 MB | 1.01 GB |
+| the clipped-text release (P16-17) | 280,810 | 329 MB | 1.07 GB |
+| the visual harvest, 50 visuals | 273,940 | 358 MB | peak 2.30–2.52 GB |
+| the snapshot's inert copy | 441,349 | 350 MB | peak 1.43 GB |
+| the render and the clipping check | 336,825 | 451 MB | peak 1.61 GB |
+
+**What the pass loaded.** By step 100 the page held 95,566 elements, 85,417
+of them (89%) in its comment feed, 480 threads, and it was 63,920 px tall,
+nearly all of it comments. The feed appends more each time the window nears
+the bottom, so the height never held still and the pass could not end before
+its limit. The column of recommendations stopped at step 25 with 107 items,
+and nothing outside clean mode's noise selectors changed after step 28. Clean
+mode removes `#comments`, so none of the feed reached the PDF or the bundle.
+
+**Where the renderer died.** The harvest grew the renderer by 28–32 MB per
+visual while the JS heap stayed flat, so outside V8. Three externally sampled
+runs that survived peaked at 2.44–2.52 GB, 81–83 s into the bundle stage,
+and gave back 1.2–1.4 GB within half a second. The run caught crashing grew
+faster (32 MB per visual against 28), from 0.91 GB to 2.50 GB in 75 s, and
+then had no renderer; the error came 0.7 s later. Which limit it reached is
+not known, since a survivor went 17 MB higher, but the crash and every
+survivor's peak sat at the same height, and the harvest's growth is what took
+them there: a run either reached the collection first or did not, which is
+why the crash was intermittent. The growth per visual scales with what the
+pass loaded: 7–8 MB at 28 steps, 10.6 at 52, 28–32 at 100. One suspect was tested and ruled out: Playwright adds and
+removes a stylesheet in every frame for each screenshot (animations off, caret
+hidden), but with both turned off the harvest still grew 27 MB per visual.
+
+**Why the error named the snapshot.** The harvest catches a Playwright error
+per visual and records the visual as removed by the page (P23-2). After a
+crash every call fails, so each later visual was counted as removed, and the
+first call nothing caught was the snapshot's `Page.evaluate`. Crashed by
+DevTools' `Page.crash` after the first of three charts, master's harvest
+returned no assets and three "removed by the page" warnings, and the capture
+ended with the bare error.
+
+**The pass now stops when only what the capture removes is growing.** Each
+step also counts the elements outside everything the capture will hide
+(clean mode's noise selectors and `--exclude`, matched as `hide_elements`
+matches them), into open shadow roots, and finds the lowest box among them
+with no element children; a container's box stretches with the feed beside
+it. Once that count has held for at least 5 steps and 2 s with the window
+past that box, and a removed region grew meanwhile, the pass stops, and a
+manifest warning (`lazy_load_warning`) names the region and what removes it.
+The patience was measured: over six parallel runs, each of 53 continuations
+of the recommendations arrived at most 0.99 s and 3 steps after the window
+passed the list's end. A page that ends still ends by the old rule, and a
+capture that removes nothing (`--mode faithful` without `--exclude`) measures
+nothing more. On the live page, five of six passes stopped after 26–30 steps,
+and in none of them did the list grow in 30 more steps. The sixth was served
+a list of recommendations that kept growing, 416 items by step 100, and ran
+to the limit, as it should: that list is content. Three full captures exited
+0 in 52–96 s (136–157 s before), and the renderer peaked at 1.13–1.62 GB in
+the bundle stage (2.44–2.52 GB before). Two kept 94 and 109 recommendations,
+where 100 steps had kept 97–106, and the third, served a longer list, kept 208
+after 52 steps; the site serves a different list each run.
+
+**A crash now says so.** The capture names its step as it goes
+(`CrashWatch`), and Playwright's `crash` event records the step it arrived
+in. Any Playwright error after it ends the capture with exit 5 and a message
+naming the step, how far the lazy-load pass went, and what makes the capture
+smaller (`--max-scrolls`, `--no-scroll`, `--selector`), instead of the call
+that happened to find the renderer gone. The harvest re-raises a crash rather
+than counting it against the visuals. `render_pdf` reports any failure of the
+print as exit 7 (P8-59), so a crash in an earlier step that only the print
+found read as "Chromium could not print the page"; it now gets the crash's
+message and exit 5, and a crash during the print itself keeps exit 7.
+
+**Tests.** `tests/fixtures/endless_feed.html` lays a page out as the watch page
+is: a log and its endless comments in one column, and a list that loads three
+more batches after 600 ms "fetches" in the other. `tests/test_endless_feed.py`
+holds the rule (stops in clean mode and under `--exclude`, light tree and
+shadow root; runs to the limit when nothing is removed; ends at the bottom when
+the removed region does not grow) and a full capture's warning, where master
+scrolled 100 steps. `tests/test_renderer_crash.py` crashes the renderer in the
+harvest, in page preparation, while the videos are read and while printing.
+
+Not done. A retry with fewer steps was asked for and is not built: the crash
+is a race the fixed pass no longer runs on this page, a retry doubles the
+slowest case, and the message names the flags. A page whose kept content is
+itself endless, like the sixth run, still scrolls to the limit and carries it
+all. Which Chromium allocator the harvest grows is not known; a memory-infra
+trace would say. The snapshot copies hidden subtrees into the inert document
+and drops them afterwards (167,409 extra nodes here); skipping a
+`display: none` subtree would shrink it, but it changes what the copy keeps
+for media, so it needs the golden corpus. And a failure report carries no
+`timings`, so it says nothing of how far a crashed run got beyond its message.
