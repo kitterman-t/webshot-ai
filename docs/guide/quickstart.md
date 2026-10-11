@@ -132,7 +132,9 @@ zip-slip limits before anything is extracted.
 Equations in DOCX and PPTX come out as LaTeX (`$x \leq 12$`), and a slide's
 SmartArt as its text. What WebShot cannot read from an Office file, such as an
 embedded object or a Word chart, is named in the manifest's `warnings` rather
-than left out without a word.
+than left out without a word. So is a member of a ZIP that WebShot cannot read.
+The `__MACOSX/` metadata the Finder adds to a ZIP is left out of the page, since
+it can hold the address a file was downloaded from.
 
 ## A protected document
 

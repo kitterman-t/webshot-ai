@@ -31,6 +31,12 @@ The five `markup_*` fixtures hold text that HTML or Markdown would read as
 structure — an `<img>` aimed at a `.invalid` host, `# heading`, `3.`, `===`,
 `: definition`, a link, alt text and a link target that close their own
 syntax — in every place each format's reader takes text from (docs/09 P28).
+
+`left_out_archive.zip` holds one member of each kind a zip's reader leaves
+out of the page, each of which the manifest must name (docs/09 P33).
+
+`adjacent_lists_book.epub` holds lists with nothing between them but markup
+that writes no text, which Python-Markdown read as one list (docs/09 P32).
 """
 
 from __future__ import annotations
@@ -38,7 +44,9 @@ from __future__ import annotations
 import base64
 import csv
 import io
+import plistlib
 import re
+import struct
 import tempfile
 import zipfile
 from pathlib import Path
@@ -67,6 +75,8 @@ SENTINELS = {
     "markup_workbook.xlsx": "SENTINEL XLSX MARKUP GECKO",
     "markup_book.epub": "SENTINEL EPUB MARKUP IBEX",
     "markup_archive.zip": "SENTINEL ZIP MARKUP JERBOA",
+    "left_out_archive.zip": "SENTINEL ZIP KEPT KINKAJOU",
+    "adjacent_lists_book.epub": "SENTINEL EPUB LISTS TAMARIN",
 }
 
 #: Deterministic timestamp for every archive member, so regenerating a fixture
@@ -548,6 +558,142 @@ def write_equation_archive(path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Left out — the members a zip's reader cannot put on the page (docs/09 P33)
+# --------------------------------------------------------------------------- #
+
+#: Where the AppleDouble members say their files were downloaded from: the
+#: address a capture must not put on the page.  `.invalid` never resolves.
+DOWNLOADED_FROM = "https://downloads.example.invalid/week-1/notes.zip"
+
+
+def _apple_double(attributes: dict[str, bytes]) -> bytes:
+    """An AppleDouble file as the Finder writes one into `__MACOSX/`.
+
+    RFC 1740's header and two entries, Finder info and an empty resource fork,
+    with Apple's `ATTR` block for extended attributes after the Finder info,
+    which is where a file's quarantine record and download address are kept.
+    """
+    names = [name.encode() + b"\0" for name in attributes]
+    entries_size = sum((11 + len(name) + 3) // 4 * 4 for name in names)
+    attr_start = 50 + 32 + 2  # header and two entry descriptors, Finder info, pad
+    data_start = attr_start + 36 + entries_size
+    data_length = sum(map(len, attributes.values()))
+    total = data_start + data_length
+    entries = b""
+    data = b""
+    for name, value in zip(names, attributes.values(), strict=True):
+        entry = struct.pack(">IIHB", data_start + len(data), len(value), 0, len(name))
+        entry += name
+        entries += entry + b"\0" * (-len(entry) % 4)
+        data += value
+    attr_header = b"ATTR" + struct.pack(
+        ">IIIIIIIHH", 0, total, data_start, data_length, 0, 0, 0, 0, len(names)
+    )
+    header = struct.pack(">II16sH", 0x00051607, 0x00020000, b"Mac OS X        ", 2)
+    header += struct.pack(">III", 9, 50, total - 50)  # Finder info, with ATTR
+    header += struct.pack(">III", 2, total, 0)  # resource fork, empty
+    return header + b"TEXTttxt" + b"\0" * 24 + b"\0\0" + attr_header + entries + data
+
+
+def _flagged_encrypted(data: bytes, name: str) -> bytes:
+    """`data` with `name`'s encryption bit set in both of its headers.
+
+    zipfile writes no encrypted member, and an archive tool would write
+    different bytes on every run.  A reader decides by this bit before it reads
+    the member, and so does WebShot, so the member's bytes can stay as written.
+    """
+    patched = bytearray(data)
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        entry = archive.getinfo(name)
+        offset = archive.start_dir
+    patched[entry.header_offset + 6] |= 0x1
+    while patched[offset : offset + 4] == b"PK\x01\x02":
+        lengths = struct.unpack_from("<HHH", patched, offset + 28)
+        if patched[offset + 46 : offset + 46 + lengths[0]] == name.encode():
+            patched[offset + 8] |= 0x1
+            return bytes(patched)
+        offset += 46 + sum(lengths)
+    raise ValueError(f"{name} is not in the central directory")
+
+
+def write_left_out_archive(path: Path) -> None:
+    """One member of each kind a zip's reader leaves out, beside one it reads.
+
+    A directory entry, a format nothing reads, a PDF (MarkItDown reads one, but
+    with a package no WebShot extra installs), a Word file that is not one, an
+    encrypted member, and two AppleDouble members, one of which records a
+    download address.  `report.docx` is read with the office extra and left
+    out, with WebShot's own advice, without it.
+    """
+    report = _docx_paragraph("Left-out archive report", "Heading1")
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f"<w:body>{report}</w:body></w:document>\n"
+    )
+    with tempfile.TemporaryDirectory() as scratch:
+        docx = Path(scratch) / "report.docx"
+        _write_archive(
+            docx,
+            [
+                ("[Content_Types].xml", _DOCX_CONTENT_TYPES),
+                ("_rels/.rels", _DOCX_RELS),
+                ("word/document.xml", document),
+            ],
+        )
+        report_bytes = docx.read_bytes()
+    where_from = plistlib.dumps([DOWNLOADED_FROM], fmt=plistlib.FMT_BINARY)
+    members: list[tuple[str, str | bytes]] = [
+        ("notes/", b""),
+        ("notes/kept.txt", f"Kept notes\n\n{SENTINELS['left_out_archive.zip']}\n"),
+        ("report.docx", report_bytes),
+        ("figure.bin", bytes(range(256))),
+        ("scan.pdf", _tiny_pdf("Left-out scan")),
+        ("broken.docx", b"PK\x03\x04" + bytes(range(256))),
+        ("secret.txt", "Encrypted notes\n"),
+        ("__MACOSX/", b""),
+        ("__MACOSX/notes/", b""),
+        (
+            "__MACOSX/notes/._kept.txt",
+            _apple_double(
+                {
+                    "com.apple.metadata:kMDItemWhereFroms": where_from,
+                    "com.apple.quarantine": b"0083;00000000;Safari;",
+                }
+            ),
+        ),
+        ("__MACOSX/._report.docx", _apple_double({})),
+    ]
+    _write_archive(path, members)
+    path.write_bytes(_flagged_encrypted(path.read_bytes(), "secret.txt"))
+
+
+def _tiny_pdf(text: str) -> bytes:
+    """A one-page PDF of `text`, its cross-reference table offsets computed."""
+    stream = f"BT /F1 12 Tf 20 100 Td ({text}) Tj ET".encode()
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R"
+        b" /Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    body = b"%PDF-1.4\n"
+    offsets = []
+    for number, content in enumerate(objects, 1):
+        offsets.append(len(body))
+        body += b"%d 0 obj\n%s\nendobj\n" % (number, content)
+    table = b"".join(b"%010d 00000 n \n" % offset for offset in offsets)
+    return (
+        body
+        + b"xref\n0 %d\n0000000000 65535 f \n%s" % (len(objects) + 1, table)
+        + b"trailer\n<< /Size %d /Root 1 0 R >>\n" % (len(objects) + 1)
+        + b"startxref\n%d\n%%%%EOF\n" % len(body)
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Markup — text a document holds that HTML or Markdown would read as structure
 # --------------------------------------------------------------------------- #
 
@@ -810,6 +956,111 @@ def write_markup_archive(path: Path) -> None:
     )
 
 
+# --------------------------------------------------------------------------- #
+# Lists side by side (docs/09 P32)
+# --------------------------------------------------------------------------- #
+
+#: Each pair of lists, by what stands between them in the chapter.  Python-
+#: Markdown read every pair but the last as one list, until the bridge kept
+#: them apart; the last is a bulleted list and a numbered one, which it never
+#: joined.  The words are made up.
+ADJACENT_LISTS = {
+    "Two numbered lists": (
+        '<ol start="5"><li>Brallow</li><li>Crindet</li></ol>'
+        "<ol><li>Dulvane</li><li>Fenwisk</li></ol>"
+    ),
+    "Two bulleted lists": (
+        "<ul><li>Glorvet</li><li>Hustrel</li></ul><ul><li>Imbrisk</li></ul>"
+    ),
+    "Nothing that shows between them": (
+        "<ol><li>Jomvet</li></ol>\n  <div></div><p></p><!-- a note --><br/>"
+        "<ol><li>Kravish</li></ol>"
+    ),
+    "Each in a division of its own": (
+        "<div><ol><li>Lomtrel</li></ol></div><div><ol><li>Morvisk</li></ol></div>"
+    ),
+    "Inside one quotation": (
+        "<blockquote><ul><li>Nuvrel</li></ul><ul><li>Opvane</li></ul></blockquote>"
+    ),
+    "A bulleted list, then a numbered one": (
+        "<ul><li>Plindex</li></ul><ol><li>Quorvel</li></ol>"
+    ),
+}
+
+
+#: The book's lists as its page holds them, in order: each tag and its items.
+ADJACENT_LISTS_PAGE = [
+    ("ol", ["Brallow", "Crindet"]),
+    ("ol", ["Dulvane", "Fenwisk"]),
+    ("ul", ["Glorvet", "Hustrel"]),
+    ("ul", ["Imbrisk"]),
+    ("ol", ["Jomvet"]),
+    ("ol", ["Kravish"]),
+    ("ol", ["Lomtrel"]),
+    ("ol", ["Morvisk"]),
+    ("ul", ["Nuvrel"]),
+    ("ul", ["Opvane"]),
+    ("ul", ["Plindex"]),
+    ("ol", ["Quorvel"]),
+    ("ol", ["Rendisk"]),
+    ("ol", ["Stumbrel"]),
+]
+
+
+def write_adjacent_lists_book(path: Path) -> None:
+    """Pairs of lists with nothing but markup between them, in two chapters.
+
+    The first chapter ends with a list and the second begins with one:
+    MarkItDown converts each chapter on its own and joins them with a blank
+    line, so the two met only once the book was whole.
+    """
+    sections = "".join(
+        f"<h2>{heading}</h2>{lists}" for heading, lists in ADJACENT_LISTS.items()
+    )
+    first = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Lists</title></head>
+<body>
+  <h1>Lists Side by Side</h1>
+  <p>{SENTINELS["adjacent_lists_book.epub"]}</p>
+  {sections}
+  <h2>Across two chapters</h2>
+  <ol><li>Rendisk</li></ol>
+</body></html>
+"""
+    second = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>More</title></head>
+<body>
+  <ol><li>Stumbrel</li></ol>
+  <p>The second chapter goes on after its list.</p>
+</body></html>
+"""
+    opf = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="book-id">urn:uuid:webshot-adjacent-lists-fixture</dc:identifier>
+    <dc:title>Lists Side by Side</dc:title>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="one" href="one.xhtml" media-type="application/xhtml+xml"/>
+    <item id="two" href="two.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="one"/><itemref idref="two"/></spine>
+</package>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", opf),
+            ("OEBPS/one.xhtml", first),
+            ("OEBPS/two.xhtml", second),
+        ],
+        first_stored=True,
+    )
+
+
 WRITERS = {
     "sample_report.docx": write_docx,
     "sample_deck.pptx": write_pptx,
@@ -824,6 +1075,8 @@ WRITERS = {
     "markup_workbook.xlsx": write_markup_workbook,
     "markup_book.epub": write_markup_book,
     "markup_archive.zip": write_markup_archive,
+    "left_out_archive.zip": write_left_out_archive,
+    "adjacent_lists_book.epub": write_adjacent_lists_book,
 }
 
 

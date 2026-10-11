@@ -8458,7 +8458,7 @@ code.
   is still left out without a word: MarkItDown's choice, which P28 kept.
   Saying so means deciding what to say for directory entries and `__MACOSX/`
   copies, and wording a missing extra for a member as `_conversion_error`
-  words it for a file.
+  words it for a file. P33 closes this.
 
 ### P29-6: the tests
 
@@ -8471,3 +8471,249 @@ that a zip with no Office member has no warning.
 `tests/test_office_formats.py` captures the archive end to end. It finds the
 deck's sentinel, which sits in the wrapped text box, and the five warnings in
 the manifest under their members' names.
+
+## P32: two lists side by side became one (2026-10-11)
+
+P30-6 recorded that an EPUB's `<ol start="5"><li>Fifth</li></ol>` followed by
+`<ol><li>One</li></ol>` reached the page as one list numbered 5 and 6.
+markdownify writes two adjacent lists with a blank line between them, and
+Python-Markdown reads a list of the same kind after a blank line as the first
+one going on. Measured with MarkItDown 0.1.8, markdownify 1.2.3, mammoth
+1.11.0, Python-Markdown 3.10.3 (`extra`, `sane_lists`, `toc`), nh3 0.3.7,
+docling-slim 2.132.0 and Chromium 153.0.8010.12, on fix/office-text-as-text
+d46f5f1 (P28, whose `_TextMarkdownify` is where this lands). The fixture is
+`tests/fixtures/office/adjacent_lists_book.epub`, written by
+`tools/fixtures/office.py`; its words are made up.
+
+### P32-1: which inputs reach it
+
+Each input was converted by the bridge and rendered as the adapter renders it.
+"Loose" is Python-Markdown wrapping an item in `<p>`, which it does to the
+items either side of a blank line inside what it takes for one list.
+
+| Input | markdownify wrote | Page before | Page now |
+|---|---|---|---|
+| EPUB `<ol start="5">` then `<ol>` | `5. Fifth`, blank, `1. One` | one `<ol>`, numbered 5 and 6, both loose | two, tight |
+| EPUB two `<ol>`s of two items | `1.`, `2.`, blank, `1.`, `2.` | one `<ol>` of four; the middle two loose | two, tight |
+| EPUB `<ul>` then `<ul>`; three `<ul>`s; six one-item `<ol>`s | the same shape | one list each time | one per list |
+| the same, with whitespace, an empty `<div>`, `<p>`, `<a id>`, `<ol>` or `<li>`, `<p>&nbsp;</p>`, `<p><br/></p>`, a comment or `<br/>` between | exactly what nothing between writes | one list | two |
+| each list in a `<div>` of its own, or only the second | the same | one list | two |
+| both in one `<blockquote>` | `> 1. A`, `>`, `> 1. B` | one list | two |
+| both in one `<dd>` | `:   1. A`, blank, `    1. B` | one list | two |
+| a chapter ending with a list, the next beginning with one | each chapter on its own; MarkItDown joins them with a blank line | one list | two |
+| an HTML file in a zip with two `<ol>`s | as EPUB | one list | two |
+| `<ol>` then `<ul>`, `<ul>` then `<ol>` | blank line between | two: `sane_lists` | unchanged |
+| text, a paragraph, `<hr>`, an image, a heading, or a quotation holding only the second list, between | that block | two | unchanged |
+| both in a `<pre>`; both in a table cell | a code block; one cell line | code; text | unchanged |
+| two lists nested in one item | `* Parent`, `  + Child one`, `  + Child two` | flattened (P32-5) | unchanged |
+| Word: two numbered (or two bulleted) lists with different `numId`s, or with an empty paragraph between | mammoth writes one `<ol>` (`<ul>`) | one list | unchanged (P31) |
+| Word: numbered then bulleted, bulleted then numbered, numbered, bulleted, numbered | `<ol>`, `<ul>`, … | separate lists | unchanged |
+
+A workbook's cells and a deck's tables go through markdownify too, as tables;
+MarkItDown writes a deck's text itself. Neither holds a list.
+
+In `content.md` the merged lists were one run of items: `3. Dulvane` followed
+`2. Crindet` where the book's second list begins at 1, and two bulleted lists
+had no blank line between them. Twelve of the fixture's items were loose in
+`content.html`.
+
+### P32-2: what keeps two lists apart
+
+| Between two lists in the Markdown | Page |
+|---|---|
+| a blank line, as markdownify writes | one list, the items at the seam loose |
+| two blank lines | the same |
+| `<!-- -->` on a line of its own, with or without blank lines round it | two lists, tight; nh3 removes the comment, leaving whitespace between `</ol>` and `<ol>` |
+| `<div></div>` | two lists; nh3 removes the `div` |
+| in a blockquote, `> <!-- -->` between `>` lines | two lists |
+| in a definition, the comment indented four spaces | two lists |
+| the comment indented four spaces after a top-level item | it joins that item: one list, loose |
+
+The comment adds no element and no text. Captured end to end, the fixture's
+`content.md`, `content.html` and `content.txt` hold no `<!--`, and in every
+case in P32-1 the page's text, whitespace aside, is upstream's.
+
+### P32-3: the change
+
+`_TextMarkdownify.convert_list` marks where each list it writes begins and
+ends, unless the list sits in an item, a table cell, a heading or a `<pre>`.
+The marks go inside the list's leading and trailing newlines, which
+markdownify counts to collapse the blank lines between blocks. Whether
+anything stands between two lists is known only once the Markdown is written,
+so the marks are resolved when it is whole: `<!-- -->` goes where one list's
+end meets the start of another of the same kind with only blank lines between,
+on a line of its own at the second list's indentation (`> ` in a quotation,
+four spaces in a definition), and every mark is removed. Where the blank lines
+between carry other indentation the two are in different blocks, which
+Markdown keeps apart already, and nothing is added. Each mark holds a token
+drawn per conversion between private-use characters, so a document's own text,
+a `<pre>`'s included, cannot hold one, and its own private-use characters are
+kept.
+
+`_TextHtmlConverter` resolves each document as markdownify finishes it, except
+for EPUB: `_TextEpubConverter` shares one set of marks across its chapters and
+resolves the book once MarkItDown has joined them. A `.md` file never reaches
+the bridge and renders as before: two lists with a blank line between are one
+list there, as Markdown says.
+
+### P32-4: real files
+
+114 of 117 real documents rendered, the same before and after: 82 Word files,
+23 decks, 6 workbooks, 5 zips and 1 EPUB. The other three, a deck and two
+zips, exceed the 100 MB expansion limit both times. No page changed. No real
+file had two lists of one kind side by side that reached markdownify as two:
+in Word, mammoth had already joined them (P31). Conversion took, before and
+after, 12.47 s and 15.56 s for the Word files, 4.21 s and 2.99 s for the decks,
+35.45 s and 46.60 s for the workbooks, 21.48 s and 28.21 s for the zips, and
+0.55 s and 0.57 s for the EPUB. Those totals were taken one after the other on
+a machine with a load average above 500. Timed in alternation, three runs
+each, the slowest zip took 29.25 s and 31.34 s, then 34.87 s and 32.57 s, and
+two workbooks 6.38 s and 5.98 s and 6.41 s and 6.50 s. Resolving that zip's
+7 MB of Markdown takes 6 ms.
+
+### P32-5: what this does not cover
+
+- **Nested lists.** markdownify indents a list nested in an item by its
+  bullet's width, 2 or 3 spaces, and Python-Markdown nests only at 4, so a
+  nested list under `* ` or `1. ` to `9. ` is flattened into its parent, or
+  written into the item as text. Two lists nested in one item are joined
+  without even a blank line. Neither is changed here.
+- **Word lists mammoth joins.** mammoth writes one `<ol>` for adjacent Word
+  lists of one kind whatever their `numId`, and drops an empty paragraph
+  between them, so they never reach markdownify as two. Splitting them is
+  P31's; the lists it splits rely on this change to stay apart.
+- **A list's start number.** nh3 drops `ol[start]` until P30, so the fixture's
+  first list is numbered from 1 on the page and in `content.md`.
+- **An empty item.** markdownify writes `<li></li>` as nothing, so a list
+  holding only that disappears, and the lists either side of it meet.
+- **A comment where none was needed.** A list in a quotation followed by one
+  outside it gets the comment; Markdown kept them apart already, and the page
+  is the same.
+
+### P32-6: the tests
+
+`tests/test_adjacent_lists.py` renders each merging case in P32-1, mammoth's
+two `<ol>`s among them, and requires one list per list, no item wrapped in a
+paragraph, and the same visible text as upstream's Markdown; it requires the
+cases that never merged to be written exactly as upstream writes them. It
+checks that a document's own private-use characters are kept, that no mark is
+left in any office fixture's Markdown, that the fixture's lists come apart
+across its two chapters and inside a zip, which reader resolves what, and that
+a `.md` file's two lists are still one. `tests/test_office_formats.py`
+captures the fixture end to end and reads `content.md`: each list a run of
+its own, each numbered list after the first counting from 1, no item loose in
+`content.html`, and no comment in any artifact. With the separator disabled,
+43 of the 56 unit tests and the end-to-end test fail.
+
+## P33: a zip member WebShot could not read was left out without a word (2026-10-11)
+
+P29-5 recorded that a member nothing reads, or whose reader fails, was still
+left out of the page with no warning: MarkItDown's zip reader catches both
+failures and moves on, and P28's copy of it kept that. CLAUDE.md's "no silent
+degradation" says otherwise. Measured on P29's change applied to P28's branch
+at 9be76d6, before either merged, with MarkItDown 0.1.8, once with the CI
+extras (`office` among them) and once with the base install. The fixture is
+`left_out_archive.zip` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`.
+
+### P33-1: which members were left out, and why
+
+Over 5 real zips (2,921 members) and synthetic cases:
+
+| Member | What the zip reader met | Before | Real zips |
+|---|---|---|---|
+| A directory entry | `UnsupportedFormatException` (no bytes) | left out | 226 |
+| An AppleDouble file (`._name`, header `00 05 16 07`) | read as text when MarkItDown took it for text, else nothing reads it | 570 in the page, 749 left out | 1,319 in 2 zips |
+| A format nothing reads (`.pyc`, `.so`, `.nib`, `.tiff`, binaries with no suffix) | `UnsupportedFormatException` | left out | 590 |
+| A PDF, `.xls` or Outlook `.msg` | MarkItDown's reader, missing a package no WebShot extra installs | left out | 0 |
+| A deck, Word file or workbook without the office extra | MarkItDown's reader, missing its package | left out | 0 |
+| A member whose reader fails | `FileConversionException`: `UnicodeDecodeError`, `BadZipFile` | left out | 1 |
+| An encrypted member | `RuntimeError` from `ZipFile.read` | the whole zip fails, exit 2 | 0 |
+| A damaged member (bad CRC) | `BadZipFile` from `ZipFile.read` | the whole zip fails, exit 2 | 0 |
+| A CSV with a cell past the CSV reader's limit | `csv.Error`, raised as `UsageError` | the whole zip fails, exit 2 | 0 |
+
+The real zips held no Office file, PDF, `.xls`, `.msg`, encrypted or damaged
+member, so those rows are from synthetic members, and the two installs read
+the real zips identically. A missing package was worse than silent: the
+exception MarkItDown records carries `pip install 'markitdown[pdf]'`, advice
+a WebShot user cannot follow (`_needs_a_dependency` exists to keep it from a
+file on its own), and a PDF in a zip is left out on every WebShot install.
+
+The 570 AppleDouble members in the page came from two zips the Finder made.
+Each was a `## File: __MACOSX/…/._name` section of binary read as text: 160,365
+characters, 2.3% of one page, and 1,928, 3.1% of the other. Of the 570, 569
+carried their file's `com.apple.provenance` attribute, 6 its quarantine record
+(which names the app that downloaded it), and 5 its `kMDItemWhereFroms`, the
+address macOS records a downloaded file came from, which reached the page
+each time. In these zips it was a site's root address; the field holds
+whatever address the downloading app recorded.
+
+### P33-2: what each gets now
+
+Every member is in the page or named in the manifest's warnings, except a
+directory entry, which holds no bytes: the files under it are members of their
+own, so naming it says nothing.
+
+- **One warning for each reason many members share.** Members nothing reads
+  are one warning, naming the first three, counting the rest and tallying them
+  by suffix: `572 members are not in the page: <three names> and 569 more (543
+  .pyc, 16 .typed, 6 .exe, 5 with no suffix, 1 .13, 1 .so). WebShot has no
+  reader for them.` One per member would have been 572 lines from a zipped
+  virtualenv, burying the one that mattered.
+- **A missing package gets WebShot's advice, never MarkItDown's.** A deck, a
+  Word file or a workbook names `webshot[office]` in the words a file on its
+  own gets, which `_dependency_advice` now holds for both. A PDF, `.xls` or
+  `.msg` is counted with the members nothing reads, because no WebShot extra
+  installs its reader.
+- **A reason of its own is a warning of its own:** a reader that failed, with
+  each error it raised and without MarkItDown's framing (`its reader failed
+  (BadZipFile: File is not a zip file)`); an encrypted member, told from the
+  member's flag before it is read; a member that cannot be extracted; and a
+  member WebShot refuses, P29-3's `ooxml` refusal now joined by the CSV
+  reader's.
+- **An AppleDouble member is left out before any reader sees it**, and the
+  archive gets one warning counting them. It is not a file of the archive:
+  `ditto`, macOS's own unzip, turns each back into its file's extended
+  attributes rather than extracting it (checked on the fixture). It is
+  recognised by its name and its four-byte header together, so `._notes.txt`
+  holding text is still read.
+
+On the real zips, each page is P29's with exactly the AppleDouble sections
+gone (566 and 4), byte for byte otherwise, and the download address no longer
+appears in them. The zipped virtualenv now has 3 warnings, the macOS app 1 (18
+members), the zip of code files 1 (5 AppleDouble members), and the zipped web
+page none. The virtualenv read in 13.2 s rather than 28.2 s, since its 1,314
+AppleDouble members no longer reach MarkItDown; the others took as long as
+before (one run each).
+
+### P33-3: what this does not cover
+
+- A member read to nothing is in the page as a heading with nothing under it:
+  an image or a sound, whose MarkItDown readers return only what `exiftool`
+  reports, on a machine without `exiftool`; an empty file. It is named, but
+  the page does not say why it is empty.
+- `.DS_Store` and `Thumbs.db` are not AppleDouble. One nothing reads is named
+  with the rest; one MarkItDown takes for text would be in the page.
+- MarkItDown guesses a text file's encoding from its first 64 KB, so a UTF-8
+  file whose first non-ASCII byte comes later is decoded as ASCII and fails:
+  the virtualenv's `__init__.py` above, now named, and a CSV with its first
+  `é` at byte 80,007, which on its own ends the run with exit 2.
+- A zip whose every member is left out is still a capture with exit 0: a page
+  with only its heading, and the warnings.
+
+### P33-4: the tests
+
+`tests/test_archive_members.py` holds `left_out_archive.zip`'s exact
+warnings with the office extra and without it (MarkItDown's own readers, told
+their packages are missing), and checks that no warning says `pip install`,
+that the download address one of its AppleDouble members holds (asserted to
+be there first) and its quarantine record stay off the page, that a `._` name
+without the header is read, that six members nothing reads are one warning,
+that a damaged member and an oversized CSV cost their member and not the
+archive, that a zip inside a zip names its own, and that the warnings reach
+`materialize_source`. Against P29's bridge, 8 of its 9 tests fail.
+`tests/test_office_formats.py` captures the fixture end to end, finds its
+four warnings in the manifest as the bridge words them, and finds the download
+address in none of `content.md`, `content.txt` and `chunks.jsonl`. macOS's own
+`ditto` restores the fixture's AppleDouble attributes onto its file, so the
+fixture is the format the Finder writes, not one WebShot alone can read.
