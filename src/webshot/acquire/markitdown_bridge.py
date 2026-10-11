@@ -22,7 +22,8 @@ each silently damages content WebShot promises to preserve (docs/09 P3-1):
    python-pptx reads neither branch of `mc:AlternateContent`, where PowerPoint
    puts every shape that holds an equation, nor an equation, nor SmartArt; and
    MarkItDown's Word equations are all kept or all lost.  `ooxml` rewrites the
-   archive first, and says what it still could not read (docs/09 P27).
+   archive first, and says what it still could not read (docs/09 P27): a file's
+   own archive, or a member's inside a zip, by the same path (docs/09 P29).
 4. **It writes a document's text into Markdown as if it were Markdown.**  The
    page is rendered from that Markdown, which passes raw HTML through and reads
    `#`, `*`, `[`, `3.` and the rest as structure.  So `<img src="https://…">`
@@ -515,7 +516,9 @@ def _code_span(text: str) -> str:
     return f"{fence}{pad}{text}{pad}{fence}"
 
 
-def _member_markdown(markitdown: MarkItDown, data: bytes, name: str) -> str:
+def _member_markdown(
+    markitdown: MarkItDown, data: bytes, name: str
+) -> ConvertedMarkdown:
     """One archive member, its text written as text.
 
     MarkItDown's own zip reader hands members straight to its converters, so
@@ -523,27 +526,36 @@ def _member_markdown(markitdown: MarkItDown, data: bytes, name: str) -> str:
     a member's converter writes raw — plain text, source code, a PDF's text —
     was inlined as Markdown, so a `.txt` could fetch an image and a `.py`'s
     comments became headings.  It is a code block here, as a top-level `.txt`
-    is: literal by construction, and with its lines intact.  `ooxml`'s rewrite
-    (docs/09 P27) is the top-level path's alone: a deck inside a zip is read
-    with its text encoded, but without its equations or SmartArt.
+    is: literal by construction, and with its lines intact.  A member is read
+    by the path a file on its own is, so a deck or a Word file inside a zip
+    gets `ooxml`'s rewrite and its fallback too: without them, a zipped deck
+    lost every equation, wrapped text box and SmartArt diagram, and said
+    nothing (docs/09 P29).  The warnings are the member's own; the zip names it.
     """
     suffix = posixpath.splitext(name)[1].lower()
-    extension = posixpath.splitext(name)[1]
-    if suffix in (".csv", ".tsv"):
-        data = _as_escaped_csv(data, "\t" if suffix == ".tsv" else ",", name)
-        extension = ".csv"
-    result = markitdown.convert_stream(
-        io.BytesIO(data),
-        stream_info=StreamInfo(extension=extension, filename=posixpath.basename(name)),
+    converted = _convert_bytes(
+        markitdown, data, suffix=suffix, name=posixpath.basename(name)
     )
-    markdown: str = result.markdown
     if suffix in TEXT_SAFE_MEMBERS or suffix in MARKDOWN_MEMBERS:
-        return markdown
-    body = markdown.rstrip("\n")
+        return converted
+    body = converted.markdown.rstrip("\n")
     if not body.strip():
-        return markdown
+        return converted
     fence = _fence(body, minimum=3)
-    return f"{fence}\n{body}\n{fence}"
+    return dataclasses.replace(converted, markdown=f"{fence}\n{body}\n{fence}")
+
+
+class _ArchiveResult(DocumentConverterResult):
+    """A zip's Markdown, and what its members' readers could not carry into it.
+
+    MarkItDown's result has no field for that, and returns the object a
+    converter made as it is, so a zip nested in a zip hands its warnings up
+    the same way.
+    """
+
+    def __init__(self, markdown: str, warnings: tuple[str, ...]) -> None:
+        super().__init__(markdown)
+        self.warnings = warnings
 
 
 class _TextZipConverter(ZipConverter):
@@ -551,7 +563,7 @@ class _TextZipConverter(ZipConverter):
 
     The heading lines are upstream's, so an archive of ordinary files renders
     as it did; the member names in them are the archive's own text, and are
-    encoded like any other.
+    encoded like any other.  Each member's warnings come back named for it.
     """
 
     def convert(
@@ -564,19 +576,33 @@ class _TextZipConverter(ZipConverter):
             or "(unknown)"
         )
         markdown = f"Content from the zip file {_code_span(file_path)}:\n\n"
+        conversion_warnings: list[str] = []
         with zipfile.ZipFile(file_stream, "r") as archive:
             for entry in archive.infolist():
                 try:
                     member = _member_markdown(
                         self._markitdown, archive.read(entry), entry.filename
                     )
+                except ValueError as exc:
+                    # `ooxml` refusing a part: one that declares an entity
+                    # (spec §6.6), or one the member's own archive cannot give
+                    # up.  Left out like a member nothing reads, but WebShot
+                    # decided it, so the manifest says so.
+                    conversion_warnings.append(
+                        f"{entry.filename} is not in the page: "
+                        f"{' '.join(str(exc).split())}"
+                    )
+                    continue
                 except (UnsupportedFormatException, FileConversionException):
                     # Upstream's choice, kept: a member nothing reads is left
                     # out rather than failing the archive.
                     continue
                 markdown += f"## File: {_as_text_lines(entry.filename)}\n\n"
-                markdown += member + "\n\n"
-        return DocumentConverterResult(markdown=markdown.strip())
+                markdown += member.markdown + "\n\n"
+                conversion_warnings += [
+                    f"{entry.filename}: {warning}" for warning in member.warnings
+                ]
+        return _ArchiveResult(markdown.strip(), tuple(conversion_warnings))
 
 
 def _markitdown() -> MarkItDown:
@@ -663,6 +689,57 @@ def _conversion_error(
     return UsageError(f"Reading {path.suffix} files needs {advice}.")
 
 
+def _convert_bytes(
+    markitdown: MarkItDown, data: bytes, *, suffix: str, name: str
+) -> ConvertedMarkdown:
+    """One file's bytes as Markdown, read as the format `suffix` names.
+
+    What a file on its own and a member of a zip share: the CSV escape, the
+    `ooxml` rewrite and its fallback, and the warnings each leaves.  Kept in
+    one place so a member cannot be read by a path the file was not, which is
+    how a zipped deck came to skip the rewrite (docs/09 P29).  `name` is the
+    file's own, for the reader and for an error.  A failed read raises, and
+    the caller decides what that costs.
+    """
+    original = data
+    conversion_warnings: list[str] = []
+    if suffix in (".csv", ".tsv"):
+        data = _as_escaped_csv(data, "\t" if suffix == ".tsv" else ",", name)
+        suffix = ".csv"
+    elif suffix == ".pptx":
+        data, conversion_warnings = ooxml.prepare_pptx(data, _equation_latex)
+    elif suffix == ".docx":
+        data, conversion_warnings = ooxml.prepare_docx(data, _equation_latex)
+
+    stream_info = StreamInfo(extension=suffix, filename=name)
+    try:
+        result = markitdown.convert_stream(io.BytesIO(data), stream_info=stream_info)
+    except MarkItDownException as exc:
+        rewritten = suffix in (".pptx", ".docx") and data is not original
+        if not rewritten or _needs_a_dependency(exc):
+            raise
+        # The rewrite is WebShot's, and a file the reader opened as it was
+        # must not become one it cannot open. Read it as it is, and say what
+        # that costs: the earlier warnings described the rewrite, so they go.
+        # The file is not named: a zip puts its member's name in front.
+        result = markitdown.convert_stream(
+            io.BytesIO(original), stream_info=stream_info
+        )
+        conversion_warnings = [
+            "The file could not be read once its equations, AlternateContent "
+            f"and SmartArt were made readable ({' '.join(str(exc).split())}), so "
+            "it was read as it is: "
+            "the text in those is not in the page (docs/09 P27)."
+        ]
+    if isinstance(result, _ArchiveResult):
+        conversion_warnings = [*conversion_warnings, *result.warnings]
+    return ConvertedMarkdown(
+        markdown=result.markdown,
+        title=result.title,
+        warnings=tuple(conversion_warnings),
+    )
+
+
 def to_markdown(
     path: Path, *, suffix: str, extra: str | None = None
 ) -> ConvertedMarkdown:
@@ -674,40 +751,9 @@ def to_markdown(
     that installs this format's converter, if any — MarkItDown's own missing
     dependency message names *its* extras, and a user cannot install those.
     """
-    data = path.read_bytes()
-    original = data
-    warnings: list[str] = []
-    if suffix in (".csv", ".tsv"):
-        data = _as_escaped_csv(data, "\t" if suffix == ".tsv" else ",", path.name)
-        suffix = ".csv"
-    elif suffix == ".pptx":
-        data, warnings = ooxml.prepare_pptx(data, _equation_latex)
-    elif suffix == ".docx":
-        data, warnings = ooxml.prepare_docx(data, _equation_latex)
-
-    converter = _markitdown()
-    stream_info = StreamInfo(extension=suffix, filename=path.name)
     try:
-        result = converter.convert_stream(io.BytesIO(data), stream_info=stream_info)
+        return _convert_bytes(
+            _markitdown(), path.read_bytes(), suffix=suffix, name=path.name
+        )
     except MarkItDownException as exc:
-        rewritten = suffix in (".pptx", ".docx") and data is not original
-        if not rewritten or _needs_a_dependency(exc):
-            raise _conversion_error(exc, path, suffix, extra) from exc
-        # The rewrite is WebShot's, and a file the reader opened as it was
-        # must not become one it cannot open. Read it as it is, and say what
-        # that costs: the earlier warnings described the rewrite, so they go.
-        try:
-            result = converter.convert_stream(
-                io.BytesIO(original), stream_info=stream_info
-            )
-        except MarkItDownException as again:
-            raise _conversion_error(again, path, suffix, extra) from again
-        warnings = [
-            f"{path.name} could not be read once its equations, AlternateContent "
-            f"and SmartArt were made readable ({' '.join(str(exc).split())}), so "
-            "it was read as it is: "
-            "the text in those is not in the page (docs/09 P27)."
-        ]
-    return ConvertedMarkdown(
-        markdown=result.markdown, title=result.title, warnings=tuple(warnings)
-    )
+        raise _conversion_error(exc, path, suffix, extra) from exc

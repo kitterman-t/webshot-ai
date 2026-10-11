@@ -8355,7 +8355,8 @@ whose parts are now parsed and written again.
   rendered and sanitized as before, and an image it names is fetched. So is an
   EPUB's own `<img src="https://…">`, as an HTML file's would be. Nothing gates
   a local capture's requests; this keeps a document's *text* from making them.
-- P27's rewrite does not reach a deck or a Word file inside a zip.
+- P27's rewrite does not reach a deck or a Word file inside a zip. P29
+  closes this.
 - `ol[start]` is not in `MARKDOWN_POLICY`, so a real list that starts at 3 is
   still numbered from 1.
 - A picture is still MarkItDown's `![name](name.jpg)`, a `file:` request that
@@ -8374,3 +8375,99 @@ too-deep fallback. `tests/test_office_formats.py` captures the five fixtures
 end to end and asserts no request failed. P27-7's exact-Markdown tests now
 compare the Markdown with its references read back, which still pins every
 character, and fails if one is written twice.
+
+## P29: a deck or Word file inside a zip skipped P27's rewrite (2026-10-11)
+
+P28-7 recorded that P27's rewrite reached a deck or a Word file on its own
+and not one inside a zip. The bridge's zip converter, added in P28, handed
+each member straight to MarkItDown, so a member got neither `ooxml`'s rewrite
+nor its fallback. Measured on P28's branch at e62ea59, before it merged, with
+the package versions P28 names. The fixture is
+`equation_archive.zip` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`: P27's two fixtures, byte for byte, as
+`slides/equation_deck.pptx` and `reports/equation_report.docx`.
+
+### P29-1: what a zipped deck and Word file lost
+
+| Text | On its own | In a zip, before | Now |
+|---|---|---|---|
+| The wrapped text box: sentinel, `x ≤ 12; y1 > 7` | read | dropped | read |
+| The grouped box's `z ≥ 3` | read | dropped | read |
+| A bare equation, `a ≠ b` | read | `a  b` | read |
+| The notes' equation | read | dropped | read |
+| SmartArt's two steps | read | dropped | read |
+| A refused equation's characters, `a+b` | read, with a warning | dropped | read, with a warning |
+| The Word file's four equations | read | dropped | read |
+| The Word chart, the embedded object | named | not named | named |
+
+The deck lost 8 of the lines it has on its own (157 characters) and the Word
+file 5 (56 characters). The archive had no warnings, where the two files on
+their own have five.
+
+### P29-2: one path for a file and a member
+
+`_convert_bytes` holds what a file and a member share: the CSV escape, the
+rewrite, the conversion, the fallback to the bytes as they were, and the
+warnings each leaves. `to_markdown` turns its failure into the user's error.
+`_member_markdown` fences plain text as before, and the zip converter decides
+what a member's failure costs. So a member is read by no path the file is
+not. A member's warnings come back with its path in front:
+`slides/equation_deck.pptx: Slide 5: an embedded object (Equation.3) is not in
+the page.` MarkItDown's result has no field for warnings, but it returns the
+object a converter made, so the zip converter returns a subclass that carries
+them. A zip inside a zip hands its own up, and the outer one names both:
+`inner.zip: deck.pptx: Slide 5: …`.
+
+The fallback warning began with the file's name. With a member's path in front
+it would have named the file twice, so it now begins "The file could not be
+read once its equations…" for a file on its own too.
+
+### P29-3: a member whose part WebShot refuses
+
+`ooxml` raises `ValueError` for a part that declares an entity (spec §6.6) or
+that the member's own archive cannot give up. Before, the same refusal came
+from P28's `rewrite_parts` inside MarkItDown's deck reader, so the zip
+converter saw a failed conversion and left the member out without a word. Now
+it is raised before the reader runs, where the zip converter can tell a
+refusal from a reader's failure. The member is still left out and the rest of
+the archive still read, and a warning names the member and the reason: `hostile.pptx is not in the page:
+ppt/slides/slide1.xml declares XML entities or external references, which
+WebShot refuses to parse (…)`. A file on its own refused the same way still
+ends the run with exit 2.
+
+### P29-4: real files
+
+None of the 5 zips in the Google Drive `School` folder holds a deck or a Word
+file, so each of its 23 decks and 81 Word files was also read wrapped alone in
+a zip. Every file in the folder's P28-6 set (178: those 109, 6 workbooks, 1
+EPUB and 62 CSVs) rendered to the same page with the same warnings as P28's
+merged head, d46f5f1, byte for byte; the same 3 fail in both, on archive
+limits. Wrapped, each member's Markdown is now its file's, and its warnings
+are the file's under the member's path. Before, the wrapped decks lost the
+text of 26 slides in 5 decks (7,705 characters, what P27-5 restored to the
+same decks on their own) and their 4 embedded-object warnings. The wrapped
+Word files lost nothing, since none has an equation, a chart or SmartArt in
+its body (P27-5). No wrapped file failed. Timing was not measured to a useful
+precision: the machine's load average was over 400, and the six workbooks,
+whose path this does not touch, took 26 s and 231 s in two runs of the same
+code.
+
+### P29-5: what this does not cover
+
+- A member nothing reads, or whose reader fails on its bytes as they were too,
+  is still left out without a word: MarkItDown's choice, which P28 kept.
+  Saying so means deciding what to say for directory entries and `__MACOSX/`
+  copies, and wording a missing extra for a member as `_conversion_error`
+  words it for a file.
+
+### P29-6: the tests
+
+`tests/test_ooxml.py` holds `equation_archive.zip`'s exact Markdown and
+warnings, finds each member's Markdown verbatim inside the zip's, and follows
+the warnings through `materialize_source`. It also checks that a zip inside a
+zip names both, that a member gets the fallback and says so, that a member
+with a refused part is left out and named while its neighbour is read, and
+that a zip with no Office member has no warning.
+`tests/test_office_formats.py` captures the archive end to end. It finds the
+deck's sentinel, which sits in the wrapped text box, and the five warnings in
+the manifest under their members' names.

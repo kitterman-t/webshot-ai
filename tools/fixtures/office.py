@@ -10,7 +10,9 @@ suite does not need the office extra installed to *exist*, only to run.
 
 Each fixture carries a sentinel string that occurs nowhere else in
 the repository, so `tests/test_office_formats.py` can prove the text reached
-the bundle through the converter rather than through a filename.
+the bundle through the converter rather than through a filename.  The one
+exception is `equation_archive.zip`, which holds the equation deck and report
+as they are, and so the deck's sentinel.
 
 DOCX and EPUB are written by hand, because the packages that read them
 (mammoth, MarkItDown's EPUB converter) cannot write them and pulling in a
@@ -22,6 +24,8 @@ specification requires.  PPTX and XLSX use python-pptx and openpyxl, which
 The two `equation_*` fixtures hold what those readers pass over (docs/09 P27):
 an equation, `mc:AlternateContent`, SmartArt, an embedded object, and an
 equation MarkItDown's LaTeX converter refuses.  Every word in them is made up.
+`equation_archive.zip` holds both, to show the same rewrite reaching a zip's
+members (docs/09 P29).
 
 The five `markup_*` fixtures hold text that HTML or Markdown would read as
 structure — an `<img>` aimed at a `.invalid` host, `# heading`, `3.`, `===`,
@@ -35,6 +39,7 @@ import base64
 import csv
 import io
 import re
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -54,6 +59,9 @@ SENTINELS = {
     # reaches the bundle only if that box does.
     "equation_deck.pptx": "SENTINEL PPTX EQUATION QUOKKA",
     "equation_report.docx": "SENTINEL DOCX EQUATION WOMBAT",
+    # The deck's own, from the deck inside it: in the wrapped text box, so it
+    # reaches the bundle only if the rewrite reaches a zip's members too.
+    "equation_archive.zip": "SENTINEL PPTX EQUATION QUOKKA",
     "markup_deck.pptx": "SENTINEL PPTX MARKUP CASSOWARY",
     "markup_report.docx": "SENTINEL DOCX MARKUP DUGONG",
     "markup_workbook.xlsx": "SENTINEL XLSX MARKUP GECKO",
@@ -515,6 +523,30 @@ def write_equation_report(path: Path) -> None:
     )
 
 
+#: Where `equation_archive.zip` puts the two equation fixtures: in folders, so
+#: a warning's member name is a path and not a bare file name.
+EQUATION_MEMBERS = {
+    "equation_deck.pptx": "slides/equation_deck.pptx",
+    "equation_report.docx": "reports/equation_report.docx",
+}
+
+
+def write_equation_archive(path: Path) -> None:
+    """The two equation fixtures, byte for byte, inside a zip (docs/09 P29).
+
+    The same bytes, so each member's page can be held to the file's own; written
+    fresh rather than copied from the fixtures beside it, so this does not
+    depend on the order the fixtures are written in.
+    """
+    with tempfile.TemporaryDirectory() as scratch:
+        members: list[tuple[str, str | bytes]] = []
+        for name, member in EQUATION_MEMBERS.items():
+            written = Path(scratch) / name
+            WRITERS[name](written)
+            members.append((member, written.read_bytes()))
+    _write_archive(path, members)
+
+
 # --------------------------------------------------------------------------- #
 # Markup — text a document holds that HTML or Markdown would read as structure
 # --------------------------------------------------------------------------- #
@@ -786,6 +818,7 @@ WRITERS = {
     "sample_archive.zip": write_zip,
     "equation_deck.pptx": write_equation_deck,
     "equation_report.docx": write_equation_report,
+    "equation_archive.zip": write_equation_archive,
     "markup_deck.pptx": write_markup_deck,
     "markup_report.docx": write_markup_report,
     "markup_workbook.xlsx": write_markup_workbook,
