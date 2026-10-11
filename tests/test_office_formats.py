@@ -38,7 +38,27 @@ CASES = (
     ("sample_workbook.xlsx", "xlsx", "SENTINEL XLSX CELL AXOLOTL", "openpyxl"),
     ("sample_book.epub", "epub", "SENTINEL EPUB CHAPTER NARWHAL", None),
     ("sample_archive.zip", "zip", "SENTINEL ZIP MEMBER OKAPI", None),
+    ("equation_deck.pptx", "pptx", "SENTINEL PPTX EQUATION QUOKKA", "pptx"),
+    ("equation_report.docx", "docx", "SENTINEL DOCX EQUATION WOMBAT", "mammoth"),
 )
+
+#: The warnings each fixture's manifest must carry: what the converter could
+#: not carry onto the page (docs/09 P27). A fixture not named here must have
+#: no warning that names a slide or the document body.
+EXPECTED_WARNINGS = {
+    "equation_deck.pptx": [
+        "Slide 5: an equation could not be converted to LaTeX, so its "
+        "characters are given in document order without its layout ('a+b').",
+        "Slide 5: an embedded object (Equation.3) is not in the page.",
+    ],
+    "equation_report.docx": [
+        "The document body: a chart is not in the page.",
+        "The document body: an equation could not be converted to LaTeX, so "
+        "its characters are given in document order without its layout ('x2').",
+        "The document body: an equation could not be converted to LaTeX, so "
+        "its characters are given in document order without its layout ('a+b').",
+    ],
+}
 
 
 def _capture(fixture: Path, workdir: Path) -> tuple[Path, Path]:
@@ -104,12 +124,20 @@ def test_office_fixture_round_trips(
         )
     assert chunk_lines, "a document with text must produce at least one chunk"
 
+    # ...and what it could not read is said, in the order it was found.
+    conversion = [
+        warning
+        for warning in manifest["warnings"]
+        if warning.startswith(("Slide ", "The notes of slide ", "The document body"))
+    ]
+    assert conversion == EXPECTED_WARNINGS.get(name, []), manifest["warnings"]
+
 
 def test_every_fixture_has_a_generator_entry() -> None:
     """A fixture nobody can regenerate is the opaque binary this avoids."""
     from tools.fixtures.office import SENTINELS, WRITERS
 
     assert set(WRITERS) == {name for name, *_ in CASES}
-    assert set(SENTINELS) == {kind for _, kind, *_ in CASES}
-    for _, kind, sentinel, _ in CASES:
-        assert SENTINELS[kind] == sentinel
+    assert set(SENTINELS) == set(WRITERS)
+    for name, _, sentinel, _ in CASES:
+        assert SENTINELS[name] == sentinel

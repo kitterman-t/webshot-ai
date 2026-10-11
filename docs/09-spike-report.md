@@ -8078,3 +8078,133 @@ beside article content named like an ad: an "Advertisement" picture, a
 `download-header`, an `mv-notes` section. The ad text must be absent from
 `content.md` and the PDF in clean mode and present in faithful mode, and the
 article's text must stay in order. The clean-mode test fails on master.
+
+## P27: what MarkItDown's Office readers pass over (2026-10-11)
+
+A slide-text file made from a lecture deck said one slide held only its
+title. The lecture video's frame of that slide showed two pairs of hypotheses
+written with ≤, > and ≥. WebShot reads `.pptx` and `.docx` through MarkItDown
+0.1.8, which reads decks with python-pptx 1.0.2 and Word files with mammoth
+1.11.0. Master was 818a9e0. Each case below was measured on a synthetic file
+before anything changed. The fixtures are `equation_deck.pptx` and
+`equation_report.docx` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`.
+
+### P27-1: a text box holding an equation was dropped whole
+
+The slide's body text box sat in `mc:AlternateContent`. Its
+`mc:Choice Requires="a14"` held the text box: 13 `a:t` runs and 3 inline
+equations (`a14:m` holding `m:oMath`, whose `m:t` were "≤", ">" and "≥"). Its
+`mc:Fallback` held a shape whose only text was a no-break space, filled with a
+picture of the rendered text. PowerPoint writes this pair for any text box
+with an inline equation in it, so that older readers get the picture.
+
+python-pptx builds its shape tree from the `p:sp`, `p:grpSp`,
+`p:graphicFrame`, `p:cxnSp`, `p:pic` and `p:contentPart` children of a slide,
+and from nothing else. `mc:AlternateContent` is none of them, so it read
+neither branch. MarkItDown rendered the slide as its title alone, and the
+manifest had no warning.
+
+### P27-2: the rest of the boundary
+
+| Case | MarkItDown alone | Now |
+|---|---|---|
+| Text box in `mc:AlternateContent`, Choice `a14` | dropped | read, equations as LaTeX |
+| The same inside a group | dropped | read |
+| Equation in a shape python-pptx reads | its characters dropped: `a  b` | `a $\ne $ b` |
+| Equation in the speaker notes | its characters dropped | read |
+| SmartArt, whose words are in `ppt/diagrams/data*.xml` | dropped | read, in the diagram's order |
+| A chart python-pptx knows | read as a table | unchanged |
+| An Office 2016 chart (`chartex`), an embedded object | nothing | named in a warning |
+| Ink and slide transitions, Choice `p14` | nothing | unchanged (P27-4) |
+| Word equations | LaTeX, all or none per part | LaTeX, each on its own |
+| Word text box holding an equation | read from its VML Fallback | unchanged |
+| Word chart, Word SmartArt | dropped | named in a warning, not read |
+
+MarkItDown converts Word's equations itself before mammoth runs: `$…$`
+inline, `$$…$$` for a display equation. It converts a whole part inside
+`try: … except Exception: pass`. Its converter, `oMath2Latex` (adapted from
+dwml), indexes each structure's properties element, and the schema makes
+`m:fPr` and `m:dPr` optional. One fraction written without `m:fPr` raised
+`KeyError: 'fPr'`, the part reached mammoth unconverted, and mammoth drops
+every equation. In the fixture that cost `≠` and `E=mc²` as well as the
+fraction. Word writes those elements, so this takes a file from some other
+producer. How often that happens was not measured.
+
+### P27-3: the archive is rewritten before MarkItDown opens it
+
+`src/webshot/acquire/ooxml.py` rewrites a deck or a Word file the way
+MarkItDown already rewrites a Word file's equations:
+- An `mc:AlternateContent` whose Choice needs only DrawingML 2010 (`a14`)
+  becomes its Choice. The prefixes in `Requires` are resolved to namespaces,
+  not compared as text.
+- Each equation becomes a text run of its LaTeX, converted alone.
+  The converter is MarkItDown's own, handed in by the bridge, so an equation
+  reads the same from a deck as from a Word file. One it refuses becomes its
+  characters in document order, and a warning names the slide (or the Word
+  part) and those characters.
+- A SmartArt frame becomes a text box of its points, read down the `parOf`
+  hierarchy from the diagram's root with siblings in `srcOrd` order: the
+  outline PowerPoint's text pane shows. A point the hierarchy misses is read
+  after the rest.
+- A warning names what nothing renders: an embedded object with its
+  `progId`, a chart python-pptx cannot read, a table or chart in a Choice that
+  stays wrapped, text in such a Choice, and a Word chart or SmartArt diagram.
+
+A slide is parsed only if it contains `AlternateContent`, `oMath` or
+`graphicFrame` (a Word part, `oMath` or `graphicData`), and an archive with
+nothing rewritten is handed over as the same bytes. A file with none of these
+converts exactly as before. Every part goes through defusedxml (spec §6.6).
+
+The first plan gave an equation as its `m:t` characters in document order.
+That keeps "≤", but it turns x/2 into `x2` and σ² into `σ2`. LaTeX keeps the
+structure and matches what MarkItDown already does for Word, so the
+characters became the fallback for an equation the converter refuses.
+
+### P27-4: unwrapping every Choice broke a deck that read before
+
+The first version unwrapped every `mc:AlternateContent`. Over real decks
+(P27-5), one that MarkItDown alone read then failed with
+`AttributeError: 'lxml.etree._Element' object has no attribute 'has_ph_elm'`.
+Its slide held ink: a Choice requiring `p14` that holds a `p:contentPart`.
+python-pptx takes that element into its shape tree but has no class for it,
+so MarkItDown's first question about the shape raised. Now only a Choice
+needing nothing but `a14` is unwrapped. That is ECMA-376 Part 3's rule: take
+the first Choice whose namespaces the reader understands. The same decks held
+107 Choices requiring `p14` around slide transitions. They stay wrapped too,
+and python-pptx never reads transitions.
+
+The bridge no longer trusts its own rewrite either. If MarkItDown cannot read
+the rewritten archive, the bridge reads the file as it is and warns that the
+text in those structures is missing. A test makes that happen as it happened
+here, by letting `p14` through.
+
+### P27-5: real files
+
+Over 23 real decks and 81 Word files, the change gave 26 slides in 5 decks
+their missing text (7,705 characters), named 4 embedded objects in 2 decks,
+failed on none, and left the output of every Word file as it was. The decks
+held 5 `a14` text boxes with 13 equations, 21 SmartArt frames, 2 ink drawings
+and 4 embedded objects. None of the Word files had an equation, a chart or a
+SmartArt diagram in its body, so the Word half was measured on fixtures only.
+
+### P27-6: what this does not cover
+
+- Word SmartArt and charts are named, not read. Reading Word SmartArt would
+  take the same data-model walk; it is not done here.
+- A picture stays MarkItDown's `![name](name.jpg)`, so text that exists only
+  as a picture (a Fallback, a pasted screenshot) is not read.
+- An Equation Editor 3.0 object is an embedded object: named, not read.
+- mammoth reads no header or footer, equations or not.
+
+### P27-7: the tests
+
+`tests/test_ooxml.py` holds the archive-level cases, which need nothing but
+the standard library: a file with nothing to rewrite comes back as the same
+bytes, nested Choices, ink left wrapped, a prefix bound to another namespace,
+hostile and malformed parts, frames left wrapped. With the office extra it
+holds each fixture's exact Markdown and warnings, the fallback to the file as
+it is, Word output that matches MarkItDown's wherever MarkItDown converted
+every equation, and a test that pins MarkItDown alone still losing this text,
+so an upgrade that starts reading it says so. `tests/test_office_formats.py`
+captures both fixtures end to end and finds each warning in the manifest.

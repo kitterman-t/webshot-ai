@@ -129,6 +129,11 @@ ZIP work without it. Inputs above 100 MB are refused, all XML is parsed through
 `defusedxml`, and archives are checked against expansion, member-count, and
 zip-slip limits before anything is extracted.
 
+Equations in DOCX and PPTX come out as LaTeX (`$x \leq 12$`), and a slide's
+SmartArt as its text. What WebShot cannot read from an Office file, such as an
+embedded object or a Word chart, is named in the manifest's `warnings` rather
+than left out without a word.
+
 ## A protected document
 
 For a document that only exists inside an authenticated viewer:

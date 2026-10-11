@@ -28,7 +28,7 @@ import re
 import stat
 import tempfile
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
@@ -188,6 +188,8 @@ class MaterializedSource:
     kind: str
     original_path: Path | None = None
     temporary_directory: tempfile.TemporaryDirectory[str] | None = None
+    #: What the conversion could not carry onto the page, for the manifest.
+    warnings: list[str] = field(default_factory=list)
 
     def cleanup(self) -> None:
         if self.temporary_directory:
@@ -444,7 +446,7 @@ def _guard_archive_bytes(
             )
 
 
-def _render_local_file(path: Path) -> tuple[str, str]:
+def _render_local_file(path: Path) -> tuple[str, str, list[str]]:
     suffix = path.suffix.lower()
     base_href = path.parent.resolve().as_uri() + "/"
 
@@ -453,9 +455,11 @@ def _render_local_file(path: Path) -> tuple[str, str]:
             guard_xml(path)
         source = html.escape(path.resolve().as_uri(), quote=True)
         body = f'<figure><img src="{source}" alt="{html.escape(path.stem)}"><figcaption>{html.escape(path.name)}</figcaption></figure>'
-        return _document_template(
-            path.name, "Image document", body, base_href=base_href
-        ), "image"
+        return (
+            _document_template(path.name, "Image document", body, base_href=base_href),
+            "image",
+            [],
+        )
 
     source_format = FORMATS.get(suffix)
     if source_format is None:
@@ -470,6 +474,7 @@ def _render_local_file(path: Path) -> tuple[str, str]:
         guard_archive(path)
 
     fallback_title = path.name
+    warnings: list[str] = []
     if source_format.presentation == "native":
         source_markdown = path.read_text(encoding="utf-8", errors="replace")
     else:
@@ -489,17 +494,22 @@ def _render_local_file(path: Path) -> tuple[str, str]:
         # better than its filename does; the body's first heading still wins,
         # because that is what a reader sees at the top of the page.
         fallback_title = converted.title or fallback_title
+        warnings = list(converted.warnings)
         if source_format.presentation == "verbatim":
             source_markdown = _as_code_block(source_markdown)
         if source_format.section:
             source_markdown = f"## {source_format.section}\n\n{source_markdown}"
 
-    return _render_markdown_document(
-        source_markdown,
-        fallback_title=fallback_title,
-        label=source_format.label,
-        base_href=base_href,
-    ), source_format.kind
+    return (
+        _render_markdown_document(
+            source_markdown,
+            fallback_title=fallback_title,
+            label=source_format.label,
+            base_href=base_href,
+        ),
+        source_format.kind,
+        warnings,
+    )
 
 
 def materialize_source(source: str) -> MaterializedSource:
@@ -524,7 +534,7 @@ def materialize_source(source: str) -> MaterializedSource:
             original_path=path,
         )
 
-    rendered, kind = _render_local_file(path)
+    rendered, kind, warnings = _render_local_file(path)
     temporary_directory = tempfile.TemporaryDirectory(prefix="webshot-source-")
     generated = Path(temporary_directory.name) / "index.html"
     generated.write_text(rendered, encoding="utf-8", newline="\n")
@@ -534,4 +544,5 @@ def materialize_source(source: str) -> MaterializedSource:
         kind=kind,
         original_path=path,
         temporary_directory=temporary_directory,
+        warnings=warnings,
     )

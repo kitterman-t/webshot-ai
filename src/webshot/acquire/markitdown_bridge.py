@@ -18,6 +18,11 @@ both silently damage content WebShot promises to preserve (docs/09 P3-1):
    rewritten to `<br>` on the way in, which is what HTML means by one.  The
    pipe is left to MarkItDown: escaping it here as well escaped it twice, and
    the page showed `a \\| b` (docs/09 P10-23).
+3. **Its Office readers skip what sits beside a document's main structure.**
+   python-pptx reads neither branch of `mc:AlternateContent`, where PowerPoint
+   puts every shape that holds an equation, nor an equation, nor SmartArt; and
+   MarkItDown's Word equations are all kept or all lost.  `ooxml` rewrites the
+   archive first, and says what it still could not read (docs/09 P27).
 
 MarkItDown itself parses XML through `defusedxml` (its RSS and EPUB
 converters), which is *not* what spec §6.6 rests on: the adapter defuses every
@@ -32,6 +37,7 @@ import io
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from xml.etree.ElementTree import Element
 
 from markitdown import (
     FileConversionException,
@@ -40,8 +46,10 @@ from markitdown import (
     MissingDependencyException,
     StreamInfo,
 )
+from markitdown.converter_utils.docx.math.omml import oMath2Latex
 
 from ..errors import UsageError
+from . import ooxml
 
 #: Markdown constructs that change what a cell *is* rather than how it looks.
 #: Anchored per cell, not per line: after the newline collapse below a cell is
@@ -63,6 +71,20 @@ class ConvertedMarkdown:
 
     markdown: str
     title: str | None
+    #: What the conversion could not carry into `markdown`, for the manifest.
+    warnings: tuple[str, ...] = ()
+
+
+def _equation_latex(equation: Element) -> str:
+    """One `m:oMath` as LaTeX, by the converter MarkItDown applies to Word.
+
+    The same converter for decks as for documents, so an equation reads the
+    same whichever format it arrived in.  It is MarkItDown's internal module,
+    imported at the top of this file so that a release which moves it fails
+    the import, not every equation.
+    """
+    latex: str = oMath2Latex(equation).latex
+    return latex
 
 
 def _escape_cell(cell: str) -> str:
@@ -140,6 +162,31 @@ def _needs_a_dependency(exc: MarkItDownException) -> bool:
     )
 
 
+def _conversion_error(
+    exc: MarkItDownException, path: Path, suffix: str, extra: str | None
+) -> UsageError:
+    """What a user is told when MarkItDown could not convert `path`."""
+    if not _needs_a_dependency(exc):
+        return UsageError(f"Could not read {path.name} as {suffix}: {exc}")
+    # From the checkout, never `pip install webshot[...]`: WebShot is not on
+    # PyPI, and that name there belongs to an unrelated project. A format with
+    # no extra is one the base install reads, so a missing dependency there
+    # means the install is incomplete, not that an extra is absent.
+    if extra is None:
+        advice = (
+            "a dependency of WebShot's base install, which is missing. "
+            "Restore it from your checkout: uv sync (name any extras you "
+            "use too)"
+        )
+    else:
+        advice = (
+            f"the optional dependencies for that format. Install "
+            f"webshot[{extra}] from your checkout: uv sync --extra {extra} "
+            f"(name any other extras you use too)"
+        )
+    return UsageError(f"Reading {path.suffix} files needs {advice}.")
+
+
 def to_markdown(
     path: Path, *, suffix: str, extra: str | None = None
 ) -> ConvertedMarkdown:
@@ -152,34 +199,39 @@ def to_markdown(
     dependency message names *its* extras, and a user cannot install those.
     """
     data = path.read_bytes()
+    original = data
+    warnings: list[str] = []
     if suffix in (".csv", ".tsv"):
         data = _as_escaped_csv(data, "\t" if suffix == ".tsv" else ",", path.name)
         suffix = ".csv"
+    elif suffix == ".pptx":
+        data, warnings = ooxml.prepare_pptx(data, _equation_latex)
+    elif suffix == ".docx":
+        data, warnings = ooxml.prepare_docx(data, _equation_latex)
 
     converter = MarkItDown(enable_plugins=False)
+    stream_info = StreamInfo(extension=suffix, filename=path.name)
     try:
-        result = converter.convert_stream(
-            io.BytesIO(data),
-            stream_info=StreamInfo(extension=suffix, filename=path.name),
-        )
+        result = converter.convert_stream(io.BytesIO(data), stream_info=stream_info)
     except MarkItDownException as exc:
-        if not _needs_a_dependency(exc):
-            raise UsageError(f"Could not read {path.name} as {suffix}: {exc}") from exc
-        # From the checkout, never `pip install webshot[...]`: WebShot is not
-        # on PyPI, and that name there belongs to an unrelated project. A format
-        # with no extra is one the base install reads, so a missing dependency
-        # there means the install is incomplete, not that an extra is absent.
-        if extra is None:
-            advice = (
-                "a dependency of WebShot's base install, which is missing. "
-                "Restore it from your checkout: uv sync (name any extras you "
-                "use too)"
+        rewritten = suffix in (".pptx", ".docx") and data is not original
+        if not rewritten or _needs_a_dependency(exc):
+            raise _conversion_error(exc, path, suffix, extra) from exc
+        # The rewrite is WebShot's, and a file the reader opened as it was
+        # must not become one it cannot open. Read it as it is, and say what
+        # that costs: the earlier warnings described the rewrite, so they go.
+        try:
+            result = converter.convert_stream(
+                io.BytesIO(original), stream_info=stream_info
             )
-        else:
-            advice = (
-                f"the optional dependencies for that format. Install "
-                f"webshot[{extra}] from your checkout: uv sync --extra {extra} "
-                f"(name any other extras you use too)"
-            )
-        raise UsageError(f"Reading {path.suffix} files needs {advice}.") from exc
-    return ConvertedMarkdown(markdown=result.markdown, title=result.title)
+        except MarkItDownException as again:
+            raise _conversion_error(again, path, suffix, extra) from again
+        warnings = [
+            f"{path.name} could not be read once its equations, AlternateContent "
+            f"and SmartArt were made readable ({' '.join(str(exc).split())}), so "
+            "it was read as it is: "
+            "the text in those is not in the page (docs/09 P27)."
+        ]
+    return ConvertedMarkdown(
+        markdown=result.markdown, title=result.title, warnings=tuple(warnings)
+    )
