@@ -7,6 +7,7 @@ skip without the office extra, as `test_office_formats.py` does.
 
 from __future__ import annotations
 
+import html
 import importlib.util
 import io
 import zipfile
@@ -319,6 +320,17 @@ REPORT_WARNINGS = (
 )
 
 
+def _decoded(markdown: str) -> str:
+    """The bridge's Markdown with its character references read back.
+
+    The bridge writes a document's text as text, `\\` as `&#92;` and `{` as
+    `&#123;` (docs/09 P28), which renders as the character itself.  Read back,
+    the Markdown must still be exactly what is pinned here, so every character
+    and line stays held, and a reference written twice would not read back.
+    """
+    return html.unescape(markdown)
+
+
 def _markitdown_alone(name: str) -> str:
     from markitdown import MarkItDown, StreamInfo
 
@@ -354,7 +366,7 @@ def test_a_deck_reaches_the_page_whole() -> None:
     from webshot.acquire.markitdown_bridge import to_markdown
 
     converted = to_markdown(FIXTURES / "equation_deck.pptx", suffix=".pptx")
-    assert converted.markdown == DECK_MARKDOWN
+    assert _decoded(converted.markdown) == DECK_MARKDOWN
     assert converted.warnings == DECK_WARNINGS
 
 
@@ -363,7 +375,7 @@ def test_word_equations_are_converted_one_at_a_time() -> None:
     from webshot.acquire.markitdown_bridge import to_markdown
 
     converted = to_markdown(FIXTURES / "equation_report.docx", suffix=".docx")
-    assert converted.markdown == REPORT_MARKDOWN
+    assert _decoded(converted.markdown) == REPORT_MARKDOWN
     assert converted.warnings == REPORT_WARNINGS
 
 
@@ -396,7 +408,7 @@ def test_word_equations_read_as_markitdown_reads_them_when_it_can(
     )
     converted = to_markdown(fixture, suffix=".docx")
     assert "$$E=mc^{2}$$" in upstream.markdown
-    assert converted.markdown == upstream.markdown
+    assert _decoded(converted.markdown) == upstream.markdown
     assert converted.warnings == ()
 
 
@@ -431,7 +443,7 @@ def test_a_rewrite_the_reader_cannot_open_falls_back_to_the_file_as_it_is(
     converted = markitdown_bridge.to_markdown(
         FIXTURES / "equation_deck.pptx", suffix=".pptx"
     )
-    assert converted.markdown == _markitdown_alone("equation_deck.pptx")
+    assert _decoded(converted.markdown) == _markitdown_alone("equation_deck.pptx")
     assert len(converted.warnings) == 1
     assert converted.warnings[0].startswith(
         "equation_deck.pptx could not be read once its equations, "

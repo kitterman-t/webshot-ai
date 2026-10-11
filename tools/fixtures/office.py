@@ -22,11 +22,19 @@ specification requires.  PPTX and XLSX use python-pptx and openpyxl, which
 The two `equation_*` fixtures hold what those readers pass over (docs/09 P27):
 an equation, `mc:AlternateContent`, SmartArt, an embedded object, and an
 equation MarkItDown's LaTeX converter refuses.  Every word in them is made up.
+
+The five `markup_*` fixtures hold text that HTML or Markdown would read as
+structure — an `<img>` aimed at a `.invalid` host, `# heading`, `3.`, `===`,
+`: definition`, a link, alt text and a link target that close their own
+syntax — in every place each format's reader takes text from (docs/09 P28).
 """
 
 from __future__ import annotations
 
+import base64
+import csv
 import io
+import re
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -46,6 +54,11 @@ SENTINELS = {
     # reaches the bundle only if that box does.
     "equation_deck.pptx": "SENTINEL PPTX EQUATION QUOKKA",
     "equation_report.docx": "SENTINEL DOCX EQUATION WOMBAT",
+    "markup_deck.pptx": "SENTINEL PPTX MARKUP CASSOWARY",
+    "markup_report.docx": "SENTINEL DOCX MARKUP DUGONG",
+    "markup_workbook.xlsx": "SENTINEL XLSX MARKUP GECKO",
+    "markup_book.epub": "SENTINEL EPUB MARKUP IBEX",
+    "markup_archive.zip": "SENTINEL ZIP MARKUP JERBOA",
 }
 
 #: Deterministic timestamp for every archive member, so regenerating a fixture
@@ -502,6 +515,269 @@ def write_equation_report(path: Path) -> None:
     )
 
 
+# --------------------------------------------------------------------------- #
+# Markup — text a document holds that HTML or Markdown would read as structure
+# --------------------------------------------------------------------------- #
+
+#: Where an image would be fetched from if a document's text reached the page
+#: as markup.  `.invalid` never resolves (RFC 2606), so a capture that tried
+#: says so as a failed request, and nothing here can reach a real host.
+BEACON = "https://tracker.invalid"
+
+#: An alt text and a link target that close the Markdown syntax holding them
+#: and open an image of their own.
+BREAKOUT_ALT = f"a chart]({BEACON}/alt.png) ![x"
+BREAKOUT_HREF = f"https://example.invalid/?q=)![x]({BEACON}/href.png"
+#: A code block whose own line closes markdownify's three-backtick fence.
+BREAKOUT_PRE = f'one\n```\n<img src="{BEACON}/pre.png">\n```\ntwo'
+
+
+def markup_lines(where: str) -> list[str]:
+    """Lines of text that are markup to HTML or to Python-Markdown."""
+    return [
+        f'<img src="{BEACON}/{where}.png"> and *stars*',
+        "# Not a heading",
+        f"[a link](https://example.invalid/{where}) and ![an image]({BEACON}/{where}-md.png)",
+        "3. Third, as typed",
+        "Total",
+        "===",
+        "Term",
+        ": not a definition",
+        "~~~",
+        "Set {x}",
+        "C:\\Users\\_x_ and a\\*b and __init__",
+        "&copy; as typed",
+    ]
+
+
+def _without_clock(data: bytes) -> bytes:
+    """A python-pptx or openpyxl package, with its clock readings fixed.
+
+    Both stamp the save time into `docProps/core.xml`, and python-pptx embeds a
+    chart's data as an XlsxWriter workbook that does the same, so the zip's
+    timestamps are not the only thing that would change on every run.
+    """
+    stamp = re.compile(rb"(<dcterms:(?:created|modified)[^>]*>)[^<]*(</dcterms:)")
+    output = io.BytesIO()
+    with (
+        zipfile.ZipFile(io.BytesIO(data)) as source,
+        zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as target,
+    ):
+        for info in source.infolist():
+            payload = source.read(info)
+            if info.filename.endswith("docProps/core.xml"):
+                payload = stamp.sub(rb"\g<1>2026-01-01T00:00:00Z\g<2>", payload)
+            elif info.filename.endswith(".xlsx"):
+                payload = _without_clock(payload)
+            entry = zipfile.ZipInfo(info.filename, date_time=FIXED_TIME)
+            entry.compress_type = zipfile.ZIP_DEFLATED
+            entry.external_attr = 0o644 << 16
+            target.writestr(entry, payload)
+    return output.getvalue()
+
+
+def write_markup_deck(path: Path) -> None:
+    from pptx import Presentation
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE
+    from pptx.util import Inches
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+    slide.shapes.title.text = f'<img src="{BEACON}/title.png"> and *title*'
+    box = slide.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(9), Inches(3))
+    lines = [SENTINELS["markup_deck.pptx"], *markup_lines("slide")]
+    # A blank line, then a tab: Markdown's indented code block.
+    lines += ["", "\tIndented, not code"]
+    box.text_frame.text = lines[0]
+    for line in lines[1:]:
+        box.text_frame.add_paragraph().text = line
+    table = slide.shapes.add_table(
+        2, 2, Inches(0.5), Inches(4.6), Inches(9), Inches(0.8)
+    ).table
+    for column, (head, cell) in enumerate(
+        [("Header", f'<img src="{BEACON}/cell.png">'), ("Other", "# cell")]
+    ):
+        table.cell(0, column).text = head
+        table.cell(1, column).text = cell
+    data = CategoryChartData()
+    data.categories = [f'<img src="{BEACON}/category.png">']
+    data.add_series("<b>series</b>", (1,))
+    chart = slide.shapes.add_chart(
+        XL_CHART_TYPE.COLUMN_CLUSTERED,
+        Inches(0.5),
+        Inches(5.5),
+        Inches(4),
+        Inches(1.5),
+        data,
+    ).chart
+    chart.has_title = True
+    chart.chart_title.text_frame.text = "[chart](https://example.invalid/chart) _x_"
+    slide.notes_slide.notes_text_frame.text = f'<img src="{BEACON}/notes.png"> *notes*'
+    buffer = io.BytesIO()
+    presentation.save(buffer)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_without_clock(buffer.getvalue()))
+
+
+_MARKUP_DOCX_CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>
+"""
+
+
+def write_markup_report(path: Path) -> None:
+    from xml.sax.saxutils import escape, quoteattr
+
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"'
+        f' Target={quoteattr(BREAKOUT_HREF)} TargetMode="External"/>'
+        '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"'
+        ' Target="media/image1.png"/></Relationships>\n'
+    )
+    picture = (
+        '<w:p><w:r><w:drawing><wp:inline><wp:extent cx="9525" cy="9525"/>'
+        f'<wp:docPr id="1" name="Picture 1" descr={quoteattr(BREAKOUT_ALT)}/>'
+        '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+        '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+        '<pic:nvPicPr><pic:cNvPr id="0" name="pixel.png"/><pic:cNvPicPr/></pic:nvPicPr>'
+        '<pic:blipFill><a:blip r:embed="rId3"/></pic:blipFill><pic:spPr/></pic:pic>'
+        "</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"
+    )
+    body = (
+        _docx_paragraph(SENTINELS["markup_report.docx"])
+        + "".join(_docx_paragraph(escape(line)) for line in markup_lines("word"))
+        + f'<w:p><w:hyperlink r:id="rId2">{_word_run("a link out")}</w:hyperlink></w:p>'
+        + picture
+        + "<w:tbl><w:tblPr/>"
+        + _docx_row(["Header", "Other"])
+        + _docx_row([escape(f'<img src="{BEACON}/cell.png">'), "# cell"])
+        + "</w:tbl>"
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", _MARKUP_DOCX_CONTENT_TYPES),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+            ("word/media/image1.png", _PIXEL_PNG),
+        ],
+    )
+
+
+#: A sheet name is a heading MarkItDown writes itself.  Excel forbids
+#: `[]:*?/\` in one, which still leaves HTML and most of Markdown.
+MARKUP_SHEET = "<i>Q1 #2 _x_ & {y}"
+
+
+def write_markup_workbook(path: Path) -> None:
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = MARKUP_SHEET
+    rows = [["Where", "Text"], ["sentinel", SENTINELS["markup_workbook.xlsx"]]]
+    rows += [
+        [f"line {number}", line] for number, line in enumerate(markup_lines("cell"))
+    ]
+    rows.append(["formula text", "=SUM(A1)"])
+    for row in rows:
+        sheet.append(row)
+        # openpyxl takes a leading `=` for a formula; these cells hold the text.
+        for cell in sheet[sheet.max_row]:
+            cell.data_type = "s"
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_without_clock(buffer.getvalue()))
+
+
+#: The book's own picture, inline: a file beside it would not be beside the
+#: page WebShot renders, and its failed request would read as the text's.
+_PIXEL_URI = "data:image/png;base64," + base64.b64encode(_PIXEL_PNG).decode()
+
+
+def write_markup_book(path: Path) -> None:
+    from xml.sax.saxutils import escape, quoteattr
+
+    title = escape(f"<b>Markup</b> *book* & {{{SENTINELS['markup_book.epub']}}}")
+    opf = f"""<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="book-id">urn:uuid:webshot-markup-fixture</dc:identifier>
+    <dc:title>{title}</dc:title>
+    <dc:creator># Creator</dc:creator>
+    <dc:description>{escape(f'<img src="{BEACON}/description.png">')}</dc:description>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <spine><itemref idref="chapter"/></spine>
+</package>
+"""
+    paragraphs = "".join(f"<p>{escape(line)}</p>" for line in markup_lines("chapter"))
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter</title></head>
+<body>
+  <h1>Chapter One</h1>
+  <p>{SENTINELS["markup_book.epub"]}</p>
+  {paragraphs}
+  <p>A sentence that ends robots!<a href="#note">1</a></p>
+  <p><a href={quoteattr(BREAKOUT_HREF)}>a link out</a></p>
+  <p><img src="{_PIXEL_URI}" alt={quoteattr(BREAKOUT_ALT)}/></p>
+  <pre>{escape(BREAKOUT_PRE)}</pre>
+  <p id="note">1. The note.</p>
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", opf),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+def _csv(rows: list[list[str]]) -> str:
+    buffer = io.StringIO()
+    csv.writer(buffer, lineterminator="\n").writerows(rows)
+    return buffer.getvalue()
+
+
+def write_markup_archive(path: Path) -> None:
+    lines = [SENTINELS["markup_archive.zip"], *markup_lines("member")]
+    cells = [
+        f'<img src="{BEACON}/csv.png">',
+        "=SUM(A1)",
+        "~approx",
+        "Set {x}",
+        "C:\\Users\\_x_",
+    ]
+    _write_archive(
+        path,
+        [
+            ("notes/markup.txt", "\n".join(lines) + "\n"),
+            ("data/markup.csv", _csv([["Cell"], *([cell] for cell in cells)])),
+            ("data/markup.tsv", "Cell\tOther\n" + f'<img src="{BEACON}/tsv.png">\t#\n'),
+            # A member's name is text the archive's reader writes as a heading.
+            ("notes/<img src=https:tracker.invalid>.txt", "named\n"),
+        ],
+    )
+
+
 WRITERS = {
     "sample_report.docx": write_docx,
     "sample_deck.pptx": write_pptx,
@@ -510,6 +786,11 @@ WRITERS = {
     "sample_archive.zip": write_zip,
     "equation_deck.pptx": write_equation_deck,
     "equation_report.docx": write_equation_report,
+    "markup_deck.pptx": write_markup_deck,
+    "markup_report.docx": write_markup_report,
+    "markup_workbook.xlsx": write_markup_workbook,
+    "markup_book.epub": write_markup_book,
+    "markup_archive.zip": write_markup_archive,
 }
 
 

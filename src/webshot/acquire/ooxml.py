@@ -29,6 +29,10 @@ converter refuses is given as its characters in document order, and a frame
 nothing renders (an embedded object, a chart type python-pptx does not know) is
 named; both come back as warnings for the manifest.
 
+`rewrite_parts` is the same machinery for an edit the caller supplies: the
+bridge uses it to write the text MarkItDown copies into Markdown as text
+(docs/09 P28).
+
 Every part is parsed through defusedxml (spec §6.6). Nothing upstream is
 imported here: the equation converter is MarkItDown's, so the bridge hands it in.
 """
@@ -41,6 +45,7 @@ import posixpath
 import zipfile
 import zlib
 from collections.abc import Callable
+from urllib.parse import unquote
 from xml.etree.ElementTree import Element, ParseError, SubElement, tostring
 
 from defusedxml import ElementTree as DefusedElementTree
@@ -52,6 +57,7 @@ EquationConverter = Callable[[Element], str]
 NAMESPACES = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
     "a14": "http://schemas.microsoft.com/office/drawing/2010/main",
+    "ct": "http://schemas.openxmlformats.org/package/2006/content-types",
     "dgm": "http://schemas.openxmlformats.org/drawingml/2006/diagram",
     "m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
     "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
@@ -537,6 +543,54 @@ def _rebuild(data: bytes, replacements: dict[str, bytes]) -> bytes:
             entry.create_system = info.create_system
             target.writestr(entry, payload)
     return output.getvalue()
+
+
+def _part_types(archive: zipfile.ZipFile) -> dict[str, str]:
+    """Each member's content type, as `[Content_Types].xml` declares it.
+
+    That declaration, not the part's name, is what python-pptx and openpyxl
+    choose a part's reader by.
+    """
+    declared = _read(archive, "[Content_Types].xml")
+    if declared is None:
+        return {}
+    defaults = {
+        (entry.get("Extension") or "").lower(): entry.get("ContentType") or ""
+        for entry in declared.iter(_q("ct:Default"))
+    }
+    overrides = {
+        unquote(entry.get("PartName") or "").lstrip("/").lower(): (
+            entry.get("ContentType") or ""
+        )
+        for entry in declared.iter(_q("ct:Override"))
+    }
+    types: dict[str, str] = {}
+    for name in archive.namelist():
+        key = name.lower()
+        kind = overrides.get(key) or defaults.get(posixpath.splitext(key)[1][1:])
+        if kind:
+            types[name] = kind
+    return types
+
+
+def rewrite_parts(data: bytes, rewrites: dict[str, Callable[[Element], bool]]) -> bytes:
+    """`data` with each part of a content type in `rewrites` passed through it.
+
+    A rewrite edits the part's tree in place and says whether it changed
+    anything.  A part it leaves alone is copied byte for byte, and a package in
+    which it changed nothing is returned as it came.
+    """
+    archive = _open(data)
+    if archive is None:
+        return data
+    replacements: dict[str, bytes] = {}
+    with archive:
+        for part, kind in _part_types(archive).items():
+            rewrite = rewrites.get(kind)
+            root = _read(archive, part) if rewrite else None
+            if rewrite and root is not None and rewrite(root):
+                replacements[part] = _serialize(root)
+    return _rebuild(data, replacements)
 
 
 def _slide_parts(archive: zipfile.ZipFile, presentation: str) -> list[str]:

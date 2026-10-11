@@ -158,6 +158,20 @@ which records the measurements behind each change.
 
 ### Security
 
+- **A document's text can no longer fetch a URL, or restructure the page.**
+  MarkItDown writes what a slide, a Word paragraph, a spreadsheet cell, an EPUB
+  chapter or a text file in a zip says into Markdown as if it were Markdown, so
+  `<img src="https://…">` typed in any of them became an image the capture
+  fetched, and `# Q3`, `3.`, `*x*`, `===` or `: x` became headings, lists,
+  emphasis and definitions. An image's alt text, a link's target and a code
+  block could each close their own syntax and add an image. Every string a
+  document contributes is now written as character references, which render as
+  the character itself, so a page whose text needed none renders exactly as
+  before. A zip's plain-text members are code blocks, as a top-level `.txt` is,
+  and a CSV inside a zip is escaped as a top-level one is. The spreadsheet fix
+  of P8-9 is corrected too: `=SUM(A1)` printed as `\=SUM(A1)`, and a trailing
+  `{x}` was dropped. See docs/09 P28.
+
 - **NAT64, IPv4-translated and site-local IPv6 addresses are internal.** The
   private-network check classified `64:ff9b::a9fe:a9fe`, the NAT64 spelling of
   the cloud metadata endpoint `169.254.169.254`, as public, along with

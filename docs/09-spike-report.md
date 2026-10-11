@@ -8208,3 +8208,169 @@ it is, Word output that matches MarkItDown's wherever MarkItDown converted
 every equation, and a test that pins MarkItDown alone still losing this text,
 so an upgrade that starts reading it says so. `tests/test_office_formats.py`
 captures both fixtures end to end and finds each warning in the manifest.
+
+## P28: a document's text was written into the page as markup (2026-10-11)
+
+A deck whose text box read `<img src="https://tracker.invalid/beacon.png"> and
+*stars*` rendered, through `materialize_source`, as
+`<p><img src="https://tracker.invalid/beacon.png"> and <em>stars</em></p>`.
+MarkItDown's deck reader appends a shape's text to its Markdown as it is,
+Python-Markdown passes raw HTML through, and `MARKDOWN_POLICY` allows
+`img[src]`: P8-9's class, which `_escape_cell` had closed for CSV cells alone.
+Measured with MarkItDown 0.1.8, python-pptx 1.0.2, mammoth 1.11.0, markdownify
+1.2.3, Python-Markdown 3.10.3 and nh3 0.3.7, on master dd961c3 (P27 merged).
+The fixtures are the five `markup_*` files in `tests/fixtures/office/`, written
+by `tools/fixtures/office.py`; every host in them is `.invalid`.
+
+### P28-1: the capture fetched what the text named
+
+A local file is captured with no request gate unless `--block-private-requests`
+or MCP roots install one, and that gate passes public hosts. With a local
+server standing in for the tracker, one default capture of each payload file
+requested: from a deck, 7 URLs (its title, body text, a Markdown image in the
+body, a table cell, a chart's title and category, the notes); from a Word file
+3; from a workbook 2; from an EPUB 4 (body, a Markdown image, `dc:title`,
+`dc:description`), besides the book's own `<img>`; from a zip 8, half of them
+from a deck inside it. A request that succeeds leaves no trace in the manifest
+or the report. One to a host that does not resolve shows as "N requests for
+the page's resources failed (image N)", with the URLs in `--report` only.
+
+### P28-2: what Python-Markdown made of the rest
+
+| Text in the document | Rendered before | Now |
+|---|---|---|
+| `<img src=…>`, `<b>x</b>`, `<class '…'>` | an element; an unknown tag dropped with its name | the text |
+| `*x*`, `__init__`, `_____` | emphasis; the underscores lost | the text |
+| `# x`, and `#hashtag` with no space | a heading (one became a deck's page title) | the text |
+| `C#` in a heading line | `C`: trailing hashes are stripped | `C#` |
+| `3. Third` | a list, renumbered from 1: `ol[start]` is not in the policy | the text |
+| `Total` over `===`, `Term` over `: x` | a heading; a definition list | the text |
+| `~~~` or ```` ``` ```` alone on a line | a fence that swallowed what followed | the text |
+| `[id]: url`, `*[HTML]: …`, `Set {x}` | the line removed; `{x}` taken as attributes | the text |
+| `a\*b`, `C:\Users\_x_` | a backslash escaping what follows it | the text |
+| `&copy;` typed as such | © | `&copy;` |
+| a tab or four spaces after a blank line | a code block | the text |
+| `robots!` and then a link | an image (the `!` joins markdownify's `[`) | the text and the link |
+| alt text `x](https://…/a.png) ![y` | a second image, fetched | one image's alt |
+| a link target `…?q=)![y](https://…/b.png` | a link cut short and an image | one link, `()` encoded |
+| a `<pre>` holding a ```` ``` ```` line | the block closed; what followed read as Markdown | one block |
+
+### P28-3: where MarkItDown takes a document's text
+
+| Format | Written into Markdown as it is | Written through markdownify |
+|---|---|---|
+| `.pptx` | shape and title text, notes, a chart's title, categories and series | table cells |
+| `.docx` | nothing | all of it, alt text and link targets included |
+| `.xlsx` | sheet names, as `## name` | cells |
+| `.epub` | `dc:` metadata, as `**Title:** …` | chapters, alt, links, `<pre>` |
+| `.zip` | member names, and every member its plain-text reader takes | each member's own reader |
+| `.csv` | cells, after `_escape_cell` | nothing |
+
+markdownify is no defence: the HTML mammoth and pandas write is escaped, but
+BeautifulSoup decodes it and markdownify escapes only `*` and `_`. Its
+`escape_misc` aims at CommonMark: Python-Markdown prints `\=` and reads `\<img>`
+as a backslash and a tag. A pptx table cell went through `html.escape` and back
+out the same way. A CSV inside a zip skipped `_escape_cell` entirely, and a TSV
+there was not a table. And `_escape_cell` itself was wrong three ways for this
+renderer: `=SUM(A1)` printed as `\=SUM(A1)` and `~x` as `\~x`, a trailing
+`{x}` was dropped, and a cell's own backslash escaped what followed it.
+
+### P28-4: written as character references
+
+Each string a document contributes is encoded where it enters Markdown: `&`,
+`<` and `>` as named references, and Markdown's characters as numeric ones,
+which the browser reads as the character and Markdown as nothing. nh3 writes
+the character back when it serializes the page, so text that needed none of
+this renders byte for byte as before, the heading anchors `toc` derives
+included. `! # * [ \ ] _ ` { | }` are encoded wherever they stand, `+ - : = ~`,
+an ordered list's full stop and code-block indentation where a line begins.
+A test holds that set to Python-Markdown's own list of escapable characters.
+
+Backslash escapes were rejected: no backslash escapes `=`, `~` or `:` there,
+and markdownify escapes `*` again, so a deck's table cell would have printed
+`\*`. Turning raw HTML off in the renderer was rejected too: MarkItDown writes
+HTML of its own (`<!-- Slide number -->`, markdownify's `<u>`, the CSV `<br>`).
+
+The first version encoded every punctuation character. A 1.7 MB CSV then took
+5.4 s instead of 3.2 s, and a 6.8 MB zip of 1,075 Python files 33 s instead of
+9 s, all in Python-Markdown's inline pass, which stashes each reference on its
+own. Narrowing the set to the above made the CSV level; the zip still took
+28 s against 15 s in that run, on 1.4 million references in prose. So a zip
+member read as plain text became a fenced code block, as a top-level `.txt`
+is: literal by construction, lines intact, and nothing to encode. A table cell
+or a heading gets no line-start encoding either, since markdownify writes each
+as one line after its own marker; every negative number in a sheet had been a
+reference, and six workbooks 12% slower.
+
+### P28-5: where it is applied
+
+- **markdownify.** `_TextMarkdownify` replaces its `escape`, fences a `<pre>`
+  longer than any backtick run in it, and is handed a tree whose alt and title
+  attributes are encoded and whose `href`, `src`, `data-src` and `poster` have
+  whitespace, `()<>`, quotes, backticks and `\` percent-encoded.
+  `_TextHtmlConverter` copies `HtmlConverter.convert`, because upstream names
+  its writer inside that method; it also encodes the plain text its
+  too-deep fallback returns, which upstream writes raw. The Word, Excel and
+  EPUB readers write through it, set on their `_html_converter`; a release
+  without that attribute is refused at construction.
+- **Text written straight in.** A deck's slide, notes and chart parts and a
+  workbook's sheet names are encoded in the archive before the reader opens it
+  (`ooxml.rewrite_parts`, by content type, through defusedxml). An EPUB's
+  metadata is encoded as it is read, and the title the bridge returns is
+  decoded again for the page's `<title>`. A zip is walked by the bridge: names
+  encoded, a CSV or TSV escaped as a top-level one is, Markdown and notebooks
+  rendered as Markdown, anything else as a code block.
+- **In place.** When a converter raises, MarkItDown tries the next that
+  accepts the file, so a builtin left beside its replacement would read a deck
+  the replacement refused, text raw. Each is replaced at its own position and
+  priority. A deck whose notes part declares an entity now ends after one
+  attempt, with exit 2.
+
+P27's equation LaTeX passes through intact: `$\leq $` is written as
+`$&#92;leq $` and renders as it did, and both P27 fixtures render byte for
+byte as before.
+
+### P28-6: real files
+
+Over 178 real files (23 decks, 81 Word files, 6 workbooks, 1 EPUB, 5 zips, 62
+CSVs), the page of 151 was byte-identical and 3 failed as before, on archive
+limits. Each of the 27 that changed had text that had been read as markup:
+Python comments pasted into Word files, which had become headings, and pasted
+`df.info()` output whose `<class '…DataFrame'>` line had vanished as a tag;
+`1.`/`2.` typed as paragraphs, which had become lists numbered from 1 even
+where the first was `2.`; a hashtag on a deck's last slide, which had become
+the page's title; `_____` blanks for answers, turned into bold and italics; a
+published book whose "…robots!" and footnote link had become a broken image,
+and whose chapter summaries a definition list; `*all*` typed on a slide; an
+`&amp;` typed into a citation; number grids indented with tabs, which had
+become code blocks; and a zipped Python project whose `.py` files had read as
+Markdown. Conversion took, before and after, 10.59 s and 10.90 s for the 62
+CSVs, 7.83 s and 7.85 s for the Word files, 25.26 s and 25.78 s for the
+workbooks, 8.52 s and 9.63 s for the zips, and 1.47 s and 1.96 s for the decks,
+whose parts are now parsed and written again.
+
+### P28-7: what this does not cover
+
+- A `.md` file is Markdown, in a zip or not: its raw HTML is its author's,
+  rendered and sanitized as before, and an image it names is fetched. So is an
+  EPUB's own `<img src="https://…">`, as an HTML file's would be. Nothing gates
+  a local capture's requests; this keeps a document's *text* from making them.
+- P27's rewrite does not reach a deck or a Word file inside a zip.
+- `ol[start]` is not in `MARKDOWN_POLICY`, so a real list that starts at 3 is
+  still numbered from 1.
+- A picture is still MarkItDown's `![name](name.jpg)`, a `file:` request that
+  fails (P27-6).
+
+### P28-8: the tests
+
+`tests/test_office_markup.py` holds the encoded set to Python-Markdown's
+escapable characters; renders 22 strings and 10 cells as themselves; checks
+that text needing no encoding renders byte for byte as before; reads each
+`markup_*` fixture and finds no element its text could have made and every
+line of it as text; checks the EPUB title round trip, that no replaced
+converter is left registered, that a refused deck ends after one attempt, that
+the copied HTML converter renders as upstream's on plain documents, and the
+too-deep fallback. `tests/test_office_formats.py` captures the five fixtures
+end to end and asserts no request failed. P27-7's exact-Markdown tests now
+compare the Markdown with its references read back, which still pins every
+character, and fails if one is written twice.

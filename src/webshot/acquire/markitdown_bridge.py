@@ -5,8 +5,8 @@ which formats it accepts, how big they may be, how the resulting page is
 titled and styled — is decided in `adapters.py`; this file's whole job is to
 hand MarkItDown a stream with an explicit type hint and hand back a string.
 
-Two behaviors of MarkItDown are corrected here rather than inherited, because
-both silently damage content WebShot promises to preserve (docs/09 P3-1):
+Four behaviors of MarkItDown are corrected here rather than inherited, because
+each silently damages content WebShot promises to preserve (docs/09 P3-1):
 
 1. **TSV is not a format MarkItDown knows.**  Its CSV converter is
    comma-only, so a tab-separated file falls through to the plain-text
@@ -23,41 +23,147 @@ both silently damage content WebShot promises to preserve (docs/09 P3-1):
    puts every shape that holds an equation, nor an equation, nor SmartArt; and
    MarkItDown's Word equations are all kept or all lost.  `ooxml` rewrites the
    archive first, and says what it still could not read (docs/09 P27).
+4. **It writes a document's text into Markdown as if it were Markdown.**  The
+   page is rendered from that Markdown, which passes raw HTML through and reads
+   `#`, `*`, `[`, `3.` and the rest as structure.  So `<img src="https://…">`
+   typed on a slide became an image the capture fetched, and `# Q3` became a
+   heading (docs/09 P28: the class P8-9 closed for CSV cells alone).  Every
+   string a document contributes is written as text here instead — its HTML
+   and Markdown characters as character references, which the browser reads as
+   the character and Markdown reads as nothing.  Where MarkItDown writes a
+   string straight into Markdown (a deck's text, a sheet's name, an EPUB's
+   metadata, a zip member's name and plain text) it is encoded on its way in;
+   where markdownify writes it, markdownify is given a writer that encodes.
 
 MarkItDown itself parses XML through `defusedxml` (its RSS and EPUB
 converters), which is *not* what spec §6.6 rests on: the adapter defuses every
-XML byte before this module is ever called.
+XML byte before this module is ever called, and the Office parts this module
+and `ooxml` rewrite are read through `defusedxml` too.
 """
 
 from __future__ import annotations
 
 import csv
+import dataclasses
 import html
 import io
+import posixpath
 import re
+import warnings
+import zipfile
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, BinaryIO
+from urllib.parse import quote
 from xml.etree.ElementTree import Element
 
+from bs4 import BeautifulSoup
 from markitdown import (
+    DocumentConverterResult,
     FileConversionException,
     MarkItDown,
     MarkItDownException,
     MissingDependencyException,
     StreamInfo,
+    UnsupportedFormatException,
 )
 from markitdown.converter_utils.docx.math.omml import oMath2Latex
+from markitdown.converters import (
+    DocxConverter,
+    EpubConverter,
+    HtmlConverter,
+    PptxConverter,
+    XlsxConverter,
+    ZipConverter,
+)
+
+# MarkItDown's Markdown writer, a markdownify subclass every HTML step uses. It
+# is internal, and imported here rather than where it is used so that a release
+# which moves it fails the import instead of quietly writing text as Markdown.
+from markitdown.converters._markdownify import _CustomMarkdownify
 
 from ..errors import UsageError
 from . import ooxml
 
-#: Markdown constructs that change what a cell *is* rather than how it looks.
-#: Anchored per cell, not per line: after the newline collapse below a cell is
-#: one line, so a leading marker is the only position that can restructure it —
-#: and `[` is escaped anywhere, because a link may start mid-cell.  `|` is not
-#: here: MarkItDown escapes every pipe in a cell, and a second escape would
-#: print the backslash (docs/09 P10-23).
-MARKDOWN_OPENER_RE = re.compile(r"^[#>\-+*=`~]|\[")
+#: Characters Python-Markdown (with `extra`) reads wherever they stand:
+#: emphasis, code, links and images (`!` too, since text ending in one turns
+#: the link markdownify writes after it into an image), escapes, attribute
+#: lists, table cells, and the hashes it strips from the end of a heading.
+INLINE_MARKDOWN = "!#*[\\]_`{|}"
+#: Characters it reads only where a line begins, after up to three spaces:
+#: bullets, a setext underline, a definition, a `~~~` fence, a table's
+#: alignment row.  An ordered list's `3.` is caught by its full stop, and
+#: indentation deep enough for a code block by `_LINE_START_RE` as well.
+LINE_START_MARKDOWN = "+-:=~"
+
+#: A document's text, written so that neither grammar reads it: HTML's three
+#: characters as named references, Markdown's as numeric ones.  A reference
+#: means its character to the browser and nothing to Markdown, and nh3 writes
+#: the character back when it serializes the page, so text that needed none of
+#: this renders exactly as it did — the anchors `toc` derives included.  Only
+#: what Markdown would read is encoded: Python-Markdown stashes each reference
+#: on its own, and encoding every full stop made a large CSV 70% slower.
+_AS_TEXT = str.maketrans(
+    {"&": "&amp;", "<": "&lt;", ">": "&gt;"}
+    | {character: f"&#{ord(character)};" for character in INLINE_MARKDOWN}
+)
+_LINE_START_RE = re.compile(
+    rf"^(?P<indent>[ \t]*)(?P<opener>[{re.escape(LINE_START_MARKDOWN)}]|\d+\.)?",
+    re.MULTILINE,
+)
+
+#: Attributes markdownify writes into Markdown as a link or image destination.
+URL_ATTRIBUTES = ("href", "src", "data-src", "poster")
+#: Attributes it writes into Markdown as text: an image's alt, a link's title.
+TEXT_ATTRIBUTES = ("alt", "title")
+#: What ends a Markdown destination early, or starts something inside it.
+#: Percent-encoded, which a URL means the same by.
+_DESTINATION_BREAK_RE = re.compile(r"[\s()<>\\`\"']")
+
+
+def _reference(characters: str) -> str:
+    return "".join(f"&#{ord(character)};" for character in characters)
+
+
+def _line_start(match: re.Match[str]) -> str:
+    indent, opener = match["indent"], match["opener"] or ""
+    # A tab, or four spaces, is a code block; shallower indentation is stripped.
+    if "\t" in indent or len(indent) >= 4:
+        indent = _reference(indent)
+    if opener:
+        opener = opener[:-1] + _reference(opener[-1])
+    return indent + opener
+
+
+def _as_text(text: str) -> str:
+    """A string Markdown meets inside a line, written so it reads as text.
+
+    A table cell, an attribute, a heading's remainder: nothing here begins a
+    line, so only `INLINE_MARKDOWN` and HTML's characters are encoded.
+    """
+    return text.translate(_AS_TEXT)
+
+
+def _as_text_lines(text: str) -> str:
+    """A string that may begin a line of Markdown, written so it reads as text.
+
+    Each of its lines is taken to begin one: where MarkItDown or markdownify
+    joins strings, one that began mid-line in the document may not mid-line in
+    the Markdown, and an opener encoded where it did not need to be renders the
+    same.
+    """
+    return _LINE_START_RE.sub(_line_start, _as_text(text))
+
+
+def _as_destination(url: str) -> str:
+    return _DESTINATION_BREAK_RE.sub(lambda match: quote(match.group(), safe=""), url)
+
+
+def _fence(text: str, *, minimum: int) -> str:
+    """Backticks that no run of backticks inside `text` can close."""
+    longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+    return "`" * max(minimum, longest + 1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,31 +196,29 @@ def _equation_latex(equation: Element) -> str:
 def _escape_cell(cell: str) -> str:
     """One tabular value, rendered so it cannot become anything but a value.
 
-    Three separate escapes, because a cell passes through three grammars on its
-    way to the page:
+    Two grammars stand between a cell and the page:
 
-    * **HTML.** MarkItDown emits cell text into Markdown, and Markdown passes
-      raw HTML straight through. A cell reading `<img src="https://tracker/x">`
-      therefore became a real element, and rendering the document fetched that
-      URL — a beacon fired by opening a local spreadsheet, and an outbound
-      request to an address chosen by whoever wrote the file. `img[src]` is in
+    * **HTML and Markdown**, through `_as_text`.  Markdown passes raw HTML
+      straight through, so a cell reading `<img src="https://tracker/x">`
+      became a real element, and rendering the document fetched that URL — a
+      beacon fired by opening a local spreadsheet.  `img[src]` is in
       `MARKDOWN_POLICY`, so sanitization does not stop it and was never meant
       to: the allowlist decides what *Markdown* may emit, and this text is not
-      Markdown (docs/09 P8-9).
-    * **Markdown.** A leading `#`, `>`, `-`, or backtick restructures the cell,
-      and `[text](url)` makes a link out of tabular data. Backslash-escaping
-      the openers keeps the value looking like itself.
-    * **The table row.** A newline would end the row, so it becomes `<br>`.
-      `|` would end the cell, and from 0.1.8 MarkItDown escapes it — together
-      with any backslashes in front of it — so it is left alone here; escaping
-      it twice put a visible backslash in the cell (docs/09 P10-23).
+      Markdown (docs/09 P8-9).  The first fix escaped the HTML and put a
+      backslash before a leading Markdown opener, which Python-Markdown read
+      three ways wrong: no backslash escapes `=` or `~` there, so `=SUM(A1)`
+      printed as `\\=SUM(A1)`; a trailing `{x}` was taken for attributes and
+      dropped; and a backslash the cell held escaped what followed it, so
+      `C:\\Users\\_x_` lost both of its own (docs/09 P28).
+    * **The table row.**  A newline would end the row, so it becomes `<br>`.
+      `|` would end the cell; by now it is a character reference, so MarkItDown,
+      which from 0.1.8 escapes a pipe and the backslashes before it, finds
+      neither to escape (docs/09 P10-23).
 
     The v2 CSV renderer HTML-escaped every cell; that property was lost in the
     move to MarkItDown and is restored here.
     """
-    escaped = html.escape(cell, quote=False)
-    escaped = MARKDOWN_OPENER_RE.sub(r"\\\g<0>", escaped)
-    return escaped.replace("\r\n", "\n").replace("\n", "<br>")
+    return _as_text(cell.replace("\r\n", "\n")).replace("\n", "<br>")
 
 
 def _as_escaped_csv(data: bytes, delimiter: str, path_name: str) -> bytes:
@@ -139,6 +243,378 @@ def _as_escaped_csv(data: bytes, delimiter: str, path_name: str) -> bytes:
         # rather than a message and an exit code.
         raise UsageError(f"Could not read the rows of {path_name}: {exc}") from exc
     return buffer.getvalue().encode("utf-8")
+
+
+# --------------------------------------------------------------------------- #
+# Text that MarkItDown writes through markdownify
+# --------------------------------------------------------------------------- #
+
+
+class _TextMarkdownify(_CustomMarkdownify):
+    """MarkItDown's Markdown writer, writing a document's text as text.
+
+    markdownify escapes `*` and `_` and, optionally, a list aimed at CommonMark
+    that Python-Markdown does not honour: it reads `\\<img>` as a backslash and
+    a tag.  So `escape` is replaced rather than added to — escaping on top of
+    markdownify's would print its backslashes.  It is not called inside `pre`,
+    `code`, `kbd` or `samp`, whose text Markdown keeps literal.
+    """
+
+    def escape(self, text: str, parent_tags: Iterable[str]) -> str:
+        # A text node can open a block, and keeps any newline its HTML had;
+        # not in a heading or a table cell, which markdownify writes as one
+        # line after its own marker (`_inline`).  Every negative number in a
+        # sheet was a reference otherwise, and a large workbook 10% slower.
+        if "_inline" in parent_tags:
+            return _as_text(text)
+        return _as_text_lines(text)
+
+    def convert_pre(self, el: object, text: str, parent_tags: object) -> str:
+        """A code block, fenced so that none of its own lines can close it.
+
+        markdownify always fences with three backticks, and Python-Markdown
+        ends the block at the first line that is those three alone: a `<pre>`
+        showing a fenced example closed early, and everything after it was
+        read as Markdown, raw HTML included.
+        """
+        block: str = super().convert_pre(el, text, parent_tags)
+        fence = _fence(text, minimum=3)
+        if fence == "```":
+            return block
+        opening, closing = block.index("```"), block.rindex("```")
+        return (
+            block[:opening]
+            + fence
+            + block[opening + 3 : closing]
+            + fence
+            + block[closing + 3 :]
+        )
+
+
+def _attributes_as_text(soup: BeautifulSoup) -> None:
+    """Make the attributes markdownify writes into Markdown safe to write.
+
+    An image's alt text goes between `![` and `]` as it is, so alt reading
+    `x](https://tracker/a.png) ![y` closed the image and opened another; a
+    link's target goes between `(` and `)`, so one holding `)![y](https://…`
+    did the same.  Either way the document chose a URL the page then fetched.
+    """
+    for tag in soup.find_all(True):
+        for name in URL_ATTRIBUTES:
+            value = tag.get(name)
+            if isinstance(value, str):
+                tag[name] = _as_destination(value)
+        for name in TEXT_ATTRIBUTES:
+            value = tag.get(name)
+            if isinstance(value, str):
+                tag[name] = _as_text(value).replace('"', "&#34;")
+
+
+class _TextHtmlConverter(HtmlConverter):
+    """MarkItDown's HTML reader, writing through `_TextMarkdownify`.
+
+    `convert` is MarkItDown 0.1.8's `HtmlConverter.convert`, because upstream
+    names its writer inside that method rather than taking it as a parameter;
+    `test_the_text_html_converter_is_upstreams_on_plain_text` holds the copy to
+    the original.  It differs in three places: the attributes markdownify
+    writes are made safe first, the writer is `_TextMarkdownify`, and the text
+    the too-deeply-nested fallback returns is encoded, where upstream writes it
+    into Markdown raw.
+    """
+
+    def convert(
+        self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
+    ) -> DocumentConverterResult:
+        strict: bool = kwargs.pop("strict", False)
+        encoding = "utf-8" if stream_info.charset is None else stream_info.charset
+        soup = BeautifulSoup(file_stream, "html.parser", from_encoding=encoding)
+        for script in soup(["script", "style"]):
+            script.extract()
+        _attributes_as_text(soup)
+        body = soup.find("body")
+        target = body if body else soup
+        try:
+            markdown: str = _TextMarkdownify(**kwargs).convert_soup(target)
+        except RecursionError:
+            if strict:
+                raise
+            warnings.warn(
+                "HTML document is too deeply nested for markdown conversion "
+                "(RecursionError). Falling back to plain-text extraction.",
+                stacklevel=2,
+            )
+            markdown = _as_text_lines(target.get_text("\n", strip=True))
+        return DocumentConverterResult(
+            markdown=markdown.strip(),
+            title=None if soup.title is None else soup.title.string,
+        )
+
+
+def _writing_html_as_text(converter: Any) -> None:
+    """Give one of MarkItDown's converters `_TextHtmlConverter` to write with.
+
+    Its HTML step is the attribute `_html_converter`, not a parameter, so a
+    release that renamed it would quietly bring the old writer back.  That is
+    refused here, at construction, where every conversion meets it.
+    """
+    if not isinstance(getattr(converter, "_html_converter", None), HtmlConverter):
+        raise RuntimeError(
+            f"MarkItDown's {type(converter).__name__} no longer writes through "
+            "`_html_converter`, so WebShot cannot keep a document's text from "
+            "being read as Markdown (docs/09 P28)."
+        )
+    converter._html_converter = _TextHtmlConverter()
+
+
+class _TextDocxConverter(DocxConverter):
+    """Word, whose every string mammoth hands markdownify as HTML."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        _writing_html_as_text(self)
+
+
+class _TextEpubConverter(EpubConverter):
+    """EPUB: chapters through markdownify, metadata written straight in.
+
+    The metadata (`**Title:** …`) is the one string MarkItDown writes itself,
+    read through `_get_all_texts_from_nodes`; it comes back encoded, so the
+    title the adapter falls back on is decoded again on the way out.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        _writing_html_as_text(self)
+
+    def _get_all_texts_from_nodes(self, dom: Any, tag_name: str) -> list[str]:
+        texts: list[str] = super()._get_all_texts_from_nodes(dom, tag_name)
+        return [_as_text_lines(text) for text in texts]
+
+    def convert(
+        self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
+    ) -> DocumentConverterResult:
+        result: DocumentConverterResult = super().convert(
+            file_stream, stream_info, **kwargs
+        )
+        if result.title:
+            result.title = html.unescape(result.title)
+        return result
+
+
+# --------------------------------------------------------------------------- #
+# Text that MarkItDown writes straight into Markdown, encoded in the file first
+# --------------------------------------------------------------------------- #
+
+_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+_C = "{http://schemas.openxmlformats.org/drawingml/2006/chart}"
+_S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+_PRESENTATION = "application/vnd.openxmlformats-officedocument.presentationml"
+_SPREADSHEET = "application/vnd.openxmlformats-officedocument.spreadsheetml"
+
+
+def _encode_text_of(elements: Iterable[Element]) -> bool:
+    changed = False
+    for element in elements:
+        if element.text:
+            encoded = _as_text_lines(element.text)
+            changed |= encoded != element.text
+            element.text = encoded
+    return changed
+
+
+def _deck_strings(root: Element) -> bool:
+    """A slide, its notes, or a chart: what MarkItDown prints from each.
+
+    Every run of text (`a:t`) — shapes, tables, titles, notes — and a chart's
+    category labels and series names (`c:v` under `c:cat` and `c:tx`).  Not
+    its values, which python-pptx reads as numbers.
+    """
+    strings = list(root.iter(f"{_A}t"))
+    for holder in (*root.iter(f"{_C}cat"), *root.iter(f"{_C}tx")):
+        strings.extend(holder.iter(f"{_C}v"))
+    return _encode_text_of(strings)
+
+
+def _sheet_names(root: Element) -> bool:
+    """A workbook's sheet names, which MarkItDown writes as `## name`."""
+    changed = False
+    for sheet in root.iter(f"{_S}sheet"):
+        name = sheet.get("name")
+        if name:
+            encoded = _as_text_lines(name)
+            changed |= encoded != name
+            sheet.set("name", encoded)
+    return changed
+
+
+#: Where in a deck MarkItDown's text comes from, by OPC content type: the same
+#: declaration python-pptx reads a part by.  A table's text reaches markdownify
+#: too, but already encoded, and markdownify has nothing left to escape in it.
+DECK_TEXT_PARTS: dict[str, Callable[[Element], bool]] = {
+    f"{_PRESENTATION}.slide+xml": _deck_strings,
+    f"{_PRESENTATION}.notesSlide+xml": _deck_strings,
+    "application/vnd.openxmlformats-officedocument.drawingml.chart+xml": _deck_strings,
+}
+#: The workbook part, in each of the forms openpyxl opens.
+WORKBOOK_TEXT_PARTS: dict[str, Callable[[Element], bool]] = {
+    f"{_SPREADSHEET}.sheet.main+xml": _sheet_names,
+    f"{_SPREADSHEET}.template.main+xml": _sheet_names,
+    "application/vnd.ms-excel.sheet.macroEnabled.main+xml": _sheet_names,
+}
+
+
+class _TextPptxConverter(PptxConverter):
+    """PowerPoint, whose text MarkItDown appends to the Markdown as it reads it."""
+
+    def convert(
+        self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
+    ) -> DocumentConverterResult:
+        deck = ooxml.rewrite_parts(file_stream.read(), DECK_TEXT_PARTS)
+        result: DocumentConverterResult = super().convert(
+            io.BytesIO(deck), stream_info, **kwargs
+        )
+        return result
+
+
+class _TextXlsxConverter(XlsxConverter):
+    """Excel: cells through markdownify, sheet names written straight in."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        _writing_html_as_text(self)
+
+    def convert(
+        self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
+    ) -> DocumentConverterResult:
+        workbook = ooxml.rewrite_parts(file_stream.read(), WORKBOOK_TEXT_PARTS)
+        result: DocumentConverterResult = super().convert(
+            io.BytesIO(workbook), stream_info, **kwargs
+        )
+        return result
+
+
+# --------------------------------------------------------------------------- #
+# Archives
+# --------------------------------------------------------------------------- #
+
+#: Member formats whose converter here already writes their text as text.
+TEXT_SAFE_MEMBERS = frozenset(
+    {".csv", ".docx", ".epub", ".htm", ".html", ".pptx", ".tsv", ".xlsx", ".zip"}
+)
+#: Member formats that are Markdown, rendered as Markdown as the top-level
+#: adapter renders a `.md` file.  A notebook's cells are Markdown and fenced
+#: code, and MarkItDown writes them as such.
+MARKDOWN_MEMBERS = frozenset({".ipynb", ".markdown", ".md"})
+
+
+def _code_span(text: str) -> str:
+    """`text` as inline code, fenced longer than any backtick run inside it."""
+    text = text.replace("\r", " ").replace("\n", " ")
+    fence = _fence(text, minimum=1)
+    pad = " " if len(fence) > 1 else ""
+    return f"{fence}{pad}{text}{pad}{fence}"
+
+
+def _member_markdown(markitdown: MarkItDown, data: bytes, name: str) -> str:
+    """One archive member, its text written as text.
+
+    MarkItDown's own zip reader hands members straight to its converters, so
+    a CSV inside a zip skipped `_escape_cell` and a TSV was not a table.  What
+    a member's converter writes raw — plain text, source code, a PDF's text —
+    was inlined as Markdown, so a `.txt` could fetch an image and a `.py`'s
+    comments became headings.  It is a code block here, as a top-level `.txt`
+    is: literal by construction, and with its lines intact.  `ooxml`'s rewrite
+    (docs/09 P27) is the top-level path's alone: a deck inside a zip is read
+    with its text encoded, but without its equations or SmartArt.
+    """
+    suffix = posixpath.splitext(name)[1].lower()
+    extension = posixpath.splitext(name)[1]
+    if suffix in (".csv", ".tsv"):
+        data = _as_escaped_csv(data, "\t" if suffix == ".tsv" else ",", name)
+        extension = ".csv"
+    result = markitdown.convert_stream(
+        io.BytesIO(data),
+        stream_info=StreamInfo(extension=extension, filename=posixpath.basename(name)),
+    )
+    markdown: str = result.markdown
+    if suffix in TEXT_SAFE_MEMBERS or suffix in MARKDOWN_MEMBERS:
+        return markdown
+    body = markdown.rstrip("\n")
+    if not body.strip():
+        return markdown
+    fence = _fence(body, minimum=3)
+    return f"{fence}\n{body}\n{fence}"
+
+
+class _TextZipConverter(ZipConverter):
+    """A zip, as MarkItDown 0.1.8 writes one, but for how its members are read.
+
+    The heading lines are upstream's, so an archive of ordinary files renders
+    as it did; the member names in them are the archive's own text, and are
+    encoded like any other.
+    """
+
+    def convert(
+        self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
+    ) -> DocumentConverterResult:
+        file_path = (
+            stream_info.url
+            or stream_info.local_path
+            or stream_info.filename
+            or "(unknown)"
+        )
+        markdown = f"Content from the zip file {_code_span(file_path)}:\n\n"
+        with zipfile.ZipFile(file_stream, "r") as archive:
+            for entry in archive.infolist():
+                try:
+                    member = _member_markdown(
+                        self._markitdown, archive.read(entry), entry.filename
+                    )
+                except (UnsupportedFormatException, FileConversionException):
+                    # Upstream's choice, kept: a member nothing reads is left
+                    # out rather than failing the archive.
+                    continue
+                markdown += f"## File: {_as_text_lines(entry.filename)}\n\n"
+                markdown += member + "\n\n"
+        return DocumentConverterResult(markdown=markdown.strip())
+
+
+def _markitdown() -> MarkItDown:
+    """MarkItDown, with each converter that writes text as Markdown replaced.
+
+    Replaced in place, not registered beside: when a converter raises,
+    MarkItDown moves on to the next that accepts the file, so a builtin left
+    behind would read a deck the WebShot converter had refused — and write its
+    text raw.  Each replacement keeps its original's position and priority, and
+    one that is not found is refused, because the original would then still be
+    there, unreplaced.
+    """
+    markitdown = MarkItDown(enable_plugins=False)
+    replacements: dict[type, Callable[[], object]] = {
+        DocxConverter: _TextDocxConverter,
+        EpubConverter: _TextEpubConverter,
+        HtmlConverter: _TextHtmlConverter,
+        PptxConverter: _TextPptxConverter,
+        XlsxConverter: _TextXlsxConverter,
+        ZipConverter: lambda: _TextZipConverter(markitdown=markitdown),
+    }
+    registrations = markitdown._converters
+    replaced: set[type] = set()
+    for index, registration in enumerate(registrations):
+        kind = type(registration.converter)
+        if kind in replacements:
+            registrations[index] = dataclasses.replace(
+                registration, converter=replacements[kind]()
+            )
+            replaced.add(kind)
+    missing = sorted(kind.__name__ for kind in set(replacements) - replaced)
+    if missing:
+        raise RuntimeError(
+            f"MarkItDown no longer registers {', '.join(missing)}, so WebShot "
+            "cannot keep a document's text from being read as Markdown "
+            "(docs/09 P28)."
+        )
+    return markitdown
 
 
 def _needs_a_dependency(exc: MarkItDownException) -> bool:
@@ -209,7 +685,7 @@ def to_markdown(
     elif suffix == ".docx":
         data, warnings = ooxml.prepare_docx(data, _equation_latex)
 
-    converter = MarkItDown(enable_plugins=False)
+    converter = _markitdown()
     stream_info = StreamInfo(extension=suffix, filename=path.name)
     try:
         result = converter.convert_stream(io.BytesIO(data), stream_info=stream_info)

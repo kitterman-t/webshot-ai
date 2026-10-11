@@ -40,6 +40,11 @@ CASES = (
     ("sample_archive.zip", "zip", "SENTINEL ZIP MEMBER OKAPI", None),
     ("equation_deck.pptx", "pptx", "SENTINEL PPTX EQUATION QUOKKA", "pptx"),
     ("equation_report.docx", "docx", "SENTINEL DOCX EQUATION WOMBAT", "mammoth"),
+    ("markup_deck.pptx", "pptx", "SENTINEL PPTX MARKUP CASSOWARY", "pptx"),
+    ("markup_report.docx", "docx", "SENTINEL DOCX MARKUP DUGONG", "mammoth"),
+    ("markup_workbook.xlsx", "xlsx", "SENTINEL XLSX MARKUP GECKO", "openpyxl"),
+    ("markup_book.epub", "epub", "SENTINEL EPUB MARKUP IBEX", None),
+    ("markup_archive.zip", "zip", "SENTINEL ZIP MARKUP JERBOA", None),
 )
 
 #: The warnings each fixture's manifest must carry: what the converter could
@@ -131,6 +136,13 @@ def test_office_fixture_round_trips(
         if warning.startswith(("Slide ", "The notes of slide ", "The document body"))
     ]
     assert conversion == EXPECTED_WARNINGS.get(name, []), manifest["warnings"]
+
+    # ...and text that names a URL stayed text. Each `markup_*` fixture names
+    # `.invalid` images in every place its reader takes text from; a capture
+    # that rendered one as an image tried to fetch it, and a host that never
+    # resolves makes every such attempt a failed request (docs/09 P28).
+    if name.startswith("markup_"):
+        assert json.loads(report.read_text("utf-8"))["failed_requests"] == []
 
 
 def test_every_fixture_has_a_generator_entry() -> None:
