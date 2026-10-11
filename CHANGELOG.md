@@ -282,6 +282,19 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **Two lists side by side in a converted document stay two lists.** Where an
+  EPUB chapter or an HTML file in a zip had one list straight after another of
+  the same kind, the page showed one list: numbered on from the first, so a
+  second list that began at 1 was numbered 3, with every item spaced as a
+  paragraph, and `content.md` recorded the same numbers. This held whatever
+  stood between the lists if it wrote no
+  text (an empty `<div>` or `<p>`, a comment, a line break), for lists in
+  neighbouring `<div>`s, in a quotation or a definition, and for a chapter
+  that ended with a list followed by one that began with one. markdownify puts
+  only a blank line between two lists, and Python-Markdown reads that as one
+  list. The two now keep their own numbering and close spacing, and the
+  comment that separates them is removed from the page. A `.md` file is
+  rendered as before. See docs/09 P32.
 - **A slide's text box with an equation in it reaches the page.** PowerPoint
   wraps such a box in `mc:AlternateContent`, beside a picture of it for older
   readers, and python-pptx reads neither, so the slide came out as its title
@@ -302,6 +315,17 @@ which records the measurements behind each change.
   the zip, as in `slides/deck.pptx: Slide 5: …`. A member WebShot refuses to
   parse is left out and named, and the rest of the zip is still read. See
   docs/09 P29.
+- **A zip member WebShot cannot read is named in the manifest.** A member
+  nothing reads, or whose reader failed, was left out of the page without a
+  word: a PDF in a zip on every install, and a deck or Word file on an install
+  without the office extra. Each is now named in the manifest's warnings, one
+  warning per reason when many members share it, and a missing reader names
+  `webshot[office]` rather than MarkItDown's `pip install` line. An encrypted
+  or damaged member, or a CSV with a cell too large to read, costs that member
+  instead of failing the whole zip. The `__MACOSX/` copies the Finder adds to
+  a zip are left out and counted: read as text, they had put a file's
+  quarantine record and the address it was downloaded from on the page. See
+  docs/09 P33.
 - **Clean mode hides the ad units an ad network writes into the article.** On
   a statistics site's calculator page, an in-article video player ("My Latest
   Videos") sat inside the main content, so selecting the region kept it. The
