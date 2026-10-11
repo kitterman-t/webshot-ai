@@ -223,6 +223,21 @@ def test_a_cell_cannot_restructure_the_document_with_markdown(
     assert 'href="https://evil.invalid"' not in rendered
 
 
+def test_a_cell_reads_as_it_was_typed(tmp_path: Path) -> None:
+    """The first escape put a backslash before a leading `=` or `~`, which
+    Python-Markdown does not read as an escape and printed; took a trailing
+    `{x}` for attributes; and let the cell's own backslash escape the
+    character after it (docs/09 P28)."""
+    kind, rendered = materialize_text(
+        tmp_path,
+        ".csv",
+        'note\n=SUM(A1)\n~approx\nSet {x}\n"C:\\Users\\_x_ and a\\*b"\n',
+    )
+    assert kind == "csv"
+    for cell in ("=SUM(A1)", "~approx", "Set {x}", "C:\\Users\\_x_ and a\\*b"):
+        assert f"<td>{cell}</td>" in rendered, cell
+
+
 def test_a_cell_past_the_csv_field_limit_fails_as_a_webshot_error(
     tmp_path: Path,
 ) -> None:
