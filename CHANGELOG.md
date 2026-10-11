@@ -268,6 +268,14 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **Clean mode hides the ad units an ad network writes into the article.** On
+  a statistics site's calculator page, an in-article video player ("My Latest
+  Videos") sat inside the main content, so selecting the region kept it. The
+  text recognized in a screenshot of its ad frame was printed between the
+  calculator's result and its verdict. Clean mode now hides Mediavine's video
+  slot and player, Google's video-ad frame, frames and videos that title
+  themselves "Advertisement", AdSense units and Publisher Tag slots. Faithful
+  mode keeps them. See docs/09 P23-9.
 - **A page that enforces Trusted Types is captured.** A site that sends
   `require-trusted-types-for 'script'` made the bundle stage throw on its
   first `DOMParser` call, and the capture exited 5. Large video sites' watch
