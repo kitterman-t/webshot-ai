@@ -8024,3 +8024,57 @@ and drops them afterwards (167,409 extra nodes here); skipping a
 `display: none` subtree would shrink it, but it changes what the copy keeps
 for media, so it needs the golden corpus. And a failure report carries no
 `timings`, so it says nothing of how far a crashed run got beyond its message.
+
+### P23-9: an ad network's video player was captured as part of the article
+
+A statistics site's t-score calculator page was captured in clean mode.
+Between the calculator's "P-value: 0.08088" and its "The result is NOT
+SIGNIFICANT", `content.md` and the PDF's text layer held three things:
+- "My Latest Videos";
+- "Advertisement";
+- a block of text recognized from a screenshot of an ad frame ("How to Plot
+  a / Confidence Interval in", at 76 %).
+
+The source was Mediavine's in-article video player. The player was
+`div#mv-first-video` > `div#mv-player-<id>`, holding the site's video (a
+`blob:` source) and `div#mv-ad-container-<id>`, which in turn held two
+`video[title="Advertisement"]` and the frame Google's video-ad SDK draws
+(`imasdk.googleapis.com`, `title="Advertisement"`). The ad network writes it
+inside `<main>`, so selecting the content region keeps it, and clean mode's
+noise list had no advertising in it. Three of the capture's warnings named
+the player: its video, its unreadable ad frame, and the video's refused
+title.
+
+Clean mode now also hides:
+- the player's slot, the player and its ad container, by Mediavine's ids
+  (`#mv-first-video`, `[id^='mv-player-']`, `[id^='mv-ad-']`);
+- the SDK's frame by its source;
+- frames and videos whose title is exactly "Advertisement";
+- AdSense's `ins.adsbygoogle` units, and Publisher Tag slots and their
+  frames by their default ids (`div-gpt-ad…`, `google_ads_iframe…`).
+
+The first two groups and the titles were measured on this page; the AdSense
+and Publisher Tag selectors follow their tags' documented markup and were
+not met in a capture. Every selector names what a vendor or an ad writes.
+None matches an "ad" substring, which would catch `header`, `download` and
+`loading`. A picture titled "Advertisement" is not hidden: an article about
+advertising has those. Faithful mode hides none of them.
+
+Recaptured live on 2026-10-11 with the change, the page:
+- removed 17 elements where it had removed 7;
+- printed the result and the verdict together;
+- held none of the player's text in either surface;
+- warned only about the failed requests: the three warnings that named the
+  player were gone, and so were the withheld accessibility snapshot (a frame
+  had detached) and the scroll positions not put back.
+
+Two recognized blocks remain lower down: the author's photo read as "aot"
+at 19 %, and a 44-pixel social icon read as "in". Both were in the first
+capture too, and they are P23-6's case, which is still not changed.
+
+`tests/test_ad_units.py` captures `tests/fixtures/ad_player_page.html`. The
+fixture holds the player's markup, an AdSense unit and a Publisher Tag slot,
+beside article content named like an ad: an "Advertisement" picture, a
+`download-header`, an `mv-notes` section. The ad text must be absent from
+`content.md` and the PDF in clean mode and present in faithful mode, and the
+article's text must stay in order. The clean-mode test fails on master.

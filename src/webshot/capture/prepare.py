@@ -64,6 +64,22 @@ NOISE_SELECTORS = [
     ".comments",
     "#comments",
     ".related-posts",
+    # Advertising. An ad network writes its units into the article itself, so
+    # selecting the content region keeps them: on a statistics page, Mediavine's
+    # video player ("My Latest Videos") sat between a calculator's result and
+    # its verdict, and the text recognized in its ad frame's screenshot went
+    # into the text layer there (docs/09 P23-9). Each selector names a unit by
+    # what its vendor or the ad itself writes, never by an "ad" substring, which
+    # matches "header", "download" and "loading".
+    "#mv-first-video",  # Mediavine's in-article video slot (measured)
+    "[id^='mv-player-']",  # its player, wherever the slot is not used
+    "[id^='mv-ad-']",  # its ad container and its ad-report footer
+    "iframe[src*='imasdk.googleapis.com']",  # Google's video-ad SDK frame (measured)
+    "iframe[title='Advertisement' i]",  # how that frame names itself (measured)
+    "video[title='Advertisement' i]",  # and the ad videos beside it (measured)
+    "ins.adsbygoogle",  # an AdSense unit, as AdSense's tag writes it
+    "[id^='div-gpt-ad']",  # a Google Publisher Tag slot, by its default id
+    "[id^='google_ads_iframe']",  # the frame that slot fills
 ]
 
 #: The rules that act on `release_clamped_text`'s marks. Part of the page's
