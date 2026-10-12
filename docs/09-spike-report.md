@@ -8717,3 +8717,578 @@ four warnings in the manifest as the bridge words them, and finds the download
 address in none of `content.md`, `content.txt` and `chunks.jsonl`. macOS's own
 `ditto` restores the fixture's AppleDouble attributes onto its file, so the
 fixture is the format the Finder writes, not one WebShot alone can read.
+
+## P34: the lazy-load pass counted steps a page had not rendered (2026-10-11)
+
+`tests/test_endless_feed.py::test_growth_where_exclude_removes_ends_the_pass_too`
+failed once in a full `tools/verify.py` while another worktree's run shared
+the Mac. It passed in isolation, three times out of three:
+
+```
+AssertionError: LazyLoadPass(steps=5, ended='bottom', height=1968, growing=(), steady_steps=0)
+```
+
+1,968 px is the page as it loads, before anything has grown. The same day a
+CI run on macOS (Python 3.12, PR #179) failed in the shadow-root case of the
+clean-mode test, at the same rule: `steps=4, ended='bottom', height=1545`.
+Master was da7f3f8.
+
+### P34-1: reproducing it
+
+The probe ran the pass over the P23-8 fixture and logged the page's `scroll`
+events, its IntersectionObserver callbacks and its timers. Three tries did not
+reproduce it: renderer CPU throttled 8x and 20x (DevTools'
+`Emulation.setCPUThrottlingRate`), sixteen workers in parallel, and eight
+workers beside 40 busy loops, 104 runs in all. Each of those probes also ran a
+`requestAnimationFrame` loop to time frames, and in the 96 runs that timed
+them the largest gap between two frames was 19 ms. With that loop taken out, the
+sixteen-worker load reproduced the failure in 1 run in 64, and later in 11 in
+128. The Mac's load average was 400 to 490 on 16 cores, most of it other
+sessions' work. Why a page that asks for frames from the start gets its first
+one sooner was not established. The loop's effect on the result was measured;
+its mechanism was not. CPU throttling was then run again with no loop: 1x,
+4x, 10x and 20x, over the module's four cases, six runs each. The old pass
+failed none of 96 and the new pass none of 96, so a slow renderer alone does
+not cause it. A late first frame does.
+
+### P34-2: what the failing runs had in common
+
+Each of the 11 failing runs had no first paint (`performance` `paint`
+entries) and no IntersectionObserver callback at all when the pass ended, at
+its fifth step about 1.0 s after it began. In the median run the observer's
+first callback came before the pass's first step, and first paint came 11 ms
+after `load`. The failing pass's own log shows the window at
+0, 800 and then 968 px, the bottom of a 1,968 px page, and the height never
+moved. Thirty-one of the 128 runs had not rendered 200 ms after the pass
+began (no observer callback yet). The 20 that passed rendered 245 to 887 ms
+in. The other 11 had not rendered by the end.
+
+The pass treats a step as a chance for the page to answer a scroll. Its
+original rule ends it at the bottom once the height has held for three steps,
+about 0.75 s at the default `--scroll-delay`. A page sees a scroll only in a
+rendering update, because Chromium fires `scroll` events there and computes
+what each IntersectionObserver sees there. Those two are how pages load lazy
+content, and they are how the fixture loads its feed and its list. So a page
+that had not rendered could not grow, and steps that measured it were not
+evidence that it had finished: a check whose input was missing (a page that
+had not seen the scroll) read as success (a page that had ended). The fixture
+is not at fault: it loads its
+content the way pages do. Nothing in it or in the pass depends on the 600 ms
+"fetch" here; every failing run ended before the first fetch could start.
+
+A capture runs the same pass. It navigates to `domcontentloaded` and sleeps
+for `--delay` (1 s by default), so a renderer whose first frame is later than
+that would have its pass end at the top of an unscrolled page, with no
+warning. That was not measured on a live page.
+
+### P34-3: each step now waits for the page to render
+
+After each scroll the pass waits for the page's next rendering update (a
+`requestAnimationFrame` callback, which runs after that update's `scroll`
+events), and only then starts `--scroll-delay`. If no frame comes within 30 s,
+the pass stops with `ended="unrendered"` and the manifest says so
+(`lazy_load_warning`). A page that never renders is not left to wait 30 s at
+each of 100 steps, and a pass that saw no scroll does not read as a page that
+ended.
+
+Measured as an interleaved A/B on the same machine at the same time: sixteen
+workers, each alternating the old and new pass over all four of the module's
+cases (`#light` under `--exclude` and clean mode, `#shadow`, `#still`), 256
+runs of each:
+
+| Pass | Failed | `--exclude` | clean | shadow root | still |
+|---|---|---|---|---|---|
+| old | 19 of 256 | 2 of 64 | 8 of 64 | 6 of 64 | 3 of 64 |
+| waits for a frame | 0 of 256 | 0 | 0 | 0 | 0 |
+
+Each old failure ended at the bottom at its fourth or fifth step, with 20 of
+the 80 related logs, so all three browser tests that scroll this fixture were
+exposed. On the new pass the first step's wait was a median 12 ms, 552 ms at
+the 90th percentile, 2.4 s at the 99th and 3.4 s at most, with the load
+average between 520 and 680. Later steps waited 4 to 13 ms (each run's
+median). That frame per step is what the change costs a pass that renders
+normally. The test module itself, eight copies at a time three times over at
+a load average near 550, passed 24 runs of 24.
+
+### P34-4: the boundary, and the cost on real pages
+
+These were measured in a parallel session, interleaving the old and new pass
+in one process at a load average of 490 to 560, with no
+`requestAnimationFrame` instrumentation. Each was opened the way a capture
+opens a page: `domcontentloaded`, then a 1 s `--delay`, then the pass at
+0.25 s. The raw runs were rechecked here.
+
+`tests/fixtures/lazy_images.html` has the same race. Its first frame was held
+6 s, longer than the old pass takes (about 4.5 s), by a render-blocking script
+served late. The old pass still ended "at the bottom" in 18 steps, and
+`below.png` was not requested during it in 4 runs of 4 at 1x and 10x CPU
+throttling. At 20x it was requested in 2 of 4, because the slower pass
+outlasted the hold. On the new pass it was requested in 4 of 4 at every rate,
+in 9.5 to 10.2 s against 4.5 to 5.4 s unheld; the difference is the held
+frame. In all 48 runs the capture's `_wait_for_fonts_and_images` still had
+`below.png` loaded before print. Its eager switch rescues an image marked
+`loading="lazy"`, but it cannot rescue content a script loads when an
+IntersectionObserver fires, such as the fixture's related list.
+
+On three real pages, clean mode, four runs of each pass, both passes ended at
+the bottom in the same number of steps:
+
+| Page | Steps | Median wall, old → new |
+|---|---|---|
+| en.wikipedia.org/wiki/Lighthouse | 19 | 4.77 → 4.95 s |
+| developer.mozilla.org, Intersection Observer API | 28 | 21.03 → 21.40 s |
+| github.com/microsoft/playwright | 13 | 9.34 → 9.59 s |
+
+That is 9 to 20 ms per step. On the fixture the median pass grew 0.03 to
+0.40 s, with the same step count or one or two fewer. This table predates
+P34-5, which changes how MDN and GitHub scroll.
+
+### P34-5: a page that scrolls smoothly hung the pass
+
+In Chromium 153 (153.0.8010.12, Playwright 1.63), `window.scrollBy` and
+`window.scrollTo` return a promise that settles when the scroll has finished,
+and `page.evaluate` waits for a promise it is handed. On a page with
+`html { scroll-behavior: smooth }` the scroll animates, so every step waited
+for the animation. On such a page that is not rendering, the animation never
+runs and the promise never settles. The pass then hung in its scroll call,
+before the frame wait could time out. P37 ran master f2be8dd the same way.
+Held, the smooth page had no result after 20 s, and the plain page ended
+`bottom` at step 5.
+
+The session measuring the pass's per-step cost (P37) found this, and it was
+reproduced here. `#late-frame` was held for ever with the frame wait cut to
+1.5 s. The plain page ended `unrendered` in 1.52 s. The same page scrolling
+smoothly had no result after 20 s.
+
+Both scrolls are now `instant`, and the function that makes them hands
+nothing back, so the only wait in a step is the frame wait, which has a bound.
+With both changed, the smooth page ends `unrendered` in 1.53 s. With only the
+step's scroll changed, P37 found the pass hung in its last scroll back to the
+top. On the smooth fixture with nothing held, three interleaved runs of each:
+
+| Scroll | Per step | Steps | Pass |
+|---|---|---|---|
+| old | 0.79–1.01 s | 15 | 11.9–15.1 s |
+| `instant` | 0.26 s | 19 | 4.9–5.0 s |
+
+Every run ended at `removed-growth` with all 80 related logs. The old scroll
+needed fewer steps because each one lasted longer, and the patience counts
+seconds as well as steps. MDN and github.com/microsoft/playwright both scroll
+smoothly. There, P37 measured the scroll call at 492 ms a step, against
+0.7 ms on Wikipedia, which is the whole of their 0.7 s steps in P34-4's
+table. Measuring the page's state took about 5 ms a step.
+
+### P34-6: the tests
+
+`#late-frame` in `tests/fixtures/endless_feed.html` adds a render-blocking
+script (`blocking="render"`) that a test serves when it chooses. The test
+serves the fixture through `page.route` from a `.test` origin and navigates to
+`domcontentloaded`, as a capture does. The page then cannot render until the
+script arrives. Held 2 s, the old pass fails with the reported assertion,
+`steps=5, ended='bottom', height=1968`, three times out of three with no
+added load, and the new pass reaches `removed-growth` with all 80 related logs.
+Held until the pass ends, with the frame wait cut to 1.5 s, the pass stops
+after one step as `unrendered` and its warning says so. A unit test pins the
+warning's text. Opened from disk, the script is missing and its load fails at
+once, so every other variant renders as before. `#late-frame-smooth` adds
+`scroll-behavior: smooth`, and both late-frame tests run on it too. The tests
+give the pass 60 s, so a hang fails rather than stalling the run. With the
+old scroll calls put back, the smooth `unrendered` case fails that way.
+
+## P48: a word with a bold, italic, code or linked part was split on every text surface but the PDF (2026-10-11)
+
+P43-4 recorded it: an EPUB chapter `<p>un<b>break</b>able and pre<i>fix</i>ed
+and co<code>de</code>word</p>` reached `content.md` as `un **break** able and
+pre *fix* ed and co `de` word` and `content.txt` and `chunks.jsonl` as "un
+break able and pre fix ed and co de word", while the page and the PDF's text
+layer read "unbreakable and prefixed and codeword". Measured on master at
+5a5a6ab with docling-core 2.99.0 and docling-slim 2.132.0. The fixture is
+`tests/fixtures/inline_joins.html`, whose words are made up so that each can be
+searched for whole.
+
+### P48-1: where the space came from
+
+It is P14-56's mechanism, which that entry undid for sub- and superscripts
+only. The HTML backend gives the text of every element in its
+`_FORMAT_TAG_MAP` (`b`, `strong`, `i`, `em`, `var`, `s`, `del`, `u`, `ins`,
+`sub`, `sup`, `code`, `kbd`, `samp`) and of `a` a formatting or a link of its
+own, so that text becomes an item apart from the text beside it. It has
+normalized each text node with `" ".join(text.split())` by then, so nothing
+records whether whitespace separated the two, and docling-core joins an
+inline group's items with a space in the Markdown, plain-text and chunking
+serializers. Two joins of the backend's own add the same space: two
+adjacent runs with the same formatting are merged with one
+(`<b>a</b><b>b</b>` read `**a b**`), and so are the parts of a heading or a
+table cell it flattens into one string (`<h2>Fen<b>dral</b>ix</h2>` read
+`## **Fen dral ix**`).
+
+The common case on real pages is not a word split in two but punctuation
+pushed off the word before it: a link followed by a comma read `[link](…) ,`
+and "link ,", and `(<code>x</code>)` read `( `x` )` and "( x )".
+
+### P48-2: what the bridge does now
+
+P14-56's markers are written for every element the backend formats or links,
+not only `sub` and `sup`: U+FDD0 at the start of the element's text where no
+whitespace separates it from the text before, U+FDD1 at its end where none
+separates it from the text after. The inline serializer then joins touching
+parts with nothing, each wrapped on its own terms: `un**break**able`,
+`pre*fix*ed`, `co`de`word`, `[link](…),`, `**bran***dovic*`. A sub- or
+superscript still takes the wrapping of the text it touches, as P14-56 made
+it. Inside a flattened heading or table cell the marker takes the backend's
+space with it, so the heading reads `## **Fendralix**` (the bold over the
+whole heading is the backend's: it gives a flattened string the first
+formatting it meets). The set is pinned by a test against the backend's
+`_FORMAT_TAG_MAP`, so an upgrade that formats another element fails until the
+bridge marks it too.
+
+"Whitespace" is every character Python's `str.isspace()` accepts, which is
+the set the backend's `str.split()` collapses, so the bridge marks exactly
+where the backend loses a fact. All 29 of those characters (U+00A0, which P43
+keeps on the page, among them) were run at either edge of bold, italic and a
+link: the output is master's, byte for byte, in each case.
+
+Two defects in P14-56's parser came with it:
+
+- **A line break between an element's start and its text was not a
+  separator.** The parser kept the character the element followed, so
+  `foo<sub><br>0</sub>` read "foo0". An element whose text has not started
+  now starts after a separator, not before it.
+- **Each marker was inserted by slicing the whole page**, which copies the
+  page once per marker. Measured by another session on master: 2,000 sub- and
+  superscripts on a 1.1 MB page took 3.2 s. With every link that touches a
+  comma marked, a 2.06 MB page with 8,000 markers would have taken 13.59 s;
+  the page is now assembled in one pass, in 0.09 s with the parse, and a test
+  checks it places every marker where slicing did.
+
+### P48-3: what the markup cannot say
+
+The bridge reads `content.html`, which carries no CSS. A page's CSS can lay
+an inline element out as a box of its own, and then the page shows a line
+break or a gap where the markup has nothing: GitHub writes a repository's
+topics as `<a>` flex items with no whitespace between them, so the prototype
+joined them into "aiconvertdocument-parser". The same held for pagination
+("PreviousNext"), skip links, breadcrumbs, and a learning platform's module
+overview whose `<small>` notes are `display: block`
+("…for the WeekWeb Page").
+
+To see how often, every edge where a formatted element touches its neighbour
+by the bridge's rule was found on 34 live public pages (encyclopedia
+articles, language and library documentation, a code host, a package index,
+news and government home pages, a course catalogue page, a textbook chapter)
+and compared with what Chromium itself does there, by selecting the two
+characters and reading the selection's text, and by measuring the two glyphs.
+Of 3,510 rendered edges (`a` 2,469, `code` 535, `sup` 462, `i` 389, `em` 363,
+`sub` 99, `b` 92, `strong` 41, `kbd` 12, `var` 5), 47 had an element on the
+path between the two characters whose computed `display` was not `inline`:
+`flex` 29, `block` 26, `inline-block` 2, `grid` 1 (an edge can cross more than
+one). The browser's text had whitespace at 26 of them, and the other 21 are
+drawn apart: chips 2.3 em apart, keys with gaps, skip links and a button on
+lines of their own. At the other 3,463, every element between was `inline`,
+and the browser's text joined the two at all 3,463. 827 of those are drawn
+more than 0.1 em apart, by an inline element's padding (inline code's
+background, an external-link icon), which the browser's text does not read
+as a space either.
+
+So the snapshot now records it. Where the page lays out an element of
+`INLINE_TAGS` as anything but `inline` (or `contents`), its copy carries
+`data-webshot-display` with the display the browser computed, and the bridge
+treats that element's edges as separators, as it does a block's. Inside the
+box, its own parts still join. The attribute is always WebShot's: the
+snapshot removes a page's own before it decides, so a page cannot suppress a
+join by writing it, and the fixture checks that. `getComputedStyle` is
+already called on every element by the visibility check, so the cost is one
+read of a property it has computed.
+
+### P48-4: the line breaks the snapshot dropped
+
+The fixture's `quor<b><br>daz</b>` still read "quordaz" after a capture. The
+snapshot dropped every `<br>`: `visible()` requires a box with width and
+height, and a line break's box has no width. So `content.html` itself read
+`quor<b>daz</b>`, and on master `alpha<br>beta` read "alphabeta" on every
+surface. Over the same 34 live pages, 476 `<br>` were rendered; 123 of them,
+on 9 pages, had no whitespace on either side, so each ran two words
+together, and 115 of those stood beside an element, as in a table cell's
+`<code>True</code><br><code>False</code>`, which read "True False" on master
+only because docling spaced the code. A `<br>` is now kept where it has a box
+at all and is not `visibility: hidden`. The backend writes it as a Markdown
+hard line break and a newline in `content.txt`, and in a table cell, or where
+it meets a formatted part, as a space.
+
+### P48-5: real captures
+
+The bridge of master and this one were run over the `content.html` of 174
+saved captures (144 readings, labs and feedback pages from an online-course
+platform, 3 learning-management pages, 19 transcript pages and 8 other local
+captures). 93 changed: 688 lines of `content.md`, 688 of `content.txt` and
+685 chunk texts. Every change removes a space and nothing else; no line was
+added or lost. Of the 1,022 spaces removed, 951 stood before closing
+punctuation (`[link](…) ,`, `**Summary** :`), 26 after opening punctuation
+(`( >= )`, `" Sign Up "`), and 45 between a word and a word or a hyphen. The
+45 were listed and the markup behind each distinct case read. Each joins what
+the markup runs together, as in `use<code>pandas.DataFrame.sample()</code>`,
+`<var>dt</var><var>Series</var>`, `March).<a href="…"><em>Unicorn…`,
+`<strong>Set:</strong><span>A Tableau term` and `<i>p</i>-value`, where the
+course's own markup has no space. Three are apart on the page, on a module
+overview page whose `<small>` notes are blocks and whose file names are
+separated by `<br>`. Its snapshot predates P48-3 and P48-4; captured again,
+`content.html` carries `data-webshot-display="block"` on each `<small>` and
+keeps the `<br>`, and the three stay apart. A saved snapshot records no CSS,
+so for the other 42 the markup is the evidence.
+
+`content.json` changed in 3 of the 174, each in a string the backend itself
+flattened or merged with a space: three notebook headings
+(`alpha : The confidence level` is now `alpha: The confidence level`), the
+`dt Series` above, and the overview page's file names. Its origin hash and
+every item's formatting are unchanged.
+
+A CommonMark reader (markdown-it-py 4.2.0, with tables and strikethrough)
+was run over every changed `content.md` line. In 9 lines of 4 captures it no
+longer reads an emphasis the old line had: two runs of emphasis that touch
+(`**Randomization***:*`, `**`California`****,**`) or a delimiter between
+punctuation and a letter (`**Set:**A`, `true**.**`), where CommonMark's
+flanking rules do not let `*` open or close. The words are right in those
+lines, and `content.txt` and the chunk texts hold them without markup.
+
+Extraction over the 174 took 29.7 s with master's bridge and 25.4 s with this
+one, with the load average above 600 from other sessions' runs: no cost this
+machine can see.
+
+### P48-6: the golden corpus
+
+Four of the 26 cases changed, and every changed line is one of these:
+
+- **`form-fields` and `form-overlapping-passwords`**: each `<label>` (8 and 6)
+  gains `data-webshot-display="block"`, because both fixtures' stylesheets set
+  `label { display: block; }`. No text surface changed: a label is followed by
+  an `<input>`, which already separated the two. `content.json`'s
+  `origin.binary_hash` is a hash of `content.html`, so it moved with it, and
+  the manifest's bytes and digest for both files followed.
+- **`lms-module` and `lms-module-videos`**: one line, `…on project issues](…) .
+  The…` in `content.md`, "…project issues . The…" in `content.txt` and the
+  chunk holding it, loses the space before the full stop. `text_characters`
+  went from 762 to 761 in the manifest and the report, and the manifest's
+  bytes and digest for the three files followed. The chunk's id, items and
+  headings are unchanged.
+
+Run three times against the branch, `lms-module`'s `asset-002` (a `<video
+preload="none" controls>` whose source never loads) gave three different
+raster digests, one of them the recorded one, and master's run gave the
+recorded one. The raster is taken before the snapshot this change touches.
+The re-recording drew the recorded frame, so no raster digest in the corpus
+changed; the flake itself is left for its own fix.
+
+### P48-7: what this does not cover
+
+- **An element the backend does not format still splits a word.** `span`,
+  `mark`, `small`, `abbr`, `cite`, `q`, `strike` and the rest of
+  `INLINE_TAGS` give their text no formatting, so the backend merges it with
+  the text beside it into one item, with a space: `un<span>break</span>able`
+  still reads "un break able". It is the same space from a different join
+  (`simplify_text_elements`, not the serializers). The live pages had 6,530
+  such edges against P48-3's 3,510, and 247 of them crossed a box (3.8%,
+  against 1.3%). Marking them is the next step, with the same display record
+  to keep the boxes apart.
+- **CommonMark does not read every join's emphasis** (P48-5): two touching
+  runs of `*` emphasis, or a delimiter between punctuation and a letter. The
+  words are right; a Markdown renderer shows the asterisks.
+- **Only `display` is read.** An inline element with a margin or padding is
+  drawn apart and joined in the text, as the browser's own text joins it
+  (P48-3). An element outside `INLINE_TAGS` that the CSS makes inline, such as
+  `div { display: inline }`, still separates.
+- **A `<br>` with `visibility: hidden` is dropped,** though it still breaks
+  the line: keeping it would keep its hidden parent, and the text in it.
+- **The PDF's text is not the measure for inline code.** pypdf reads the gap
+  an inline code element's padding draws as a space ("cozib wort"), so the
+  tests read only emphasized words off the PDF.
+
+### P48-8: the tests
+
+`tests/test_inline_joins.py` reads `inline_joins.html` without a browser:
+every made-up word with a formatted part is whole in `content.txt`, in
+`content.md` once its Markdown is taken out, and in the chunk texts; the
+Markdown wraps each part where it touches (`[**tor**](#later)quellish`,
+`**bran***dovic*`, `| sko*val*der |`); every character Python reads as
+whitespace, at either edge of bold, italic and a link, leaves the page
+unmarked and the text as docling spaces it; a `<br>` inside an element keeps
+its text off the word before; an element carrying `data-webshot-display`
+separates while its own parts still join; the joined set is the backend's
+`_FORMAT_TAG_MAP` and `a`; the one-pass insertion places every marker where
+slicing did; and `content.json` keeps every item, formatting and origin hash.
+It then captures the fixture end to end and checks `content.md`,
+`content.txt` and `chunks.jsonl` word by word, the PDF's text for the
+emphasized words and for every pair kept apart, `content.html` for the five
+recorded displays and the three kept `<br>`, and that a page's own
+`data-webshot-display` is gone. With its imports pointed at master's names, 9
+of its 40 tests fail on master; the 31 that pass are the whitespace cases and
+the `content.json` and PDF checks, which hold there by construction. P14-56's
+tests in `tests/test_docling_bridge.py` pass with only the marking function's
+new name.
+
+## P50: a list item's code lost its lines in content.md (2026-10-11)
+
+A `<pre>` in a list item reached `content.md`, `content.txt` and
+`chunks.jsonl` as one line. Where the page had `<li><p>Arbel</p><pre><code>`
+and two lines of code, `content.json` held a `code` item
+`'plinth = gorvane(7) wex plinth'` in the item's inline group, and
+`content.md` wrote `` - Arbel `plinth = gorvane(7) wex plinth` ``. The code of
+an item that opened with it, `<li><pre>opal = 1\nopine = 2</pre></li>`, was the
+item's own text and no longer code: `- opal = 1 opine = 2`. A `<pre>` outside a
+list kept its lines, fenced. P44-4 recorded this as not covered: P44 puts the
+`<pre>` on the page, and this is what docling made of it there. Measured with
+docling-slim 2.132.0 and docling-core 2.99.0, as `uv.lock` pins them, and
+markdown-it-py 4.2.0 (installed with `rich`) as a CommonMark reader, on master
+5a5a6ab. docling-slim 2.137.0 and docling-core 2.101.1, the latest releases on
+the day, behave the same, and a search of both projects' issues found no
+report of it. The fixture is `tests/fixtures/item_code_blocks.html`: down to
+"Code outside a list" it is the page P44 made of a draft of
+`code_items_book.epub`, which also had code in a quotation, then shapes a web
+page has. Every word in it is made up.
+
+### P50-1: both of docling's layers lost them
+
+**The backend.** `_add_list_item_with_content` reads an item's text from
+everything the item holds but its `ul`, `ol`, `dl` and `table`, and replaces
+each run of whitespace with a space (`re.sub(r"\s+|\n+", " ", ...)`). A `<pre>`
+is text there: a `code` part of the item's inline group where a `<code>` wraps
+its text, plain text where none does, and the item's own text where it is the
+item's only text, the one part an item needs no inline group for, so the code
+flag goes. `_process_list_item_nested_content` then walks the item for an
+image, a list or a table, and nothing else. The inline group comes first, so
+code after a nested list moved before it.
+
+**The serializer.** Given a `code` item under a list item, as a correct
+document would have it, docling-core still wrote it wrong.
+`MarkdownListSerializer` puts the list's indentation before each child's
+first line only. At depth 1 the fence was at column 0, which ends the list,
+and the code after it was a paragraph; at depth 2 the fence was four spaces
+in and every other line at the margin. `content.txt`, from the same list
+serializer, had the same shape.
+
+### P50-2: the correction is in the bridge
+
+Both are corrected where the bridge already meets docling, and docling is not
+patched. An upstream fix would arrive in a release WebShot then adopts, with
+its goldens; this one is held by WebShot's own tests from today.
+
+`_code_block_backend` subclasses `HTMLDocumentBackend` with three overrides.
+While an item's own text is read, a `<pre>` the item holds as a block of its
+own reads as nothing; when the item's nested content is walked, that `<pre>`
+goes to `_handle_block`, which reads it as the backend reads one anywhere
+else: a `code` item with its lines, here a child of the list item, in the
+order the item holds it among its lists. An item whose only text was its code
+becomes an item with no text holding the code; the backend makes no item of
+an `<li>` with no text, so its code would go with it. A `<pre>` is the item's
+when no `ul`, `ol`, `dl`, `table` or `pre` is between them and the backend
+hides neither it nor what it is in. It applies to a list item and a
+description (`<dd>`), the two the backend walks; a term's code stays in the
+term's line.
+
+`_code_block_serializers` gives the Markdown, plain-text and chunking
+serializers a text serializer that writes such a `code` item in its item:
+
+- every line at the item's content column: four spaces a level, as docling
+  indents a nested list, or one past the marker where that is wider (`998.`,
+  `1000.`), as CommonMark needs;
+- a blank line in the code empty, and `\r\n` or `\r` a line break, because
+  CommonMark reads a carriage return as one and the line after it lost its
+  indentation;
+- a fence of three backticks, or one more than the code's longest run of
+  them, so no line of the code closes it;
+- for an item with no text whose first child is its code, the code's first
+  line on the marker's line (`-   ````, `999. ````). A marker alone on a line
+  is an empty item, which cannot interrupt a paragraph: under an item with
+  text it reads as a setext underline.
+
+`content.txt` has the same lines without the fences. Four cases are written
+as docling writes them, each for its reason. A `<pre>` holding an image, a
+list or a table: walking the item made an image in it a picture, and
+`_handle_block` makes none, which would cost every picture on the page its
+match to its asset (P2-4). A `<pre>` the backend reads as
+several runs, because emphasis or a `<sub>` splits its code, it writes inline
+with their lines joined outside a list too, so in an item it stays in the
+item's line. docling writes a table cell on one line: an item's code there is
+inline code on the item's line, whitespace joined, as before, but an item that
+opens with code now has it as code (`` - `only code` ``) where it had it as
+plain text. A linked block of code docling writes inline as the link's text;
+it is indented into the item.
+
+An item with no text but its code has no text for the bridge to tell chrome
+by, so it stays on its code's layer. Moved to the body alone, as the bridge
+moves furniture whose text no chrome region holds, a footer's item came back
+with its code, which then reached `content.md`.
+
+The overrides and the calls they make are docling's private methods
+(`_BACKEND_HOOKS`, with `AnnotatedTextList.simplify_text_elements`). Should a release drop one, the page is read by docling's
+own backend, each item's code on its item's line as before, and the manifest
+says so.
+
+### P50-3: measured
+
+Over 260 generated cases, ten kinds of code (one line break, indentation,
+one blank line, two, blank lines and spaces at either end, tabs, a line of
+three backticks, runs of four and six, carriage returns, Markdown and HTML) in
+26 shapes (after an item's text at depths 1 to 3 and an item that opens with
+code at depths 1 to 3, under both kinds of list; after a nested list and
+before one; two blocks in one item; code in a `<div>` in an item; an item that
+opens with code and holds a list; `<ol start>` 9, 99 and 999; descriptions),
+each `content.md` was read by markdown-it-py and its lists compared with the
+page's, each block with the same `<pre>` outside a list as `content.json`
+holds it. Master matched in none, this bridge in all 260.
+
+The page P44 made of that draft is the fixture's first sections, on which
+the comparison below passes. Captured end to end with P40, P44's draft and
+this bridge together, the EPUB's `content.md` and `content.txt` held every
+block in its item, line for line, and P44's own end-to-end test passed for it;
+its Word file and zip need mammoth, which this environment lacks. P44's own
+test checks only that `content.md` and `content.txt` hold each block's words
+in order; with both on master it can hold them to lines.
+
+Every other HTML fixture in `tests/fixtures/` (56, none with code in an item)
+is written byte for byte as with docling's own backend and serializers:
+`content.json`, `content.md`, `content.txt`, `content.doctags`, the tables,
+the chunks and the warnings. So were 206 real captured pages, each page's
+`content.html` read out of its PDF and extracted by master's bridge and by
+this one: none holds a `<pre>` in a list item, and extraction took 32.7 s and
+33.0 s in all.
+
+### P50-4: what this does not cover
+
+- **docling's reading of a `<pre>` is unchanged**, outside a list as in one.
+  It strips the code's leading and trailing whitespace, so a first line's
+  indentation goes (`   lead` is `lead`). It strips each text node, so code a
+  highlighter split into one element per token loses the line breaks and
+  indentation that sat in whitespace between tokens and gains a space between
+  tokens: `def f(x):` and an indented `return x` read `def f ( x ): return x`.
+  A `<pre>` with emphasis in it, or in a link, loses its lines. In an item each
+  of these now reads as it does outside a list.
+- **A line of three backticks ends docling's own fence**, which is always
+  three: the rest of a top-level block is read as Markdown. In an item the
+  fence is longer.
+- **Text after an item's code joins the item's text**, before the code, as
+  text after a nested list does in docling: "Orvash", the code, "and Pemberly
+  after it" reads `- Orvash and Pemberly after it`, then the code. A quotation
+  in an item has no quotation in `content.md`, which holds none anywhere.
+- **In a table cell code is one line**, as all of a cell is.
+- **An item with no text that holds a list before its code** has its marker
+  alone on a line: under an item with text, a setext underline. The first
+  child of such an item is a list, which this does not join to the marker.
+- **Two blocks in one item read as one in `content.txt`**, which has no
+  fences and no blank line between them.
+
+### P50-5: the tests
+
+`tests/test_item_code_blocks.py` extracts the fixture and reads `content.md`
+with markdown-it-py. For each of its 14 sections of code in items, the lists
+and their code are the page's, item for item, and each block is the same
+`<pre>` outside a list as `content.json` holds it; on master's bridge all 14
+fail. It holds that an item that opens with code is an item with no text
+holding the code in `content.json`; that `content.txt` holds each block line
+for line at its item's column or deeper; that a chunk holds each block as
+`content.md` writes it; that code outside a list is written as before; that
+code with emphasis in it, and a term's code, are written as docling writes
+them; that a table cell's code is inline on its item's line; that an image in
+an item's code is still a picture; and that a footer's code stays off the
+body. Every other HTML fixture is held to docling's own output on every
+surface. It checks the backend still has the methods the bridge extends, and
+that without one the capture completes as docling reads it, with a warning.

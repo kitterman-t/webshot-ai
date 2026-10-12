@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inline joins</title>
+<!-- docs/09 P48. Every word here is made up, so each can be searched for
+     whole. A word with a formatted part reads as one word on the page; a
+     space the page has, a line break, or a box the CSS makes keeps two
+     apart. -->
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 2rem; max-width: 40rem; }
+  code { background: #eef; padding: 0 .2em; }
+  .chips a { display: inline-block; margin-right: .6em; padding: 0 .3em; border: 1px solid #889; }
+  .row { display: flex; gap: 1rem; }
+  .stacked small { display: block; }
+</style>
+</head>
+<body>
+<h1>Glossary of the Varn<b>tesh</b>ic</h1>
+<p>A vel<b>moran</b>tic drift, a pre<i>quast</i>ed orbit and a <em>blor</em>nish tone.</p>
+<p>Call co<code>zib</code>wort, press tre<kbd>vak</kbd>ul, read gor<samp>pen</samp>dil and set fla<var>nor</var>ic.</p>
+<p>The <a href="#later">Plavik</a>, the <a href="#later">Dromsen</a>; then (<code>zubrel</code>) and "<i>wenthar</i>".</p>
+<p>One <a href="#later"><b>tor</b></a>quellish word, one <b>bran</b><i>dovic</i> word, and one <s>fen</s>nik<u>tal</u>.</p>
+<p>Kept apart: before <b>spaced</b> after, trel&nbsp;<b>wisp</b>&nbsp;mor, quil&#8201;<i>nesh</i>&#8201;dor.</p>
+<p>Broken lines: quor<b><br>daz</b> and skel<br>vona.</p>
+<h2>Fen<b>dral</b>ix</h2>
+<ul><li>gram<code>pel</code>osh and stra<strong>vin</strong>e</li></ul>
+<table>
+<tr><th>Term</th><th>Use</th></tr>
+<tr><td>sko<i>val</i>der</td><td>a test</td></tr>
+<tr><td><code>vrin</code><br><code>tosk</code></td><td>two flags</td></tr>
+</table>
+<p class="chips"><a href="#t1">zorbel</a><a href="#t2">quintar</a></p>
+<div class="row"><span>krev</span><b>moltan</b></div>
+<p class="stacked"><a href="#t3">Hessel</a><small>Wiki page</small></p>
+<p>A <span data-webshot-display="block">yar</span><b>bistle</b> the page marked itself.</p>
+<h2 id="later">Later</h2>
+<p>End of the glossary.</p>
+</body>
+</html>

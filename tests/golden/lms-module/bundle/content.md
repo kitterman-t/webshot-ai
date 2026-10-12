@@ -22,4 +22,4 @@ Understanding the Sandbox Environment · 4:11
 
 ## Where to get help
 
-Raise a project issue for anything the consultants need to answer, or read the [knowledge base article on project issues](https://help.example.com/Portal/Login.aspx?ReturnUrl=/Portal/KB/ArticleDet?ID=1234) . The [module checklist](checklist.html) is on the next page.
+Raise a project issue for anything the consultants need to answer, or read the [knowledge base article on project issues](https://help.example.com/Portal/Login.aspx?ReturnUrl=/Portal/KB/ArticleDet?ID=1234). The [module checklist](checklist.html) is on the next page.

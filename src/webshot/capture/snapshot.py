@@ -227,6 +227,56 @@ HARVEST_MARKERS = (
     "data-webshot-ocr-text",
 )
 
+#: Elements a line of text runs through, as the browser lays them out unless
+#: the page's CSS says otherwise. Text either side of one is one run, so a
+#: formatted part of it can touch the text beside it; any other element (a
+#: block, a line break, an image) separates the two. The extraction bridge
+#: reads `content.html` by this list (docs/09 P14-56, P48).
+INLINE_TAGS = frozenset(
+    {
+        "a",
+        "abbr",
+        "b",
+        "bdi",
+        "bdo",
+        "big",
+        "cite",
+        "code",
+        "data",
+        "del",
+        "dfn",
+        "em",
+        "font",
+        "i",
+        "ins",
+        "kbd",
+        "label",
+        "mark",
+        "q",
+        "s",
+        "samp",
+        "small",
+        "span",
+        "strike",
+        "strong",
+        "sub",
+        "sup",
+        "time",
+        "tt",
+        "u",
+        "var",
+        "wbr",
+    }
+)
+
+#: Set on an element of `INLINE_TAGS` that the page's CSS laid out as a box of
+#: its own (a block, a flex or grid item, an inline-block, a float), to the
+#: `display` the browser computed for it. Markup alone says such an element
+#: runs with the text beside it; on the page a line break or a gap stands
+#: between them, so the bridge treats it as a separator (docs/09 P48). Always
+#: WebShot's: the snapshot removes a page's own before it decides.
+DISPLAY_ATTRIBUTE = "data-webshot-display"
+
 
 LOCATOR_JS = """function locate(element) {
     // Two ways this used to emit a selector that matches nothing, both from
@@ -360,6 +410,7 @@ async def extract_semantic_content(
             const locator = __LOCATOR__;
             const flat = __FLAT_TREE__;
             const owned = new Set(__HARVEST_MARKERS__);
+            const inlineTags = new Set(__INLINE_TAGS__);
             const mediaTags = ['audio', 'video', 'iframe', 'object', 'embed'];
 
             // The page as a reader sees it, which `document` alone is not. An
@@ -417,11 +468,23 @@ async def extract_semantic_content(
                 const style = getComputedStyle(element);
                 return style.display === 'contents' && style.visibility !== 'hidden';
             };
+            // A line break draws nothing, so its box has no width and
+            // `visible()` is false for every one. Dropped, it ran the words
+            // either side together wherever no whitespace stood beside it:
+            // a table cell's `<code>True</code><br><code>False</code>` read
+            // "True False" only because docling spaced the code, and plain
+            // `t-test<br>Regression test` read "t-testRegression test"
+            // (docs/09 P48). It is shown where it has a box at all.
+            const lineBreakShown = element => {
+                if (element.closest('[data-webshot-hidden="true"]')) return false;
+                return getComputedStyle(element).visibility !== 'hidden'
+                    && element.getClientRects().length > 0;
+            };
             const copyOf = node => {
                 if (node.nodeType === Node.TEXT_NODE) return inert.createTextNode(node.data);
                 if (node.nodeType !== Node.ELEMENT_NODE) return null;
                 elements.push(node);
-                const shown = visible(node);
+                const shown = node.localName === 'br' ? lineBreakShown(node) : visible(node);
                 const frame = flat.isFrame(node) && shown;
                 const body = frame ? flat.frameBody(node) : null;
                 // Ours in every tree the walk enters, because the harvest
@@ -449,6 +512,20 @@ async def extract_semantic_content(
                         if (name.startsWith('data-webshot-') && !owned.has(name)) {
                             copy.removeAttribute(name);
                         }
+                    }
+                }
+                // Markup says an inline element runs with the text beside it,
+                // and the bridge joins the two where no whitespace separates
+                // them. A page's CSS can make one a box of its own -- a flex
+                // item, a block, a float -- and the page then shows a line
+                // break or a gap there: a project's topic links read
+                // "aiconvertdocument-parser" (docs/09 P48). The display the
+                // browser computed travels with the copy.
+                copy.removeAttribute('__DISPLAY_ATTRIBUTE__');
+                if (inlineTags.has(node.localName)) {
+                    const display = getComputedStyle(node).display;
+                    if (!['inline', 'contents', 'none'].includes(display)) {
+                        copy.setAttribute('__DISPLAY_ATTRIBUTE__', display);
                     }
                 }
                 if (['INPUT', 'TEXTAREA', 'SELECT'].includes(node.tagName)) liveOf.set(copy, node);
@@ -687,7 +764,9 @@ async def extract_semantic_content(
         }""".replace("__LOCATOR__", LOCATOR_JS)
         .replace("__VISIBLE__", VISIBLE_JS)
         .replace("__FLAT_TREE__", FLAT_TREE_JS)
-        .replace("__HARVEST_MARKERS__", json.dumps(HARVEST_MARKERS)),
+        .replace("__HARVEST_MARKERS__", json.dumps(HARVEST_MARKERS))
+        .replace("__INLINE_TAGS__", json.dumps(sorted(INLINE_TAGS)))
+        .replace("__DISPLAY_ATTRIBUTE__", DISPLAY_ATTRIBUTE),
         {"ownLabels": dict(own_labels or {})},
     )
     extracted["html"] = standalone_document(

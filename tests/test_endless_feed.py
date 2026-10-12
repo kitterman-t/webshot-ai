@@ -12,6 +12,12 @@ and the manifest says so.
 `tests/fixtures/endless_feed.html` lays the page out as the watch page is: the
 log and its endless comments in one column, and in the other a list of
 related logs that loads three more batches, each after a 600 ms "fetch".
+
+A scroll reaches the page only when it renders, and on a loaded machine a fresh
+renderer's first frame came seconds after `load` (docs/09 P34). The pass
+counted steps the page could not yet have answered, saw nothing grow, and
+ended "at the bottom" of a page that had not seen a scroll. `#late-frame`
+holds the first frame back until the test lets it go.
 """
 
 from __future__ import annotations
@@ -20,10 +26,12 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 from playwright.async_api import async_playwright
 
+from webshot.capture import prepare
 from webshot.capture.prepare import (
     NOISE_SELECTORS,
     REMOVED_GROWTH_STEPS,
@@ -63,6 +71,68 @@ def _scroll(
                 )
                 return result, await page.evaluate(RELATED_COUNT_JS)
             finally:
+                await browser.close()
+
+    return asyncio.run(run())
+
+
+#: Where `_scroll_late_frame` serves the fixture from, so that it can hold
+#: `late-frame.js` back. A `.test` name never resolves, and the route answers
+#: every request to it, so nothing leaves the machine.
+ORIGIN = "http://endless-feed.test"
+
+
+#: Longer than any pass here takes. A pass that hangs fails the test rather
+#: than stalling the run: absence of a result is not a result.
+PASS_DEADLINE_S = 60
+
+
+def _scroll_late_frame(
+    hold_s: float | None, variant: str = "late-frame"
+) -> tuple[LazyLoadPass, int]:
+    """`#late-frame`, opened as the capture opens a page, and scrolled under `--exclude`.
+
+    The page's first frame waits `hold_s` seconds, or for the pass to end when
+    `hold_s` is None.
+    """
+
+    async def run() -> tuple[LazyLoadPass, int]:
+        released = asyncio.Event()
+
+        async def serve(route: Any) -> None:
+            path = urlsplit(route.request.url).path
+            if path == "/endless_feed.html":
+                await route.fulfill(body=FIXTURE.read_bytes(), content_type="text/html")
+            elif path == "/late-frame.js":
+                if hold_s is None:
+                    await released.wait()
+                else:
+                    await asyncio.sleep(hold_s)
+                await route.fulfill(body="", content_type="text/javascript")
+            else:
+                await route.fulfill(status=404)
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            try:
+                page = await browser.new_page(viewport=DEFAULT_VIEWPORT)
+                await page.route(f"{ORIGIN}/**", serve)
+                # `domcontentloaded`, as the capture navigates: `load` would
+                # wait for the held script.
+                await page.goto(
+                    f"{ORIGIN}/endless_feed.html#{variant}",
+                    wait_until="domcontentloaded",
+                )
+                result = await asyncio.wait_for(
+                    scroll_to_load(page, 100, 0.25, excluded=("#comments",)),
+                    PASS_DEADLINE_S,
+                )
+                released.set()
+                # Rendered, so the held script has been served before closing.
+                await page.evaluate("new Promise(r => requestAnimationFrame(r))")
+                return result, await page.evaluate(RELATED_COUNT_JS)
+            finally:
+                released.set()
                 await browser.close()
 
     return asyncio.run(run())
@@ -111,6 +181,45 @@ def test_a_removed_region_that_does_not_grow_leaves_the_original_rule() -> None:
     assert result.ended == "bottom", result
     assert related == RELATED
     assert lazy_load_warning(result, 100) is None
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("variant", ["late-frame", "late-frame-smooth"])
+def test_the_pass_waits_for_a_page_that_has_not_rendered_yet(variant: str) -> None:
+    """Held 2 s, the first frame came after the pass used to end (docs/09 P34).
+
+    The pass ended at its fifth step, 1.1 s in, "at the bottom" of the page as
+    it loaded: 1,968 px, nothing grown, twenty related logs of eighty.
+    """
+    result, related = _scroll_late_frame(2.0, variant)
+    assert result.ended == "removed-growth", result
+    assert result.growing == (("section#comments", "exclude"),)
+    assert related == RELATED
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("variant", ["late-frame", "late-frame-smooth"])
+def test_a_page_that_does_not_render_ends_the_pass_and_says_so(
+    monkeypatch: pytest.MonkeyPatch, variant: str
+) -> None:
+    """Smoothly scrolled, too: a scroll the page never finished hung the pass."""
+    monkeypatch.setattr(prepare, "FRAME_TIMEOUT_S", 1.5)
+    result, related = _scroll_late_frame(None, variant)
+    assert result.ended == "unrendered", result
+    assert result.steps == 1
+    assert related == 20, "nothing loaded: the page never saw the scroll"
+    message = lazy_load_warning(result, 100)
+    assert message is not None
+    assert "did not render within 1.5 seconds of a scroll" in message
+
+
+def test_the_unrendered_warning_says_what_was_not_seen() -> None:
+    result = LazyLoadPass(steps=1, ended="unrendered", height=1968)
+    assert lazy_load_warning(result, 100) == (
+        "The lazy-load pass stopped after 1 step(s): the page did not render "
+        "within 30 seconds of a scroll, and a page sees a scroll only when it "
+        "renders, so content it loads as it is scrolled may not have been loaded."
+    )
 
 
 def test_the_warning_names_the_region_and_what_removes_it() -> None:

@@ -86,6 +86,14 @@ lists, tables, and code, in reading order. Tables are GitHub-flavored Markdown
 pipe tables with no padding inside the cells, so a long cell does not widen
 every row; `content.txt` and the chunks write them the same way.
 
+Text the page runs together stays together on every text surface: a word
+with a bold, italic, code or linked part is one word (`un**break**able`,
+"unbreakable"), and a link keeps the comma after it. Whitespace, a line
+break, or an inline element the page's CSS lays out as a box of its own (a
+flex item, a block, an inline-block) keeps two parts apart. `content.html`
+records that last case on the element as `data-webshot-display`, the display
+the browser computed.
+
 **`chunks.jsonl`** is one JSON object per line, sized for retrieval:
 
 ```json

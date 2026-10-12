@@ -22,9 +22,15 @@ versions rather than assumed (docs/09 S3 and the Phase 2 corrections):
   a mismatch raises rather than mis-attributing OCR text.
 - The backend strips every text node and keeps no record of where the source
   had whitespace, and docling-core's serializers join the parts of an inline
-  group with a space, so "H<sub>0</sub>" reached every text surface as
-  "H 0". Where a sub/superscript touches the text beside it is carried through
-  the backend as two marker characters (docs/09 P14-56).
+  group with a space, so "H<sub>0</sub>" reached every text surface as "H 0"
+  and "un<b>break</b>able" as "un break able". Where a formatted part touches
+  the text beside it is carried through the backend as two marker characters
+  (docs/09 P14-56, P48).
+- The backend reads a `<pre>` in a list item into the item's line with its
+  whitespace joined, and docling-core indents only the first line of a list
+  item's child, so an item's code reached content.md as one line. The bridge
+  extends the backend to read it as a block of code under the item, and the
+  serializers to write each of its lines inside the item (docs/09 P50).
 """
 
 from __future__ import annotations
@@ -34,12 +40,13 @@ import re
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
+from functools import cache
 from html.parser import HTMLParser
 from io import BytesIO
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from ..bundle.publish import dump_json
-from ..capture.snapshot import TITLE_ELEMENT_RE
+from ..capture.snapshot import DISPLAY_ATTRIBUTE, INLINE_TAGS, TITLE_ELEMENT_RE
 from ..capture.visuals import VisualAsset
 from ..errors import BundleBuildError
 
@@ -182,7 +189,7 @@ class _SnapshotFacts(HTMLParser):
 
 
 #: Two Unicode noncharacters, which the standard keeps for a program's internal
-#: use: the first opens a sub/superscript's text that touches the text before
+#: use: the first opens a formatted part's text that touches the text before
 #: it, the second closes one that touches the text after it.
 JOINED_BEFORE = "\ufdd0"
 JOINED_AFTER = "\ufdd1"
@@ -194,55 +201,56 @@ _JOIN_MARK_RE = re.compile(f" ?{JOINED_BEFORE}|{JOINED_AFTER} ?")
 #: Stands in for a part's text, to read what a serializer wraps text in.
 _WRAPPER_PROBE = "\x00"
 
-_SCRIPT_TAGS = frozenset({"sub", "sup"})
-#: Elements a line of text runs through. Text either side of one is one run,
-#: so a sub/superscript can touch it; any other element (a block, a line
-#: break, an image) separates the two.
-_INLINE_TAGS = _SCRIPT_TAGS | frozenset(
+#: The elements whose text the backend gives a formatting or a link of its
+#: own: its `_FORMAT_TAG_MAP` (emphasis, strong, strikethrough, underline,
+#: sub/superscript, inline code) and `a`. Their text becomes an item apart
+#: from the text beside it, which every serializer joins to the next with a
+#: space, so "un<b>break</b>able" read "un **break** able" (docs/09 P48).
+_JOINED_TAGS = frozenset(
     {
         "a",
-        "abbr",
         "b",
-        "bdi",
-        "bdo",
-        "big",
-        "cite",
         "code",
-        "data",
         "del",
-        "dfn",
         "em",
-        "font",
         "i",
         "ins",
         "kbd",
-        "label",
-        "mark",
-        "q",
         "s",
         "samp",
-        "small",
-        "span",
-        "strike",
         "strong",
-        "time",
-        "tt",
+        "sub",
+        "sup",
         "u",
         "var",
-        "wbr",
     }
 )
+#: The one element of `INLINE_TAGS` that has no end tag.
+_VOID_INLINE_TAGS = frozenset({"wbr"})
 
 
-class _ScriptJoins(HTMLParser):
-    """Where each `<sub>`/`<sup>` touches the text beside it, as insertions.
+@dataclass(slots=True)
+class _OpenInline:
+    """An inline element the parse is inside of."""
 
-    A script whose text starts with no whitespace between it and the text
-    before it gets `JOINED_BEFORE` at the start of its text; one whose text
-    ends with no whitespace before the text after it gets `JOINED_AFTER` at
-    the end. Offsets are into the parsed string, and a marker goes inside the
-    script's innermost text, never into a text node of its own, which the
-    backend would make an item of.
+    tag: str
+    #: Laid out as a box of its own, so its edges separate (`DISPLAY_ATTRIBUTE`).
+    box: bool
+    #: The character the element follows; "" where nothing in its run does.
+    before: str = ""
+    #: Where its text starts, with which character, once it has any.
+    first: tuple[int, str] | None = None
+
+
+class _InlineJoins(HTMLParser):
+    """Where each formatted element touches the text beside it, as insertions.
+
+    An element of `_JOINED_TAGS` whose text starts with no whitespace between
+    it and the text before it gets `JOINED_BEFORE` at the start of its text;
+    one whose text ends with no whitespace before the text after it gets
+    `JOINED_AFTER` at the end. Offsets are into the parsed string, and a
+    marker goes inside the element's innermost text, never into a text node
+    of its own, which the backend would make an item of.
     """
 
     def __init__(self, source: str) -> None:
@@ -250,13 +258,11 @@ class _ScriptJoins(HTMLParser):
         self._line_starts = [0, *(match.end() for match in re.finditer("\n", source))]
         self.marks: set[tuple[int, str]] = set()
         self._last = ""  # the run's last character so far; "" after a separator
-        #: Per open script: the character it follows, and where its text
-        #: starts with which character, once it has any.
-        self._open: list[tuple[str, tuple[int, str] | None]] = []
+        self._open: list[_OpenInline] = []
         self._text_open = False
         self._text_end = 0
-        #: Where a closed script's text ended, until the next character says
-        #: whether the script touches it.
+        #: Where a closed element's text ended, until the next character says
+        #: whether the element touches it.
         self._after_at: int | None = None
 
     def _event(self) -> int:
@@ -271,32 +277,56 @@ class _ScriptJoins(HTMLParser):
     def _separate(self) -> None:
         self._last = ""
         self._after_at = None
+        # An element with no text yet starts after the separator, not after
+        # what came before it: `foo<b><br>bar</b>` is two lines.
+        for element in self._open:
+            if element.first is None:
+                element.before = ""
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self._event()
-        if tag in _SCRIPT_TAGS:
-            self._open.append((self._last, None))
-        elif tag not in _INLINE_TAGS:
+        if tag not in INLINE_TAGS:
             self._separate()
+            return
+        if tag in _VOID_INLINE_TAGS:
+            return
+        box = any(name == DISPLAY_ATTRIBUTE for name, _ in attrs)
+        if box:
+            self._separate()
+        self._open.append(_OpenInline(tag, box, before=self._last))
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self._event()
-        if tag not in _INLINE_TAGS:
+        if tag not in INLINE_TAGS:
             self._separate()
 
     def handle_endtag(self, tag: str) -> None:
         self._event()
-        if tag in _SCRIPT_TAGS and self._open:
-            before, first = self._open.pop()
-            if first is None:
-                return
-            offset, character = first
-            if before and not before.isspace() and not character.isspace():
-                self.marks.add((offset, JOINED_BEFORE))
-            if self._last and not self._last.isspace():
-                self._after_at = self._text_end
-        elif tag not in _INLINE_TAGS:
+        if tag not in INLINE_TAGS:
             self._separate()
+            return
+        depth = next(
+            (
+                index
+                for index in range(len(self._open) - 1, -1, -1)
+                if self._open[index].tag == tag
+            ),
+            None,
+        )
+        if depth is None:
+            return
+        element = self._open[depth]
+        del self._open[depth:]
+        if element.box:
+            self._separate()
+            return
+        if tag not in _JOINED_TAGS or element.first is None:
+            return
+        offset, character = element.first
+        if element.before and not element.before.isspace() and not character.isspace():
+            self.marks.add((offset, JOINED_BEFORE))
+        if self._last and not self._last.isspace():
+            self._after_at = self._text_end
 
     def handle_data(self, data: str) -> None:
         offset = self._event()
@@ -306,37 +336,42 @@ class _ScriptJoins(HTMLParser):
             if not data[0].isspace():
                 self.marks.add((self._after_at, JOINED_AFTER))
             self._after_at = None
-        if self._open:
-            self._open = [
-                (before, first or (offset, data[0])) for before, first in self._open
-            ]
-            self._text_open = True
+        for element in self._open:
+            if element.first is None:
+                element.first = (offset, data[0])
+        self._text_open = True
         self._last = data[-1]
 
     def handle_comment(self, data: str) -> None:
         self._event()
 
 
-def mark_script_joins(html: str) -> str:
-    """`html` with each sub/superscript's touching edges marked for the backend.
+def mark_inline_joins(html: str) -> str:
+    """`html` with each formatted element's touching edges marked for the backend.
 
     The backend normalizes every text node with `" ".join(text.split())`,
-    which drops the one fact the serializers would need: whether "H" and its
-    "0" had whitespace between them. Characters survive it, so the fact
-    travels as one, and `extract` removes every marker once the document is
-    built. A marked page opens with a byte-order mark: given bytes with no
+    which drops the one fact the serializers would need: whether "un" and its
+    bold "break" had whitespace between them. Characters survive it, so the
+    fact travels as one, and `extract` removes every marker once the document
+    is built. A marked page opens with a byte-order mark: given bytes with no
     declared encoding, the backend's charset detection read the markers' bytes
     as cp775 or cp949 and garbled the text around them.
     """
-    parser = _ScriptJoins(html)
+    parser = _InlineJoins(html)
     parser.feed(html)
     parser.close()
     if not parser.marks:
         return html
-    marked = html
-    for offset, mark in sorted(parser.marks, reverse=True):
-        marked = marked[:offset] + mark + marked[offset:]
-    return "\ufeff" + marked
+    # Assembled once: inserting each marker by slicing the whole page copied
+    # it once per marker, and a page has a marker for nearly every link
+    # followed by a comma (docs/09 P48).
+    pieces = ["\ufeff"]
+    start = 0
+    for offset, mark in sorted(parser.marks):
+        pieces += (html[start:offset], mark)
+        start = offset
+    pieces.append(html[start:])
+    return "".join(pieces)
 
 
 def _marked(text: str) -> bool:
@@ -390,6 +425,376 @@ def _captions_missing(snapshot: Sequence[str], carried: Sequence[str]) -> list[s
     return missing
 
 
+#: The elements the backend makes a list item of and then walks for nested
+#: content: a list item and a description. A term (`<dt>`) it does not walk,
+#: so a term's code stays in its line.
+_CODE_ITEM_TAGS = frozenset({"li", "dd"})
+#: An element between an item and its `<pre>` that the backend reads as a
+#: block of its own, so the code is that block's, not the item's.
+_CODE_HOLDING_BLOCKS = frozenset({"ul", "ol", "dl", "table", "pre"})
+#: What the backend gives an item of its own when it walks a list item's
+#: nested content, and makes nothing of inside a `<pre>` it reads as code.
+_NESTED_CONTENT_TAGS = ["img", "ul", "ol", "dl", "table"]
+#: A line ending, as CommonMark reads one: a carriage return on its own is one.
+_LINE_END_RE = re.compile(r"\r\n|\r|\n")
+#: The backend methods `_code_block_backend` overrides or calls. They are
+#: private to docling, so `extract` checks they are still there, with
+#: `AnnotatedTextList.simplify_text_elements`, which it calls too.
+_BACKEND_HOOKS = (
+    "_add_list_item_with_content",
+    "_extract_text_and_hyperlink_recursively",
+    "_handle_block",
+    "_is_suppressed_tag",
+    "_make_text_prov",
+    "_process_nested_element",
+)
+
+
+def _backend_hooked() -> bool:
+    """Whether docling's backend still has everything `_code_block_backend` uses."""
+    from docling.backend import html_backend
+
+    return all(
+        hasattr(html_backend.HTMLDocumentBackend, hook) for hook in _BACKEND_HOOKS
+    ) and hasattr(
+        getattr(html_backend, "AnnotatedTextList", None), "simplify_text_elements"
+    )
+
+
+@cache
+def _code_block_backend() -> type[Any]:
+    """docling's HTML backend, reading a list item's `<pre>` as a block of code.
+
+    The backend reads a list item's text from everything the item holds but
+    its lists and tables, and joins each run of whitespace in it. A `<pre>`
+    there was a `code` part of the item's line, its lines joined into one, and
+    the code of an item that opened with it was the item's own text, no longer
+    code (docs/09 P50). This backend reads that `<pre>` as it reads one outside
+    a list, a `code` item holding its lines, and makes it a child of the item,
+    walked in the order the item holds it, as the item's lists are. An item
+    whose only text was its code becomes an item with no text that holds the
+    code.
+    """
+    from docling.backend.html_backend import AnnotatedTextList, HTMLDocumentBackend
+
+    class _CodeBlockBackend(HTMLDocumentBackend):
+        #: The `<pre>` elements, by id, of the item whose own text is being read.
+        _reading: frozenset[int] = frozenset()
+
+        def _is_code_block(self, pre: Any, item: Any) -> bool:
+            """Whether `item` holds `pre` as a block of code of its own.
+
+            A list or table between the two reads the `<pre>` as its own
+            content, and a `<pre>` the backend hides, or that is in an element
+            it hides, gave the item no text, so it stays out. So does one that
+            holds an image, a list or a table, which walking the item made an
+            item of its own, and one the backend reads as several runs, which
+            formatting in the code makes: those it writes inline, their lines
+            joined, outside a list too, and in the item's line they read as
+            they did.
+            """
+            node = pre
+            while node is not None and node is not item:
+                if self._is_suppressed_tag(node) or (
+                    node is not pre and node.name in _CODE_HOLDING_BLOCKS
+                ):
+                    return False
+                node = node.parent
+            if node is not item:
+                return False
+            # An image, list or table in the `<pre>` the item's nested content
+            # gave its own item, which `_handle_block` would drop.
+            if pre.find(_NESTED_CONTENT_TAGS) is not None:
+                return False
+            # As `_handle_block` reads a `<pre>`.
+            runs = self._extract_text_and_hyperlink_recursively(
+                pre, find_parent_annotation=True, keep_newlines=True
+            ).simplify_text_elements()
+            return len(runs) == 1 and bool(runs[0].text.strip())
+
+        def _add_list_item_with_content(
+            self,
+            tag: Any,
+            doc: Any,
+            parent: Any,
+            enumerated: bool = False,
+            marker: str = "",
+            extra_formatting: Any = None,
+        ) -> Any:
+            code = (
+                [pre for pre in tag.find_all("pre") if self._is_code_block(pre, tag)]
+                if tag.name in _CODE_ITEM_TAGS
+                else []
+            )
+            self._reading = frozenset(map(id, code))
+            try:
+                item = super()._add_list_item_with_content(
+                    tag=tag,
+                    doc=doc,
+                    parent=parent,
+                    enumerated=enumerated,
+                    marker=marker,
+                    extra_formatting=extra_formatting,
+                )
+            finally:
+                self._reading = frozenset()
+            if item is None and code:
+                # The code was all the item's text. The backend makes no item
+                # of one with none, so its code would go with it.
+                item = doc.add_list_item(
+                    text="",
+                    enumerated=enumerated,
+                    marker=marker,
+                    parent=parent,
+                    content_layer=self.content_layer,
+                    prov=self._make_text_prov(text="", tag=tag),
+                )
+            return item
+
+        def _extract_text_and_hyperlink_recursively(
+            self,
+            item: Any,
+            ignore_list: bool = False,
+            find_parent_annotation: bool = False,
+            keep_newlines: bool = False,
+        ) -> Any:
+            # `ignore_list` is how the backend reads an item's own text.
+            if ignore_list and id(item) in self._reading:
+                return AnnotatedTextList()
+            return super()._extract_text_and_hyperlink_recursively(
+                item,
+                ignore_list=ignore_list,
+                find_parent_annotation=find_parent_annotation,
+                keep_newlines=keep_newlines,
+            )
+
+        def _process_nested_element(
+            self, elem: Any, li: Any, doc: Any, processed_elements: set[int]
+        ) -> None:
+            if (
+                getattr(elem, "name", None) == "pre"
+                and id(elem) not in processed_elements
+                and li.name in _CODE_ITEM_TAGS
+                and self._is_code_block(elem, li)
+            ):
+                processed_elements.add(id(elem))
+                # Under the item, as the backend reads a `<pre>` anywhere else.
+                self._handle_block(elem, doc)
+                return
+            super()._process_nested_element(elem, li, doc, processed_elements)
+
+    return _CodeBlockBackend
+
+
+@cache
+def _code_block_serializers() -> tuple[type[Any], type[Any]]:
+    """docling's Markdown and plain-text serializers for a text, writing a list
+    item's block of code inside the item.
+
+    docling-core writes each child of a list item on a line of its own and
+    indents only the first line of each, to the item's depth. A block of code
+    under an item had its fence there and every other line at the margin, so
+    at depth 1 the fence ended the list (docs/09 P50). These write every line
+    of it at the item's content column: the column docling indents the item's
+    nested list to, or past the item's marker where that is wider, as
+    CommonMark needs. A blank line in the code stays empty, and a carriage
+    return is a line break, as CommonMark reads one. The fence is three
+    backticks, or one more than the code's longest run of them, so no line of
+    the code closes it. An item that has no text of its own and opens with its
+    code writes the code's first line on its marker's line, `-   ````: a
+    marker alone on a line is an empty item, which under an item's text reads
+    as a setext underline. In a table cell, which docling writes on one line,
+    an item's code is inline code on the item's line, its whitespace joined,
+    as the backend wrote it there before.
+    """
+    from docling_core.transforms.serializer.common import create_ser_result
+    from docling_core.transforms.serializer.markdown import (
+        MarkdownParams,
+        MarkdownTextSerializer,
+    )
+    from docling_core.transforms.serializer.plain_text import PlainTextTextSerializer
+    from docling_core.types.doc.document import CodeItem, ListGroup, ListItem
+
+    def _depth(item: Any, doc: Any) -> int:
+        """How many lists `item` is in, which is how deep docling indents it."""
+        depth = 0
+        node = item
+        while node.parent is not None:
+            node = node.parent.resolve(doc)
+            depth += isinstance(node, ListGroup)
+        return depth
+
+    def _codes(item: Any, doc: Any) -> list[Any]:
+        return [
+            child
+            for child in (ref.resolve(doc) for ref in item.children)
+            if isinstance(child, CodeItem)
+        ]
+
+    class _CodeBlocks:
+        def serialize(
+            self,
+            *,
+            item: Any,
+            doc_serializer: Any,
+            doc: Any,
+            is_inline_scope: bool = False,
+            visited: set[str] | None = None,
+            **kwargs: Any,
+        ) -> Any:
+            written = None
+            if not is_inline_scope and isinstance(item, CodeItem | ListItem):
+                written = self._in_item(item, doc_serializer, doc, visited, kwargs)
+            if written is not None:
+                return written
+            return self._docling(
+                item, doc_serializer, doc, is_inline_scope, visited, kwargs
+            )
+
+        def _docling(
+            self,
+            item: Any,
+            doc_serializer: Any,
+            doc: Any,
+            is_inline_scope: bool,
+            visited: set[str] | None,
+            kwargs: dict[str, Any],
+        ) -> Any:
+            return super().serialize(  # type: ignore[misc]
+                item=item,
+                doc_serializer=doc_serializer,
+                doc=doc,
+                is_inline_scope=is_inline_scope,
+                visited=visited,
+                **kwargs,
+            )
+
+        def _in_item(
+            self,
+            item: Any,
+            doc_serializer: Any,
+            doc: Any,
+            visited: set[str] | None,
+            kwargs: dict[str, Any],
+        ) -> Any:
+            """`item` written with the code of its list item, or None to leave it."""
+            args = (doc_serializer, doc)
+            if kwargs.get("in_table_cell"):
+                # Each code on the item's line, as inline code.
+                if not isinstance(item, ListItem) or visited is None:
+                    return None
+                codes = [
+                    code for code in _codes(item, doc) if code.self_ref not in visited
+                ]
+                if not codes:
+                    return None
+                line = self._docling(item, *args, False, visited, kwargs)
+                inline = [
+                    " ".join(
+                        self._docling(code, *args, True, set(), kwargs).text.split()
+                    )
+                    for code in codes
+                ]
+                visited.update(code.self_ref for code in codes)
+                return create_ser_result(
+                    text=" ".join([line.text.rstrip(), *inline]),
+                    span_source=[
+                        line,
+                        *(create_ser_result(span_source=code) for code in codes),
+                    ],
+                )
+            if isinstance(item, CodeItem):
+                owner = item.parent.resolve(doc) if item.parent else None
+                if not isinstance(owner, ListItem):
+                    return None
+                params = MarkdownParams(**kwargs)
+                column = self._column(owner, *args, params, kwargs)
+                return create_ser_result(
+                    text=_indented(
+                        self._lines(item, *args, params, kwargs), column, " " * column
+                    ),
+                    span_source=item,
+                )
+            if item.text or not item.children or visited is None:
+                return None
+            code = item.children[0].resolve(doc)
+            if not isinstance(code, CodeItem) or code.self_ref in visited:
+                return None
+            params = MarkdownParams(**kwargs)
+            line = self._docling(item, *args, False, visited, kwargs)
+            column = self._column(item, *args, params, kwargs)
+            # The list writes the item's indentation before its first line.
+            indent = (_depth(item, doc) - 1) * params.indent
+            visited.add(code.self_ref)
+            text = _indented(
+                self._lines(code, *args, params, kwargs),
+                column,
+                line.text.strip().ljust(column - indent),
+            )
+            return create_ser_result(
+                text=text,
+                span_source=[line, create_ser_result(span_source=code)],
+            )
+
+        def _lines(
+            self,
+            code: Any,
+            doc_serializer: Any,
+            doc: Any,
+            params: Any,
+            kwargs: dict[str, Any],
+        ) -> list[str]:
+            """The lines of `code` as a block, before its item's indentation."""
+            if params.include_hyperlinks and code.hyperlink:
+                # docling writes a linked code item as the link's text, inline.
+                text = self._docling(
+                    code, doc_serializer, doc, False, set(), kwargs
+                ).text
+                return _LINE_END_RE.split(text)
+            lines = _LINE_END_RE.split(code.text)
+            if not params.format_code_blocks:
+                return lines
+            longest = max((len(run) for run in re.findall("`+", code.text)), default=0)
+            fence = "`" * max(3, longest + 1)
+            return [fence, *lines, fence]
+
+        def _column(
+            self,
+            item: Any,
+            doc_serializer: Any,
+            doc: Any,
+            params: Any,
+            kwargs: dict[str, Any],
+        ) -> int:
+            """The column list item `item`'s nested content starts at."""
+            line = self._docling(item, doc_serializer, doc, False, set(), kwargs)
+            marker = line.text.split(" ", 1)[0]
+            depth = _depth(item, doc)
+            return int(
+                max(
+                    depth * params.indent, (depth - 1) * params.indent + len(marker) + 1
+                )
+            )
+
+    def _indented(lines: list[str], column: int, first: str) -> str:
+        """`lines` at `column`, the first after `first` in place of the indentation."""
+        pad = " " * column
+        return "\n".join(
+            [
+                first + lines[0] if lines[0] else first.rstrip(),
+                *(pad + line if line else "" for line in lines[1:]),
+            ]
+        )
+
+    class _MarkdownText(_CodeBlocks, MarkdownTextSerializer):
+        pass
+
+    class _PlainText(_CodeBlocks, PlainTextTextSerializer):
+        pass
+
+    return _MarkdownText, _PlainText
+
+
 def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     """Sanitized snapshot -> DoclingDocument -> serialized artifacts and seeds."""
     from docling.backend.html_backend import HTMLDocumentBackend
@@ -416,6 +821,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         DoclingDocument,
         Formatting,
         InlineGroup,
+        ListItem,
         PictureDescriptionData,
         PictureMiscData,
         Script,
@@ -437,9 +843,22 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     if not markable:
         extraction_warnings.append(
             "the page contains U+FDD0 or U+FDD1, the characters WebShot uses to "
-            "keep a subscript or superscript joined to the text it touches, so "
-            "content.md, content.txt and chunks.jsonl separate each one from "
-            "its neighbours with a space (docs/09 P14-56)."
+            "keep formatted text (a link, emphasis, inline code, a subscript or "
+            "superscript) joined to the text it touches, so content.md, "
+            "content.txt and chunks.jsonl separate each such part from its "
+            "neighbours with a space (docs/09 P14-56, P48)."
+        )
+    # The methods the backend's subclass relies on are private to docling.
+    # Without one, the page is read by docling's own backend, an item's code
+    # into the item's line, and the record says so.
+    hooked = _backend_hooked()
+    backend = _code_block_backend() if hooked else HTMLDocumentBackend
+    if not hooked:
+        extraction_warnings.append(
+            "docling's HTML backend no longer has the methods WebShot extends to "
+            "read a list item's <pre> as a block of code, so content.md, "
+            "content.txt and chunks.jsonl hold each such block on one line, in "
+            "its item's text (docs/09 P50)."
         )
     docling_input = docling_html.encode("utf-8")
     try:
@@ -448,11 +867,11 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         in_doc = InputDocument(
             path_or_stream=BytesIO(docling_input),
             format=InputFormat.HTML,
-            backend=HTMLDocumentBackend,
+            backend=backend,
             filename="content.html",
         )
-        parsed = mark_script_joins(docling_html) if markable else docling_html
-        document: DoclingDocument = HTMLDocumentBackend(
+        parsed = mark_inline_joins(docling_html) if markable else docling_html
+        document: DoclingDocument = backend(
             in_doc=in_doc, path_or_stream=BytesIO(parsed.encode("utf-8"))
         ).convert()
     except Exception as exc:
@@ -490,6 +909,14 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             item.text
         ):
             item.content_layer = ContentLayer.BODY
+    # An item with no text that holds its code has no text to tell chrome by,
+    # so it stays on its code's layer: moved alone, a footer's item was in the
+    # body, and its code written there with it (docs/09 P50).
+    for item in document.texts:
+        if isinstance(item, ListItem) and not item.text and item.children:
+            code = item.children[0].resolve(document)
+            if isinstance(code, CodeItem):
+                item.content_layer = code.content_layer
 
     # Attach <table><caption> text the backend did not keep.
     aligned_tables = _aligned(document.tables, facts.table_captions)
@@ -704,9 +1131,10 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
 
         Each part is unwrapped to the text inside its emphasis, link and
         backticks; a plain sub/superscript then takes the wrapping of the
-        text it touches, and each stretch of one wrapping is wrapped once. Wrapping
-        each part on its own gives "**(H**0" or "`a``1`", where no reader sees
-        one word.
+        text it touches, and each stretch of one wrapping is wrapped once.
+        Wrapping each part on its own gives "**(H**0" or "`a``1`", where no
+        reader sees one word. A part with a wrapping of its own keeps it, and
+        meets its neighbours with nothing between: "un**break**able".
         """
         if len(run) == 1:
             whole: str = run[0].text
@@ -742,13 +1170,15 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         return "".join(out)
 
     class _JoinedInline(MarkdownInlineSerializer):
-        """docling's inline group, without the space it puts beside a sub/superscript.
+        """docling's inline group, without the space it puts beside formatted text.
 
         docling-core joins an inline group's parts with a space. Where the
-        source had none, beside a sub/superscript, the parts join with
-        nothing, so "H<sub>0</sub>" reads "H0" in content.md, content.txt and
-        chunks.jsonl, as it does in the PDF's text layer (docs/09 P14-56). A
-        group with no such join is joined exactly as docling joins it.
+        source had none, beside a link, emphasis, inline code or a
+        sub/superscript, the parts join with nothing, so "H<sub>0</sub>" reads
+        "H0" and "un<b>break</b>able" reads "unbreakable" in content.md,
+        content.txt and chunks.jsonl, as they do on the page and in the PDF's
+        text layer (docs/09 P14-56, P48). A group with no such join is joined
+        exactly as docling joins it.
         """
 
         def serialize(
@@ -779,6 +1209,9 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 span_source=parts,
             )
 
+    # An item's code block written in its item (docs/09 P50).
+    markdown_text, plain_text = _code_block_serializers()
+
     class _TableProvider(ChunkingSerializerProvider):
         def get_serializer(self, doc: DoclingDocument) -> ChunkingDocSerializer:
             # Full-fidelity table text: the default triplet serialization drops
@@ -786,6 +1219,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             return _unpadded(
                 ChunkingDocSerializer(
                     doc=doc,
+                    text_serializer=markdown_text(),
                     table_serializer=MarkdownTableSerializer(),
                     annotation_serializer=_MarkedOcr(),
                     inline_serializer=_JoinedInline(),
@@ -882,6 +1316,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             _unpadded(
                 MarkdownDocSerializer(
                     doc=document,
+                    text_serializer=markdown_text(),
                     annotation_serializer=_MarkedOcr(),
                     inline_serializer=_JoinedInline(),
                 )
@@ -893,6 +1328,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             _unpadded(
                 PlainTextDocSerializer(
                     doc=document,
+                    text_serializer=plain_text(),
                     annotation_serializer=_MarkedOcr(),
                     inline_serializer=_JoinedInline(),
                 )
@@ -939,10 +1375,10 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 for seed in seeds
             ]
             extraction_warnings.append(
-                "a subscript or superscript's join marker reached a field WebShot "
-                f"does not rejoin ({', '.join(leaked)}); it was removed there, and "
-                "that text may separate the script from its neighbours with a "
-                "space (docs/09 P14-56)."
+                "a formatted part's join marker reached a field WebShot does not "
+                f"rejoin ({', '.join(leaked)}); it was removed there, and that "
+                "text may separate the part from its neighbours with a space "
+                "(docs/09 P14-56, P48)."
             )
 
     return ExtractionResult(

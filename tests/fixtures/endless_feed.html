@@ -16,7 +16,26 @@
   The fragment picks a variant:
     #shadow  the related list lives in an open shadow root
     #still   the comment feed does not grow
+    #late-frame  as #light, but the page does not render until
+             `late-frame.js` arrives, which a test serves when it chooses
+             (docs/09 P34). Opened from disk the script is missing, its load
+             fails at once, and the page renders as it always has.
+    #late-frame-smooth  as #late-frame, and the page scrolls smoothly, as
+             `scroll-behavior: smooth` makes many sites do
 -->
+<script>
+  // Render-blocking is only possible before <body>, so it is added here.
+  if (location.hash.startsWith('#late-frame')) {
+    const late = document.createElement('script');
+    late.src = 'late-frame.js';
+    late.async = true;
+    late.setAttribute('blocking', 'render');
+    document.head.appendChild(late);
+  }
+  if (location.hash.endsWith('-smooth')) {
+    document.documentElement.style.scrollBehavior = 'smooth';
+  }
+</script>
 <style>
   body { font: 16px/1.5 Georgia, serif; margin: 0; padding: 1rem; }
   .columns { display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; align-items: start; }

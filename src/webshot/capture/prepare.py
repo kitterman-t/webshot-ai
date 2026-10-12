@@ -341,13 +341,47 @@ async def _wait_for_fonts_and_images(page: Page, timeout_s: float = 30.0) -> lis
 
 #: How long the content a capture keeps must stand still, while only regions
 #: it removes go on growing, before the lazy-load pass stops short of a page
-#: that never ends (docs/09 P23-8). Steps and seconds both: a step is
-#: `--scroll-delay` plus a measurement, and what the pass waits for is a
-#: network fetch. On a video site's watch page each continuation of the kept
-#: list of recommendations arrived within three steps (0.99 s) of the window
-#: passing the end of the list.
+#: that never ends (docs/09 P23-8). Steps and seconds both: a step is a
+#: rendered frame, `--scroll-delay` and a measurement, and what the pass waits
+#: for is a network fetch. On a video site's watch page each continuation of
+#: the kept list of recommendations arrived within three steps (0.99 s) of the
+#: window passing the end of the list.
 REMOVED_GROWTH_STEPS = 5
 REMOVED_GROWTH_SECONDS = 2.0
+
+#: How long a step waits for the page to render after its scroll before the
+#: pass gives up on a page that is not rendering (docs/09 P34). A scroll
+#: reaches the page only in a rendering update: that is where Chromium fires
+#: `scroll` events and works out what an IntersectionObserver sees, and the
+#: two are how pages load lazy content. A step that counted before the page
+#: had rendered measured a page that could not yet have answered, and three
+#: such steps at the bottom ended the pass as though the page had ended. With
+#: sixteen captures sharing a loaded Mac, a fresh renderer's first frame came
+#: up to 3.4 s after `load`; later frames came every 12 ms or so.
+FRAME_TIMEOUT_S = 30.0
+
+#: Resolves true at the page's next rendering update, which handles every
+#: scroll made before it, or false after `timeout` ms without one. A timer,
+#: because a page that is not rendering still runs them.
+NEXT_FRAME_JS = """timeout => new Promise(resolve => {
+    const timer = setTimeout(() => resolve(false), timeout);
+    requestAnimationFrame(() => { clearTimeout(timer); resolve(true); });
+})"""
+
+#: One step down, and back to the top when the pass ends. Chromium 153's
+#: scroll methods return a promise that settles when the scroll has finished,
+#: and `page.evaluate` waits for a promise it is handed. On a page that sets
+#: `scroll-behavior: smooth` that took 0.49 s a step, and on one that was not
+#: rendering it never settled, so the pass hung before its frame wait could
+#: time out (docs/09 P34). `instant` puts the window where the next
+#: measurement expects it, and the function hands nothing back, so the only
+#: wait is `NEXT_FRAME_JS`, which has a bound.
+SCROLL_STEP_JS = """() => {
+    window.scrollBy({top: Math.max(320, window.innerHeight * 0.8), behavior: 'instant'});
+}"""
+SCROLL_TO_TOP_JS = """() => {
+    window.scrollTo({top: 0, behavior: 'instant'});
+}"""
 
 #: One step's measurement. The document's height drives the original rule: the
 #: pass ends when the window has reached the bottom and the height has held
@@ -428,8 +462,9 @@ class LazyLoadPass:
     steps: int
     #: `bottom`: the window reached the end of a page that stopped growing.
     #: `removed-growth`: the page was still growing, only inside regions the
-    #: capture removes. `limit`: `--max-scrolls` ran out first.
-    ended: Literal["bottom", "removed-growth", "limit"]
+    #: capture removes. `limit`: `--max-scrolls` ran out first. `unrendered`:
+    #: the page did not render within `FRAME_TIMEOUT_S` of a scroll.
+    ended: Literal["bottom", "removed-growth", "limit", "unrendered"]
     #: The document's height at the last step, in CSS pixels.
     height: int
     #: For `removed-growth`: each removed region that grew while the kept
@@ -466,7 +501,7 @@ async def scroll_to_load(
     LOGGER.info("Loading lazy content (up to %d scroll steps)...", max_scrolls)
     stable_steps = 0
     previous_height = 0
-    ended: Literal["bottom", "removed-growth", "limit"] = "limit"
+    ended: Literal["bottom", "removed-growth", "limit", "unrendered"] = "limit"
     growing: tuple[tuple[str, str], ...] = ()
     steady: _Steady | None = None
     steady_steps = 0
@@ -512,12 +547,15 @@ async def scroll_to_load(
                     ended = "removed-growth"
                     steady_steps = steps - steady.step
                     break
-        await page.evaluate(
-            "window.scrollBy(0, Math.max(320, window.innerHeight * 0.8))"
-        )
+        await page.evaluate(SCROLL_STEP_JS)
+        # The delay starts once the page has seen the scroll, not when it was
+        # asked for: until it renders, the page has not seen it (docs/09 P34).
+        if not await page.evaluate(NEXT_FRAME_JS, FRAME_TIMEOUT_S * 1000):
+            ended = "unrendered"
+            break
         await asyncio.sleep(delay_s)
 
-    await page.evaluate("window.scrollTo(0, 0)")
+    await page.evaluate(SCROLL_TO_TOP_JS)
     LOGGER.info("Lazy-load pass finished after %d step(s).", steps)
     return LazyLoadPass(
         steps=steps,
@@ -534,6 +572,13 @@ def lazy_load_warning(result: LazyLoadPass, max_scrolls: int) -> str | None:
         return f"Lazy-load scrolling reached the {max_scrolls}-step safety limit."
     if result.ended == "bottom":
         return None
+    if result.ended == "unrendered":
+        return (
+            f"The lazy-load pass stopped after {result.steps} step(s): the page "
+            f"did not render within {FRAME_TIMEOUT_S:g} seconds of a scroll, and "
+            "a page sees a scroll only when it renders, so content it loads as "
+            "it is scrolled may not have been loaded."
+        )
     chrome = [name for name, by in result.growing if by == "clean"]
     cut = [name for name, by in result.growing if by == "exclude"]
     where = []
