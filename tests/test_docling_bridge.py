@@ -378,7 +378,7 @@ def test_content_json_keeps_the_script_and_carries_no_marker(monkeypatch) -> Non
         assert docling_bridge.JOINED_AFTER not in surface
         assert "\ufeff" not in surface
 
-    monkeypatch.setattr(docling_bridge, "mark_script_joins", lambda html: html)
+    monkeypatch.setattr(docling_bridge, "mark_inline_joins", lambda html: html)
     unmarked = json.loads(_script_page_result().document_json)
     document = json.loads(result.document_json)
     assert document["origin"] == unmarked["origin"]
@@ -397,9 +397,9 @@ def test_content_json_keeps_the_script_and_carries_no_marker(monkeypatch) -> Non
 
 def test_a_page_without_scripts_is_parsed_as_given() -> None:
     page = (FIXTURES / "empty_section_heading.html").read_text(encoding="utf-8")
-    from webshot.extract.docling_bridge import mark_script_joins
+    from webshot.extract.docling_bridge import mark_inline_joins
 
-    assert mark_script_joins(page) is page
+    assert mark_inline_joins(page) is page
 
 
 def test_a_page_carrying_the_markers_keeps_docling_spacing_and_says_so() -> None:

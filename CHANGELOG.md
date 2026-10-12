@@ -326,6 +326,18 @@ which records the measurements behind each change.
   a zip are left out and counted: read as text, they had put a file's
   quarantine record and the address it was downloaded from on the page. See
   docs/09 P33.
+- **A word with a bold, italic, code or linked part is one word in the
+  bundle.** docling spaced every formatted run from the text beside it, so
+  `un<b>break</b>able` read `un **break** able` in `content.md` and "un break
+  able" in `content.txt` and `chunks.jsonl`, and a link followed by a comma
+  read "link ,", while the page and the PDF read "unbreakable" and "link,".
+  Where nothing separates them on the page, they now meet with nothing between:
+  `un**break**able`, `[link](…),`. Whitespace of any kind, a line break, and an
+  element the page's CSS lays out as a box of its own (a flex item, a block,
+  an inline-block) still keep them apart; the snapshot records that last case
+  as `data-webshot-display` in `content.html`. The snapshot also keeps a
+  `<br>` now: it dropped every one, so `t-test<br>Regression test` read
+  "t-testRegression test" on every surface. See docs/09 P48.
 - **Clean mode hides the ad units an ad network writes into the article.** On
   a statistics site's calculator page, an in-article video player ("My Latest
   Videos") sat inside the main content, so selecting the region kept it. The
@@ -334,6 +346,15 @@ which records the measurements behind each change.
   slot and player, Google's video-ad frame, frames and videos that title
   themselves "Advertisement", AdSense units and Publisher Tag slots. Faithful
   mode keeps them. See docs/09 P23-9.
+- **A list item's code keeps its lines in `content.md`.** A block of code
+  (`<pre>`) in a list item on the page reached `content.md`, `content.txt` and
+  `chunks.jsonl` as one line: inline code on the item's line, or, for an item
+  that opens with its code, the item's own text with no code at all. The
+  code is now a block in its item, each line indented into the item at any
+  depth, after a nested list as before one, with a fence longer than any run
+  of backticks in the code. `content.json` holds it as a code item under the
+  list item, with its lines. A list with no code in its items is written as
+  before. See docs/09 P50.
 - **A page that enforces Trusted Types is captured.** A site that sends
   `require-trusted-types-for 'script'` made the bundle stage throw on its
   first `DOMParser` call, and the capture exited 5. Large video sites' watch

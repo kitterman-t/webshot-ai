@@ -68,7 +68,7 @@
     "tables": 0,
     "links": 3,
     "chunks": 19,
-    "text_characters": 762,
+    "text_characters": 761,
     "visual_assets": 2,
     "ocr_words": 0
   },
@@ -152,8 +152,8 @@
       "sha256": "<RASTER-SHA256>"
     },
     "chunks.jsonl": {
-      "bytes": 12220,
-      "sha256": "930768e24ae30da513f9005d54f6df9009978c41a9f2a47e9685bd76e0728cdf"
+      "bytes": 12219,
+      "sha256": "a0c04155928185831efa773f0574fac9ab0a2fb263f9f9cc2110cfa499834a34"
     },
     "content.doctags": {
       "bytes": 1258,
@@ -168,12 +168,12 @@
       "sha256": "805ce7459b04e9afc09a20ab44d98093f4765226e545283240bacca89f14c414"
     },
     "content.md": {
-      "bytes": 5789,
-      "sha256": "b460b95a8f54791db4b1a018b231507b094c8f765b01ac61f8b94023b2d7c0cd"
+      "bytes": 5788,
+      "sha256": "7218abbd8679567d8f2cf4edb7e49af398f947c082ead602306cc77cf0329af9"
     },
     "content.txt": {
-      "bytes": 4861,
-      "sha256": "3946293c522d7e780a3e1b291ed3b313e67457c643e0b54a3985b6dba0dda44a"
+      "bytes": 4860,
+      "sha256": "84122e6d6075e5a5b75bab108825e726332ef3ec6908e9ce98cd2a974ea9e22d"
     },
     "links.json": {
       "bytes": 379,
