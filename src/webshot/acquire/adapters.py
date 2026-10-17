@@ -30,14 +30,20 @@ import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 from xml.etree.ElementTree import Element, ParseError
 
 import markdown  # type: ignore[import-untyped]
 from defusedxml import ElementTree as DefusedElementTree
 from defusedxml.common import DefusedXmlException
+from markdown.blockprocessors import (  # type: ignore[import-untyped]
+    ListIndentProcessor,
+)
 from markdown.extensions import Extension  # type: ignore[import-untyped]
+from markdown.extensions.def_list import (  # type: ignore[import-untyped]
+    DefListIndentProcessor,
+)
 from markdown.treeprocessors import Treeprocessor  # type: ignore[import-untyped]
 
 from ..netpolicy import file_url_path
@@ -183,6 +189,11 @@ MARKDOWN_ATTRIBUTES = {
 #: sanitizer; relative references are untouched by any allowlist, so the
 #: `<base href>` below still resolves a Markdown document's own images.
 MARKDOWN_POLICY = Policy(tags=frozenset(MARKDOWN_TAGS), attributes=MARKDOWN_ATTRIBUTES)
+#: The class of inline code whose line breaks are its own: a `<pre>` that a
+#: converted document's link or emphasis holds, which the bridge writes as
+#: inline code (docs/09 P59).  The page keeps its lines and indentation, as it
+#: keeps a `<pre>`'s, where inline code runs them together.
+CODE_LINES_CLASS = "code-lines"
 
 
 @dataclass(slots=True)
@@ -237,6 +248,7 @@ def _document_template(
     a {{ color: #245b96; }}
     pre {{ padding: 18px; overflow-wrap: anywhere; white-space: pre-wrap; background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 6px; line-height: 1.45; tab-size: 4; }}
     code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    code.{CODE_LINES_CLASS} {{ white-space: pre-wrap; tab-size: 4; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; }}
     th, td {{ padding: 8px 10px; border: 1px solid #cbd5e1; text-align: left; vertical-align: top; overflow-wrap: anywhere; }}
     th {{ background: #e8f1fb; }}
@@ -289,12 +301,53 @@ class TableHeaderScope(Extension):
         md.treeprocessors.register(_HeaderCellScope(md), "webshot-th-scope", 5)
 
 
+class _IndentIntoDefinitions(DefListIndentProcessor):
+    """A block indented past a definition list in a list item, read into it.
+
+    Python-Markdown hands a block indented under a list to its `indent`
+    processor, which walks down the last list and item to the block's depth
+    and stops at anything else.  At a definition list in an item it stopped
+    at the item: a definition's second paragraph, or a definition list nested
+    in it, was read into the item as code (docs/09 P62).  `def_list`'s own
+    processor walks through definitions too, but runs after `indent`, so it
+    never saw these.  No indentation and no raw HTML put a block in such a
+    `<dd>`.
+
+    This claims only a block whose walk passes a definition list, which
+    `indent` would have stopped at, and reads it as `def_list` reads one under
+    a definition list that is in no item.  Every other block is `indent`'s,
+    read as it always was; so is a tight item's, which `indent` reads into
+    the item itself, where `def_list`'s walk would put a list into the `<dl>`.
+    """
+
+    def __init__(self, parser: Any) -> None:
+        super().__init__(parser)
+        self._indent = ListIndentProcessor(parser)
+
+    def test(self, parent: Element, block: str) -> bool:
+        return bool(
+            self._indent.test(parent, block)
+            and parent.tag not in self.ITEM_TYPES
+            and self.get_level(parent, block)[1]
+            is not self._indent.get_level(parent, block)[1]
+        )
+
+
+class DefinitionsInItems(Extension):
+    def extendMarkdown(self, md: markdown.Markdown) -> None:
+        # Above `indent` (90), which would otherwise claim the block first.
+        md.parser.blockprocessors.register(
+            _IndentIntoDefinitions(md.parser), "webshot-definition-indent", 95
+        )
+
+
 #: The rendering configuration for every local document, in one place.
 MARKDOWN_EXTENSIONS: tuple[str | Extension, ...] = (
     "extra",
     "sane_lists",
     "toc",
     TableHeaderScope(),
+    DefinitionsInItems(),
 )
 
 

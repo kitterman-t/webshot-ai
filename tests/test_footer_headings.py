@@ -245,6 +245,44 @@ def test_every_shape_keeps_its_footer_out_and_the_rest_in(body: str) -> None:
     assert all(text in result.markdown for text in _texts(page).outside)
 
 
+#: A part of a list item's line that holds only a `<br>`, which the bridge
+#: removes from the document after the backend has read the page (P56), so
+#: every item made after it is renumbered.
+_REMOVED_PART = "<ul><li><b>Morvik</b><i><br></i></li></ul>"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(
+            f"{_REMOVED_PART}<p>Lede.</p><footer><h2>Company</h2>"
+            "<p>About us</p></footer><p>After.</p>",
+            id="only-heading-in-footer",
+        ),
+        pytest.param(
+            f"<h1>T</h1>{_REMOVED_PART}{_REMOVED_PART}<p>Body.</p><footer>"
+            "<p><img src='a.png' alt='Logo'></p><h2>Company</h2>"
+            "<p>About us</p></footer><p>After.</p>",
+            id="logo-caption",
+        ),
+    ],
+)
+def test_a_line_break_removed_before_the_footer_does_not_move_it(body: str) -> None:
+    """The footer's items are known while the backend reads the page; writing
+    out the line breaks then removes an item made only of one and renumbers
+    every item after it. The footer must still be the footer's items: the
+    footer stays out, the text after it stays in, and the empty item that
+    holds the removed part's line is the only text on the body that the page
+    did not write as one (P56, P65)."""
+    page = f"<html><head><title>t</title></head><body>{body}</body></html>"
+    result = extract(page, [])
+    assert _leaks(page, result) == []
+    layers = _layers(result)
+    assert [text for text in layers["body"] if text] == _texts(page).outside
+    assert sorted(layers["furniture"]) == sorted(_texts(page).inside)
+    assert all(text in result.markdown for text in _texts(page).outside)
+
+
 def test_a_page_without_a_footer_heading_is_unchanged() -> None:
     """The text test still decides chrome before the first heading, and a
     footer without a heading was furniture before P65 too."""

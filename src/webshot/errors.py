@@ -156,6 +156,26 @@ def certificate_hint(detail: str) -> str:
     )
 
 
+def http2_refusal_hint(detail: str) -> str:
+    """One line for an HTTP/2 connection the server broke off, or nothing.
+
+    A news page failed with `net::ERR_HTTP2_PROTOCOL_ERROR` and opened in an
+    ordinary browser a minute later (docs/09 P78-3). Resetting the stream at
+    the HTTP/2 layer is how some bot checks refuse an automated browser, and
+    the raw error reads as a site that is down. It stays a "may": a server or
+    proxy with a broken HTTP/2 stack raises the same code. Not
+    `ERR_HTTP2_PING_FAILED`, which is a connection that stopped answering, the
+    usual sign of a network that dropped rather than a server that refused.
+    """
+    if "net::ERR_HTTP2_PROTOCOL_ERROR" not in detail:
+        return ""
+    return (
+        "\nThe server broke off the connection at the HTTP/2 layer, which is "
+        "how some bot checks refuse an automated browser. If the page opens in "
+        "your own browser, save it there and capture the saved file."
+    )
+
+
 def classify(exc: BaseException) -> int:
     """The spec §3 code for an exception WebShot did not raise itself.
 

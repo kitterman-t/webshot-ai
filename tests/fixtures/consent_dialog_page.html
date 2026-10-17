@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Two boxes and a ledger</title>
+<style>
+  body { font: 16px/1.5 Georgia, serif; margin: 0 auto; max-width: 42rem; padding: 1rem; }
+  /* Shaped as a vendor's corner dialog: too narrow for clean mode's
+     large-overlay rule, and fixed, so Chromium prints it on every page. */
+  #CybotCookiebotDialog { position: fixed; bottom: 1rem; left: 1rem; width: 22rem;
+    padding: 1rem; background: #fff; border: 1px solid #333; z-index: 2147483000; }
+  #onetrust-banner-sdk { position: fixed; bottom: 0; left: 0; right: 0; display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Two boxes and a ledger</h1>
+  <p>The first box weighs four kilograms and the second weighs three.</p>
+  <p>This article names the vendors of consent dialogs, Cookiebot and
+     Usercentrics among them, and its own box says "cookie consent".</p>
+  <div class="cookie-notes">A ledger entry about cookies baked for the fair.</div>
+  <p>Paragraph three of the ledger records the weighing on a Tuesday.</p>
+  <p>Paragraph four records that the scale was checked against a known weight.</p>
+  <p>Paragraph five records the clerk's signature and the time of day.</p>
+  <p>The last paragraph says the security foundation is what makes the ledger trustworthy.</p>
+</main>
+<div id="CybotCookiebotDialog" role="region" lang="en">
+  <h2>This website uses cookies</h2>
+  <p>We use "marketing" cookies to personalise content and ads.</p>
+  <button>Reject optional cookies</button> <button>Accept all cookies</button>
+</div>
+<!-- A manager whose container is on every page and whose banner was already
+     closed: hidden, and not named, because hiding it changes nothing. -->
+<div id="onetrust-consent-sdk"><div id="onetrust-banner-sdk">OneTrust banner text</div></div>
+<!-- Usercentrics draws its banner inside an open shadow root on a host that
+     has no box of its own. -->
+<div id="usercentrics-root"></div>
+<script>
+  const root = document.getElementById("usercentrics-root").attachShadow({ mode: "open" });
+  root.innerHTML = '<div style="position:fixed;top:1rem;right:1rem;width:16rem;' +
+    'background:#eef;padding:1rem">Usercentrics privacy settings banner</div>';
+</script>
+</body>
+</html>

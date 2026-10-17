@@ -8089,6 +8089,202 @@ beside article content named like an ad: an "Advertisement" picture, a
 `content.md` and the PDF in clean mode and present in faithful mode, and the
 article's text must stay in order. The clean-mode test fails on master.
 
+## P78: a bot check's page served with 200, and an HTTP/2 reset (2026-10-17)
+
+A week after P23, the same kind of capture (every page one course module
+linked to) met two more refusals of an automated browser that WebShot did not
+name. Master was d247610.
+
+
+### P78-1: a bot check's page was captured as the page, exit 0
+
+A business magazine's article, captured in faithful mode, exited 0 with a
+7-page PDF whose text was a block page under the article's title: "We
+detected unusual activity from your device or network", a list of reasons
+(rapid taps or clicks, automated use, developer tools) and an ID. No warning.
+P23-3 names a bot check only from a 403's headers, and this answer was a 200.
+The same site is the one P23-3 measured answering 403 with `server:
+DataDome`.
+
+Read again on 2026-10-17, the article was served whole, with 200 and
+`x-datadome: protected` on the response. That header is on the site's
+ordinary answer, which confirms P23-3's choice not to treat it as evidence of
+a refusal. The block page's wording is DataDome's own: people refused by
+other sites behind DataDome quote it word for word, and DataDome serves its
+challenge and block pages from `geo.captcha-delivery.com`, in a frame its tag
+draws over the page it refuses. The frame itself was not seen in this
+capture: its PDF had been replaced by a capture of a copy saved from Chrome
+before the cause was looked for.
+
+The page is now read after the lazy-load pass (`bot_check_page`), for three
+signatures, each the vendor naming itself:
+
+| Vendor | Signature | Why only that |
+|---|---|---|
+| DataDome | an `iframe` whose `src` host is `captcha-delivery.com` or under it, laid out and shown | a frame laid out invisibly blocks nothing |
+| HUMAN (formerly PerimeterX) | a rendered `#px-captcha` | the element is sized by a frame its script loads, so a box of any size counts |
+| Akamai | the title "Access Denied" **and** a `Reference #` in Akamai's dotted format | the title alone is an ordinary phrase, and an article about Akamai could quote a reference |
+
+Each fails the capture with exit 4, the bot check named, "this is not a
+sign-in page", and P23-3's advice to save the page from one's own browser.
+The QA report records the status (200) and `final_url`, as P23-3 made it do
+for a refused status. P22's rule stands: no phrase of a block page is
+matched, so an article that quotes one, links to the vendor's host or names
+the element is captured. The test runs on the top document and every open
+shadow root, and not on a local file, which is what the person saved.
+
+It runs after the lazy-load pass because a check that watches for rapid
+scrolling can draw its page during that pass, and before anything is
+extracted, because nothing of a bot check's page is the page. A page that
+cannot be read is read once more after the document loads, as the sign-in
+check does (P22-1). A second failure is a manifest warning that the test did
+not run, never a pass.
+
+### P78-2: Akamai and HUMAN were matched from their documented pages
+
+Neither was met in this capture. HUMAN's block page is titled "Access to this
+page has been denied" and holds `<div id="px-captcha">`, where its script
+draws the press-and-hold button. Akamai's refusal reads "You don't have
+permission to access … on this server" under the title "Access Denied", with
+a reference such as `Reference #18.6f1d2c17.1792000000.1a2b3c4d` and the same
+number on an `errors.edgesuite.net` link. P23-3 left Akamai out because no
+page had shown it; it is in now because the module's issue list asked for it,
+and the two-part signature keeps it from matching an article.
+
+### P78-3: `ERR_HTTP2_PROTOCOL_ERROR` read as a site that is down
+
+A news site's article failed with exit 3 and "could not be reached:
+Page.goto: net::ERR_HTTP2_PROTOCOL_ERROR". The same page opened in Chrome a
+minute later. Resetting the stream at the HTTP/2 layer is how Akamai's bot
+manager is commonly reported to refuse a headless browser, and the message
+sent the reader to the site. The message now adds that the server broke off
+the connection at the HTTP/2 layer, which is how some bot checks refuse an
+automated browser, and the same advice (`http2_refusal_hint`). It is a "may",
+because a server or proxy with a broken HTTP/2 stack raises the same code,
+and the exit code stays 3: nothing in the answer names a bot check.
+
+`ERR_HTTP2_PING_FAILED` was suggested with it and is not matched. Chromium
+raises it when the server stops answering its HTTP/2 pings, which is a
+connection that went quiet, the usual sign of a network that dropped. Telling
+that reader to save the page by hand would send them the wrong way, as P23-3's
+sign-in advice did.
+
+### P78-4: the tests
+
+`tests/test_bot_check_pages.py` serves each vendor's page from a loopback
+server with 200, and answers DataDome's host from a route inside the browser,
+so nothing leaves the machine. Each of the three signatures fails with exit 4,
+the vendor named, the advice, `http_status` 200 and `final_url`, and no PDF.
+So does a DataDome frame that the page adds only when it is first scrolled.
+An article that quotes the block page, links to the vendor's host, names the
+element and carries an Akamai reference under another title is captured, and
+so is a page whose frame and `#px-captcha` are present and not shown. A page
+whose every read fails reports that the test did not run. The HTTP/2 message
+is tested from `goto` raising Chromium's error, because Chromium speaks HTTP/2
+only over TLS to a certificate it trusts, which a loopback server is not. On
+master the four refusals and the frame test exit 0, and the HTTP/2 message
+lacks the advice.
+
+### P78-5: what this does not cover
+
+- A site's own block page that names no vendor. Matching its words is the
+  thing P22 declined.
+- A check that draws its page after the lazy-load pass, while the bundle is
+  being built.
+- Akamai's page served as a 403, which still gets P23-3's two readings: the
+  403 path reads the response headers, and Akamai's name no check.
+
+## P79: a consent dialog printed over the article, in both modes (2026-10-17)
+
+From the capture that produced P78. Master was d247610.
+
+
+### P79-1: what was printed
+
+An international forum's article was captured in faithful mode, and its
+Cookiebot dialog ("This website uses cookies…", three buttons) was printed
+on top of the last two paragraphs. The text layer interleaved the two: "we
+need the security foundation that"marketing" will makecookies it
+trustworthy". No warning. `--exclude "#CybotCookiebotDialog"` fixed it.
+
+Captured again on 2026-10-17 in clean mode, the default, the result was worse
+than the issue said. The dialog was on five of the six pages, because it is
+fixed to the window and Chromium prints a fixed box on every page, and its
+text was in `content.md` and `content.txt`. The interleaved sentence was the
+same, word for word. Clean mode has two rules that might have caught it and
+neither did. The noise list's cookie selectors look for `cookie` in an
+`aria-label` or `cookie-consent` in a class or id, and the dialog's root is
+`<div id="CybotCookiebotDialog" role="region">`. And the large-overlay rule
+wants a fixed box at least 45 % of the window wide, which a corner dialog is
+not.
+
+### P79-2: both modes hide the consent managers by name
+
+`CONSENT_MANAGERS` lists seven vendors by the ids and classes their scripts
+give their own dialogs:
+
+| Vendor | Selectors |
+|---|---|
+| Cookiebot | `#CybotCookiebotDialog`, `#CybotCookiebotDialogBodyUnderlay` |
+| OneTrust | `#onetrust-consent-sdk` |
+| Didomi | `#didomi-host` |
+| Quantcast Choice | `.qc-cmp2-container` |
+| TrustArc | `#truste-consent-track` |
+| Usercentrics | `#usercentrics-root`, `#usercentrics-cmp-ui` |
+| Sourcepoint | `[id^='sp_message_container']` |
+
+Cookiebot's dialog was measured on this page. The others follow each vendor's
+documented markup and were not met in a capture, the standard P23-9 set for
+the ad units. Every selector is a name the vendor gave its own element, so
+none can match a page's own box the way `[class*='cookie-consent' i]` can.
+That is why these are hidden in faithful mode too, and the noise list is
+not.
+
+Faithful mode used to hide nothing (docs/04 §5 item 5). It hides these now,
+because a consent dialog is not the page. It is the browser's session being
+asked a question that a person would have answered before reading, it covers
+the page's text on every printed page, and its words land in the bundle in
+the middle of the page's sentences. A faithful capture that keeps it records
+the page less accurately, not more. A manifest warning names each vendor
+whose dialog was on screen, with the selector that found it. A manager whose
+container is on every page and whose banner was already closed is hidden as
+well, and is not named, because hiding it changed nothing a reader would see.
+"On screen" counts the container and everything inside it, including an open
+shadow root, since Usercentrics draws its banner inside one on a host with
+no box of its own.
+
+Recaptured live with the change, in both modes, the page had six pages, no
+dialog text in the PDF or `content.md`, the sentence whole ("the security
+foundation that will make it trustworthy"), and the warning naming Cookiebot.
+
+The spec's item 5 also said clean mode "records the hidden-element count in
+the manifest". No producer ever did: the count is logged ("Removed N
+non-document element(s)"). The spec now says it is logged.
+
+### P79-3: the tests
+
+`tests/test_consent_dialogs.py` captures `tests/fixtures/consent_dialog_page.html`
+in both modes. The fixture has a Cookiebot-shaped corner dialog, a closed
+OneTrust banner, and a Usercentrics banner in a shadow root, beside article
+text that names the vendors and has a box classed `cookie-notes`. The
+dialogs' text must be absent from every PDF page and from `content.md`, the
+article's text present, and the manifest's one consent warning must name
+Cookiebot and Usercentrics and not OneTrust. Both modes fail on master.
+
+### P79-4: what this does not cover
+
+- A consent dialog from a vendor not on the list, or a site's own. The issue
+  also suggested a warning for any fixed box that covers the page's text in
+  the printed layout. It is not built here. The golden corpus's main fixture
+  has a fixed cookie banner of its own over its text, which faithful mode
+  keeps on purpose, so the warning would change every faithful golden of that
+  page. And Chromium prints a fixed box on every page, so overlap has to be
+  measured on the paginated layout, not on the screen.
+- A consent manager inside a frame, other than through the container that
+  holds the frame (Sourcepoint's).
+- The scroll lock a dialog leaves on `html` or `body` once it is hidden.
+  None was seen to change what printed.
+
 ## P27: what MarkItDown's Office readers pass over (2026-10-11)
 
 A slide-text file made from a lecture deck said one slide held only its
@@ -9633,6 +9829,1056 @@ main. On main, `export_to_doctags()` of a 2,000 × 2 table took 57.7 s and with
 the change 0.010 s. Once a docling-core release carries it, the swap changes
 nothing, since the writer then reads the grid once itself, and
 `_grids_built_once` can go; the count test holds either way.
+## P45: a list item that holds only a list had no line in content.md (2026-10-11)
+
+An `<li>` with no text of its own, holding only a list, is what mammoth writes
+for Word bullets at level 1 with none at level 0, and what P40's fixture
+`nested_book.epub` holds under "An item that is only a list". Its content.md
+was
+
+```
+    - Gorvane
+    - Holvish
+- Istrel
+```
+
+with no line for the outer item. Measured with docling-slim 2.132.0,
+docling-core 2.99.0 and markdown-it-py 4.2.0 (a CommonMark reader) on master
+5a5a6ab. The fixture is `tests/fixtures/item_holding_a_list.html`; every word
+in it is made up.
+
+### P45-1: what docling does with such an item
+
+`HTMLDocumentBackend._handle_list` reads each `<li>`'s text with its lists left
+out (`ignore_list=True`). When none is left, `_add_list_item_with_content`
+makes no item, and the lists inside go to `_handle_block`, which hangs them off
+the outer list's group. The counter that numbers an `<ol start>` counts only
+the items made. So:
+
+- In content.json the nested list is a child of the outer list, the shape an
+  invalid `<ul><li>A</li><ul>…</ul></ul>` also gives, so nothing after the
+  conversion can tell the two apart. The empty item is not there.
+- docling-core's Markdown serializer writes a nested list four spaces in per
+  level and an item as `marker text`. With no item there is no marker line,
+  and the nested list's lines come straight after whatever preceded it.
+- Without `start`, the serializer numbers an item by its position among the
+  group's children, the nested group included, so the next item's number was
+  right (`3.` after `1.` and the missing `2.`). With `start`, the backend's own
+  marker counts only the items it made: `<ol start="5">` with the empty item
+  second wrote the third as `6.`, in content.json and content.md.
+
+Read back with a CommonMark reader, master's content.md for the fixture:
+
+| The empty item | master's content.md | Read as |
+|---|---|---|
+| first, after a paragraph | `    - Gorvane` | a code block |
+| first of a list under an item with text | `        - Kelmar` | the parent's text: `Jaskov - Kelmar - Lunden` |
+| two levels of them | `        - Nalder` | a code block |
+| second of a numbered list | `1. Quenby`, `    1. Raskel`, `3. Tallow` | Raskel under Quenby |
+| second of `<ol start="5">` | `5. Umber`, `    - Varrick`, `6. Wendle` | Varrick under Umber, Wendle 6, not 7 |
+| holding a `<ul>` and an `<ol>` | `    - Yarrow`, `    1. Zennor` | a code block |
+| holding a `<dl>` | `    - **Brisk**`, `        - Callow` | a code block |
+| in a table cell | `\| - Elvar     - Fennick - Galt \|` | (one line, as every list in a cell) |
+
+content.txt and chunks.jsonl write list lines as content.md does, and had the
+same lines. The doctags are not affected: docling-core's doctags serializer
+writes every nested list as a `<list_item>` of its own, after its parent's, so
+a missing item and an empty one come out alike.
+
+### P45-2: why not a marker line of its own
+
+A Markdown list item with nothing on its marker's line is an empty item, and
+CommonMark does not let a list that opens with one interrupt a paragraph. An
+empty marker line works after a heading or a paragraph, but under an item with
+text, `- Jaskov`, `    -`, `        - Kelmar` reads `-` as a setext underline:
+`Jaskov` becomes an `<h2>` and the sub-list a code block. `- ` with a trailing
+space reads the same.
+
+CommonMark's own spelling of an item that holds a list is the list on the
+item's line, `- - Gorvane`. Its content begins after the marker and up to four
+spaces, so `-   - Gorvane`, the marker padded to four columns, puts the inner
+list where docling indents nested lists, and the next line, `    - Holvish`,
+is its sibling. It reads correctly in every shape above, numbered ones
+included (`6.  - Varrick`), and in chains (`-   -   - Nalder`).
+
+### P45-3: the fix
+
+- **The backend makes the item.** Before the backend parses the page,
+  `mark_empty_items` writes a third noncharacter, U+FDD2, as the text of each
+  `<li>` of a `<ul>` or `<ol>` whose content outside its own lists is
+  whitespace and empty wrappers (inline elements, `div`, `p`) and which holds a
+  `<ul>`, `<ol>` or `<dl>`. Not a `<br>`: the backend writes one as its own
+  character, U+E000, which counts as text, so it already makes an item of
+  `<li><br><ul>…</ul></li>`; marked, that item's text was U+E000 beside the
+  stand-in, which the stray check then caught. The backend then makes an item of it, counts
+  it, and puts its lists inside it, so an `<ol start>` numbers the items after
+  it right. As with P14-56's join markers, a marked page opens with a
+  byte-order mark. The marked page is built in one pass: slicing it once per
+  mark copies the page each time, and 2,000 items on a 1.1 MB page took 1.5 s
+  that way. P14-56's join markers were inserted so too, and 2,000
+  sub/superscripts on that page took 3.2 s; P48 builds them in one pass.
+- **content.json holds the item empty.** Once the document is built the
+  item's text and `orig` are emptied. content.json gains an empty `list_item`
+  holding its list, numbered among its siblings, as the page has it. The
+  doctags do not change.
+- **Each text surface writes it on its list's first line.** While content.md,
+  content.txt and the chunks are written, the empty item carries the stand-in
+  again, so its line is `marker U+FDD2`, which nothing else can produce.
+  `write_empty_items` joins that line to the next one, padding the marker to
+  where the next line's list begins: `-   - Gorvane`, `2.  1. Raskel`,
+  `    -   - Kelmar`. A marker too wide for four columns (`1000.`), or no deeper
+  line after it, keeps a line of its own with the marker alone. In a table
+  cell, where docling writes a list on one line, the item is its marker before
+  its list's first: `- - Elvar`.
+- **An empty item has no text to tell chrome by.** The bridge moves each text
+  that is not header, nav, footer or aside text from the furniture layer to the
+  body. An empty item now goes where its own items went; moved on its own, a
+  nav menu's empty item was a bare `-` in content.md.
+- **Absence is said, not hidden.** A page with U+FDD2 of its own, as the
+  character or as a reference to it, is not marked and gets a warning.
+  `html.unescape` drops a reference to a noncharacter, which the backend's
+  parser decodes, so the check looks for the reference itself. A stand-in
+  found anywhere but its item's line is removed and named in a warning, as
+  P14-56 does for a join marker.
+
+Only an item with no text of its own changes. Over 600 seeded random list
+trees (up to five levels deep, either kind, `start` numbers, one or two lists in an
+item, whitespace in the empty item, after a paragraph or under an item with
+text), the 213 pages with no such item were byte-identical to master on every
+surface, and in the 387 with one, every list read back with a CommonMark
+reader as the page has it. The tree generator left out three shapes docling
+writes wrongly with or without this change; they are in P45-5.
+
+### P45-4: real files
+
+Every document in the real-file folder P27, P28 and P40 scanned, copied first
+and read only: 256 files (82 Word, 23 decks, 6 workbooks, 1 EPUB, 5
+zips, 62 CSVs, 58 Markdown files, 19 HTML files). Each was rendered into its
+page twice, with master's MarkItDown bridge and with P40's (#193), which keeps
+the nesting master's flattened; an HTML file is its own page. Each page was
+then extracted with master's docling bridge and this one, without a browser.
+
+- **3 files render on neither**, on WebShot's own archive limits: a symbolic
+  link in a zip, and a deck and a zip that expand past 100 MB.
+- **94 pages hold no `<li>`** (93 of P40's), so nothing is marked and every
+  step added here does nothing: 59 CSVs, 13 Word files, 10 decks, every
+  workbook. They were not extracted twice; docling's DocTags export of a
+  large table is quadratic, and one CSV took minutes.
+- **154 pages hold lists but no such item** (136 of P40's): content.json,
+  content.md, content.txt, the doctags, the chunks, the tables and the
+  warnings are byte-identical to master's.
+- **5 pages hold such items, all Word files: 36 items**, 24 of them holding
+  a list of more than one item on P40's pages (15 on master's, which flatten
+  some of the rest, P40-1). Read back with markdown-it-py, master's
+  content.md holds none of the 36 with its list; this one holds all 36, on
+  either page. content.md and content.txt each change on 25 lines, and every
+  one is an item's line joined to its list's first: in one outline 11 lines
+  hold two items, an empty item holding an empty item (`-   -   1. …`).
+  content.json gains the 36 empty items, and its other texts are unchanged in
+  text, marker and layer. The chunks change on the same lines and keep their
+  count; the doctags, the tables and the warnings do not change. None of the
+  36 is in a list with a start number, so no number changes.
+- **Captured end to end** through Chromium with P40's tree and each docling
+  bridge, the outline's content.md changes on exactly the scan's lines, its
+  doctags, `assets.json` and `links.json` are identical, and the manifest's
+  count of content.json items rises by the 24 empty items, 80 to 104.
+
+Extraction of each changed page, best of five, stayed within 10 ms of
+master's (the outline: 42 ms, now 52 ms). On a synthetic 231 KB page with 300
+such items extraction took 3.2 s rather than 2.8 s, docling handling 300 more
+items; with 600 ordinary nested lists instead, the two took the same. The
+pass that finds the items is skipped on a page with no `<li`, and costs 0.24 s
+on a 1.2 MB page with 2,000 of them.
+
+### P45-5: what this does not cover
+
+- **An item with no text of its own holding a list and something else** is
+  left to docling as before. With an image or a table, docling drops the item
+  and the image or table with it, from content.json and content.md, with no
+  warning; the same happens to an image or a table that is all an item holds
+  (flagged separately). With a checkbox it writes the checkbox as an item of
+  its own, `- [ ]`, and the list after it; a code block is P50's, which reads
+  it as a block of code under the item.
+- **`<li></li>`**, an item with nothing in it, still has no line.
+- **A `<br>` in an item** is the backend's U+E000 in the item's text, which
+  reaches content.json, content.md and content.txt on master as it does here
+  (found by the session extending this fix, and flagged separately).
+- **A marker four characters wide or more** (`1000.`): the item keeps a bare
+  marker line. docling's four-space indent does not nest a list under such a
+  marker anyway, item text or not.
+- **docling's other list limits, unchanged:** a numbered list starting at
+  other than 1 cannot interrupt a paragraph in CommonMark, so under an item
+  with text it reads as that text; two lists of one kind in one item are
+  written with nothing between them and read as one; and a nested list before
+  the page's first heading is written flat, because the bridge moves its items
+  to the body layer and leaves their groups behind (flagged separately).
+- **P14-56's check for a page's own join markers** looks for the characters
+  only, so a page writing U+FDD0 as `&#xFDD0;` loses it without a warning
+  (flagged separately; this entry's check does not have the gap).
+
+### P45-6: the tests
+
+`tests/test_item_holding_a_list.py`, without a browser: the fixture's lists
+read back from content.md with markdown-it-py as the page has them (against
+master's bridge, 6 of its 7 sections do not); each shape's exact lines in
+content.md, content.txt and the chunks; that an empty marker line would not do
+(the `<h2>` and the code block); content.json's empty items, what they hold,
+and `5.`, `6.`, `7.`; the nav menu staying chrome; the table cell; no stand-in
+or byte-order mark in any surface and no warning; that against the unmarked
+page only the items' nine lines change, each as expected; which items are
+marked and which are left to docling (a `<br>` among them); a stand-in with no
+line to share; a stray stand-in removed and named; and a page carrying U+FDD2,
+as the character and three spellings of its reference.
+
+## P35: MarkItDown guessed a text file's encoding from its first 64 KB (2026-10-11)
+
+P33-3 recorded that a UTF-8 file whose first character outside ASCII comes
+after its first 64 KB is decoded as ASCII and fails. MarkItDown 0.1.8 reads a
+64 KiB sample (`_read_charset_sample`), asks charset-normalizer for its
+encoding, and decodes the whole stream by that answer. Measured on P33's
+branch at 34ae3b5, before P28, P29 and P33 merged, with MarkItDown 0.1.8,
+Magika 0.6.2 and charset-normalizer 3.5.1 under Python 3.12 on macOS, with
+the CI extras. The fixtures are `late_utf8.csv` and `late_utf8_archive.zip`
+in `tests/fixtures/office/`, written by `tools/fixtures/office.py`.
+
+### P35-1: which files failed
+
+Each format was written with its first character outside ASCII at about
+70 KB, on its own and as a zip member:
+
+| Format | On its own | In a zip |
+|---|---|---|
+| CSV, TSV | exit 2: `UnicodeDecodeError` from MarkItDown's CSV reader | left out, named (P33) |
+| JSON, JSON Lines, XML, `.txt` | exit 2: `UnicodeDecodeError` from its plain-text reader | left out, named |
+| YAML | exit 2, as above, or "No converter attempted a conversion" | left out, named, or counted as a format WebShot has no reader for |
+| Notebook, Python | not a format on its own | left out, named |
+| `.ini`, `.sql`, `.sh` | not a format on its own | counted as a format WebShot has no reader for |
+
+Whether a given file failed depends on Magika as much as on its format.
+MarkItDown guesses an encoding only for a stream Magika names as text; where
+Magika's name agrees with the suffix, its guess is the only one. A stream
+Magika could not name, or named as something its suffix is not, went first to
+a reader chosen by the suffix with no encoding, and MarkItDown's plain-text and
+CSV readers then guess from all of the bytes, which works. So the CSV above
+failed when its last row was `café,1` and read when it ended in a longer
+sentinel Magika could not name; a `.txt` of `x` lines ending in `café` failed
+where a `.log` of the same bytes read. YAML has no MIME type in Python 3.12's
+`mimetypes`, so a YAML file Magika could not name was taken by no reader at
+all: a late `é` did it, and so did a byte order mark in front of a one-line
+file. A short text file behind a byte order mark that Magika did name was
+read, and the mark put at the start of the page as U+FEFF.
+
+The guess was not only wrong past the sample. A CSV that is not UTF-8 is
+read by WebShot as UTF-8 before MarkItDown sees it (`_as_escaped_csv`), so its
+accented letters became U+FFFD; charset-normalizer then took the UTF-8 that
+WebShot wrote, U+FFFD's bytes and all, for Shift JIS 2004, and the page showed
+`caf魹ｽ`. On a real zip it read a UTF-8 file of box-drawing characters, inside
+the sample, as `ptcp154`, a Kazakh code page (P35-4). Neither said a word.
+
+### P35-2: the encoding WebShot states
+
+`_convert_bytes`, the one path for a file and a member (P29-2), now gives
+MarkItDown an encoding wherever WebShot has one that is not a guess:
+
+- **Bytes WebShot wrote** are UTF-8: the CSV `_as_escaped_csv` makes, from a
+  CSV or a TSV.
+- **Text that decodes as UTF-8 to its last byte**, with a character outside
+  ASCII and no NUL, is declared UTF-8 (`_declared_charset`). A legacy
+  encoding all but never forms valid UTF-8 sequences, and a NUL, which text
+  does not hold, keeps a binary file that happens to from being read as text
+  on WebShot's say-so. A byte order mark makes it `utf-8-sig`, which drops the
+  mark: it records how the text is encoded and is not part of it.
+  MarkItDown dropped it only where Magika could not name the file.
+
+MarkItDown keeps a declared encoding in front of its own guess: where the two
+disagree it tries the declared one first, and where Magika cannot name the
+stream, the encoding is what lets its plain-text reader take it. Every case
+in P35-1 that is UTF-8 now reads, on its own and in a zip, and the BOM never
+reaches the page. A CSV or TSV that is not UTF-8 is still read as UTF-8, now
+with a warning that says so: `The file is not UTF-8, the one encoding WebShot
+reads a CSV or TSV file in, so the page shows U+FFFD (�) where its bytes are
+not UTF-8`. A UTF-16 CSV, read as UTF-8 the same way, gets the same
+warning.
+
+Two things are left to MarkItDown's guess on purpose. ASCII, for which
+charset-normalizer answered `ascii` or `utf-8`, both of which decode it as
+itself; declaring it would only reorder MarkItDown's guesses, and so which
+reader an unsuffixed member goes to. And text that is not UTF-8, whose
+encoding WebShot has no better way to know (P35-3).
+
+### P35-3: what this does not cover
+
+Measured with the same matrix in Windows-1252, before and after; this change
+leaves all of it as it was, except the CSV and TSV rows, which now warn:
+
+- A late character still fails as P35-1 does, for every format Magika names
+  as text.
+- Where a reader guesses from all of the bytes, a few accented letters among
+  80 KB of ASCII are too little for charset-normalizer. A `.txt` read as
+  `cp1006` gave `cafﻠ` for `café`, and curly quotes as C1 control
+  characters. Where it found no encoding at all, MarkItDown decoded the bytes
+  as UTF-8 and dropped every one that was not: a `.py` lost its `é` and both
+  curly quotes without a mark. Neither is in the manifest.
+- An empty `.yaml`, `.yml` or `.xml` file on its own still ends the run with
+  exit 2 and "No converter attempted a conversion", as before: no reader takes
+  an empty stream Magika cannot name.
+
+Choosing an encoding for legacy text, by charset-normalizer over all of the
+bytes or by the Windows-1252 a browser assumes, and saying in the manifest
+that it was chosen, is a decision of its own.
+
+Apart from encodings: a table's capture costs time with the square of its
+rows. docling-core's DocTags serializer reads `TableData.grid` once per row,
+and each read builds the whole grid again, so a 1,000-row, 2-column CSV built
+4 million cells in 2,010 reads, 23.6 s of a 76 s profiled capture. Captures of
+500, 1,000 and 2,000 rows took 26 s, 57 s and 179 s (one run each, with other
+test runs on the machine), and the first `late_utf8.csv`, 11,431 rows of
+`x,1`, ran the round-trip test past 40 minutes. The fixtures reach 64 KB with
+82 rows of long text instead; the cost itself is not changed here.
+
+### P35-4: real files
+
+Every `.zip`, `.csv`, `.txt`, `.json`, `.xml`, `.yaml`, `.log` and `.epub`
+file in one real folder, 298 files, was read through `_render_local_file` by
+P33's bridge and by this one; the dataset zip past the 100 MB limit, which
+P33-1 read member by member, was read the same way: two CSVs, 707 MB between
+them. Of the 300, 293 pages were byte-identical, one file failed on both, on
+the archive guard's symbolic-link refusal, and six changed:
+
+- **The zipped Python project.** Its vendored `pkg_resources/__init__.py`,
+  first non-ASCII byte at 74,446 (P33-3), is in the page, 124,345 characters,
+  and its warning is gone. Its vendored `rich/box.py`, UTF-8 box drawing from
+  byte 370, had been guessed `ptcp154` and read as `в”Ңв”Җв”¬в”җ` where it says
+  `┌─┬┐`; it now reads as the file does. No other member changed.
+- **Five `.txt` files**, all saved with a byte order mark: each page had begun
+  with an invisible U+FEFF, and no longer does. Nothing else in them changed.
+
+Conversion took, P33's bridge then this one, one run each: 210.7 s and 206.3 s
+for the CSVs (the dataset zip's two members among them), 6.6 s and 7.2 s for
+the `.txt` files, 13.1 s and 13.0 s for the zips, and 5.3 s and 5.4 s for the
+log, which is 41 MB.
+
+### P35-5: the tests
+
+`tests/test_text_charset.py` checks that every late character in the two
+fixtures is past the 64 KiB sample, so a fixture regenerated shorter fails
+rather than passing for nothing; that MarkItDown on its own, handed what the
+bridge hands it less the encoding, still fails each late file and the marked
+YAML and still puts the marked text's BOM on the page, which is the premise
+of the rest; that the late CSV reads with no warning; that every member of
+the archive is in the page, the Windows-1252 CSV with U+FFFD and the one
+warning that names it; that neither marked member's BOM reaches the page; and
+`_declared_charset` on ASCII, UTF-8, a BOM, Windows-1252, a NUL and nothing.
+Against P33's bridge, its four tests of what reaches the page fail.
+`tests/test_office_formats.py` captures both fixtures end to end and finds
+their sentinels, each the late character's own words, in `content.md`,
+`content.txt` and `chunks.jsonl`: 25 s for the CSV and 40 s for the archive,
+whose five late members put about 400 KB of text on the page.
+
+## P40: a list nested in a converted document's item was flattened (2026-10-11)
+
+A Word item numbered `1.` with a bulleted sub-item and a numbered one came out
+of mammoth as
+`<ol><li>Alpha<ul><li>sub a</li></ul><ol><li>sub b</li></ol></li><li>Bravo</li></ol>`.
+markdownify wrote `1. Alpha`, `   * sub a`, `   1. sub b`, `2. Bravo`, and the
+page printed `* sub a` as text in Alpha's item, with `sub b` an item beside
+Alpha. markdownify's `convert_li` indents every line of an item after its
+first by the width of the item's marker: two spaces under `* `, three under
+`1. `. Python-Markdown takes an indented list only at its `tab_length`, four.
+Every converted document whose lists nest goes through that writer: a Word
+file, an EPUB, an HTML file, and each of those inside a zip. P31-4 counted the
+Word items it flattened. P32-5 left it for this entry, with two lists nested in
+one item; the case in `test_adjacent_lists.py` that pinned such a pair as
+upstream writes it is now `test_two_lists_in_one_item_stay_two`. Measured with MarkItDown 0.1.8, markdownify 1.2.3,
+mammoth 1.11.0, Python-Markdown 3.10.3 (with `extra`, `sane_lists` and `toc`,
+as `MARKDOWN_EXTENSIONS` renders), nh3 0.3.7 and docling-core 2.99.0, on master
+f2be8dd. The fixtures are `nested_book.epub`, `nested_report.docx` and
+`nested_archive.zip` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`. Every word in them is made up.
+
+### P40-1: what each shape became
+
+| In the document | markdownify's Markdown | On the page, before |
+|---|---|---|
+| bullets under bullets, numbers under numbers | the sub-list 2 or 3 spaces in | the sub-items became the parent list's own |
+| bullets under numbers, numbers under bullets | the same | the sub-items printed into the parent's text: `Parent 1. Child one 2. Child two` |
+| three levels, of either kind | 2 or 3 spaces a level | at best the third level nested in the second |
+| under `10.` or a wider number | 4 spaces or more | nested, which is why P30-1's `<ol start="12">` fixture did |
+| an item of two paragraphs | the second after a blank line, 2 or 3 spaces in | the second left the list and took the next item with it: `Two 2. Three` |
+| two lists in one item | joined with no line between (P32-5) | the second list the first's text, or more of its items |
+| text after a nested list | on the sub-list's last line: `+ subtail text` | the text run into the sub-item's last word |
+| an item that holds only a list | the list on the marker's line: `* + x`, `  + y` | `y` an item of the outer list |
+| a quotation in an item | `  > quoted` | a quotation in the item, as it should be |
+
+Python-Markdown's rules, read from its `OListProcessor` and
+`ListIndentProcessor` and measured on each shape: a line with a marker four to
+seven spaces in begins a nested list, at any depth and under a marker of any
+width. A line straight after a nested list is more of that list's last item,
+whatever its indentation. A block after a blank line belongs to the item only
+four spaces in, and the next item must then follow a blank line too, or it is
+read as more of that block. A nested list with no blank line before it nests
+only straight after the item's first block: after a later block it is that
+block's text (`Two + sub`). On the item's first block, a `>` four spaces in is
+text, not a quotation. A list begun on the marker's own line (`* + x`) reads a
+list nested in `x` as `x`'s text. Under `sane_lists`, a bulleted list and a
+numbered one with a blank line between are two lists, and two of one kind are
+one, as P32 found.
+
+### P40-2: four spaces, and a blank line after a nested list
+
+`_TextMarkdownify.convert_li` writes each line of an item after the first four
+spaces in. The rest of the item's first block is the exception: it stays at
+the marker's width, at most three, because a quotation straight after an
+item's text is one at two spaces and is not at four. markdownify still chooses
+the marker. It hands an item its children's Markdown as one string, by when
+where a nested list ended is lost, so each nested item is written between
+marks that name its list: a token drawn for each conversion, between
+private-use characters. The item it sits in reads its lists back out and
+writes them:
+
+- a blank line after a nested list that more of the item follows, and where
+  that is another list of the same kind, `<!-- -->` between blank lines, as
+  P32 keeps two lists apart; nh3 drops the comment from the page;
+- a blank line before a nested list that follows a block other than the
+  item's first;
+- a blank line after an item of more than one block, so the next item stays
+  an item;
+- `<!-- -->` for the text of an item that opens with a list, and the list on
+  the next line. A bare `* ` would do for Python-Markdown, but MarkItDown
+  strips the space from the end of every line, and `*` alone is text.
+
+A mark that does not begin a line is in a quotation or a table cell, and is
+only taken out. None survives the outermost item, and an item inside `pre`,
+`code`, `kbd` or `samp` is written as markdownify writes it. A flat list, and
+every item of one line, is written byte for byte as before.
+
+An item that holds a second block is loose: its text and the next item's
+become paragraphs, which is how Python-Markdown writes every item of more than
+one block. A nested list straight after its item's text leaves the item tight.
+So two lists in one item make that item and the next loose; the page holds
+the same lists either way.
+
+### P40-3: real files
+
+Every `.docx`, `.epub`, `.zip`, `.pptx` and `.xlsx` in the Google Drive
+`School` folder (117: 82 Word files, 1 EPUB, 5 zips, 23 decks, 6 workbooks) was
+rendered with master's bridge and with this one. The same 3 fail in both, on
+archive limits. The page of 91 is byte-identical, every deck, workbook and zip
+among them. The 23 that changed are the 22 Word files whose lists nest, and
+the EPUB.
+
+- **Word.** mammoth's HTML for the 82 files holds 1,690 items, 520 of them
+  nested. Master's pages kept 133 nested; these keep 520. Outside table cells
+  the files hold 273 lists, and every one now reaches its page with mammoth's
+  structure and text, where 22 files had differed. Two files lost 35 words
+  each: the `*` printed in front of each bulleted sub-item of a numbered one.
+  mammoth wrote 36 items that hold only a list, for bullets at level 1 with
+  none at level 0 (`<ul><li><ul>…`). 24 of them, in 5 files, hold more than
+  one sub-item, and every sub-item after the first had become the outer
+  list's. No Word file has two lists side by side in one item.
+- **The EPUB.** Its numbered steps are items of two paragraphs,
+  `<li><p>1.</p><p>Take in an input…</p></li>`. The second paragraph had left
+  the list and taken the next item with it, its numbers printed as `2. 2.`:
+  the page held 5 fewer items than the book. Its 100 lists now match its
+  chapters' XHTML list for list. 8 items are loose, as their `<p>`s say.
+
+Rendering took, master then this branch: the Word files 8.76 s and 9.27 s, the
+decks 2.69 s and 1.98 s, the workbooks 29.71 s and 31.65 s, the zips 13.41 s
+and 13.21 s, the EPUB 0.45 s and 0.43 s. The load average was near 300, so
+these differ within that machine's noise.
+
+### P40-4: what this does not cover
+
+- A `<pre>` in a list item still loses its lines. Python-Markdown's
+  `fenced_code` reads a fence only at the start of a line, and the item
+  indents it. This was so before; none of the scanned files has one.
+- A list in a table cell is the cell's text, because a Markdown table cell is
+  one line: 91 lists in 5 of the Word files, before as after.
+- markdownify's `chomp` drops a no-break space at the edge of bold or italic
+  text, so `called<strong>&nbsp;SALT.&nbsp;</strong>We'll` reads
+  `calledSALT.We'll`. One Word file has it, before as after.
+- docling writes no line for an item that holds only a list, so content.md
+  shows that list indented under nothing, which a CommonMark reader takes for
+  a code block. The page holds the item.
+- A `.md` file, or a `.md` member of a zip, is its author's Markdown and never
+  reaches this writer. Its two-space nesting renders flat, as before.
+
+### P40-5: the tests
+
+`tests/test_nested_lists.py` renders each shape in P40-1 through the bridge and
+Python-Markdown and compares the page's lists, item by item and level by level,
+with the HTML's: both kinds at two and three levels, ordered lists from 1 to
+1000, items of more than one paragraph, a list after an item's second block,
+two and three lists in one item, text after a nested list, items that hold only
+a list, and a quotation in an item, which nested before and must still. Sixty
+seeded random trees are held to the same comparison, three levels deep, each
+item up to three pieces in any order: text, a paragraph, a nested list. 2,000
+such trees passed when it was written. It checks that no mark is left in a
+table cell or a `<pre>`, that text which looks like a mark is text, that a flat
+list is written as before, and that a `.md` file and a `.md` member of a zip
+are untouched. `tests/test_office_formats.py` captures the three fixtures end
+to end. Each page's lists in content.html, and every item's depth in
+content.md, must match the fixture's, with no `<!--` and no private-use
+character in content.md, content.html or content.txt.
+
+## P44: a `<pre>` in a converted document's list item lost its lines (2026-10-11)
+
+A `<pre>` in a list item of a Word file, an EPUB or an HTML page, on its own
+or in a zip, reached the page as one line. markdownify writes a `<pre>` as a
+fenced block, and the item indents the fence with the rest of its lines.
+Python-Markdown's `fenced_code` reads a fence only where a line begins, and
+reads it before any list, so in an item it found none: the fence and the code
+were the item's text, and a run of backticks with text between is inline
+code. The page held `<li><p>A</p><p><code>code\n  x</code></p></li>`, which a
+browser shows as `code x`. P40-4 recorded it as not covered. Measured with
+MarkItDown 0.1.8, markdownify 1.2.3, mammoth 1.11.0, Python-Markdown 3.10.3
+(with `extra`, `sane_lists` and `toc`, as `MARKDOWN_EXTENSIONS` renders), nh3
+0.3.7 and docling-core 2.99.0, on fix/nested-lists 0ba87cd (P40) and master
+5a5a6ab. The fixtures are `code_items_book.epub`, `code_items_report.docx` and
+`code_items_archive.zip` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`. Every word in them is made up.
+
+### P44-1: what each shape became
+
+| In the document | On the page, before (P40) |
+|---|---|
+| code after an item's text, at depth 1, 2 or 3, under `* ` or `1. ` | `<p><code>code x</code></p>` in the item |
+| an item that is only code | the fence on the marker's line: `<li><code>code x</code></li>` |
+| code after a nested list, or before one | inline code in the item, as above |
+| code holding a fence (P28's longer fence) | `<code>``` x ```</code>`, the inner fence printed |
+| code holding a blank line | `<p>``` one</p><p>two ```</p>`: the fence printed, and the code after the blank line read as Markdown |
+
+The last row is the class of P28. The blank line ended the paragraph the
+fence was read in, and what followed was Markdown with raw HTML: an
+`<img src="https://tracker.invalid/x.png">` typed in the code became an image
+on the page, which the capture fetches. A line a paragraph gives way to did
+the same with no blank line: on P40 one opening a heading, a quotation or a
+rule (`#`, `>`, `***`); on master, where the fence sat shallower, a quotation,
+a rule or an HTML block (`<div>`). markdownify does not encode a
+`<pre>`'s text, because a code block keeps it literal, and in an item it was
+not one.
+
+On master, before P40 indented by four, the fence sat at the marker's width,
+and the code left the list with every item after it:
+`<ul><li>A</li></ul><p><code>code x</code> * N</p>`.
+
+Measured over 229 cases, eight kinds of code (one line break, a blank line,
+two blank lines, blank lines and spaces at either end, tabs, backtick runs, a
+carriage return, and Markdown and HTML) in fourteen shapes under both kinds of
+list, and under `<ol start>` from 9 to 999: master and P40 put a `<pre>` on
+the page in none.
+
+### P44-2: an indented code block in the item
+
+Python-Markdown reads an indented code block at any depth: four spaces past
+the text of the item it is in, after a blank line. Measured, the
+alternatives were worse. A fence at column 0 ends the list, which goes on
+after the code as a second list, and at depth 2 the next sub-item became a
+code block too. A raw `<pre>` four spaces in is inline HTML in a `<p>`, and
+the code inside it is read as Markdown: `*b*` became `<em>b</em>`. A `~~~`
+fence is read only where a line begins, as a backtick one is.
+
+`_TextMarkdownify.convert_pre` writes a `<pre>` its item holds as a block as
+markdownify's code, as markdownify's `strip_pre` option trims it, four spaces
+in, with no fence; `convert_li` adds the item's own indentation (P40-2). With
+no fence, a backtick in the code is text. Tabs are expanded to four columns
+first, as Python-Markdown expands them from the start of a line, so that how
+far in the code is written moves no tab stop, and a `\r` is a line break, as
+Python-Markdown makes it one. The code is marked as P40-2 marks a nested item, so the item knows
+where it begins and ends, and so that a `<div>` or `<p>` around it, which
+strips its text, cannot strip its first line's indentation. The item then
+writes:
+
+- a blank line either side of the code;
+- `<!-- -->` between blank lines before code that follows a nested list or
+  other code. Python-Markdown places an indented block by its depth alone,
+  and an item's code is as deep as a nested item's text: after a sub-list it
+  was the last sub-item's paragraph, `<li><p>Sub</p><p>code(1)</p></li>`, and
+  two code blocks with only a blank line between them were one;
+- `<!-- -->` for the text of an item that opens with code, and a blank line
+  after it, because no code block begins on a marker's line. nh3 drops the
+  comment, and the page holds `<li><pre>`.
+
+A `<pre>` is written so only where its item holds it as a block: it has an
+`li` ancestor, it is not in a table cell or a heading (one line, `_inline`)
+or in `pre` or `code` (`_noformat`), and nothing between it and its item is
+something markdownify converts, but for `div`, `p`, `section`, `article` and
+`figcaption` (`CODE_HOLDERS`), which leave what they hold at the start of a
+line, where the item finds the code. A link, emphasis and a `<dd>` write what they hold into
+a line of text, where no code block begins; the first version of this fix put
+the indented code there too, and the page held plain text where P40's held
+inline code. A quotation writes its own blocks after `> `, out of the item's
+reach. An indented block there reads (`>     code` is a `<pre>`), but the
+second version found two code blocks in a quotation in an item read as one,
+and code after a list in one read as the last sub-item's text,
+`<li><p>x</p><p>one i</p></li>`, both worse than P40's inline code. In all
+of these markdownify's fence is kept, and the Markdown is P40's byte for
+byte. A tag markdownify does not convert, a `<span>` or `<details>`, passes its
+Markdown through and may stand between. Outside a list a `<pre>` is written as
+before.
+
+An item that holds code holds a second block, so it is loose, and its text
+and the next item's are paragraphs, as P40-2 says of every such item. In 213
+of the 229 cases the page holds the code as it holds the same `<pre>` outside
+a list, line for line. The other 16 are code in a quotation in an item, written
+as P40 wrote it.
+
+### P44-3: real files
+
+Every `.docx`, `.epub`, `.zip`, `.pptx` and `.xlsx` in the Google Drive
+`School` folder (117: 82 Word files, 1 EPUB, 5 zips, 23 decks, 6 workbooks)
+was rendered with P40's bridge and with this one. The same 3 fail in both, on
+archive limits. The page of the other 114 is byte-identical. None of the 117
+holds a `<pre>`: the writer's `convert_pre` was called for none of them.
+mammoth writes a `<pre>` only where a style map says to, and a Word file's
+style map is its own, embedded, as `code_items_report.docx` carries one;
+none of the 82 maps a style to `<pre>`.
+
+With no `<pre>` to write, the change ran none of its code on these files,
+and the times differ by the machine alone. Rendering took, P40's bridge, this
+one, then P40's again: the Word files 17.11 s, 16.57 s and 14.42 s, the decks
+4.76 s, 3.95 s and 3.66 s, the workbooks 52.32 s, 44.94 s and 53.02 s, the zips
+25.05 s, 17.90 s and 13.05 s, the EPUB 0.81 s, 0.68 s and 0.59 s. The load
+average was near 300.
+
+### P44-4: what this does not cover
+
+- **content.md and content.txt held an item's code as one line** with this
+  alone. docling's HTML reader reads a `<pre>` in an `<li>` as a `code` item
+  with its whitespace joined, and the code of an item that opens with code as
+  the item's own text, so content.md wrote `- Arbel` and the code as inline
+  code on its line, or `- opal = 1 opine = 2`. A `<pre>` outside a list kept
+  its lines there. For `code_items_book.epub`, content.md was byte-identical
+  before and after but for the code whose Markdown had damaged it, the fence
+  printed and `<b>` read as markup, which it held exactly. P50 corrects the
+  record in the extract bridge: with both, content.md holds each item's code
+  as a fenced block in its item, line for line, as P50-4 qualifies.
+- **A `<pre>` in a quotation or a definition** still loses its lines, outside
+  a list or in an item: `> ` or `:   ` stands before the fence, and
+  `fenced_code` cannot see it there either. So does one in a link or emphasis
+  in an item. Each is written as before (P44-2), and quotations and
+  definitions are left to a follow-up: P47 makes them code blocks, but for a
+  definition in an item.
+- **Markup in code the page does not read as code is still markup.** Where
+  markdownify's fence is kept and cannot be read as one, a blank line in the
+  code, or a line opening a heading or a quotation, ends the paragraph the
+  fence is read in, and an `<img src>` after it is an image on the page,
+  which the capture fetches: in a quotation and in an element markdownify
+  writes inline (a link, `em`, `strong`, `del`, `sub`), outside a list or in
+  an item; in a definition outside a list; and in a table's `<caption>` in an
+  item, whose table is no holder. Not in a table cell, nor in a `<dd>` in an
+  item. Measured the same on master and P40; this fix closes it for code an
+  item holds as a block, and no other. P47 closes it in a quotation and a
+  definition, and P59 in an element markdownify writes into a line.
+- **A run of blank lines in code is one**, outside a list as in it: MarkItDown
+  collapses every run in its Markdown, and strips the spaces at a line's end.
+  markdownify's `strip_pre` drops the blank lines at the code's start and end.
+- **A `<pre>` of blank lines in an item is nothing on the page**, because an
+  indented code block cannot be empty. Outside a list it is an empty `<pre>`.
+
+### P44-5: the tests
+
+`tests/test_code_in_list_items.py` renders each shape in P44-1 through
+`to_markdown`, MarkItDown's clean-up included, and Python-Markdown, and
+compares each `<pre>` on the page with the same `<pre>` outside a list, and the
+page's lists, code included, with the HTML's: fourteen shapes at depths 1 to 3
+under both kinds of list, numbers from 9 to 999, code after a nested list, two
+blocks in one item, an item that is only code, and each kind of code in P44-1
+at depths 1 and 3. Markup after a blank line, a heading, a quotation, a rule
+or an HTML block in an item's code, plain, in a `<div>` or in a figure's
+caption, must be text, with no `<img>` on the page. It holds that code
+outside a list is written as before, fence lengths included; that code in a
+table cell in an item is the cell's as outside one; that code in a
+definition in an item keeps markdownify's fence (a link's and emphasis's are
+P59's), as does code in a quotation in an item, two blocks and code after a
+list included; and that
+code in code leaves no mark. Forty seeded random trees, three levels of both
+kinds, each item up to three pieces in any order (text, a paragraph, a nested
+list, a block of code of any kind above, a `<div>` of up to three more), are
+held to the same comparisons; 2,000 passed when it was written. On P40's bridge
+99 of the file's 117 tests fail; the 18 that pass hold what already worked, or
+are random trees that drew no code. `tests/test_office_formats.py` captures
+the three fixtures end to end: each `<pre>` in content.html sits in the item
+and at the depth the fixture says, line for line, and the lists match;
+content.md holds each block's lines in order, with P50's correction, and
+content.txt its words; none of the three holds `<!--` or a private-use
+character.
+
+## P47: a `<pre>` in a converted document's quotation or definition lost its lines (2026-10-11)
+
+A `<pre>` in a `<blockquote>` or a `<dd>` of a Word file, an EPUB or an HTML
+page, on its own or in a zip, reached the page as one line. markdownify fences
+a `<pre>`, a quotation puts `> ` before every line it holds, and a definition
+puts `:   ` before its first and four spaces before the rest. Python-Markdown's
+`fenced_code` reads a fence only where a line begins, and before any
+quotation or definition is parsed, so it found none: the fence and the code
+were the container's text, and a run of backticks with text between is
+inline code. `<blockquote><pre>a\n  b</pre></blockquote>` was written
+`> ```\n> a\n>   b\n> ```` and the page held
+`<blockquote><p><code>a\n  b</code></p></blockquote>`, which a browser shows
+as `a b`; a `<dd>` held `<dd><code>a b</code></dd>`. P44-4 recorded both as
+not covered. Measured with MarkItDown 0.1.8, markdownify 1.2.3, mammoth
+1.11.0, Python-Markdown 3.10.3 (with `extra`, `sane_lists` and `toc`, as
+`MARKDOWN_EXTENSIONS` renders) and nh3 0.3.7, on P44's branch
+(fix/pre-in-list-items 5e50b5f, stacked on P40) and master 5a5a6ab. The fixtures are
+`quoted_code_book.epub`, `quoted_code_report.docx` and
+`quoted_code_archive.zip` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`; the Word file carries a mammoth style map, as
+P44's does. Every word in them is made up.
+
+### P47-1: what each shape became
+
+Eight containers — a quotation, one between two paragraphs, two and three
+deep, a definition, one after a definition's text, a definition in a
+quotation and a quotation in a definition — each holding eight kinds of code:
+a blank line, two blank lines, blank lines and spaces at either end, tabs,
+three backticks, longer backtick runs, and a blank line followed by
+`<img src="https://tracker.invalid/x.png">`, with and without indentation. On
+master and on P44 alike, none of the 64 put the code on the page as a `<pre>`;
+56 held no `<pre>` at all, and the other 8 one made of the indented line after
+a blank line alone.
+
+| In the document | On the page, before |
+|---|---|
+| code in a quotation, at any depth | `<p><code>a b</code></p>` in the quotation |
+| code in a definition | `<dd><code>a b</code></dd>`, or a `<p>` of it after the definition's text |
+| code holding a fence (P28's longer fence) | the inner fence printed as text |
+| code holding a blank line | `<p>``` one</p><p>two ```</p>`: the fence printed, and the code after the blank line read as Markdown |
+| a `<pre>` of blank lines in a quotation | two paragraphs of three backticks |
+
+The fourth row is the class of P28, as P44-1's was. In all eight containers
+the `<img>` typed after a blank line in the code became an image on the
+page, which the capture fetches. Code reading `> q` or `: d` after a blank
+line put a quotation or a definition list on the page that the document did
+not hold, and a carriage return in code began a line that ended the
+definition list the code was in.
+
+P44's first version wrote code in a quotation in an item as an item's code
+block, and two code blocks there were one, and code after a list there was
+the list's: P44 now leaves a quotation in an item as P40 wrote it, and this
+entry covers it.
+
+### P47-2: an indented code block in its container
+
+Python-Markdown reads an indented code block in a quotation, `>     code`,
+because its BlockQuoteProcessor strips `> ` and parses what is left; and in a
+definition, eight columns in (its four and four more) after a blank line, as
+in a list item. Measured, the alternatives fail. A fence after `> ` or `:   `
+is the case above. Code on a definition's `:` line, `:       code`, is a
+paragraph. Without a blank line before it, code in a quotation is more of
+the paragraph above.
+
+`_TextMarkdownify.convert_pre` writes a `<pre>` as P44's item code block —
+markdownify's code, four spaces in, no fence, tabs expanded, `\r` a line
+break, marked — wherever its nearest container is a list item, a quotation
+or a definition (`CODE_CONTAINERS`) and nothing between them writes it into
+a line: only `div`, `p`, `section`, `article` and `figcaption` may stand
+there (`CODE_HOLDERS`), as P44-2 found for an item, and a tag markdownify
+does not convert. A quotation or a definition then takes its code blocks' marks away
+itself (`_NestedItems.code_blocks`), before markdownify prefixes or indents
+its lines, and writes `<!-- -->` and a blank line before each:
+
+- after a list, a definition list or another code block, Python-Markdown
+  places an indented block by its depth alone, so the code was more of the
+  last item, the last definition or the code above (measured in each);
+- a definition's text cannot be a code block on its `:` line, so a
+  definition that opens with code has the comment there;
+- with something before it, the container's strip of its own text, which
+  markdownify does first, leaves the code's first line's indentation alone.
+
+nh3 drops the comment, and the page holds `<dd><pre>`, or a quotation's
+`<pre>` after a blank line. An item takes its own marks as P44 does; a
+quotation or a definition in an item has taken its own away by then. The
+separator also makes a definition's text a paragraph where code follows it,
+`<dd><p>d</p><pre>`, as P40's page makes it where a second paragraph
+follows; without it Python-Markdown left the text bare beside the code.
+
+A definition in a list item, with no quotation between, is not a container.
+Python-Markdown's list indentation is read before a definition's (its
+`indent` processor at priority 90, def_list's `defindent` at 85), so a block
+indented in such a definition is the item's: measured, the code reached the
+page in the item, outside its definition, four spaces deeper. There
+markdownify's fence is kept, and the page is P44's (P47-4). A quotation
+starts the parse afresh, so a quotation in that definition is a container.
+
+Code outside a quotation or a definition is written as before, and so is
+every quotation and definition that holds no code block.
+
+### P47-3: what the page holds now
+
+Of the 64 cases in P47-1, 54 put on the page the same `<pre>` as the code at
+the top level. The other 10 hold code with a run of two blank lines in a
+quotation, and keep both, as the document has them: each blank line is a `>`
+line there, which MarkItDown's collapse of blank-line runs does not see as
+blank. At the top level and in a definition the run is one. None of the 64
+puts an `<img>` on the page.
+
+Five hundred seeded random trees — quotations, definition lists, lists of
+both kinds and divs three deep, each holding up to three pieces in any order
+(text, a paragraph, a container, code of the kinds above), with no definition
+list directly in an item (P47-4) — put every `<pre>` on the page as the top
+level does, put the same quotations, definition lists and lists on the page
+as the tree with a paragraph for each `<pre>`, and leave no mark, comment or
+image. Twelve hundred more were written byte for byte as P44's bridge writes
+them: trees with no quotation or definition, code in items included;
+quotations and definitions with no `<pre>`; and `<pre>`s in a link or
+emphasis in them.
+
+Over 600 trees of code with no blank line and no carriage return, the
+page's quotations, definition lists and lists are P44's in every one. In 600
+more, with a carriage return among the kinds of code, they differ in 27, and
+in none did P44's match the
+document's and this change's not. P44's page read the code as text, and a
+carriage return in it began a line that ended the definition list the code
+was in, after which the code's indented lines were code blocks of their own:
+in 16 trees this change's match the document and P44's do not; in the other
+11 two definition lists or two quotations side by side are one here, which
+Python-Markdown makes of them with or without code (P47-4), and which P44's
+broken page happened to keep apart.
+
+### P47-4: what this does not cover
+
+- **A `<pre>` in a definition in a list item** keeps markdownify's fence, and
+  the page holds inline code in the definition, as before. A definition list
+  in an item loses more than code: on P40's bridge a definition's second
+  paragraph is a code block in the item, `<dd>d</dd><pre><code>e</code></pre>`,
+  and a list nested in the definition is its text, `<dd>d\n+ x</dd>`; on
+  master the definition list leaves the item's list. docs/09 P62 reads such a
+  definition's later blocks into it, after which the code can be a code block
+  there too.
+- **A `<pre>` in a link or emphasis** is written into a line of text, as
+  markdownify writes it. There, as in an item (P44-4), a blank line in the
+  code still lets the markup after it reach the page.
+- **A quotation or a definition in a link or emphasis** is written into the
+  link's or emphasis's line too, which opens before the container's first
+  line and closes after the code's last. Its code is a code block here, and
+  the `<img>` after a blank line that master put on the page in all twenty
+  such cases measured (a link, emphasis, strong, strikethrough and a link
+  around emphasis, each around a quotation, two quotations, a definition and
+  a definition after text) is text in it; but the line's opening `[` or `*`
+  is printed before the container's first line (`[>` before a quotation, `*t`
+  as a term), and its closing `](x)` or `*` is the code's last characters. An
+  item there fares the same under P44, its code four spaces deeper. docs/09
+  P59 writes code in a line of text, and these with it.
+- **Two quotations, or two definition lists, side by side are one** on the
+  page, with or without code: Python-Markdown makes a quotation after a
+  quotation part of it, and adds a term to the definition list before it, as
+  it joined two lists before P32. docs/09 P63 keeps them apart outside list
+  items.
+- **A run of blank lines in code** is kept in a quotation and is one
+  elsewhere (P47-3); markdownify's `strip_pre` drops the blank lines at the
+  code's start and end.
+- **A `<pre>` of blank lines in a quotation or a definition is nothing on
+  the page**, as in an item (P44-4): an indented code block cannot be empty.
+  Before, a quotation printed its fence as two paragraphs.
+- **content.md and content.txt** are docling's reading of the page. A
+  quotation's code is a code block in content.md, line for line, but docling
+  fences a code block outside a list with three backticks and strips its first
+  line's leading spaces, at the top level too: code holding a line of three
+  backticks closes its own fence early. A definition is a list item there, and
+  with P50 its code is a code block in it, line for line, fenced past its own
+  backtick runs; its first line's leading spaces are stripped too, and a
+  definition's text after its code is written before the code.
+
+### P47-5: real files
+
+Copies of every `.docx`, `.epub` and `.zip` in the Google Drive `School`
+folder (88: 82 Word files, 1 EPUB, 5 zips) were rendered with P44's bridge
+and with this one, twice each, alternating. The same 2 fail in both, on
+archive limits: one expands past 100 MB, one holds a symbolic link. The page
+of the other 86 is byte-identical in both rounds. `convert_pre` was called
+for none of them: no Word file's style map writes a `<pre>`, and no EPUB
+chapter or zip member holds one; the 603 `<pre>`s on their pages are the
+zip reader's own fences around code members. markdownify converted 28
+quotations, all in the EPUB and none holding a `<pre>`, and no definition.
+On the EPUB, P44's bridge took 0.669 s of CPU at best of seven and this one
+0.680 s, medians 0.732 s and 0.714 s; the load average was over 700, and
+whole-scan wall times moved more between rounds than between bridges.
+
+### P47-6: the tests
+
+`tests/test_code_in_quotations.py` renders each case through `to_markdown`,
+MarkItDown's clean-up included, and Python-Markdown, and compares each
+`<pre>` on the page with the same `<pre>` at the top level, the containers it
+sits in, and the page's quotations, definition lists and lists with the same
+tree's holding a paragraph instead: twenty shapes (a quotation alone,
+between paragraphs, after text, in a div, after a list or a definition list,
+two and three deep, in an item, opening an item, holding an item; a
+definition alone, after text, between paragraphs, after a list, in a
+definition, in a quotation, holding a quotation or an item, and a quotation
+in a definition in an item), two code blocks in one container, code after a
+list, a definition that opens with code, and seven kinds of code in four
+containers. Markup after a blank line in the code must be text, with no
+`<img>` on the page, in seven containers, and in a quotation or a
+definition in a link or emphasis, twenty ways, where the code's text alone is
+held (P47-4). It holds that code outside a
+container, and containers without code, are written as before; that code in
+a link, emphasis or a table cell, or in a definition in an item, keeps
+markdownify's Markdown; and that code in code leaves no mark. Forty seeded
+random trees, as in P47-3, are held to the same comparisons. On P44's bridge
+95 of the file's 134 tests fail; the 39 that pass hold what is written as
+before, the code P44 writes in an item, or are random trees whose code drew
+no quotation or definition. P44's test of code in a quotation in an item,
+two blocks and code after a list included, now holds that each is a code
+block of the quotation's, in the outer item
+(`test_code_in_a_quotation_in_an_item_is_the_quotations`).
+`tests/test_office_formats.py` captures the three fixtures end to end: each `<pre>` in content.html sits in the
+quotations, definitions and items the fixture says, line for line; the page
+holds no `<img>` and no inline code but the zip's name; content.md and
+content.txt hold each block's words in order; and none of the three holds
+`<!--` or a private-use character.
+
+## P43: a Unicode space at the edge of bold text was dropped, and the words either side ran together (2026-10-11)
+
+P40-4 recorded it: a Word file's `package called<strong>&nbsp;SALT.&nbsp;</strong>We'll`
+reached the page as `calledSALT.We'll`. Measured on master at 5a5a6ab with
+MarkItDown 0.1.8, markdownify 1.2.3, mammoth 1.11.0 and docling-core 2.99.0.
+The fixtures are `edge_space_report.docx`, `edge_space_book.epub` and
+`edge_space_archive.zip` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`.
+
+### P43-1: what `chomp` dropped
+
+markdownify writes bold, italic, strikethrough, sub- and superscript, `code`,
+`kbd`, `samp` and links through `chomp`, and MarkItDown's own `<a>` and `<u>`
+call it too. `chomp` takes the text's edges with `str.strip()`, which removes
+every Unicode space, and puts back one ASCII space where the text began or
+ended with one. A space outside ASCII was taken, and nothing was put back.
+
+The bridge's HTML reader and the page's Markdown renderer were run over 16
+inline forms (`strong`, `b`, `em`, `i`, `code`, `kbd`, `samp`, `del`, `s`,
+`strike`, `sub`, `sup`, `u`, and `a` with an `https:` target, a `mailto:`
+target and none), times the 19 characters `str.strip()` removes outside ASCII
+(U+0085, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F,
+U+3000), times four places: the start, the end, both, and a run of the space
+alone. In 1,197 of the 1,216 cases the character was gone and the words either
+side ran together. The 19 it survived were `<u>` holding only the space, which
+MarkItDown returns as it is. Word through mammoth (bold, italic,
+strikethrough, sub- and superscript, a hyperlink), an EPUB chapter and an HTML
+page in a zip lost it alike.
+
+An ASCII space or tab at an edge comes back as one space, which is right. A
+zero-width space and a byte-order mark are not whitespace to Python and were
+kept. A line break at an edge, and a run of ASCII spaces alone, are dropped
+too, and the words run together: P43-4.
+
+content.md hid most of it. docling joins an inline group's parts with a space
+(P14-56), so content.md and content.txt read `called **SALT.** We'll` while
+the page and the PDF's text read `calledSALT.We'll`. Where the space was all
+the run held, or the run was a sub- or superscript, which P14-56 joins back to
+its neighbours, or struck through, whose `~~` Python-Markdown leaves as text,
+content.md ran the words together as well: on master, 16 of the Word
+fixture's 34 lines and 36 of the EPUB's 70.
+
+### P43-2: what the writer does now, and why a no-break space stays one
+
+`_TextMarkdownify` wraps each converter that `chomp`s
+(`_keeping_edge_spaces`). Where the run of whitespace at an edge holds any
+character outside ASCII, the run is taken off before `chomp` sees the text and
+written as the document has it, outside the markup:
+`called&nbsp;**SALT.**&nbsp;We'll`. A run that is all whitespace and holds one
+is written as itself. An edge of ASCII whitespace, or none, still goes to
+`chomp` untouched, so output that was right stays byte for byte: the
+measurement's 320 cases whose edges are a space, a tab, a line break, a
+zero-width space or a byte-order mark write what master writes. `strike`
+reaches `s` through `self`. A test reads the source of every `convert_*` in
+markdownify and MarkItDown that calls `chomp`, so a release that adds one
+fails until it is wrapped.
+
+The document's own character is kept, not replaced with a plain space:
+
+- **The page shows it as it shows the same character between two words**,
+  which markdownify always kept. A no-break space still holds its two words on
+  one line, and a thin or ideographic space keeps its width. A plain space
+  would let the line break where Word could not.
+- **The text a reader or a search uses already reads it as a space.** A probe
+  Word file with a no-break space between two words had none in content.md,
+  content.txt or content.json, because docling normalizes whitespace. The
+  fixtures' lines read there with one plain space between each pair of words,
+  and none gained a second.
+- **The PDF's text layer keeps U+00A0**, as it does between two words.
+
+A kept space that ends a line is taken by MarkItDown, which strips the end of
+every line, and one at a table cell's edge by markdownify's `str.strip()`, as
+any space there is. In `pre`, `code`, `kbd` and `samp` markdownify writes text
+as it is, so their edges were already the document's. The exception was
+MarkItDown's `<a>`, which strips its text before it looks for `pre`; it now
+keeps an edge outside ASCII there, and still drops an ASCII one, as before.
+
+### P43-3: real files
+
+Every `.docx`, `.epub`, `.zip`, `.pptx` and `.xlsx` in the Google Drive
+`School` folder (117: 82 Word files, 1 EPUB, 5 zips, 23 decks, 6 workbooks)
+was rendered with master's bridge and with this one. The same 3 fail in both,
+on archive limits and a symbolic link. Counting what each wrapped converter
+was handed, the bridge met 20 no-break spaces at an inline edge, in 3 Word
+files and the EPUB, and no other space outside ASCII. Of the 114 pages, 112
+are byte-identical, every deck, workbook and zip and the EPUB among them, and
+every manifest's warnings are the same. The 2 that changed:
+
+- **P40-4's syllabus** reads `called SALT. We'll`, a no-break space either
+  side of "SALT.", where it read `calledSALT.We'll`. Its 5 other edge spaces
+  end a paragraph (1) or sit at a table cell's edge (4), where they are
+  stripped as before.
+- **A set of submission instructions**, 3 lines: a link, "HERE", is followed
+  by a bold run of a no-break space, a full stop and a space. The page read
+  `HERE.` and now reads `HERE .`, as Word draws it. No words had run together
+  there; the page now holds the space the file does.
+
+The other two files' edge spaces end a line, where they are stripped as
+before: a paragraph that is one bold italic sentence (1), and the EPUB's
+author line, where each of 9 footnote markers (`<sup>`) ends with one.
+
+Rendering took, master then this branch, alternating per file with the load
+average near 280: the Word files 12.98 s and 13.55 s, the decks 3.37 s and
+2.96 s, the workbooks 32.85 s and 33.35 s, the zips 9.38 s and 8.79 s, the
+EPUB 0.49 s and 0.48 s. The changed step on its own, the writer over the HTML
+of the 82 Word files and the EPUB's chapters (95 documents, 12.8 million
+characters), took 2.07 s with master's converters and 1.94 s with these, best
+of five: no cost that this machine can see.
+
+### P43-4: what this does not cover
+
+- **A run of ASCII spaces alone is still dropped.** `This<strong> </strong>course`
+  reads `Thiscourse` in 6 Word files, once each. The bridge met 20 more such
+  runs, in 12 files, beside a space or at the start or end of a line, where
+  nothing is lost. `chomp` puts a space back only around text, and this change leaves an
+  ASCII edge to it. *P49 writes it as one space.*
+- **A line break at an edge is dropped.** A `<br>` that begins or ends a bold
+  run, or a newline at an inline edge in an XHTML chapter, is lost, and the
+  words either side run together. In these files that is 7 `<br>` edges in 3
+  Word files, and the EPUB's 228 contents links, whose text begins and ends
+  with a newline; none of them sits between two words. *P49 writes it as one
+  space.*
+- **A link with no target drops an ASCII edge.** MarkItDown's `<a>` returns
+  its stripped text, so `alpha<a id="x"> beta</a>` reads `alphabeta`. None of
+  these files has one. *P49 keeps it.*
+- **docling still splits a word at its formatting** in content.md and
+  content.txt: `un<b>break</b>able` reads `un **break** able` and "un break
+  able". It is P14-56's join, which that entry undoes for sub- and
+  superscripts only. P48 closes this.
+- **Struck-through text prints its `~~`**, because Python-Markdown's `extra`
+  has no strikethrough. The Word files and the EPUB hold 1 struck run.
+
+### P43-5: the tests
+
+`tests/test_edge_spaces.py` runs every inline form above with every one of the
+19 characters, derived from Python rather than listed, at each of the four
+places, and checks that the page reads the line character for character. It
+checks that ASCII edges, a `<br>` at an edge, zero-width spaces and no edge
+write exactly what MarkItDown's own converters write, that text in `pre` and
+`code` is the document's, that nested formatting keeps the space once, and
+that a heading, a table cell and a list item keep it. It reads the source of
+every converter that calls `chomp` and fails on one left unwrapped. It reads
+each fixture's page, without a browser, line by line. Against master's bridge
+27 of its 45 tests fail; the 18 that pass are the ASCII checks, which compare
+the writer with MarkItDown's converters and so hold there by construction, and
+the check that the measured characters are every Unicode space.
+`tests/test_office_formats.py` captures the three fixtures end to end. Every
+line reads in content.md as its words with one space between, once the
+Markdown is taken out, and every line holding a no-break space reads in the
+PDF's text with whitespace between its words. On master all three captures
+fail.
 
 ## P48: a word with a bold, italic, code or linked part was split on every text surface but the PDF (2026-10-11)
 
@@ -9864,6 +11110,174 @@ the `content.json` and PDF checks, which hold there by construction. P14-56's
 tests in `tests/test_docling_bridge.py` pass with only the marking function's
 new name.
 
+## P49: whitespace alone in bold text was dropped, and the words either side ran together (2026-10-11)
+
+P43-4 recorded it: mammoth writes a Word file's bold space as
+`This<strong> </strong>course is A-E graded`, and the page read `Thiscourse`.
+Measured on P43's branch at c3fbedc (master 5a5a6ab plus P43) with MarkItDown
+0.1.8, markdownify 1.2.3 and mammoth 1.11.0. The fixtures are
+`whitespace_run_report.docx`, `whitespace_run_book.epub` and
+`whitespace_run_archive.zip` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`.
+
+### P49-1: what was dropped
+
+`chomp` gives back one space where an inline element's text begins or ends
+with a plain space, and nothing for any other edge. By then markdownify has
+made each run of spaces and tabs in a text node one space, and each run that
+holds a line break one newline. So an edge can hold spaces, a newline (a
+pretty-printed XHTML chapter has them: 228 of the measured EPUB's links begin
+and end with one), the two spaces and newline markdownify writes for a `<br>`,
+or, in an element that holds nothing else, any of these alone. `chomp` keeps
+only the first. MarkItDown's `<a>` returns without `chomp`'s spaces altogether in three
+places: with no `href` or an empty one, inside `pre`, and where the link's
+text is its address, which it writes as `<address>`.
+
+The bridge's HTML reader and the page's Markdown renderer were run over 18
+inline forms: P43's 16, a link whose `href` is empty, and `strong` around
+`em`. Each held whitespace alone (each of the 10 ASCII characters
+`str.strip()` takes, two spaces, a space-newline-space, CRLF, a `<br>`, a
+`<br>` between spaces, two `<br>`s), or a word with a newline, a `<br>` or a
+space at its start, its end or both; and a link whose text is its address had
+a space at both edges. In 371 of the 451 cases the words either side ran
+together on the page:
+
+| Case | Ran together | Not |
+|---|---|---|
+| Whitespace alone | 272 of 288 | `<u>`, which MarkItDown returns as it is |
+| A newline at an edge | 54 of 54 | — |
+| A `<br>` at the start | 2 of 18 | the 16 whose `chomp` saw the `<br>`'s leading spaces |
+| A `<br>` at the end, or both | 36 of 36 | — |
+| A space at an edge | 6 of 54 | all but the two links without a target |
+| A link whose text is its address | 1 of 1 | — |
+
+Word through mammoth lost the same in every run property P43 used (bold,
+italic, both, strikethrough, sub- and superscript, a hyperlink): a space, two
+spaces or a tab alone, a `<br>` alone and a `<br>` that ends the run. An EPUB
+chapter and an HTML page in a zip lost what the table lists. content.md hid
+part of it, as P43-1 found for Unicode spaces: docling pads a formatted part
+with spaces (P14-56), so a word whose edge was dropped read right there unless
+the part was a sub- or superscript, struck through, underlined or a link
+written as text. Whitespace alone leaves `Thiscourse`, with no part to pad,
+and read wrong there too. Captured with P43's tree, the fixtures' content.md
+ran 31 of the Word file's 56 lines together and 99 of the EPUB's and the
+zip's 177; their PDFs, like their pages, 35 and 127.
+
+### P49-2: what the writer does now
+
+`_keeping_edge_spaces` now hands `chomp` no edge at all. It strips the text,
+converts what is left, and writes each edge outside the markup, every run of
+ASCII whitespace in it as one space and any other space as P43 keeps it. Text
+that is whitespace alone is written the same way, as one edge. Inside `pre`,
+`code`, `kbd` and `samp` every edge is written as markdownify writes the text
+there, as it stands. An edge of plain spaces comes out as `chomp` wrote it, one space, so
+the 16 forms that kept a space edge write what they wrote before;
+`tests/test_edge_spaces.py` holds those byte for byte against MarkItDown's
+converters.
+
+**A line break at an edge is one space, not a line break.** The first version
+kept a newline or a `<br>` at an edge as the document had it, outside the
+markup. The real-file scan (P49-3) found the EPUB's table of contents broken
+by it: each entry's link text began with a newline, the text before the link
+ended with one, and markdownify joins strings without merging the two, so the
+entry had a blank line in it. Python-Markdown ended the list item there, the
+list became paragraphs, and `* ` showed as text. A space can never begin a
+line, so it cannot make a blank one.
+
+For a newline that is what HTML means: a browser shows one between two words
+as a space. For a `<br>` it is what the page shows already. MarkItDown strips
+the end of every line of its Markdown, and with it the two spaces that
+make markdownify's line break a hard one (P43-2), so every `<br>` in a
+converted Word file, EPUB or zipped page reaches the page as a space: P49-4.
+
+### P49-3: real files
+
+Every `.docx`, `.epub`, `.zip`, `.pptx` and `.xlsx` in the Google Drive
+`School` folder (117: 82 Word files, 1 EPUB, 5 zips, 23 decks, 6 workbooks)
+was rendered with P43's bridge and with this one. The same 3 fail in both, on
+archive limits and a symbolic link, and every manifest's warnings are the
+same. Counting what each wrapped converter was handed with P43's bridge: 26
+bold or italic runs of spaces alone, in 14 files; 5 bold `<br>`s alone and 2
+`<br>`s at a bold run's edge, in 3 Word files; 228 links in the EPUB whose
+text begins and ends with a newline; and 1 link whose text is its address,
+with a space before it. No link without a target, and no edge in `pre` or
+`code`.
+
+Of the 114 pages, 104 are byte-identical, every deck, workbook and zip among
+them. The 10 that changed:
+
+- **Six syllabi** read `This course is A-E graded`, where they read
+  `Thiscourse`: the run of a space alone between two words, once in each.
+- **A Word file's reference list** reads `Retrieved from https://…`, where
+  it read `Retrieved fromhttps://…`: the link's text is its address and
+  begins with a space, which MarkItDown's `<address>` dropped.
+- **A reference guide** reads `Example input: print(df)`, where it read
+  `Example input:print(df)`: a `<br>` ends the bold label. Word draws a line
+  break there; the page draws a space, as for every `<br>` (P49-4).
+- **A glossary** has three spaces where it had two, between `XGBoost` and the
+  next bold term: a bold space beside a space. The page reads the same.
+- **The EPUB**: 37 of its 3,396 lines gain a space at their start, before a
+  link whose text begins with a newline, after text that ended with one: 9
+  contents entries and 28 web addresses. The page reads the same. In 5
+  footnotes a link is followed by a comma or a full stop,
+  and the page now reads `address ,` where it read `address,`: each link's
+  text ends with a newline in the book's own markup, so an EPUB reader shows
+  that space too. None of these had run two words together.
+
+The other 19 runs of spaces alone sit beside a space or at a line's start or
+end, the 5 `<br>`s alone end a line, and the `<br>` at a run's start opens a
+paragraph, so their pages did not change.
+
+The scan ran twice, and the second run's 10 pages were byte-identical to the
+first's. Rendering took, P43 then this branch, alternating per file with the
+load average near 600, in the first run and then the second: the Word files
+19.93 s and 18.65 s, then 17.63 s and 17.27 s; the decks 5.65 s and 5.40 s,
+then 3.97 s and 4.15 s; the workbooks 45.51 s and 50.38 s, then 58.39 s and
+53.93 s; the zips 23.68 s and 12.82 s, then 21.55 s and 19.39 s; the EPUB
+0.72 s and 1.21 s, then 0.74 s and 0.50 s. The two bridges trade places
+between runs. The changed step on its own, the writer over the HTML of the 82 Word files and the EPUB's
+chapters (95 documents, 12.8 million characters, parsed once), took 0.30 s
+with P43's converters and 0.32 s with these, best of five, at a load average
+near 700.
+
+### P49-4: what this does not cover
+
+- **A `<br>` reaches the page as a space, not a line break**, in every Word
+  file, EPUB and zipped page, at a formatted run's edge or not:
+  `one<br/>two` reads `one two`. markdownify writes it as two spaces and a
+  newline, and MarkItDown strips every line's end before WebShot sees the
+  Markdown. A Word file's manual line breaks run on as one line.
+- **A space before punctuation that the document's markup holds is shown.**
+  The EPUB's 5 footnote links end with a newline, and the page now shows the
+  space a reader shows; WebShot does not tidy a document's spacing.
+- **A Unicode space that ends a line, or sits at a table cell's edge**, is
+  still taken there, as P43-2 records.
+
+### P49-5: the tests
+
+`tests/test_whitespace_runs.py` runs every form above with whitespace alone,
+each of the ASCII characters derived from Python rather than listed, and with
+a newline, a `<br>`, a form feed and a space at each edge, and checks the page
+reads `alpha omega` or `alpha beta omega`. It checks the link whose text is its
+address, that text in `pre` and `code` keeps its edges as markdownify writes
+them, and that whitespace alone in a heading, a table cell and a list item is
+one space. A test built on the EPUB's contents list, in made-up words, checks
+that no edge, in any form, begins a line: a list of three entries stays one
+list with no paragraphs. With the first version's rule, which kept a line
+break, that test fails for all 18 forms. It reads each fixture's page, without
+a browser, through the whole adapter, MarkItDown's clean-up included. Against
+P43's bridge 44 of its 79 tests fail; the 35 that pass are the plain space at
+an edge in the 16 forms that kept it, the 18 forms' line-start checks, and the
+check that the measured characters are ASCII's whitespace.
+
+`tests/test_edge_spaces.py`'s check that an ASCII edge is written as
+MarkItDown wrote it now holds the edges that were right, a space or a tab
+around text, none, a zero-width space and a byte-order mark; the rest are
+this entry's. `tests/test_office_formats.py` captures the three fixtures end
+to end: every line reads in content.md as its words with one space between,
+and in the PDF's text with whitespace between its words. With P43's tree all
+three captures fail (P49-1).
+
 ## P50: a list item's code lost its lines in content.md (2026-10-11)
 
 A `<pre>` in a list item reached `content.md`, `content.txt` and
@@ -10031,6 +11445,195 @@ an item's code is still a picture; and that a footer's code stays off the
 body. Every other HTML fixture is held to docling's own output on every
 surface. It checks the backend still has the methods the bridge extends, and
 that without one the capture completes as docling reads it, with a warning.
+
+## P53: a group before the first heading stayed on the furniture layer (2026-10-11)
+
+docling's HTML backend files everything before a page's first heading on the
+furniture layer, which every text surface skips, and the bridge moves content
+back to the body (P2-3). It moved each text item back on its own. The groups
+holding them stayed, so a list before the first heading,
+
+```html
+<ul><li>Alpha<ul><li>Gorvane</li></ul></li><li>Istrel</li></ul><h1>T</h1>
+```
+
+reached content.md as
+
+```
+- Alpha
+
+- Gorvane
+
+- Istrel
+```
+
+which a CommonMark reader takes for one loose list of three siblings, Gorvane
+no longer under Alpha. Measured with docling-slim 2.132.0, docling-core 2.99.0
+and markdown-it-py 4.2.0 on master 9bf4eeb. The fixture is
+`tests/fixtures/furniture_groups.html`; every word in it is made up.
+
+### P53-1: what stayed on furniture, and what each surface wrote
+
+The serializers and the chunker walk the body layer. Under a group they skip,
+each item is met alone and written as a block of its own:
+
+| Group before the first heading | content.md and content.txt | chunks.jsonl |
+|---|---|---|
+| A list, and every list an item holds | each item a paragraph of its own, nested items at the outer level | a chunk per item |
+| A paragraph's inline group (bold, italic, link, inline code, footnote marks) | a line per run: `Please read the`, `**Terms**`, `now.`; inline code alone as a fenced block | a chunk per run |
+| An `<ol start="3">` | `3. One` and `4. Two`, numbered right but apart | a chunk per item |
+| A description list | the term and its description at one level | a chunk each |
+| A `<details>` or a `<footer>` before the heading (a section group) | unchanged | unchanged |
+| A table or picture inside a list item | missing | missing |
+
+content.json held the groups on `furniture` and their items on `body`; for a
+section group that was the only difference. The
+doctags were not affected: docling-core's doctags export writes both layers,
+and its nesting does not depend on them.
+
+### P53-2: three ways the item-by-item test misread chrome
+
+An item stayed on furniture when its text read out of one header, nav,
+footer or aside region (`_SnapshotFacts.is_chrome_text`). Asked of each item
+alone:
+
+- **A run as short as a word reads out of many a menu.** With a menu holding
+  "Terms of travel", the run `Terms` of "Please read the **Terms** now."
+  stayed on furniture, and the sentence lost it.
+- **An item of a content list can match a menu's.** `<ul><li>Home</li><li>Garden</li></ul>`
+  under a menu holding "Home" lost its first item.
+- **The backend cleans text; the region was the page's.** The backend writes
+  every item through `HTMLDocumentBackend._clean_unicode`, which makes
+  `’` `'`, `—` `-`, `“”` `"` and `…` `...` and drops soft hyphens and
+  zero-width characters. A menu item "What’s new" became "What's new", which
+  the region as the page spells it does not contain, so it went to the body
+  and into content.md.
+- **A line break is a character only the backend's text has.** The backend
+  writes each `<br>` as U+E000 (`_BR_SENTINEL`), having first dropped the
+  page's own copies of that character, and an item keeps it in its text
+  (`Line one \ue000 line two`). The region holds the two lines either side.
+  A menu item with a `<br>` went to the body.
+
+### P53-3: a group moves as one block
+
+Each group the backend hung off the body root on furniture is decided once,
+with everything under it, groups, items, tables and pictures alike. Its whole
+text, the texts under it joined, is compared with the chrome regions with both
+sides as the backend writes text: cleaned, and U+E000 read as the space it
+stands for. A first version cleaned the text but kept U+E000, and a menu with
+one `<br>` in one item went to the body whole, where master had let only that
+item through; the tests hold that case now. A block that reads out of one region
+stays on furniture whole; any other goes to the body whole. A group with no
+text has nothing to tell chrome by and is left as the backend filed it.
+
+Content before the first heading then reads as it does on a page with no
+heading, where the backend files nothing as furniture: the tests compare the
+two for every surface. Chrome stays out whole.
+
+The other rule considered, a group going to the body when any item under it
+did, keeps each item's own verdict. "Please read the **Terms** now." would
+have become one fluent line with a word missing, `Please read the now.`,
+which reads as authoritative where the broken lines at least looked broken.
+
+What keeps the old test, unchanged:
+
+- **A text with no group around it.** Its text is the whole block's, so only
+  the cleaning would differ, and that is P53-5's.
+- **Furniture under a heading.** The backend puts it there only by its
+  `<footer>` rule, not the first-heading rule this corrects. When this was
+  written a footer whose text had a curly quote or a dash still sent those
+  items to the body, item by item; since P65 nothing inside a footer takes a
+  test, and this pass skips a footer group before the heading the same way.
+
+So a page with nothing grouped before its first heading is written exactly as
+before: the new pass finds no block and the old loop runs alone.
+
+### P53-4: what changed
+
+**Golden corpus:** no case's output moved. Run three times on a machine
+loaded by other sessions' test runs: twice 25 of 26 identical, with
+`lms-module-videos` differing only in the hash of `asset-002.png`, a video
+frame the capture takes before extraction runs, and of `assets.json` in the
+manifest (the same code then differed once and matched once on two reruns of
+that case alone); and once, after the `<br>` change in P53-3, all 26
+identical.
+
+**Real files:** every document in the folder P27, P28, P40 and P45 scanned,
+copied first and read only: 256 files (82 Word, 23 decks, 6 workbooks, 1 EPUB,
+5 zips, 62 CSVs, 58 Markdown, 19 HTML). Each was rendered into its page once,
+and the page extracted with master's docling bridge and this one, without a
+browser.
+
+- **3 render on neither**, on WebShot's archive limits, as in P45-4.
+- **246 hold no group before their first heading**: a page with no heading of
+  its own gets the template's `<h1>` first, and most documents open with one.
+  These are unchanged by construction and were not extracted twice.
+- **7 changed, and each change is explained:** 5 Word files, the EPUB and a
+  zip. In every one, the doctags are identical and everything from the first
+  heading on is identical in content.md.
+  - The EPUB's front matter: its metadata lines (`**Title:**`, `**Authors:**`
+    and the rest, soft-wrapped lines of one Markdown paragraph) were a line
+    per run and are one line, and its foreword's paragraphs were split at
+    every link, italic title and footnote mark and are whole: 4,790 lines of
+    content.md to 4,735, 1,990 chunks to 1,957, the same words.
+  - 4 syllabi and an activity sheet: the syllabi's label and value pairs
+    (`**Day/Time:**` and `Asynchronous online`) were two paragraphs and are
+    one line, and every bulleted and numbered list is a tight list. The same
+    words, except in one syllabus, below.
+  - One syllabus has a small picture inside a list item, alt text "Show
+    Course Menu", pasted in with the item's text. It stayed on furniture with
+    its list and was missing; it is now written as docling writes a picture
+    in a list item under a heading, its alt text and `<!-- image -->`.
+  - The zip's opening line, `Content from the zip file` with the file name as
+    inline code, wrote the name as a fenced code block between two
+    paragraphs, the colon a third. It is one line with the name inline.
+
+The `<br>` change in P53-3 moves none of them: it only changes how a group
+before the first heading is compared with a chrome region, the 246 have no
+such group, and the 7 that do have no header, nav, footer or aside at all.
+
+**Cost:** on a 316 KB page with a 2,000-item menu and 4,000 groups before its
+heading, the reflow took 0.15 s in a profile, against 0.66 s for master's
+per-item test: 4,001 block tests in place of 16,000 item tests.
+
+
+### P53-5: what this does not cover
+
+- **A table or a picture at the top level before the first heading** stayed
+  on furniture and was missing from content.md, content.txt and the chunks,
+  while `pictured_asset_ids` said its OCR text reached content.md. P57 fixed
+  that by where each `<img>` and `<table>` stands in the snapshot; its pass
+  runs after this one, so a table or picture this pass left on furniture
+  inside a block of chrome text, but which does not itself stand in chrome,
+  still reaches the body.
+- **The item-by-item test still compares uncleaned regions** for a text with
+  no group around it, so such a text in a menu with a curly quote, a dash or
+  a `<br>` reaches content.md, as in P53-2. Furniture inside a `<footer>`
+  takes no test at all since P65, which keeps it there whole.
+- **A group with no text** stays on furniture. No such group was found among
+  the real files; docling-slim 2.132 makes no picture of an `<img>` that is a
+  list item's only content.
+- **Chrome inside content**, a `<nav>` inside a list item, moves to the body
+  with its list, since the block's text as a whole is not the menu's.
+
+### P53-6: the tests
+
+`tests/test_furniture_groups.py` extracts each of ten kinds of content before
+a heading (a nested list, an `<ol start>` with nested items, three levels of
+mixed lists, a paragraph with formatted runs, an item with formatted runs, a
+description list, a `<details>`, an item holding P50's code block, an item
+holding a table, and two lists with a paragraph between) and checks that content.md, content.txt, the chunks, their
+kinds and the tables are those of the same content on a page with no heading,
+and that every node is on the body in content.json. Four kinds of chrome
+before a heading (a nav list with a curly quote, a dash and a nested list, a
+header paragraph with formatted runs, an aside list, a footer) stay out of
+every surface and on furniture whole. The menu-word and menu-item cases keep
+their sentence and their list; the fixture after its heading reads the same
+with and without what precedes it; and `is_chrome_text` compares cleaned text
+only when asked to. A fifth kind of chrome, a nav list with a `<br>` in one
+item, stays out whole too. Against master's bridge (with P50), 18 of the 22 fail; the 4
+that pass guard what must not change (the aside and footer, the text after
+the first heading, and the doctags).
 
 ## P54: a page's own U+FDD0 written as a reference was removed as a join marker (2026-10-11)
 
@@ -10827,3 +12430,1534 @@ warnings.
   scheduler, not a contract.
 - **Memory.** Linux's swap is not macOS's compressor, and the run without swap
   held memory pressure for two minutes only.
+## P56: a `<br>` in a list item, heading, caption or `<pre>` reached every text surface as U+E000 (2026-10-11)
+
+docling's HTML backend replaces each `<br>` with a private-use character,
+U+E000 (`_BR_SENTINEL`), before it walks the page, so that a line break can be
+told apart from the newlines in the page's source. It deletes the page's own
+U+E000 from the page's text first. It turns the character back into a line
+break in two places: a paragraph's text (`split_by_newline`, where one `<br>`
+is a newline and two start a new paragraph) and a table cell's (`get_text`).
+Every other text it reads kept the character. Measured on master 9bf4eeb and
+cd41eb2 with docling-slim 2.132.0 and docling-core 2.99.0, by running
+`extract()` on `<h1>T</h1>` followed by each shape. docling-slim 2.137.0, the
+latest release, handles `<br>` the same way. Below, `[E000]` stands for the
+character.
+
+Extraction meets this only in HTML that keeps its `<br>`, and a captured web
+page's snapshot does not yet. `copyOf` in `capture/snapshot.py` keeps an
+element only when it has a box or keeps a child, and a `<br>`'s box has no
+width, so the element is marked invisible and left out. The words either
+side of it join. This entry's fixture, opened in Chromium and passed through
+`extract_semantic_content`, holds 25 `<br>` and its snapshot none, with
+`<li>Jaskov</li>`, `<p>A paragraph keeps its linebreak.</p>`,
+`<h2>Headline</h2>` and `<pre>firstsecondfourth</pre>`. That loss is a fix of
+its own; P55 keeps a `<br>` in preformatted text. This entry makes the
+bridge ready for the line breaks those fixes let through. Today the
+character reaches a bundle only from HTML that skipped the snapshot.
+
+### P56-1: where it reached
+
+| Shape | content.json text before | Now |
+|---|---|---|
+| `<li>Jask<br>ov</li>` | `Jask [E000] ov` | `Jask ov` |
+| `<li>Halder<br></li>`, `<li><br>Lunden</li>` | `Halder [E000]`, `[E000] Lunden` | `Halder`, `Lunden` |
+| `<li>a<br><br>b</li>` | `a [E000] [E000] b` | `a b` |
+| `<li><b>bold</b><br>plain</li>`, an item read as parts | parts `bold` and `[E000] plain` | `bold` and `plain` |
+| a link, `<code>` or `<p>` in an item | in the item's text | a space |
+| `<pre>` in an item | in the item's text | a line ending in the item's block of code (P50) |
+| `<li><input type="checkbox">do<br>it</li>` | `do[E000]it` | `do it` |
+| `<dt>`, `<dd>` | as a list item | as a list item |
+| `<h1>` to `<h6>`, with a link or without | `Head [E000] line` | `Head line` |
+| `<caption>`, `<figcaption>` | `cap [E000] tion` | `cap tion` |
+| `<pre>a<br>b</pre>` | code `a [E000] b` | code `a`, a line ending, `b` |
+| `<li><br></li>` | an item whose text is `[E000]` | no item, as for `<li></li>` |
+| `<p>`, `<div>`, `<blockquote>`, `<summary>`, `<address>`, `<label>`, `<td>`, `<th>` | a line break | unchanged |
+
+The character reached content.json (each item's `text` and `orig`),
+content.md, content.txt, the DocTags and chunks.jsonl, and a heading's also
+reached the heading path of every chunk under it. A list in a table cell
+carried it into the cell's row in content.md.
+
+Two of the bridge's own checks compare a text with the page's, which
+`_SnapshotFacts` reads with a `<br>` as a space. Both went wrong:
+
+- A list item with a `<br>` in a `<nav>` before the first heading did not read
+  as page chrome, so the bridge moved it to the body. content.md opened with
+  `- Home [E000] page` while the rest of its list stayed on the furniture
+  layer.
+- When the page has more tables than the backend made, each caption is looked
+  for among those the document carries. One with a `<br>` was not found, and
+  the warning said "1 table caption(s) could not be attached" although
+  content.md had it.
+
+### P56-2: a space, or a line break in the item
+
+The backend reads every text but a paragraph's, a cell's and a `<pre>`'s onto
+one line. `_add_list_item_with_content` replaces each run of whitespace in an
+item's text with a space (`re.sub(r"\s+|\n+", " ", ...)`), and a heading's or
+a caption's runs are joined with spaces. U+E000 is not whitespace, so it was
+the one line break left. The browser draws a `<br>` in an item as a new line,
+and the PDF keeps it there.
+
+Keeping it as a line break in the item was tried, with a newline for each:
+
+- content.md wrote `- Jask  \nov`. CommonMark reads `ov` as part of the item,
+  a lazy continuation line, but content.txt's `- Jask\nov` puts `ov` on a line
+  of its own outside the list.
+- Two `<br>` wrote `- a\n\nb`, which ends the list: CommonMark reads `b` as a
+  paragraph after it.
+- docling-core indents only an item's first line, so the second line of a
+  nested item sat at the margin.
+- A heading's newline was a space in content.md (`## Head line`) and a line
+  break in content.txt.
+
+So a `<br>` in those texts is now what any other whitespace there becomes, a
+space, and the spaces the backend joined it with go with it. The bridge's own
+reader of the snapshot already read it that way. In a `<pre>` it is a line
+ending, as in a paragraph. A line ending at either end of a code block is
+dropped, as the backend strips the code. A `<pre>` in a list item is a
+block of code under the item since P50, and keeps its lines the same way;
+code inline in an item's line, `<code>` or a `<pre>` the backend reads as
+several runs, is part of that line and takes a space.
+
+### P56-3: an element that holds only line breaks
+
+The backend makes an item of a list item, term or description, and a
+caption, only when its text is not empty. To it, the character is text. So
+`<li><br></li>` was an item where `<li></li>` is none, and the numbers of an
+`<ol start>` counted it. `<dt><br></dt>` was a bold term holding only the
+character, with the descriptions after it nested under it, where after
+`<dt></dt>` they are the list's own; written out, the term would read
+`- ****`. `<li><br><ul>` was an item holding the list, where the backend lifts the list of `<li><ul>` into the outer list
+(P45). And `<figcaption><br></figcaption>` kept the backend from captioning
+the figure with its image's alt text, as it does when the caption is empty.
+None of that can be undone once the document is built without rebuilding the
+backend's own choices, so the bridge takes those `<br>` out before the
+backend reads the page.
+
+`drop_lone_line_breaks` removes every `<br>` of a list item in a `<ul>` or
+`<ol>`, a term or description in a `<dl>`, or a caption that has no text of
+its own. Own text is read as the backend reads it: a list item's leaves out
+the lists and tables it holds, a caption's is all of it, an image or a field
+is no text, and the page's own U+E000 is none, since the backend deletes it.
+The backend then makes of each element what it makes of it empty. A page
+with no `<br>` is parsed as given.
+
+After the backend, every text that still holds the character has it written
+out. One that was nothing but line breaks is what the backend makes of
+whitespace there: an empty heading, checkbox or code block stays, as for
+`<h2></h2>`, `<input type="checkbox">` and `<pre>\n</pre>`, and a part of an
+item's line goes, with the inline group and item it leaves empty. An empty
+list item or caption that reaches this pass is one `drop_lone_line_breaks`
+missed, and goes the same way.
+
+The backend makes no item of an empty list item, so an ordered list numbers
+the items after `<li><br></li>` one lower than the browser does. That is
+what it does for `<li></li>` and `<li>&nbsp;</li>`. Before this change the
+character kept the count right. The empty item is the backend's to make, as
+P45 does for an item that holds only a list.
+
+### P56-4: the page with whitespace for each `<br>`
+
+Each shape was extracted twice and compared on every surface: content.json
+without its origin hash, content.md, content.txt, the DocTags, the tables,
+the chunks and the warnings. The first run used the shape as written, the
+second the same page with each `<br>` written as a space (as a newline in a
+`<pre>`). 45 shapes are identical: 39 where the backend reads onto one line,
+17 of them elements that hold only line breaks, and 6 in a `<pre>`, one of
+them in a list item. Three
+differ, none carrying the character:
+
+- A cell holding a `<br>` is a rich cell to the backend, and one holding a
+  space is not. So `<td><ul><li>x<br>y</li></ul></td>` and
+  `<td><pre>a<br>b</pre></td>` keep their items, where with the space the
+  cell is plain text.
+- In `<li><b>Morvik</b><i><br></i></li>` the `<br>` is a run of its own
+  formatting, so the item's line is an inline group, and its one remaining
+  part stays in it. With a space the backend makes one plain item. content.md,
+  content.txt and the chunks read the same.
+
+### P56-5: removing items, and what it costs
+
+A part left empty is removed from the document. docling-core's
+`delete_items` counts, for every reference it renumbers, the items removed
+before it. Removing empty list items through it, before
+`drop_lone_line_breaks` existed, took 5 ms for 50, 84 ms for 200, 659 ms for
+500, 2.3 s for 1,000 and 10.5 s for 2,000, and a page can hold as many as it
+likes. The bridge renumbers every reference in one pass over the document
+instead, and a test holds the result to `delete_items`' own. 10,000 items
+whose `<br>` was a run of its own take 0.42 to 0.47 s of an extraction that
+takes 18.5 to 22.8 s; master spends 28.2 to 29.0 s on the same page.
+`drop_lone_line_breaks` takes 259 ms on a page of 10,000 `<li><br></li>`
+beside 10,000 items with text, and 458 ms on the 10,000 runs.
+
+### P56-6: the page's own U+E000
+
+The backend deletes the page's own U+E000 from its text, so `<p>Tam&#xe000;sin</p>`
+reads `Tamsin`, but not from an attribute it reads into a text. An image's alt
+text becomes a figure's caption and a field's value becomes a text, and
+there the page's U+E000 cannot be told from a line break: `alt="Orm&#xe000;by"`
+reads `Orm by`. A page that holds the character, as itself or as a reference,
+now gets a warning that says so. Icon fonts set glyphs in the private-use
+area, so a page can hold U+E000 as an icon. None of the 383 real pages in
+P56-8 holds any private-use character.
+
+### P56-7: a line break the bridge does not reach
+
+Every text item has its line breaks written out. A line break the backend
+leaves in any other field (a table cell's own text, a group's name) would
+come from a path not measured here. On a page that holds no U+E000 of its
+own, the bridge looks for the character in every surface it returns. Where it
+finds one, it writes a space and adds a warning that names the surfaces. A
+test puts one in a cell to prove the check fires.
+
+### P56-8: real pages
+
+The 383 captured pages on this machine were extracted with master's bridge
+and this one: 177 bundles' `content.html` and 206 snapshots embedded in
+delivered PDFs. All 383 are identical on every surface, and none failed. Two
+hold a `<br>`, both in a paragraph, where the backend writes it as a line
+break already, and none produced the character on master. No real page here
+showed the defect; the snapshot leaves no `<br>` for it to come from (P56,
+above). The shapes above come from the report and from reading the
+backend. The 383 took 42.0 s
+with master's bridge and 45.0 s with this one, run one after the other on a
+machine running other sessions' test suites.
+
+### P56-9: what this does not cover
+
+- **The numbering after an empty item.** The backend makes no item of
+  `<li></li>`, with or without a `<br>`, so the numbers after it are one low
+  (P56-3).
+- **A line break inside an item.** No text surface keeps it. The PDF, which
+  is the browser's rendering, does.
+- **The rich cell.** A cell holding a `<br>` is read as content of its own
+  (P56-4), as before.
+- **The snapshot's own loss of every `<br>`.** It joins the words either
+  side, on every captured page, before extraction (P56, above). It is not
+  changed here.
+- **docling.** Not reported upstream. The fix is in the bridge, and once
+  docling writes these line breaks itself the bridge's pass finds nothing to
+  do.
+
+### P56-10: the tests
+
+`tests/test_line_breaks_in_items.py` extracts each of P56-4's shapes and
+requires the character nowhere. It requires each of the 45 to match its
+whitespace twin on every surface. `tests/fixtures/line_breaks_in_items.html`
+holds one of each kind, and its content.md, content.txt, tables and chunk
+headings are checked line by line. Further tests cover the nav item staying
+on the furniture layer, the caption found among those carried, the page's
+own U+E000 and its warning in seven spellings (the character, hex and
+decimal references, upper case, leading zeros, no semicolon), a reference to
+a neighbouring code point that must not warn, a line break planted in a cell,
+and the one-pass
+removal, held to docling-core's `delete_items` with `drop_lone_line_breaks`
+off so that list items and captions reach it. `drop_lone_line_breaks` and
+`write_line_breaks` have unit tests. Against master's bridge, 59 of the 60
+tests of behaviour fail, the one passing being the neighbouring code point,
+which master never warned about; the other 24 call functions master does not
+have.
+## P55: highlighted code lost its lines, and code its indentation and fence (2026-10-11)
+
+A block of code reached `content.md`, `content.txt`, `chunks.jsonl` and
+`content.json` with fewer lines than the page shows. GitHub's rendering of
+
+```text
+def f(x):
+    return x
+
+# done
+```
+
+is a `<pre>` with an element for each token, and `content.md` wrote it as
+`def f ( x ): return x` and `# done`, on two lines. The first line of any block
+lost its indentation (`   lead` read `lead`), and a line of three backticks in
+the code ended the block, so the rest was read as Markdown. P50-4 recorded all
+three as not covered, outside a list as in one. Measured with docling-slim
+2.132.0 and docling-core 2.99.0, as `uv.lock` pins them, and markdown-it-py
+4.2.0 as a CommonMark reader, on P50's branch (f1cd0e1). docling-slim 2.137.0
+and docling-core 2.101.1, the latest releases on the day, have the same code
+for both: the `<pre>` branch of `_handle_block` is unchanged line for line, as
+is the serializer's fence. The fixture is `tests/fixtures/pre_code_text.html`,
+each block made by its highlighter from made-up code.
+
+### P55-1: four places lost it
+
+**The backend's reading.** `_handle_block` reads a `<pre>` with
+`_extract_text_and_hyperlink_recursively(keep_newlines=True)`. That strips each
+text node, keeps a text node of only whitespace only when it is only line
+endings, and then as one line ending, and `simplify_text_elements` joins the
+runs with a space. A highlighter puts the line endings and the indentation in
+text nodes between its elements, so they went, and a space came between every
+two tokens. The result is stripped again (`text_orig = annotated_text.text.strip()`),
+which is where a first line's indentation went. A link or emphasis in the code
+splits it into runs with different annotations, each a `code` item of an
+inline group, which docling-core writes inline: Go's documentation came out as
+`` `func` [`Join`](#Join) `(elems []` [`string`](/builtin#string) ... `` on one
+line. A `<pre>` inside a link is read by the `find_parent_annotation` path,
+which calls the extractor again without `keep_newlines`, so its lines were
+joined too. Docusaurus writes each line as a `<div>` that ends in a `<br>`,
+with no line ending between them, and its lines were joined with spaces.
+
+**The serializer's fence.** docling-core's `MarkdownTextSerializer` writes a
+block as ```` f"```\n{text}\n```" ````, whatever the code holds. P47 measured
+it on master for an EPUB whose `<pre>` is `   lead`, a line of three
+backticks, `fence`, another, `after`: `content.md` wrote a block holding
+`lead`, then `fence` as a paragraph, then a block holding `after`.
+
+**The table backend.** Pygments, Rouge and Chroma can number a block's lines in
+a table of one row: a `<pre>` of the numbers in one cell, a `<pre>` of the code
+in the other. docling wrote it as a table, every cell on one line:
+`` | ``` 1 2 3 4 5 6 7 8 ``` | ``` first = "indented" def greet(name): ... ``` | ``.
+
+**The snapshot.** Chroma, Hugo's highlighter, writes each line of code as an
+element that ends in its line break, so a blank line is an element holding only
+`\n`. Its box has a height and no width, `VISIBLE_JS` calls it unseen, and the
+snapshot removed it, line break and all, before docling read the page. A
+`<br>` has a box with no width too: in a Docusaurus block it went the same way.
+
+docling#4549, opened on 2026-10-03 and open on the day, reports two shapes of
+the first: a `<pre>` of sibling `<code>` elements, and a text node beside an
+element losing its line ending. It does not cover the strip, the link, the
+fence, the line-number table or the snapshot, which is WebShot's own.
+
+### P55-2: the correction is in the bridge and the snapshot
+
+As in P50-2, docling is not patched: an upstream fix would arrive in a release
+WebShot then adopts, with its goldens, and this is held by WebShot's tests from
+today. P50's backend subclass and serializer take the change.
+
+`_code_block_backend` reads every `<pre>` itself (`_pre_text`): each text node
+as it is, docling's `<br>` sentinel a line ending, a comment nothing, and an
+element a browser lays out as a block (`<div>`, `<p>`, `<li>` and the rest of
+`_PRE_LINE_TAGS`) on lines of its own, with no blank line where a line already
+ended. That is what a reader selecting the block gets: on every section of the
+fixture it equals Chromium's selection text. The blank lines at either edge go
+and a line's own indentation stays. The HTML parser drops a line ending just
+after `<pre>`, docling's parser does not, and Pygments ends every block with
+one, which would be a blank last line in the fence. The `<pre>` is one `code`
+item. A link or formatting every run of the code has is the item's, as the
+backend gave one run's to its item; links and emphasis on parts of the code
+have no field in a code item, and `links.json`, which the snapshot reads from
+the page, keeps every link. `text` has docling's `_clean_unicode` applied, as
+every text item has, and `orig` is the code as the page has it.
+
+A table is the code beside its line numbers (`_gutter_code`) when it is one row
+of two cells, each holding one `<pre>` and the table nothing else, and the
+first `<pre>`'s lines are numbers counting up by one, no fewer of them than the
+code has lines. It is then read as that code's `<pre>`. Any other table is a
+table: the fixture's two-cell table whose numbers do not count its code stays
+one.
+
+The serializers write a top-level block as P50 writes one in an item: three
+backticks, or one more than the code's longest run of them. A block is never
+wrapped in emphasis, which made its fence text (`**```...```**`), and code of
+more than one line with a link of its own is a block, not the link's inline
+code with its lines joined; the link is in `content.json` and `links.json`.
+One line of code with a link stays inline code in the link, as docling writes
+it, so a paragraph that is only linked code (`<p><a><code>`) is still a link.
+P50's exception for code with emphasis in an item is gone, since that code is
+now one item.
+
+The bridge files furniture whose text no chrome region holds in the body
+(P2-3), and compares the two by their words. A token split across elements was
+two words in the region and is one in its code item, so `_SnapshotFacts` now
+reads a `<pre>`'s words as the page lays them out, and a footer's highlighted
+code stays off the body.
+
+In the snapshot, an element of preformatted text (computed
+`white-space-collapse` of `preserve`, `preserve-breaks` or `break-spaces`)
+that has a box with height, is not `visibility: hidden`, and holds a line
+ending in its own text, is kept. P48, merged while this was in review, keeps
+every `<br>` that has a box, in code and out of it, so a Docusaurus block's
+`<br>`s reach the bridge through P48.
+
+The backend's private names the subclass uses are in `_BACKEND_HOOKS` and
+`_BACKEND_MODULE_HOOKS`. Should a release drop one, the page is read by
+docling's own backend, code as before, and the manifest says so.
+
+### P55-3: measured
+
+**Generated by the highlighters.** One page of 32 blocks: GitHub's renderer
+(its `/markdown` API), Pygments 2.21.0 as Sphinx wraps it, with inline line
+numbers and with a line-number table, highlight.js 11.11.1, Prism 1.30.0 and
+Shiki 3.13.0, each on a Python and a JavaScript sample; Chroma 2.20.0 and Rouge
+3.30.0 line-number tables; a Docusaurus block from docusaurus.io; the same
+highlighted code and line-number table in list items; and shapes a page has
+(a fence line, four backticks, tabs, no-break spaces, a subscript, emphasis,
+links in the code, code in a link, a marked line). Each was captured end to
+end, and each block in `content.md` compared with Chromium's selection text of
+its `<pre>`, less the edge blank lines and with docling's no-break space. On
+P50's branch 3 of the 30 blocks matched (two plain blocks and one of no-break
+spaces); on this one all 30 did, and the two-cell table that is not a
+line-number table stayed a table.
+
+**Live pages.** Nine public pages, each captured end to end with P50's
+bridge and with this one on 2026-10-11, and each `<pre>` outside a table
+compared with Chromium's text of it on the live page: its selection, which
+leaves out what the page marks unselectable, or its `innerText`, which doubles
+a line that a `<br>` ends inside a block. They were a Docusaurus page
+(docusaurus.io), Hugo's syntax-highlighting page (Chroma), a Jekyll page
+(Rouge), the Python tutorial's control-flow chapter (Sphinx, Pygments), a
+GitHub README, `pkg.go.dev/strings` (links in the code), a VitePress page
+(Shiki) and a chapter of the Rust book (highlight.js). Of their 282 blocks
+P50's `content.md` held 16 line for line, and this one 280. The two it did
+not are Hugo's blocks with inline line numbers, which read `1package main`:
+the number is the code's text, and the page sets it apart with CSS (P55-4).
+man7.org did not load in time.
+
+**Real captured pages.** The 206 pages P50-3 extracted, each page's
+`content.html` read out of its PDF and extracted by P50's bridge and by this
+one. 186 are byte for byte the same on every surface; the 20 that differ each
+hold a `<pre>`, and 18 pages with a `<pre>` did not change. Of the 739
+`<pre>`s on the 38 pages that hold one, outside tables and page chrome, and
+not hidden from a reader, P50's `content.md` held 635 line for
+line and this one all 739. Every one of the 104 had lost only its first line's
+indentation; none was highlighted. One more, in a closed `<details>`, opens and
+closes with lines of three backticks: P50's bridge wrote an empty block, the
+code as paragraphs and another empty block, and this one a block in a fence of
+four. Extraction took 27.1 s and 27.7 s in all. Extracted again by master
+with P48 (a32181a) and by this branch merged with it, the same 20 pages differ
+and no other, and the counts are the same, 635 and 739.
+
+The golden corpus does not move: the five cases whose pages hold a `<pre>`
+(definition-structures, text-notes, markdown-report, jsonl-records,
+json-data) match their recordings, and no fixture but this one held a `<br>`
+before P48. Every measurement above predates P48; the browser tests pass on
+it.
+
+### P55-4: what this does not cover
+
+- **Code text has docling's character replacements** in `content.md`,
+  `content.txt` and the chunks: a no-break space is a space, curly quotes are
+  straight, a dash is `-`, `…` is `...`. `content.json`'s `orig` keeps the
+  page's.
+- **Inline code with a backtick at an edge loses it.** docling-core writes a
+  `<code>` in a sentence in single backticks, or double where the code holds
+  one, so `` `x` `` as code reads `` ``x`` ``, which CommonMark reads as `x`.
+- **Inline line numbers are text of the code.** Pygments and Chroma can
+  write a line's number as an element at the start of its line, which the
+  page sets apart with CSS and usually marks unselectable. The code item holds
+  it against the line, `1package main`, as `textContent` reads it. A prompt
+  (`>>> `, `$ `) is marked the same way and is part of the code, so an
+  unselectable element is not left out.
+- **A line-number table's numbers are not kept**, so where they start past 1,
+  the start goes.
+- **A table of a line of code a row**, as GitHub's file view and gist embeds
+  write one with the numbers drawn by CSS, holds no `<pre>`. It is a table, each
+  row a line.
+- **Code in any other table cell is one line**, as all of a cell is.
+- **A block has no language** in its fence: docling-core writes none.
+- P50-4's limits on code in list items stand.
+
+### P55-5: the tests
+
+`tests/test_pre_code_text.py` extracts the fixture and reads `content.md` with
+markdown-it-py. For each of its 21 sections the blocks are the code of each
+`<pre>` as `pre_code_text.json` records Chromium laying it out, and a
+line-number table is its code; with docling's own backend and serializers no
+section's are, so a docling that comes to read them right fails here and says
+which. It holds that `content.json` has one code item a block, `orig` the code,
+and no inline group of code; that `content.txt` holds each block line for line
+and a chunk each block as `content.md` writes it; that each fence is longer
+than the code's longest backtick run; that a link all of a block has is its
+code item's; that a table of two cells whose numbers do not count the code is
+a table; that a footer's highlighted code stays off the body; and that with a
+module-level name gone the capture completes as docling reads it, with a
+warning. Two browser tests hold `pre_code_text.json` to Chromium's selection
+text and capture the fixture end to end, snapshot then bridge, to the same
+blocks, Chroma's blank line included; a third holds that the snapshot keeps
+only line breaks a reader sees. In `tests/test_item_code_blocks.py` code with
+emphasis in an item joins the sections written as blocks.
+## P58: page chrome spelled with a curly quote, a dash or an ellipsis reached content.md (2026-10-11)
+
+A site footer holding `Acme — all rights reserved` and a list of `What’s new`
+and `Legal` reached `content.md` as `Acme - all rights reserved` and
+`- What's new`, while `Legal` stayed out. A `<nav>`, `<header>` or `<aside>`
+before the first heading leaked the same way. Measured on master 1a40fc6 with
+docling-core 2.99.0 and docling-slim 2.132.0, no browser, by calling
+`extract()` on a page shaped as `standalone_document` writes one. The fixture
+is `tests/fixtures/chrome_typography.html`; its names are made up.
+
+### P58-1: where it reached
+
+docling's HTML backend cleans every item's text with
+`HTMLDocumentBackend._clean_unicode`, a table of 19 characters: five dashes
+and the hyphen U+2010 become `-`, four curly quotes become straight ones, the
+ellipsis becomes `...`, the no-break and narrow no-break spaces become spaces,
+and the soft hyphen, the three zero-width characters, the byte-order mark and
+the word joiner are removed. One page per region held one chrome item per
+character, as a paragraph and as a list item:
+
+| Region | Characters whose item leaked | Surfaces |
+|---|---|---|
+| `<nav>` before the first heading | 17 of 19 | `content.md`, `content.txt`, `chunks.jsonl`, the body layer of `content.json` |
+| `<header>` before it | 17 of 19 | the same |
+| `<aside>` before it | 17 of 19 | the same |
+| `<footer>` before it | 17 of 19 | the same |
+| `<footer>` after it | 17 of 19 | the same |
+
+The two that did not leak are the no-break spaces: the comparison splits on
+whitespace, and Python's `str.split()` already reads both as whitespace. In
+`content.json` a leaked item is on the body layer, so a reader of the
+lossless document is told it is content. `content.doctags` carries every layer
+alike, so it held the chrome before and after, as it holds the chrome of any
+page. Of the fixture's 15 chrome items without a `<br>`, the 10 holding a
+cleaned character reached all four surfaces on master, as did its two list
+items holding a `<br>` (see below). The two captions, of a table and a
+picture in its footer, reached the body layer of `content.json` only, since
+no surface writes the caption of a furniture table or picture. The three
+spelled in ASCII, `Stores`, `Shipping & returns` and `Legal`, stayed out.
+
+Two more symptoms come from the same comparison:
+
+- **A chrome item holding a line break.** The backend writes a `<br>` in a
+  list item as U+E000 (P56), so `<ul><li>Open<br>daily</li></ul>` was not
+  found in its region either and reached `content.md` as `- Open`, U+E000 and
+  `daily` on one line, with ASCII text throughout. It leaked in all five
+  regions.
+- **A table caption on a nested-table page.** When the backend's table count
+  differs from the snapshot's, the bridge warns about each snapshot caption no
+  table carries (P10-19). A caption reading `Outer’s caption — 2026` was
+  carried as `Outer's caption - 2026`, so the page warned `1 table caption(s)
+  could not be attached` while `content.md` held the caption.
+
+### P58-2: why
+
+The backend files everything before the first heading on the furniture layer,
+and everything inside a `<footer>` there too, before the first heading or
+after it (`_use_footer`). The bridge moves a furniture item back to the body
+unless `_SnapshotFacts.is_chrome_text` finds its text in one of the page's
+chrome regions: the text of each top-level `<header>`, `<nav>`, `<footer>`
+and `<aside>`, read from the snapshot. The item's text arrives cleaned; the
+region was the page's spelling. `What's new` is not a substring of
+`What’s new`, so the menu item was content.
+
+### P58-3: the change
+
+- **Both sides are compared as the backend writes text.** `_SnapshotFacts`
+  takes a cleaner as a required constructor argument, cleans each region once
+  as it closes, and cleans the text it is asked about. The cleaner is the
+  backend's `_clean_unicode` followed by reading U+E000 as a space: the
+  backend deletes the page's own U+E000 before it parses, so in an item's
+  text the character is always a `<br>`. Once P56 stops the sentinel reaching
+  item text, that second step changes nothing. The cleaning comes before the
+  split: a soft hyphen or a zero-width space is not whitespace, and the
+  backend joins the two halves of the word (`Gift&shy;cards` is the item
+  `Giftcards`). Being required, the cleaner cannot be left out of a
+  comparison. P53 (fix/furniture-groups, #202, not merged when this was
+  written) adds a `clean=` keyword to `is_chrome_text` for the groups before
+  the first heading. With this change the keyword has nothing left to choose.
+- **What the backend filed under a `<footer>` is not tested by its text.** The
+  backend hangs a `<footer>`'s content from a `footer` section group, and the
+  bridge counts `<footer>` as chrome. A text test there could only agree, or
+  misfire where the backend's text is not the page's. Before this change that
+  was the punctuation it made plain and the line break of P58-1. A picture's
+  alt text and a form field's placeholder still misfire: the backend writes
+  each as text that no page text holds. So every node under such a group
+  stays on the furniture layer, with the captions of its tables and pictures.
+  The backend hangs a picture's caption from the body, not from the footer,
+  so captions are collected from their table or picture.
+  Before the first heading the text test still decides for `<nav>`,
+  `<header>` and `<aside>`, which the backend files by position, not by
+  element.
+- **A caption is compared as the backend writes it too.** `_captions_missing`
+  takes the same cleaner, for both the snapshot's captions and the carried
+  ones.
+
+### P58-4: measured
+
+| Check | Before | After |
+|---|---|---|
+| P58-1's matrix: 19 characters × 5 regions | 85 of 95 leaked | none |
+| a list item holding a `<br>`, in each of the 5 regions | 5 of 5 leaked | none |
+| the fixture's 15 chrome items, its 2 holding a `<br>`, the lede | 10 items and both `<br>` items in every surface, 2 captions on the body layer; the lede after them | all on the furniture layer; `content.md` opens with the lede |
+| the nested-table caption | one false warning | none |
+| golden corpus, 26 cases, strict profile | — | all match; no golden line changed |
+
+The corpus holds no chrome with a cleaned character, so it was not expected to
+move, and the tests carry the property instead.
+
+213 distinct `content.html` files saved on this machine, from earlier captures
+and test runs, were extracted with master's bridge and this one. None changed
+on any surface or layer. Only 2 of them hold chrome at all, and neither holds a
+cleaned character in it: most are selector captures of course pages.
+
+Real pages were then captured end to end. 20 public pages were fetched and
+their chrome read for a cleaned character: 8 of the 18 that answered had one.
+Each was captured in clean and in faithful mode, with the default print
+media and again with `--media screen`, and each `content.html` was
+extracted with both bridges. 15 of the 32 captures held a cleaned character in
+their chrome, and `content.md` changed in 7:
+
+| Capture | Media, mode | What `content.md` no longer holds |
+|---|---|---|
+| MDN, the `<footer>` element page | screen, clean and faithful | its footer's `Portions of this content are ©1998–2026 by individual mozilla.org contributors.` line |
+| mozilla.org | print and screen, faithful | its footer's newsletter line, which holds an em dash, and `yourname@example.com`, the placeholder of the footer's email field |
+| Smashing Magazine | print, faithful | `. 2006-2026 .`, the run of its footer's founding line that holds an en dash, left on a line of its own |
+| Wikipedia, *Dash* | screen, clean and faithful | two bare `-` bullets at the end: two empty list items of its footer, which no text test can find |
+
+MDN shows why print media rarely met the leak: its print styles hide all of
+its footer but the logo and a tagline, and a capture records only what is
+shown. Clean mode hides `nav` and only the `header`, `footer` and `aside`
+that are children of `body`, so MDN's footer, inside a wrapper, leaked in
+clean mode too. The Guardian's chrome held cleaned characters in 24 regions
+and nothing changed: every item holding one was already on the body layer,
+where the backend itself filed it, and this change moves only furniture. In
+no capture did an item move to the body that master kept as furniture, and
+`content.doctags` and the warnings were the same in every one. The only
+other change was in `content.json`: the caption the backend made of MDN's
+footer logo's alt text moved from the body layer to the furniture layer,
+from which no surface writes it.
+
+Every `.docx`, `.pptx`, `.xlsx`, `.epub`, `.zip`, `.csv` and `.html` file in
+the Google Drive `School` folder, 198 in all, was rendered as the adapter
+renders it (an HTML file is its own page) and extracted with both bridges.
+The adapter's page puts a converted document in a `<main>` with nothing around
+it, and Markdown has no element for chrome, so only 4 pages, all HTML files,
+hold a `<header>`, `<nav>`, `<footer>`, `<aside>` or `<caption>`. None of the
+four holds a cleaned character in its chrome, and all four came out the same,
+extracted again with the final bridge. Of the rest, 157 were extracted and
+compared, with no change on any surface or layer. 3 were refused before
+extraction by the adapter's guards, on both: a symbolic link in a zip, and a
+deck and a zip past the expansion limit. The last 34, 28 of them large CSVs,
+were not extracted. The scan took pages smallest first, and the DocTags export
+of a table of thousands of rows took minutes a page on a machine with a load
+average near 1000 (#196 addresses that export). None of the 34 holds any of
+the five elements, and without them both bridges take the same path: no
+region to compare, no footer group, no caption to look for. The compared
+files took 1255 s to extract before and 1232 s after, almost all of it the
+CSVs, with master's bridge run first on each file. Cleaning the 71 regions of
+the screen capture of the Guardian adds 0.5 ms to the 12 ms it takes to read
+that page's facts.
+
+### P58-5: what this does not cover
+
+- **A `<footer>` holding a heading.** The backend's heading handler sets the
+  layer to body, inside a footer as anywhere, so in
+  `<footer><h2>Company</h2><p>About us</p></footer>` the heading and
+  everything after it in that footer are filed as body content, hung from the
+  page's heading rather than from the footer group. No test the bridge makes
+  sees them, and they reach `content.md` whatever their spelling. It is the
+  larger leak on real pages: in 9 of P58-4's 32 captures, footer headings
+  reached `content.md` as Markdown headings with their link lists under
+  them. That was 6 on GitHub's About page in faithful mode and 1 in clean,
+  5 on mozilla.org (`## Company`, `## Support`, `## Developers`, …) in all
+  four of its captures, and 1 on Smashing Magazine in screen media.
+- **`<nav>`, `<header>` and `<aside>` after the first heading.** The backend
+  files them as body. Only clean mode's hiding (`nav`, and `header` and
+  `aside` that are children of `body`) keeps them out of a capture.
+- **The substring test's false positive.** Text before the first heading that
+  is not chrome, but whose words appear in a chrome region, stays furniture.
+  That held for a plain spelling before; it now holds at either spelling.
+- **Alt text before the first heading.** The caption the backend makes of a
+  `<nav>` or `<header>` picture's alt text is in no page text, so it is moved
+  to the body layer of `content.json`. Its picture is furniture, so no text
+  surface writes it.
+- **A page with no declared encoding.** Given bytes, the backend guesses their
+  encoding, and read a page whose only non-ASCII character was a soft hyphen
+  as Shift-JIS: `Acme&shy;menu` became `Acmeﾂｭmenu`. A capture always declares
+  UTF-8 (`standalone_document`), so this reaches no bundle, but a test that
+  passes `extract()` a bare `<html><body>` string with one such character
+  measures the guess, not the bridge.
+- **A caption the bridge attaches.** Where the backend keeps no caption and the
+  counts agree, the bridge adds the caption in the page's spelling, so it can
+  differ from the backend's cleaned text around it.
+
+### P58-6: the tests
+
+`tests/test_chrome_typography.py` extracts the fixture and requires each of
+its 15 chrome items to be absent from `content.md`, `content.txt` and the
+chunks and present on the furniture layer, the two items holding a `<br>` to
+be absent, and the lede and the body to be present, with the lede first. For
+each of the five regions it extracts a page with one item per cleaned
+character, and one with a list item holding a `<br>`, and requires none of
+their tokens in any surface. `tests/test_docling_bridge.py` requires the
+nested-table page to carry its curly caption without a warning.
+The page spellings are written out in the tests, not read from the backend's
+table. With master's bridge in place, 24 of the 27 tests in the new file fail,
+the three that pass being the ASCII items, and the caption test fails on the
+warning.
+
+## P71: chrome marked only by an ARIA landmark role read as content (2026-10-12)
+
+docling's HTML backend files everything before a page's first heading on the
+furniture layer, and the bridge moves back to the body whatever is not page
+chrome (P2-3): a text unless it reads out of a header, nav, footer or aside
+region, and, since P57, a table or picture unless its element stands inside
+one. A page can mark the same chrome with an ARIA landmark role instead of the
+element: `banner` is a page header's role, `navigation` nav's, `contentinfo`
+a page footer's and `complementary` aside's. The snapshot sanitizer keeps
+`role` on every element (`SNAPSHOT_GENERIC_ATTRIBUTES`), but the bridge read
+only the four tag names, so a `<div role="banner">` above the first heading
+was content. Measured with docling-slim 2.132.0 and docling-core 2.99.0 on
+P57's branch (6ec2648), without a browser:
+
+```html
+<div role="banner"><a href="/"><img src="assets/asset-001.png" alt="Orlenvale logo"
+  data-webshot-asset-id="asset-001"></a><span>Orlenvale Park Service</span></div>
+<div role="navigation"><ul><li><a href="#plan">Plan a visit</a></li></ul></div>
+<h1>Talvessa</h1><p>The valley floods each autumn.</p>
+```
+
+gave content.md the logo's alt text and `<!-- image -->`, "Orlenvale Park
+Service" and the menu item above `# Talvessa`. The same markup in `<header>`
+and `<nav>` gives `# Talvessa` and its paragraph only. The fixture is
+`tests/fixtures/landmark_roles.html`; every word in it is made up.
+
+### P71-1: how often pages mark chrome with a role
+
+**Golden corpus:** none of the 24 cases with a `content.html` carries a
+`role` attribute of any kind, and no fixture under `tests/fixtures/` but this
+entry's carries a landmark role, so the corpus cannot move.
+
+**Live pages:** 42 public sites captured once each in `faithful` and `clean`
+mode with this branch, 83 snapshots (IEEE's `clean` capture failed; 16 more
+sites could not be captured from here, on an HTTP error, a refusal of a
+headless browser or, once, a hang, and are not counted). 30 carry no landmark
+role in either snapshot. Of the 12 that do, 4 give the role only to the
+matching element or to an element inside one (BBC, Canvas's guides, the IRS,
+Smashing Magazine), where the element already decided it. 8 give a role to an
+element that is not one of the four and not inside one:
+
+| Site | Element | Where | What it holds |
+|---|---|---|---|
+| National Park Service | `<div role="banner">` | above the first heading, both modes | the service's logo and its name, linked home |
+| PubMed Central | `<div role="complementary">` | above, both modes | the NLM disclaimer, with "PMC Disclaimer" and "PMC Copyright Notice" links |
+| NPR | `<ul role="navigation">` | above, `faithful` | "Hourly News", "Listen Live", "My Playlist" |
+| The R Project | `<div role="navigation">` | above, `faithful` | the sidebar: the R logo, "[Home]", then its section headings and links |
+| PubMed Central | `<div role="complementary">` | below | "See editorial … on page 760" |
+| An online-course platform's catalogue page | `<div role="contentinfo">` | below, both modes | the site footer |
+| MIT's LibGuides | `<div role="navigation">` | below, `faithful` | the libraries' breadcrumb |
+| Python's documentation | `<div role="navigation">` | below, `faithful` | the sidebar's table of contents |
+| Statology | `<div role="complementary">` | below, `faithful` | the sidebar: a search box and "About Statology" |
+
+
+`clean` mode already hides `[role='navigation']` before the snapshot
+(`NOISE_SELECTORS`, `capture/prepare.py`), which is why NPR's and the R
+Project's menus appear in `faithful` only. It does not hide `banner`,
+`contentinfo` or `complementary`.
+
+**Saved pages:** the folder P57-4 scanned holds 19 HTML files: saved course
+pages (8), the saved journal article of P57-4, two pages written for class
+projects, six Flask templates and two test files from a vendored package. 18
+were copied and rendered once each. None carries a landmark role in its
+snapshot; three carry `role="button"`, `group` or `presentation`, which are
+not chrome. The saved article, whose banner P57-4 found reaching content.md,
+is one of those three (P71-5). The 19th, a 7.1 MB saved page from a learning
+management system, is larger than the Drive connector this measurement read
+the folder through can carry, and was not measured.
+
+### P71-2: does a landmark ever hold content above the heading?
+
+Not in this sample. Every landmark above a first heading held the site's
+logo, name, menu or disclaimer. The one landmark that held something about
+the document itself, PubMed Central's editorial note, stands below the
+heading, where the backend already files it on the body and nothing here
+moves it. ARIA says a `complementary` landmark's contents "would be expected
+to remain meaningful if it were to be separated from the main content"; it is
+the role `<aside>` maps to, and the bridge already keeps an `<aside>` out. A
+page that puts content of its own in one above its first heading now has that
+content in content.json and content.doctags only, as it would in an
+`<aside>`.
+
+### P71-3: the change
+
+`_SnapshotFacts` treats an element whose `role` is one of the four as it
+treats the four elements: it opens a chrome region, whose text feeds the text
+test (`is_chrome_text`, and P53's block test, which calls it) and inside
+which every `<img>` and `<table>` stands as chrome for the position test
+(P57-2).
+
+- **The region ends at the element's own end tag.** The four elements could
+  be counted by name; a `<div role="navigation">` holding `<div>`s cannot. The
+  parser keeps the open elements as a stack: an end tag closes the innermost
+  open element of its name and everything still open inside it, and one that
+  closes nothing open is ignored. On the sanitized snapshot, which nh3
+  serializes from a parsed tree, every element is closed, so for the four
+  elements this ends a region where the depth count ended it.
+- **A table can be its own region.** The region opens before the element's
+  own position is taken, so a `<table role="navigation">` stands inside it.
+- **An empty element opens nothing.** An `<img>` or `<hr>` with a landmark
+  role has no end tag; a region it opened would never close, and everything
+  after it would read as chrome.
+- **The first token decides.** A role may list fallbacks after the first,
+  which ARIA reads only for a role it does not know, and it knows every
+  landmark role. `role="menubar navigation"` is a menubar.
+- **Only the four.** `main`, `region`, `search`, `presentation` and `none`
+  are not chrome: none is the role of one of the four elements. A search box
+  inside a banner is chrome by the banner.
+
+### P71-4: what changed
+
+**Golden corpus:** every case's `content.html` extracted with P57's bridge
+and this one gives identical content.md, content.txt, content.doctags,
+chunks, tables and warnings, 24 of 24. The corpus run itself, on a Linux
+machine whose fonts, Tesseract (5.3.4) and Chromium differ from the
+recording's, differs from the goldens in 20 of 26 cases with and without this
+change, and the two reports are the same line for line but for a local
+server's port.
+
+**Live pages:** 6 of the 83 snapshots change, on the 4 sites with a landmark
+above the first heading: the National Park Service (both modes), PubMed
+Central (both modes), NPR (`faithful`) and the R Project (`faithful`). In each,
+content.md only loses lines, every lost line is inside that landmark (the
+table in P71-1), the doctags, tables and warnings are identical, and nothing
+from the first heading on changes. No table or picture moved to the body; the
+logo pictures of the National Park Service and the R Project moved to
+furniture. On the tree with P53 (#202) merged, the same 6 snapshots change in
+the same way; P53 already writes PubMed Central's disclaimer and its links as
+one line, so one line goes instead of four.
+
+**Real files:** of P57-4's 256 documents, the 237 that are not HTML (Word,
+decks, workbooks, the EPUB, zips, CSVs and Markdown) are written as Markdown
+and rendered through `MARKDOWN_POLICY`, whose only attributes on every tag are
+`id` and `class`: their pages carry no `role` and no header, nav, footer or
+aside, so they cannot change. A zip holding `<div role="banner">` renders it
+as a `<p>`. The 18 HTML files of P71-1 extract identically with P57's bridge
+and this one, alone and with P53 merged; the 19th was not measured.
+
+
+### P71-5: what this does not cover
+
+- **Chrome marked by neither.** The saved ACM Digital Library page of P57-4
+  wraps its banner in a non-standard `<banner>` element, which the sanitizer
+  drops while keeping what it holds, and gives its layout table
+  `role="presentation"`. It has no landmark role anywhere, so its banner
+  reaches content.md as before. A `<div class="menu">` does too.
+- **A landmark below the first heading.** The backend files it on the body,
+  as it does a `<header>` or `<nav>` there (P57-6), and the bridge only moves
+  furniture to the body. The course platform's footer `<div
+  role="contentinfo">` and Statology's sidebar reach content.md as before.
+- **A chrome element that says it is not chrome.** A `<header
+  role="presentation">`, or a `<header>` inside an `<article>`, which ARIA
+  does not map to `banner`, is still chrome by its tag, as before.
+
+### P71-6: the tests
+
+`tests/test_landmark_roles.py` extracts the fixture and checks that the
+banner's logo and name, the menu, the disclaimer and the link table are out of
+content.md, content.txt and every chunk but the logo's figure chunk, and still
+in content.doctags, while the lede and the gauge table are in. For each of the
+four roles, on a `<div>` and on a `<section>`, chrome holding a linked logo, a
+paragraph and a table above the heading must read exactly as the same chrome
+in the matching element, on every surface. A `<table>` with the role, written
+as `navigation`, `Navigation` or `navigation menubar`, is its own region. Six
+other roles leave the same markup in the body. The snapshot parser is checked
+directly: a region runs past a `<div>` closed inside it to its own end tag,
+closes over list items left open, and an `<hr>` or `<img>` with a landmark role
+opens nothing. One case pins P71-5's second bullet. Against P57's bridge, 15
+of the 23 cases fail; the 8 that pass guard what must not change.
+
+## P62: a definition list in a converted document's item kept only each definition's first paragraph (2026-10-11)
+
+On P40's bridge, `<ul><li>A<dl><dt>t</dt><dd><p>d</p><p>e</p></dd></dl></li></ul>`
+is written `* A`, `    t`, `    :   d`, a blank line, `        e`, and the page
+held `<dd>d</dd>` with `e` after the definition list as `<pre><code>e`, in the
+item. `<dd>d<ul><li>x</li></ul></dd>` in an item gave `<dd>d` `+ x</dd>`: the
+nested list became the definition's text. On master 5a5a6ab, before P40, the
+same definition list left the list altogether (`<ul><li>A</li></ul><dl>…`),
+because markdownify indented it by the marker's width. Every converted
+document goes through this writer and reader: an EPUB, an HTML file, and each
+of those inside a zip. A Word file does not: mammoth writes a `<dl>` only from
+a style map, and the bridge gives it none. Measured with MarkItDown 0.1.8,
+markdownify 1.2.3, Python-Markdown 3.10.3 (with `extra`, `sane_lists` and
+`toc`, as `MARKDOWN_EXTENSIONS` renders), nh3 0.3.7, docling-slim 2.132.0 and
+docling-core 2.99.0, on fix/nested-lists f2e4976 (P40, with master cd41eb2
+merged in). The fixtures are `definition_book.epub` and
+`definition_archive.zip` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`. Every word in them is made up.
+
+### P62-1: what each shape became
+
+Each definition below was put in a definition list in the first item of a list
+one, two and three items deep, of each kind at each level (14 nestings), once
+after the item's text and once opening the item. A shape is right when the
+page's tree of lists, items, definition lists, terms, definitions and
+quotations, with each paragraph one block of text, is the document's.
+
+| The definition holds | after the item's text | opening the item |
+|---|---|---|
+| a second paragraph, or a third | the second a code block in the item | the same |
+| text, then a list of either kind | the list the definition's text: `d + x + y` | the list the item's, after the definition list |
+| a paragraph after a list | the list and the paragraph one code block in the item: `+ x`, `e` | the same |
+| a list two deep | the definition's text: `d + x - z` | the list, two deep, the item's |
+| text, then a definition list | the nested one a code block in the item: `t2`, `:   d2` | the same |
+| only a list | right | the list's first item in the definition, the rest a list of the item's |
+| only a definition list, a quotation of one or two paragraphs, only a quotation, one line | right | right |
+
+So 13 of the 28 pairs were right, each at all 14 nestings, and 15 were wrong at
+all 14. After this entry all 28 are right at all 14. Text, a paragraph or a
+list after the definition list stays the item's, not the definition's.
+
+Python-Markdown's rules, read from its `ListIndentProcessor` and `def_list`
+and measured on each shape: a block after a blank line, indented under a list,
+goes to the `indent` processor (priority 90). It walks down the last list and
+its last item, one level for each four spaces, and stops at anything that is
+not a list or an item. At a definition list in an item it stops at the item,
+strips one level, and parses the block there with indented blocks turned off,
+so eight spaces in is a code block in the item. `def_list` has a processor
+that walks through definition lists and definitions as well (`defindent`,
+85), but `indent` claims every such block first. A block is read into a
+definition only by `def_list`'s own processor on the line after `:`, and only
+up to the next blank line. So no indentation puts a second block in a
+definition that is in an item. A quotation between them works: its content is
+parsed with the quotation as the parent, which `indent` does not claim. Raw
+HTML does not: `md_in_html` reads a block of HTML only at most three spaces
+in, so `<dl markdown="1">` in an item is text in a paragraph. On a `<li>`,
+`markdown="1"` reads the item's content as inline text only.
+
+Two more writer shapes were wrong, measured the same way:
+
+- markdownify writes a list in an item straight under the item's text, with
+  no blank line, and decides that from whether any `<li>` is above the list.
+  A list in a definition in an item was written so, and Python-Markdown reads
+  a list with no blank line before it as more of the paragraph above.
+- An item that opens with a definition list has the term on the marker's line
+  and the definition on the next, in the item's first block, which P40 writes
+  at the marker's width. A list that opens the definition puts its second
+  item five to seven spaces in, and Python-Markdown's list reader takes any
+  line four to seven spaces in that starts with a marker for an item nested in
+  the one it is in.
+
+### P62-2: a processor for the block, and two writer changes
+
+`adapters.py` adds `DefinitionsInItems` to `MARKDOWN_EXTENSIONS`. It registers
+a processor above `indent` (priority 95) that walks down as `defindent` does.
+It claims a block only where `indent` would also have claimed it, outside an
+item, and where its own walk ends somewhere other than `indent`'s. That
+happens only when the walk passed a definition list. It then reads the block
+as `def_list` reads one under a definition list that is in no item. Every
+other block falls through to `indent`, read as before.
+
+Registering `def_list`'s processor itself in `indent`'s place was measured
+first. Over 20,000 random Markdown documents, 34 of its pages held a list
+directly in a `<dl>` where Python-Markdown's had none. In a tight item,
+`indent` is called with the item as the parent, and `def_list`'s processor
+then parses a block straight into the item's last definition list. The
+narrower processor leaves an item's own blocks to `indent`.
+
+`markitdown_bridge.py` makes two changes:
+
+- A list whose nearest holder is a `<dd>`, not an `<li>`, is written as a list
+  in no item is: after a blank line, and marked for P32's separator. Its items
+  are not marked as nested in the item (P40-2).
+- Where a line of an item's first block would be read as an item nested in it
+  (four to seven spaces in once written, then a marker), the item gets
+  `<!-- -->` for its text, as P40 gives an item that opens with a list. The
+  first block follows after a blank line, at four spaces. Python-Markdown
+  writes the comment as a block of its own, and nh3 drops it from the page.
+
+A `.md` file renders through the same `MARKDOWN_EXTENSIONS`, so a definition
+list in an item of an author's Markdown now reads as Python-Markdown already
+read one in no item: a block indented four spaces past the term is more of
+the definition. Before, eight spaces in under an item was a code block in the
+item. None of the 58 `.md` files in P62-4 has a definition list.
+
+### P62-3: measured over random documents
+
+- **The reader.** 40,000 random Markdown documents, made of list markers,
+  terms, definitions, quotations, fences, comments, headings, rules and table
+  lines at 0 to 12 spaces, were rendered with and without the processor. 138
+  pages differed. Every one of the 138 already held a definition list in an
+  item without it. None held anything in a `<dl>` but terms and definitions
+  where Python-Markdown's page did not.
+- **The writer and reader together**, against f2e4976. 4,000 random HTML
+  documents of lists, quotations, paragraphs and code, three deep, with no
+  definition list: every converted Markdown and every page byte-identical.
+  4,000 with definition lists as well and no code: 1,803 hold none in an item,
+  and those are byte-identical. Of the other 2,197, 688 hold two definition
+  lists or two quotations side by side, which merge whether or not an item
+  holds them (P63). On the remaining 1,509, every definition list in an item
+  matches the document's: 1,509, against 385 before. The whole page matches on
+  1,454, against 375. On the other 55, a list in a quotation in an item runs
+  its last item into the text after it, or into a second list (P62-5). No
+  page got further from its document.
+- **With code.** 4,000 documents with `<pre>` too: 1,241 with a definition
+  list in an item and none side by side; the definition lists match on 1,008,
+  against 336 before. Each of the other 233 has a `<pre>` in a definition list
+  in an item (P62-5).
+
+### P62-4: real files
+
+Every `.docx`, `.epub`, `.zip` and `.md` in the Google Drive `School` folder
+(146: 82 Word files, 1 EPUB, 5 zips, 58 Markdown files) was copied and
+rendered with f2e4976's `adapters.py` and bridge and with this branch's. The
+same 2 zips fail in both, on archive limits. The other 144 pages are
+byte-identical. None of them holds a definition list, so these files give no
+evidence that the change works, only that it changes nothing else. The
+fixtures stand in for the documents that have one. Rendering took, before
+then after: the Word files 18.9 s and 17.5 s, the zips 17.5 s and 18.0 s, the
+EPUB 0.7 s and 0.6 s, the Markdown files 1.1 s and 1.0 s. The load average was
+959 just after, so these differ within that machine's noise.
+
+### P62-5: what this does not cover
+
+- **A `<pre>` in such a definition** stays in the definition now, but
+  markdownify's fence is eight spaces in, where `fenced_code` does not read
+  one, so the page holds it as inline code: its text kept, its lines not
+  shown. Before, it was a code block in the item, fence lines and all, with
+  the paragraph after it inside. A `<pre>` that opens a definition was inline
+  code before as well. P47 writes code in a definition as an indented block,
+  and keeps the fence for one in an item for want of this entry (P47-4).
+  Whichever of the two merges second removes that fallback.
+- **content.md loses a definition's own text where the definition holds a
+  definition list.** docling's HTML reader, on a `<dd>` that holds a `<dl>`,
+  reads the nested list under the term and never adds the definition's text
+  (P60-5). It does that for a definition list in no item too. Before this
+  entry, a definition list in an item never reached docling as one: content.md
+  held `Quarvel` `` `Tormish : Ulbrin Vastrow` `` and `Selvane`, garbled but
+  whole. Now it holds the structure without `Selvane`. The page holds all of
+  it.
+- **Two `<dt>`s in a row, and a `<dd>` after one of more than one block.**
+  markdownify writes the second term after a blank line, and the next `:`
+  straight under the last block. Python-Markdown reads the first as a
+  paragraph and the second as more of the block, in an item or not. In an
+  item they now read as they do in no item.
+- **Two definition lists side by side** in an item merge, as two side by side
+  anywhere do; P63 keeps them apart only outside items.
+- **A list in a quotation in an item** runs into the text after it
+  (`> + xtail`), and a second list in that quotation into the first. That is
+  markdownify's rule from P62-1 again: the quotation, not the item, holds the
+  list. No definition list is involved, so it is left out of this entry. In a
+  quotation in a definition in an item, the list is written after a blank
+  line.
+
+### P62-6: the tests
+
+`tests/test_definitions_in_items.py` renders each definition in P62-1, after
+the item's text and opening it, at all 14 nestings, and compares the page's
+tree with the document's. It does the same for a paragraph or a list after the
+definition list, and for 80 seeded random items holding lists, definition
+lists and quotations three deep. The generator leaves out what P62-5 leaves
+out, instead of skipping it, and 37 of the 80 hold a definition of more than
+one block. It checks the Markdown the writer gives a list in a definition and
+an item that opens with a definition list, and that a `<pre>` in a definition
+in an item keeps its text there and takes no paragraph with it. For the
+processor, it checks that Python-Markdown alone still reads the second
+paragraph as code in the item (when that fails, the processor may go), that
+the processor reads it into the definition, that it changes 3,000 random
+Markdown documents only where a definition list is in an item, and that an
+author's `.md` file reads the same way. 46 of its 120 cases fail on f2e4976.
+`tests/test_office_formats.py` captures both fixtures end to end. Their pages'
+lists in content.html must match the fixture's sections. content.md and
+content.txt must hold every word but those P60-5 drops, and no `<!--` or
+private-use character may be left in content.md, content.html or
+content.txt. On f2e4976, 7 of the book's 8 sections reach the page wrong.
+
+## P59: code that markdownify wrote into a line of text was Markdown (2026-10-11)
+
+A `<pre>` inside a link, emphasis, struck text, a subscript, a superscript, a
+quotation mark or inline code, in a Word file (through its style map), an
+EPUB or an HTML page, on its own or in a zip, could put an element on the
+page. markdownify writes what each of those holds into a line of text, after
+stripping the blank lines a `<pre>`'s fence stands between, so the fence began
+mid-line: `[```\na\n\n<img src="…">\n```](x)`. Python-Markdown's `fenced_code`
+reads a fence only where a line begins, so the page read the code as inline
+code only while it stayed one paragraph. markdownify does not encode a
+`<pre>`'s text (`_noformat`), a code block being literal, and here it was not
+one: a blank line ended the paragraph, and a line opening a heading, a rule, a
+quotation, a link reference, a definition or a `<div>` split it, which
+Python-Markdown's block processors find anywhere in a paragraph. What followed
+was Markdown with raw HTML, and an `<img src="https://tracker.invalid/x.png">`
+typed in the code was an image the capture fetched: the class of P28. P44-4
+recorded it. Inline code whose own text ran over lines did the same with no
+`<pre>` at all. Measured with MarkItDown 0.1.8, markdownify 1.2.3, mammoth
+1.11.0, Python-Markdown 3.10.3 (with `extra`, `sane_lists` and `toc`), nh3
+0.3.7 and docling-core 2.99.0, on P44 as staged on fix/nested-lists 0ba87cd
+(P40); master 5a5a6ab and P40 measured the same. The fixtures are
+`inline_code_book.epub`, `inline_code_report.docx` and
+`inline_code_archive.zip` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`. Every word in them is made up.
+
+### P59-1: what each element did
+
+Twelve kinds of code (a blank line, a line of spaces, a Markdown image after a
+blank line, a line opening `#`, `***`, `>`, `[r]: url` or `: `, a `<div>`,
+backtick runs, fence lines, and an `<img>` with no blank line) in each element
+markdownify converts, in five places. The count is how many put an `<img>` on
+the page:
+
+| Element | Top level | Text in the element either side | A word before the element | In an item | In an item, after text |
+|---|---|---|---|---|---|
+| `a`, `b`, `strong`, `em`, `i`, `del`, `s`, `strike`, `u`, `code`, `kbd`, `samp` | 10 | 0 | 10 | 8 | 8 |
+| `sub`, `sup` | 0 | 0 | 10 | 8 | 8 |
+| `q` | 0 | 0 | 0 | 9 | 9 |
+
+- At the top level, the first ten kinds were live in each element that writes
+  markup around what it holds; an `<img>` with no blank line, and fence
+  lines, stayed in the code span. In an item, the heading and the link
+  reference were not live.
+- `sub` and `sup` write no markup (MarkItDown's `sub_symbol` and `sup_symbol`
+  are empty), so their `<pre>` began a line at the top level, unless a word
+  stood before the element and the fence ran into it.
+- `q` writes `"` on lines of its own around what it holds, so at the top level
+  the fence began a line and closed on one: a code block between two lines of
+  a lone quotation mark. In an item P44's code block stops at `q`, as at every
+  element but its `CODE_HOLDERS`.
+- With text either side in the element, the fence began a line after the text
+  and closed on one before it, and `fenced_code` read it: the page held a code
+  block between `[before` and `after](x)`, the link's syntax printed.
+- `dt`, `h1`–`h6`, `td` and `th` write what they hold as one line, a code span
+  that nothing in it can leave: 0 everywhere. So do the tags markdownify does
+  not convert (`span`, `mark`, `small`, `cite`, `label`, `font`, `ins`,
+  `abbr`), whose `<pre>` begins a line.
+- `<code>`, `<kbd>` or `<samp>` whose own text went over lines, with no
+  `<pre>`, was live through a line opening a heading, a rule, a quotation, a
+  link reference, a definition or a `<div>`: 6 of the 12. A blank line in it
+  was not, because markdownify folds runs of line breaks in text to one; but a
+  `<p>` inside it writes its own, and that was live too.
+- A quotation or a definition inside a link or emphasis was live (P47-4 has
+  the quotation's code block inside a link mangled but inert); a list item in
+  emphasis was P44's code block, inert, with the item's marker run into the
+  emphasis's `*`.
+
+Where nothing was live, the page held the code as inline code with its lines
+run together: `<a><code>first line\n    indented\nlast</code></a>`, which a
+browser shows as `first line indented last`.
+
+### P59-2: inline code, its text encoded, on one line
+
+No block can begin inside a line of text, so a `<pre>` there is written as
+inline code. Three forms were measured. Each line a Markdown code span,
+joined by `<br>`, loses each line's indentation from the page's text, because
+Python-Markdown strips a code span's text at both ends (`m.group(3).strip()`):
+`<code>    indented</code>` is `<code>indented</code>` on the page. The form
+taken is a raw `<code class="code-lines">` whose text is encoded as every other
+string a document holds (`_as_text`, P28), all of it on the one line of
+Markdown, so nothing in it begins a line and nothing in it is read. Each line
+break is a line feed by reference, `&#10;`, which Markdown does not read. The
+page template's `code.code-lines { white-space: pre-wrap; tab-size: 4; }` shows
+it, and each line's indentation, as the page shows a `<pre>`'s, where inline
+code ran the lines together: in Chromium the element computes `pre-wrap`, lays
+out over as many lines as the code has, and its `innerText` holds the breaks. A
+second form put a `<br>` after each line feed. It read the same on the page,
+but on P44's base the capture's snapshot dropped every `<br>` (P59-4), and on
+master, which keeps them since P48, docling wrote one in a list item into
+content.md and content.txt as its private mark U+E000, which P56 is fixing. The
+line feed alone is text everywhere. Tabs are expanded first, as at the top
+level. A space stands either side, because markdownify strips the whitespace
+next to a `<pre>`, a block, and the words either side ran into the code.
+
+`_TextMarkdownify.convert_pre` writes a `<pre>` so when an element it sits in,
+at any depth, has a converter and is not in `BLOCKS`, the elements markdownify
+writes on lines of their own (`[document]`, `article`, `blockquote`,
+`caption`, `dd`, `div`, `dl`, `dt`, `figcaption`, `li`, `ol`, `p`, `section`,
+`table`, `tr`, `ul`). An element `BLOCKS` does not name is taken to write
+into a line, which is safe wherever it stands; a test fails when markdownify
+adds a converter, so that which it does is decided. Under a heading or in a
+table cell (`_inline`) markdownify's one-line code span is kept, and so is a
+`<pre>` in a `<pre>`, whose outer fence holds it. This is tested before P44's
+item path, and P47 puts its quotation and definition path after it too, so a
+quotation, a definition or an item written into a line has its code here, as
+anything in a line does: the blocks those paths write did not survive being
+run into the line whole.
+
+Inline code is written on one line: `convert_code` (and `kbd` and `samp`)
+writes each line break in its text as a space, which is how the browser shows
+one there (`code` keeps `white-space: normal`). A `<pre>` inside inline code is
+the span's text, its fence dropped, where the page had printed it.
+
+After, the five places above hold no `<img>` for any element or kind of code,
+nor do inline code over lines and blocks inside a line. The `<code>` stands
+where the page's inline code stood, in the link or the emphasis, and its lines
+are apart:
+`<a><code class="code-lines">first line\n    indented\nlast</code></a>`.
+Two shapes read worse. A `<pre>` in a `q`, a `sub` or a `sup` with nothing
+before it was a code block at the top level and is inline code there now;
+none of the three may hold a `<pre>` in HTML, whose content model gives them
+phrasing content only. And code in a line keeps a run
+of blank lines and a line's trailing spaces, which MarkItDown takes from a
+top-level code block.
+
+### P59-3: real files
+
+Every `.docx`, `.epub` and `.zip` in the Google Drive `School` folder, and its
+19 `.html` files read as a zip reads a member (a top-level `.html` opens in the
+browser and never reaches the bridge): 107 files, 82 Word files, 1 EPUB, 5
+zips and the 19 HTML files. The same 2 zips are refused by both, on archive
+limits. The page of each of the other 105 differs from P44's by one line,
+the `code.code-lines` rule in the template's `<style>`, and by nothing else.
+The golden cases that render a local document (`markdown-report`,
+`csv-data`, `text-notes`, `json-data`, `jsonl-records`,
+`definition-structures`) match their recordings. The writer met 10
+`<pre>`, all in one HTML file, and 11 `<code>`: none in a line of text, none
+over lines. As in P44-3, no Word file maps a style to `<pre>`.
+
+With nothing to change, the times differ by the machine. The zips, best of
+three, P44's bridge then this one, twice: 21.96 s, 17.26 s, 17.23 s and
+14.08 s. In one pass each: the Word files 26.6 s and 23.4 s, the EPUB 1.1 s and
+0.8 s, the HTML files 1.3 s and 1.3 s.
+
+### P59-4: what this does not cover
+
+- **On P44's base the capture dropped every `<br>`** from content.html,
+  content.md and content.txt: `<p>alpha<br>beta</p>` reached them as
+  `alphabeta`, and a CSV cell's two lines as `cell onecell two`. Master keeps
+  them since P48's change to the snapshot, measured on this branch once it
+  was merged in; a `<br>` in a list item is then docling's U+E000 in
+  content.md until P56. P59's code holds no `<br>`.
+- **content.md** holds code in a line of text as docling writes inline code,
+  its lines joined by spaces, as it held the code there before when nothing
+  was live. docling writes code that is all an item holds as the item's text,
+  which content.md escapes (`&lt;img`), as P44-4 says of an item's code.
+- **A `<pre>` in a table's `<caption>` in a list item** is still live, as
+  P44-4 says: P44's code block stops at the table, and markdownify's fence is
+  indented. Of the twelve kinds of code, 8 alone in the item and 9 after its
+  text. A caption writes on lines of its own, so it is not P59's. A `<pre>` in a
+  quotation or a definition is P47's.
+- **Blocks written into a line** stay malformed, as they were: strong emphasis
+  around a list runs the item's marker into its `**`, a link around a
+  quotation prints `[>`. Only their code is P59's.
+- **`<u>` inside inline code** is the span's text, `<u>…</u>` printed:
+  MarkItDown's `convert_u` does not look for `_noformat`. Inert, and as before.
+
+### P59-5: the tests
+
+`tests/test_code_in_inline_text.py` renders through `to_markdown`, MarkItDown's
+clean-up included, and Python-Markdown and nh3 as the adapter does. For each of
+the 15 elements in P59-1, in 8 places (alone, with text either side of the
+element or touching it, in an item, after an item's text, in a nested item, in
+a quotation, and in emphasis), 14 kinds of code (P59-1's but for the `<img>`
+with no blank line, and with tabs, carriage returns, and Markdown and entities)
+must put no `<img>` on the page, the tracker's host in no attribute and only in
+code, and each `<code>` must hold its code line for line, each line break a
+line feed and no `<br>`, in `code-lines`; in a code span, its words. The same
+holds for text either side of the `<pre>` in the element, for inline code over
+lines with each kind of code, for a `<p>` in inline code, for a quotation, an
+item and a definition inside a link or emphasis, and for a `<pre>` in a `<pre>`
+in a link. Code in a link with no blank line stays the link's inline code; a
+`<pre>` in inline code has no fence. A `<pre>` at the top level and in 14
+elements that write on lines of their own, or that markdownify does not
+convert, is written as before: markdownify's fence, P44's code block, or the
+one-line span of a heading or a cell. Every converter `_TextMarkdownify` has is
+named. Forty seeded trees of up to four elements around the code, one of them
+at least writing into a line, hold no element from the code and every one of
+its words in code. On P44's bridge 226 of the file's 241 tests fail; the 15
+that pass hold what already worked. Each fixture's page has no `<img>`, holds
+its code where `tools/fixtures/office.py` says, and styles `code-lines` as
+`pre-wrap`. `tests/test_office_formats.py` captures the three end to end:
+content.html holds no `<img>` and each code where the fixture says, line for
+line; assets.json names no tracker; content.md and content.txt hold each code's
+words in order and no private-use character.
+
+## P63: two quotations, or two definition lists, side by side became one (2026-10-11)
+
+P32 kept two lists side by side apart; quotations and definition lists had the
+same fault. markdownify writes a blank line between two `<blockquote>`s, and
+between two `<dl>`s, and Python-Markdown's `BlockQuoteProcessor` makes a
+quotation whose previous sibling is a quotation part of it, while `extra`'s
+`DefListProcessor` adds a term to the definition list before it.
+`<blockquote><p>a</p></blockquote><blockquote><p>b</p></blockquote>` reached
+the page as one `<blockquote>` holding both paragraphs, and
+`<dl><dt>t</dt><dd>x</dd></dl><dl><dt>u</dt><dd>y</dd></dl>` as one `<dl>`
+of two terms. P47's sweep (fix/pre-in-quotations, not yet merged) found 11
+such merges in 600 random trees. Measured
+with MarkItDown 0.1.8, markdownify 1.2.3, mammoth 1.11.0, Python-Markdown
+3.10.3 (`extra`, `sane_lists`, `toc`), nh3 0.3.7 and BeautifulSoup 4.15.0, on
+master 1a40fc6, rendering through `to_markdown`, Python-Markdown with
+`MARKDOWN_EXTENSIONS` and `sanitize_markdown_html`. The fixtures are
+`adjacent_blocks_book.epub`, `adjacent_blocks_report.docx` and
+`adjacent_blocks_archive.zip` in `tests/fixtures/office/`, written by
+`tools/fixtures/office.py`; the Word file carries a mammoth style map, as
+P47's does, and every word in them is made up.
+
+### P63-1: which inputs reach it
+
+Each input sat between two paragraphs of an HTML document. "Merged" is fewer
+quotations or definition lists on the page than in the document.
+
+| Input | markdownify wrote | Page before | Page now |
+|---|---|---|---|
+| two `<blockquote>`s; three; bare text in each | `> a`, blank, `> b` | one quotation | one each |
+| the same with whitespace, an empty `<div>` or `<p>`, a comment, `<br/>`, or an empty `<blockquote>` between | exactly what nothing between writes | one | two |
+| each quotation in a `<div>` of its own | the same | one | two |
+| two quotations in one quotation, before or after its own text | `> > a`, `>`, `> > b` | the inner two one | two |
+| two quotations in a `<dd>`, before or after its text | `:   > a`, blank, `    > b` | one | two |
+| a quotation of a quotation, twice; a quotation, then a quotation of one; the reverse | `> > a`, blank, `> b` | the outer two one, the inner kept | as the document |
+| two quotations each holding a list | `> * a`, blank, `> * b` | one quotation holding one list | two, a list each |
+| two `<dl>`s; three; the first of two entries, two definitions, or a definition of two paragraphs | `t`, `:   x`, blank, `u`, `:   y` | one list, the second's terms added | one each |
+| the same with markup between that writes nothing, or each in a `<div>` | as above | one | two |
+| two definition lists in a quotation, or in a `<dd>` | `> t`, …, `>`, `> u`; `    u` | one | two |
+| a chapter that ends with a quotation, the next beginning with one | each chapter on its own; MarkItDown joins them with a blank line | one | two |
+| Word, with a style map writing each `Quote` paragraph in a fresh `<blockquote>`, or a fresh `<dl>` at a `NewTerm` | mammoth writes them side by side | one | two |
+| an HTML file in a zip, and that Word file in it | as above | one | two |
+| a quotation then a definition list, either order; a list and a quotation, either order | blank line between | apart | unchanged |
+| text, a paragraph, `<hr>` or a heading between | that block | apart | unchanged |
+| two quotations or definition lists in a table cell, a heading or a `<pre>` | one line; code | text | unchanged |
+| two in a list item | the item's indentation, its marker's width | P63-4 | unchanged |
+| a `<dl>` whose only child is a `<dd>`, after a `<dl>` | `:   y` after a blank line | its definition added to the list before | unchanged (P63-2) |
+
+### P63-2: what keeps them apart
+
+The separator P32 found for lists, `<!-- -->` on a line of its own with a
+blank line either side, measured in Markdown written by hand:
+
+| Between the two | Page |
+|---|---|
+| quotations at the top level | two quotations; nh3 removes the comment, leaving whitespace |
+| in a quotation, `> <!-- -->` between `>` lines | two |
+| in a definition, the comment four spaces in | two |
+| in a list item, four spaces in, the first quotation after a blank line | two, both in the item |
+| definition lists at the top level, in a quotation, in a definition | two |
+| a definition list whose first line is a definition, `:   y` | one list, with an empty `<dt>`: `DefListProcessor` takes a paragraph before a definition with no term for its term, and the comment is one |
+
+So a definition list that opens with a definition gets no separator. Without
+one its definition joins the list before, as it always has: a `<dd>` with no
+`<dt>` takes the paragraph before it for its term wherever it stands, which is
+upstream's and not changed here.
+
+### P63-3: the change
+
+P32's `_ListSeams` marks quotations and definition lists too.
+`_TextMarkdownify.convert_blockquote` and `convert_dl` mark where each one
+markdownify writes begins and ends, inside its blank lines, unless it sits in
+a list item (P63-4), a table cell, a heading or a `<pre>`. `resolve` finds
+their seams as it finds lists': one's end, blank lines (`>` in a quotation),
+the second one's indentation (`> `, or four spaces in a definition) and its
+start, the two of one kind. It puts `<!-- -->` there and removes the marks, in
+a pass of its own before the lists'. The lists' pass then reads the string it
+read before quotations were marked, so a document with no quotation or
+definition list beside another of its kind is written byte for byte as
+before, and P32's lists are resolved as they were. `_TextEpubConverter`
+resolves a book once its chapters are joined, as it does for lists, and the
+Word, HTML and zip readers each document as markdownify finishes it.
+
+### P63-4: in a list item
+
+markdownify indents an item's content by its marker's width, two spaces under
+`* ` and three under `1. `, and Python-Markdown reads an item's blocks only at
+four (P32-5). Two quotations in an item are not merged on master: the second
+leaves the list. Under an item numbered 10 or more, whose marker is four wide,
+or under `* ` nested in `* `, the indentation adds up to four by chance, the
+seam is found, and a pair there was merged.
+
+The first version marked quotations and definition lists in items too. Over
+the 1000 trees of P63-5 it printed `<!-- -->` on 10 pages: Python-Markdown
+read the separator as indented code. Five sat in a definition in an item and
+five where an item's indentation had added up to four by chance. So on master a
+quotation or definition list in an item is not marked, as P32 leaves a list
+in an item, and is written as before.
+
+With P40's bridge (fix/nested-lists at f2e4976, not yet merged, which
+indents an item's content by four) the same trees measured three ways:
+
+| P63 on P40's bridge | Pages nearer the document | Pages further | Pages printing `<!--` |
+|---|---|---|---|
+| as it ships: nothing in an item marked | 181 | 0 | 0 |
+| everything in an item marked | — | — | 61, every one a seam inside a `<dd>` inside an `<li>` |
+| marked in an item, but not in a `<dd>` with an `<li>` above it and no `<blockquote>` between | 282 | 0 | 0 |
+
+"Nearer" is a page whose nesting of quotations, definition lists, terms,
+definitions, lists and items matches the document's where the page without
+P63 did not. Python-Markdown reads an item's indentation before a
+definition's (its `indent` processor at priority 90, `extra`'s `defindent`
+at 85), so every block of a definition in an item after its first is the
+item's code (P47-4), and a separator there is printed in it; a quotation
+between starts the reading afresh. Once P40 has merged, the third row is the
+rule to adopt, and P62's reading of a definition in an item (in progress)
+may widen it.
+
+### P63-5: random trees
+
+1000 seeded trees, three deep, each container holding one to three pieces —
+text, a paragraph, or a quotation, definition list, bulleted or numbered list
+(starting at 1, 9 or 10) or `<div>` of the same, written twice in a row half
+the time — and the 54 cases of P63-1, through `to_markdown` on master and
+with this change:
+
+- 731 were written byte for byte as before. The other 323 differ only in
+  separator lines and the blank lines round them; no line was removed.
+- Every page's text, tags and whitespace aside, is the same before and after.
+- 322 changed pages differ only by a quotation or definition list closed and
+  another opened where the separator is. The other, two quotations each
+  holding a list, also splits the one list the merge had made of theirs.
+- 428 pages matched the document's nesting before and after, 80 match it now
+  and did not before (24 cases and 56 trees), and none matched it before and
+  does not now. The 546 that match it neither way have a list item P40 has
+  not yet fixed.
+
+2000 more trees of quotations, definition lists, `<div>`s, paragraphs and text
+alone, nothing in an item: 873 put their quotations and definition lists on
+the page as the tree has them before, and all 2000 now.
+
+### P63-6: real files
+
+Copies of 88 real documents (82 Word files, 1 EPUB, 5 zips) were rendered
+through `_render_local_file` with master's bridge and with this one, twice
+each, alternating. The same 2 fail in both, on archive limits: one zip expands
+past 100 MB, one holds a symbolic link. The page of each of the other 86 is
+byte-identical in both rounds. None had two quotations or two definition
+lists side by side: markdownify converted 28 quotations, all in the EPUB and
+none beside another, and no definition list; no Word file carries a style map
+that writes either. CPU time, master and this bridge, was 27.71 s and 28.48 s
+for the Word files in the first round and 26.28 s and 26.34 s in the second;
+0.71 s and 0.65 s, then 0.64 s and 0.66 s, for the EPUB; and 125.77 s and
+94.50 s, then 62.88 s and 64.76 s, for the three zips that convert. The load
+average was over 700, and the zips' times moved more between rounds than
+between bridges.
+
+### P63-7: what this does not cover
+
+- **A pair in a list item** is written as before (P63-4): on master the
+  second quotation leaves the list, or, under a marker four wide, the pair is
+  one. P40 and the rule in P63-4's last row close it.
+- **A definition list that opens with a definition** joins the list before
+  (P63-2).
+- **Two terms in a row**: markdownify writes a blank line between two `<dt>`s,
+  so Python-Markdown reads the first as a paragraph before the list. The list
+  after is kept apart from the next one now; the first term is still a
+  paragraph.
+- **An empty `<blockquote>` or `<dl>`** writes nothing, as an empty list does
+  (P32-5), and the two either side of it meet: they are kept apart, and the
+  empty one is not on the page.
+- **A quotation in a link or emphasis** is written into the line of the link
+  or emphasis (P47-4), and the page shows the quotation's marker as text. Two
+  there get the separator, which changes nothing on the page but whitespace.
+- **A `.md` file** never reaches the bridge, and two quotations with a blank
+  line between are one there, as Markdown says.
+
+### P63-8: the tests
+
+`tests/test_adjacent_blocks.py` renders each merging case of P63-1 and
+requires the page's quotations and definition lists, each with its own words,
+and its nesting, to be the document's; that the only lines added to the
+Markdown the bridge wrote before are separators and blank lines; that the
+page holds no comment and the same text. It requires the cases that never
+merged, and pairs in an item, a table cell, a `<pre>` or a heading, and P32's
+own lists, to be written byte for byte as before (markdownify's own writers
+for quotations and definition lists, patched back in); a definition list that
+opens with a definition to get no empty term; a document's own private-use
+characters to be kept; and forty seeded random trees of P63-5's second kind
+to keep their nesting with separators the only change. The three fixtures are
+read through `to_markdown`, the book across its two chapters and inside a
+zip. On master 81 of its 115 tests fail; the 34 that pass hold what is
+written as before, random trees that drew no pair, and the fixture's count.
+With the `:` check removed, 2 fail; with items marked, 2.
+`tests/test_office_formats.py` captures the three fixtures end to end: the
+quotations and definition lists in `content.html` are the fixture's, each with
+its words, and no artifact holds `<!--` or a private-use character.
+
+## P80: a 4-page capture was 86 MB, its thumbnails printed at 2,300 ppi (2026-10-17)
+
+From the capture that produced P78 and P79. Master was d247610.
+
+
+### P80-1: what was in the file
+
+A think tank's topic page, four pages of article cards, was 85,983,608 bytes.
+`pdfimages -list` showed eight pictures, and four of them were most of the
+file: 6720×4480, 5100×3300, 5073×3382 and 4068×2712 pixels at 1,400 to 2,300
+ppi on the page (24.4, 13.9, 18.7 and 15.6 MB). Each is shown as a 308×172 px
+card thumbnail. The page asks for a 500-pixel copy and does not get one: its
+image URLs read `…jpg?quality=75?w=500`, with a second `?`, so the image
+service reads `w=500` as part of the quality and sends the original. Chromium
+embeds every picture at its natural size, whatever size it prints at, and
+here it wrote them as Flate rather than passing the JPEG through (an ICC
+profile came with each).
+
+### P80-2: the pass, and why it reads the PDF
+
+`render/images.py` runs on the printed file right after the render, before
+the clipping check, the walkthrough appendix and the embed. It walks each
+page's content stream, tracking the transformation matrix through `q`, `Q`
+and `cm`, into every form a page draws, with the form's own matrix and
+resources each time it is drawn. At each `Do` of a picture it records the
+size the picture's unit square is mapped to. A picture drawn twice is
+measured at its larger size, so it stays sharp where it is biggest. A picture
+drawn at more than 600 ppi on its coarser axis gets 300 ppi at that size,
+resampled with Lanczos, in the codec Chromium chose for it: JPEG stays JPEG
+(quality 90), anything else is Flate. Its soft mask is resampled to the same
+size. The trigger is twice the target, so a reduction always drops at least
+three quarters of a picture's pixels, and a screen's 2x or 3x picture (192 or
+288 ppi at its CSS size) is never touched.
+
+The issue suggested doing this in the page before print, by redrawing each
+`<img>` through a canvas. Two things decided against that. Only the PDF knows
+the printed size, because print CSS, shrink-to-fit and `object-fit` all move
+it after the page is laid out. And a canvas cannot read back a picture from
+another origin that sends no CORS header, which is where most sites keep
+their pictures, so the fix would have missed most of the pages it is for.
+Reading the file needs neither the page nor the network. The issue also
+asked for the original size in `assets.json`. That file records the
+harvest's screenshots of the page's visuals, not the pictures the PDF
+prints, and the two are not matched one to one. So the record is a manifest
+warning instead, naming each picture's original and reduced size, the size
+it prints at and the resolution it had, and how much smaller the printed file
+became. It says that the PDF holds the reduced copies and that the originals
+are not in the capture. Capture is an act of record, and this changes what
+the PDF holds.
+
+Only an encoding that can be rewritten exactly is touched: 8 bits per sample,
+gray or RGB (directly or through an ICC profile, whose samples are kept as
+read, without colour conversion), Flate, JPEG or no filter, and no decode
+array or colour-key mask. A soft mask must satisfy the same and be the
+picture's alone. A picture over the limit that fails any of these, or has more
+pixels than Pillow decodes without calling it a decompression bomb, is left as
+it is and named in its own warning, with the reason. A printed file the pass
+cannot read is a warning that it did not run. Absence is not success here
+either: a large file is never passed off as one that was checked.
+
+A file with nothing over the limit keeps its bytes. The sizes are read from
+a reader first, and the file is cloned into a writer, rewritten, staged and
+renamed over the original only when a picture is over the limit.
+
+### P80-3: what the first live run found
+
+The first capture of the page with the pass failed with exit 5: "Limit
+reached while decompressing". pypdf refuses to inflate more than 75 MB from
+one stream, as a guard against decompression bombs, and the 6720×4480
+photograph is 90 MB of samples. The limit is now raised for each picture's
+read, through pypdf's `apply_configuration`, to exactly the size the
+picture's own dictionary declares. A stream that inflates past its declared
+size is still refused. And a picture that cannot be decoded is now left as it
+is and named, instead of failing the capture, so this optional pass cannot
+cost a capture that would otherwise have been published.
+
+Recaptured live on 2026-10-17, the page printed four pages and 8.1 MB where
+it had been 85.7 MB (8.3 MB with the bundle embedded). Six pictures were
+reduced to 300 ppi, from 663 to 2,327 ppi. The 1024×683 picture at 355 ppi was
+left alone.
+
+On copies of other captures from the same run, the pass took 0.07 s on a
+3-page news article with nothing to reduce, 0.5 s on a 6-page article where it
+reduced two pictures, and 5.0 s on a 63-page incident database where it
+reduced one 2048×2048 logo printed at 5,461 ppi. 1.6 s of that was the walk of
+63 content streams, and the rest the clone and rewrite.
+
+On a test page of noise pictures (P80-4), the PDF went from 27.7 MB to
+0.36 MB. Rasterized at 150 dpi with `pdftoppm`, the page before and after
+differed by less than 0.5 of 255 per channel on average, at most 25, in the
+noise texture.
+
+### P80-4: the tests
+
+`tests/test_print_image_resolution.py` makes its pictures at test time, of
+noise so neither codec can make them small: a 6000×4000 JPEG shown 200 px
+wide, a 2000×2000 PNG with alpha shown 100 px wide, a 3000×2000 JPEG at
+opacity 0.6 (which Chromium draws inside a transparency group, a form the
+walk has to enter) and a 400×300 JPEG at 192 ppi. The capture must come in
+under 2 MB, and the 400×300 picture untouched. The largest reduced picture
+must decode to the original, resized, within 6 of 255 per channel on average,
+and the soft mask must match its picture's new size. One warning must name
+the three originals and not the fourth. On master the same capture is
+36.7 MB. Unit tests on PDFs that Pillow writes cover a file with nothing to
+reduce, which keeps its bytes and still reports the picture it measured, a
+JPEG that stays a JPEG at exactly 300 ppi, a picture at exactly 600 ppi,
+which is left alone, and a 1-bit picture at 1,500 ppi, which is left at full
+size and named.
+
+### P80-5: what this does not cover
+
+- A picture drawn through a tiling pattern (a CSS background that repeats),
+  or as an inline image. The walk does not enter patterns, so such a picture
+  is not measured, and neither reduced nor named.
+- Re-encoding a Flate photograph as JPEG. That would have taken the topic
+  page well below 8 MB, but it turns a lossless picture lossy, which the pass
+  does not do to a page's picture without being asked.
+- An option to keep full resolution. 300 ppi is what print needs, and the
+  originals are one request away at the addresses the page gave them.
+- The walkthrough appendix, whose pages are screenshots at their own size,
+  and the protected path, which builds its PDF from page images.

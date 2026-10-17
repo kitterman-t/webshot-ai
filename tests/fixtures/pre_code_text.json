@@ -1,0 +1,156 @@
+{
+ "sections": {
+  "GitHub": [
+   {
+    "text": "    lead = \"an indented first line\"\ndef gorvane(plinth):\n    \"\"\"Wend the `plinth`.\"\"\"\n\ttabbed = \"two  spaces\"   \n    if plinth:\n        return f\"orvash {plinth}\"\n\n    return \"```\"",
+    "table": false
+   }
+  ],
+  "Pygments": [
+   {
+    "text": "    lead = \"an indented first line\"\ndef gorvane(plinth):\n    \"\"\"Wend the `plinth`.\"\"\"\n\ttabbed = \"two  spaces\"   \n    if plinth:\n        return f\"orvash {plinth}\"\n\n    return \"```\"",
+    "table": false
+   }
+  ],
+  "Pygments with line numbers inline": [
+   {
+    "text": "1    lead = \"an indented first line\"\n2def gorvane(plinth):\n3    \"\"\"Wend the `plinth`.\"\"\"\n4\ttabbed = \"two  spaces\"   \n5    if plinth:\n6        return f\"orvash {plinth}\"\n7\n8    return \"```\"",
+    "table": false
+   }
+  ],
+  "Pygments with a line-number table": [
+   {
+    "text": "1\n2\n3\n4\n5\n6",
+    "table": true
+   },
+   {
+    "text": "  const wend = `orvash ${plinth}`;\nfunction gorvane(a,  b) {\n\treturn a + b; // jessop\n}\n\n// ``` varnel",
+    "table": true
+   }
+  ],
+  "highlight.js": [
+   {
+    "text": "  const wend = `orvash ${plinth}`;\nfunction gorvane(a,  b) {\n\treturn a + b; // jessop\n}\n\n// ``` varnel",
+    "table": false
+   }
+  ],
+  "Prism, a fence in the code": [
+   {
+    "text": "Some *orvash* text:\n\n```js\nwend(plinth)\n```",
+    "table": false
+   }
+  ],
+  "Shiki": [
+   {
+    "text": "    lead = \"an indented first line\"\ndef gorvane(plinth):\n    \"\"\"Wend the `plinth`.\"\"\"\n\ttabbed = \"two  spaces\"   \n    if plinth:\n        return f\"orvash {plinth}\"\n\n    return \"```\"",
+    "table": false
+   }
+  ],
+  "Chroma with a line-number table": [
+   {
+    "text": "1\n2\n3\n4\n5\n6\n7\n8",
+    "table": true
+   },
+   {
+    "text": "    lead = \"an indented first line\"\ndef gorvane(plinth):\n    \"\"\"Wend the `plinth`.\"\"\"\n\ttabbed = \"two  spaces\"   \n    if plinth:\n        return f\"orvash {plinth}\"\n\n    return \"```\"",
+    "table": true
+   }
+  ],
+  "Rouge with a line-number table": [
+   {
+    "text": "1\n2\n3\n4\n5\n6\n7\n8",
+    "table": true
+   },
+   {
+    "text": "    lead = \"an indented first line\"\ndef gorvane(plinth):\n    \"\"\"Wend the `plinth`.\"\"\"\n\ttabbed = \"two  spaces\"   \n    if plinth:\n        return f\"orvash {plinth}\"\n\n    return \"```\"",
+    "table": true
+   }
+  ],
+  "One element a line": [
+   {
+    "text": "const wend = gorvane();\n\n  jessop(wend);",
+    "table": false
+   }
+  ],
+  "An indented first line and fence lines": [
+   {
+    "text": "   lead\n```\nfence\n```\nafter",
+    "table": false
+   }
+  ],
+  "Blank lines at either end": [
+   {
+    "text": "  \n    first\n  second   \n\n ",
+    "table": false
+   }
+  ],
+  "A run of four backticks": [
+   {
+    "text": "````\nnested ``` fence\n````",
+    "table": false
+   }
+  ],
+  "Links in the code": [
+   {
+    "text": "func Gorvane(wend []Plinth, sep Plinth) Plinth\nfunc Jessop(wend Plinth) []Plinth",
+    "table": false
+   }
+  ],
+  "Code in a link": [
+   {
+    "text": "linked = 1\n    deeper = 2",
+    "table": false
+   }
+  ],
+  "Emphasis in the code": [
+   {
+    "text": "gorvane [OPTION...] PLINTH [FILE...]\ngorvane [OPTION...] -e PLINTH ... [FILE...]",
+    "table": false
+   }
+  ],
+  "A subscript in the code": [
+   {
+    "text": "x1 = wend\n  x2 = varnel",
+    "table": false
+   }
+  ],
+  "A comment in the code": [
+   {
+    "text": "orvash = 1\n  jessop = 2",
+    "table": false
+   }
+  ],
+  "Highlighted code in a list item": [
+   {
+    "text": "    lead = \"an indented first line\"\ndef gorvane(plinth):\n    \"\"\"Wend the `plinth`.\"\"\"\n\ttabbed = \"two  spaces\"   \n    if plinth:\n        return f\"orvash {plinth}\"\n\n    return \"```\"",
+    "table": false
+   }
+  ],
+  "A line-number table in a list item": [
+   {
+    "text": "1\n2\n3\n4\n5\n6",
+    "table": true
+   },
+   {
+    "text": "  const wend = `orvash ${plinth}`;\nfunction gorvane(a,  b) {\n\treturn a + b; // jessop\n}\n\n// ``` varnel",
+    "table": true
+   }
+  ],
+  "A table of two cells that is not a line-number table": [
+   {
+    "text": "1\n2\nthree",
+    "table": true
+   },
+   {
+    "text": "wend\nvarnel\njessop",
+    "table": true
+   }
+  ]
+ },
+ "footer": [
+  {
+   "text": "footercode = 1\n  tail = 2",
+   "table": false
+  }
+ ]
+}

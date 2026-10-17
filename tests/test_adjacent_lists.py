@@ -179,7 +179,8 @@ APART = [
     ("paragraph-between", _ol("Alpha") + "<p>a paragraph</p>" + _ol("Bravo")),
     ("rule-between", _ol("Alpha") + "<hr/>" + _ol("Bravo")),
     ("second-in-a-quote", f"{_ol('Alpha')}<blockquote>{_ol('Bravo')}</blockquote>"),
-    ("nested", "<ul><li>Parent" + _ul("Child one") + _ul("Child two") + "</li></ul>"),
+    # Two lists nested in one item did merge, as upstream writes them (P32-5);
+    # docs/09 P40 keeps them apart, in `test_two_lists_in_one_item_stay_two`.
     (
         "in-a-table-cell",
         f"<table><tr><th>H</th></tr><tr><td>{_ol('Alpha')}{_ol('Bravo')}</td></tr></table>",

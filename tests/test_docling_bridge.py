@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from webshot.capture.snapshot import standalone_document
 from webshot.capture.visuals import VisualAsset
 from webshot.extract.chunks import build_chunk_records
 from webshot.extract.docling_bridge import (
@@ -214,10 +215,30 @@ def test_a_caption_no_table_carries_is_the_one_reported_missing() -> None:
     """What the count-mismatch warning is decided on: every snapshot caption
     that no table carries, compared as collapsed text and counted, so a second
     table captioned alike is not satisfied by the first one's caption."""
-    assert _captions_missing(["O", "", "I2"], ["O"]) == ["I2"]
-    assert _captions_missing(["A", "A"], ["A"]) == ["A"]
-    assert _captions_missing(["  Two   words "], ["Two words"]) == []
-    assert _captions_missing(["", ""], []) == []
+    assert _captions_missing(["O", "", "I2"], ["O"], clean=_as_given) == ["I2"]
+    assert _captions_missing(["A", "A"], ["A"], clean=_as_given) == ["A"]
+    assert _captions_missing(["  Two   words "], ["Two words"], clean=_as_given) == []
+    assert _captions_missing(["", ""], [], clean=_as_given) == []
+
+
+def _as_given(text: str) -> str:
+    return text
+
+
+def test_a_curly_caption_is_not_reported_missing() -> None:
+    """P58: the backend writes a caption's curly quote and dash plain, so the
+    caption as the page spells it was not found among the ones the document
+    carries, and a nested-table page warned that a caption it kept was lost."""
+    page = standalone_document(
+        "Tables",
+        "en",
+        "<h1>T</h1><table><caption>Outer\N{RIGHT SINGLE QUOTATION MARK}s caption "
+        "\N{EM DASH} 2026</caption><tr><td><table><tr><td>inner</td></tr></table>"
+        "</td></tr></table>",
+    )
+    result = extract(page, [])
+    assert "Outer's caption - 2026" in result.markdown
+    assert not any("caption" in warning.lower() for warning in result.warnings)
 
 
 def test_aligned_counts_match_means_no_warnings() -> None:

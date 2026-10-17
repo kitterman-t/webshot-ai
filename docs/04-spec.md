@@ -326,14 +326,30 @@ there with its reason, and the run's job summary lists every skip.
    check refused an automated browser and that this is not a sign-in page; a
    403 that names nothing gives both readings. The QA report records the
    status and `final_url` of any refused status (docs/09 P23-3).
+   A web page whose document shows a bot check's own page in place of the
+   page exits 4 with the same advice, whatever its status: a shown frame
+   from DataDome's `captcha-delivery.com`, a rendered `#px-captcha` (HUMAN,
+   formerly PerimeterX), or a page titled "Access Denied" carrying a
+   reference in Akamai's dotted format. Only a signature that names the
+   vendor counts, never a phrase a page could quote. The test runs after the
+   lazy-load pass, and a page it cannot read, tried twice, is a manifest
+   warning. A navigation that fails with `net::ERR_HTTP2_PROTOCOL_ERROR`
+   keeps exit 3, and its message adds that some bot checks refuse an
+   automated browser this way (docs/09 P78).
    A page that sends the browser from the address asked for to its own
    site's home page (same origin, the path dropped to `/`) is captured with a
    manifest warning that says so; asking for the root or its index file is
    not such a move (docs/09 P23-5).
-5. **Overlay policy (was undocumented in v2):** `clean` mode hides
-   cookie/consent overlays and records the hidden-element count in the
-   manifest; `faithful` mode hides nothing. Capture is an act of record —
-   what was altered must be declared.
+5. **Overlay policy (was undocumented in v2):** both modes hide the dialogs
+   of the consent managers WebShot knows by the names their vendors give
+   them (`CONSENT_MANAGERS`: Cookiebot, OneTrust, Didomi, Quantcast Choice,
+   TrustArc, Usercentrics, Sourcepoint), because a consent dialog is the
+   browser's session asking, not the page, and Chromium prints a fixed
+   dialog over the text of every page. A manifest warning names each one
+   that was on screen. `clean` mode also hides page chrome and large fixed
+   overlays; `faithful` mode hides nothing else. The number of elements
+   hidden is logged. Capture is an act of record — what was altered must be
+   declared (docs/09 P79).
 6. **Frames and shadow roots:** the snapshot is the page's flat tree. Every
    open shadow root, and the document of every frame the page can script
    (same-origin, `srcdoc`, `about:blank`), is read where it renders, so its
@@ -466,6 +482,15 @@ there with its reason, and the run's job summary lists every skip.
     `--no-ai-bundle`, where nothing records a count either. The figure is the
     one Crawl4AI's structural check uses for minimal text; a one-sentence page
     clears it (docs/09 P14-1, P22-2).
+15. **A picture printed far finer than paper shows:** after the render, each
+    picture the PDF draws at more than 600 pixels per inch, measured at the
+    largest size it is drawn on any page, is reduced to 300 pixels per inch
+    at that size, in the codec Chromium chose for it (a JPEG stays a JPEG),
+    with its soft mask. A manifest warning names each one, its original and
+    reduced size, and how much smaller the file became. A picture over the
+    limit whose encoding cannot be rewritten exactly is left as it is and
+    named in a warning, and a file that cannot be read for the pass says so.
+    A file with nothing to reduce keeps its bytes (docs/09 P80).
 
 ## 6. Security requirements (carried forward and new; all MUST)
 

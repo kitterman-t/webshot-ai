@@ -5,8 +5,8 @@ which formats it accepts, how big they may be, how the resulting page is
 titled and styled — is decided in `adapters.py`; this file's whole job is to
 hand MarkItDown a stream with an explicit type hint and hand back a string.
 
-Five behaviors of MarkItDown are corrected here rather than inherited, because
-each silently damages content WebShot promises to preserve (docs/09 P3-1):
+Eight behaviors of MarkItDown are corrected here rather than inherited, because
+each damages content WebShot promises to preserve (docs/09 P3-1):
 
 1. **TSV is not a format MarkItDown knows.**  Its CSV converter is
    comma-only, so a tab-separated file falls through to the plain-text
@@ -35,12 +35,44 @@ each silently damages content WebShot promises to preserve (docs/09 P3-1):
    string straight into Markdown (a deck's text, a sheet's name, an EPUB's
    metadata, a zip member's name and plain text) it is encoded on its way in;
    where markdownify writes it, markdownify is given a writer that encodes.
+   Code is not encoded, being literal, but only a code block is literal
+   whole: a `<pre>` written into a line of text, and inline code over
+   several lines, were Markdown after a blank line or a line opening a
+   heading, so they are written on one line, the `<pre>` as inline code
+   (docs/09 P59).
 5. **It writes two lists side by side as one.**  markdownify puts a blank line
    between two lists, and Python-Markdown reads a list of the same kind after a
    blank line as the first one going on: two EPUB `<ol>`s became one list,
    numbered on from the first, with every item a paragraph.  The writer marks
    where each list begins and ends, and an HTML comment, which nh3 drops from
-   the page, goes where two meet (docs/09 P32).
+   the page, goes where two meet (docs/09 P32).  Two quotations, or two
+   definition lists, side by side were one in the same way, and are kept
+   apart the same way (docs/09 P63).
+6. **It guesses a text's encoding from its first 64 KB.**  A UTF-8 file whose
+   first character outside ASCII comes later was decoded as ASCII, and its
+   reader failed: on its own the capture ended with exit 2, and in a zip the
+   member was left out (docs/09 P35).  The encoding of bytes WebShot wrote,
+   and of any text that is UTF-8 to its last byte, is stated instead
+   (`_declared_charset`).
+7. **It writes a list nested in an item at its parent's level.**  markdownify
+   indents what belongs to an item by the width of the item's marker, two
+   spaces under `* ` and three under `1. `, and Python-Markdown nests at four:
+   a document's sub-items became items of their parent's list, or text inside
+   it.  The writer indents by four, and leaves a blank line after a nested
+   list that more of the item follows (docs/09 P40).  A `<pre>` in an item is
+   an indented code block there, because Python-Markdown reads a fence only at
+   the start of a line, and an item's fence printed its code as one line of
+   text (docs/09 P44); so is one in a quotation or a definition, whose `> `
+   or `:   ` did the same (docs/09 P47).
+8. **It drops the whitespace at the edge of bold, italic, a link or code.**
+   markdownify strips each inline element's text and gives back one ASCII
+   space where the text began or ended with one, and nothing for anything
+   else: a no-break space, a newline or a `<br>` at the edge was lost, and a
+   run of whitespace alone was lost entirely, so
+   `called<strong>&nbsp;SALT.&nbsp;</strong>We'll` read `calledSALT.We'll`
+   and `This<strong> </strong>course` read `Thiscourse`.  The writer takes
+   the edges off before markdownify sees them and writes them outside the
+   markup (docs/09 P43, P49).
 
 MarkItDown itself parses XML through `defusedxml` (its RSS and EPUB
 converters), which is *not* what spec §6.6 rests on: the adapter defuses every
@@ -54,8 +86,10 @@ import base64
 import binascii
 import csv
 import dataclasses
+import functools
 import html
 import io
+import itertools
 import mimetypes
 import posixpath
 import re
@@ -98,7 +132,7 @@ from markitdown.converters._markdownify import _CustomMarkdownify
 
 from ..errors import UsageError
 from . import ooxml
-from .adapters import FORMATS
+from .adapters import CODE_LINES_CLASS, FORMATS
 
 #: Characters Python-Markdown (with `extra`) reads wherever they stand:
 #: emphasis, code, links and images (`!` too, since text ending in one turns
@@ -385,17 +419,32 @@ def _escape_cell(cell: str) -> str:
     return _as_text(cell.replace("\r\n", "\n")).replace("\n", "<br>")
 
 
-def _as_escaped_csv(data: bytes, delimiter: str, path_name: str) -> bytes:
+def _as_escaped_csv(
+    data: bytes, delimiter: str, path_name: str
+) -> tuple[bytes, list[str]]:
     """Re-delimit a separated-values file and escape its cells, in one pass.
 
     Both halves of this exist because MarkItDown's CSV converter is comma-only
     *and* flattens a line break in a cell to a space;
     doing them together means TSV is not parsed and re-serialized twice, and
     that a fix to quoting or encoding cannot reach one path and miss the other.
+    The bytes returned are UTF-8, whatever the file's were, and the warnings
+    say when that cost characters.
     """
-    rows = csv.reader(
-        io.StringIO(data.decode("utf-8-sig", errors="replace")), delimiter=delimiter
-    )
+    try:
+        text = data.decode("utf-8-sig")
+        conversion_warnings: list[str] = []
+    except UnicodeDecodeError:
+        # Read as UTF-8 regardless, as it always was; what is new is saying
+        # so, since a Windows-1252 export lost every accented letter without
+        # a word (docs/09 P35-1).
+        text = data.decode("utf-8-sig", errors="replace")
+        conversion_warnings = [
+            "The file is not UTF-8, the one encoding WebShot reads a CSV or "
+            "TSV file in, so the page shows U+FFFD (\N{REPLACEMENT CHARACTER}) "
+            "where its bytes are not UTF-8 (docs/09 P35)."
+        ]
+    rows = csv.reader(io.StringIO(text), delimiter=delimiter)
     buffer = io.StringIO()
     try:
         csv.writer(buffer, lineterminator="\n").writerows(
@@ -406,17 +455,121 @@ def _as_escaped_csv(data: bytes, delimiter: str, path_name: str) -> bytes:
         # cell past the 128 KB field limit would end the run in a traceback
         # rather than a message and an exit code.
         raise UsageError(f"Could not read the rows of {path_name}: {exc}") from exc
-    return buffer.getvalue().encode("utf-8")
+    return buffer.getvalue().encode("utf-8"), conversion_warnings
+
+
+#: What a UTF-8 stream's first bytes are when it begins with a byte order mark.
+_UTF8_BOM = b"\xef\xbb\xbf"
+
+
+def _declared_charset(data: bytes) -> str | None:
+    """The encoding MarkItDown is told a stream WebShot did not write is in.
+
+    MarkItDown guesses a text stream's encoding from its first 64 KB
+    (`_read_charset_sample` in 0.1.8), and decodes all of it by the guess.  A
+    UTF-8 file whose first character outside ASCII came later was guessed to
+    be ASCII and failed, or, where Magika could not name its content, found
+    no reader at all; and a guess inside the sample can be wrong too, as when
+    pip's `rich/box.py`, UTF-8 box drawing, was read as Kazakh `ptcp154`
+    (docs/09 P35).  So text that decodes as UTF-8 to its last byte is
+    declared UTF-8: a legacy encoding all but never forms valid UTF-8
+    sequences, and a NUL, which text does not hold, rules out a binary file
+    that happens to.  A byte order mark makes it `utf-8-sig`, which drops the
+    mark: it says how the text is encoded and is no part of it.  MarkItDown
+    dropped it only where Magika could not name the file, and otherwise put
+    it at the start of the page as U+FEFF (docs/09 P35-2).
+
+    Everything else is left to MarkItDown, as before: ASCII, which its guess
+    (`ascii`, or `utf-8`) decodes as itself, and text that is not UTF-8, whose
+    encoding WebShot cannot know (docs/09 P35-3 records what the guess does).
+    """
+    if data.isascii() or b"\x00" in data:
+        return None
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return "utf-8-sig" if data.startswith(_UTF8_BOM) else "utf-8"
 
 
 # --------------------------------------------------------------------------- #
 # Text that MarkItDown writes through markdownify
 # --------------------------------------------------------------------------- #
 
+#: How deep Python-Markdown indents what belongs to a list item: its
+#: `tab_length`.  A nested list indented less is read as more of the item's
+#: text, or as items of the item's own list (docs/09 P40).
+ITEM_INDENT = " " * 4
 #: What keeps two lists apart in Python-Markdown, which reads two lists of one
-#: kind with only blank lines between them as one list (docs/09 P32).  A
-#: comment is a block of its own to Markdown, and nh3 drops it from the page.
+#: kind with only blank lines between them as one list (docs/09 P32), and two
+#: quotations or two definition lists likewise (docs/09 P63).  A comment is a
+#: block of its own to Markdown, and nh3 drops it from the page.
 LIST_SEPARATOR = "<!-- -->"
+#: The text of an item that opens with a list, which goes on the next line: a
+#: list begun on the marker's line had its items' own lists read as text, and
+#: MarkItDown strips the space a bare marker needs to be one.  A comment, so
+#: the page shows nothing there (docs/09 P40).
+EMPTY_ITEM = "<!-- -->"
+#: How far a code block in a list item, a quotation or a definition is
+#: indented past their text.  Python-Markdown's `fenced_code` reads a fence
+#: only at the start of a line, so a fence behind an item's indentation, a
+#: quotation's `> ` or a definition's `:   ` printed its code as one line of
+#: text; an indented code block is read in each (docs/09 P44, P47).
+CODE_INDENT = " " * 4
+#: The `_ItemPart.kind` of a code block in an item.
+CODE = "pre"
+#: What a code block is written as a block in, because each begins its lines
+#: with something of its own: a list item (docs/09 P44), a quotation and a
+#: definition (docs/09 P47).  Each takes its code blocks' marks away.
+CODE_CONTAINERS = frozenset({"blockquote", "dd", "li"})
+#: What may stand between a code block and its container: markdownify writes
+#: what these hold at the start of a line, where an indented code block is
+#: read.  Anything else that markdownify converts writes it into a line of
+#: text — a link, emphasis, a term — and there the code is markdownify's, as
+#: it was, but for code written into a line (`BLOCKS`, docs/09 P59).  A tag
+#: markdownify does not convert passes its Markdown through, and may stand
+#: there too.
+CODE_HOLDERS = frozenset({"article", "div", "figcaption", "p", "section"})
+#: A line Python-Markdown reads as an item nested in the one it is in, though
+#: it is in the item's first block (its list's `INDENT_RE`): the second item
+#: of a list that opens a definition that opens an item (docs/09 P62).
+_NESTED_ITEM_LINE_RE = re.compile(r"[ ]{4,7}(?:\d+\.|[*+-])[ ]")
+#: Elements markdownify writes on lines of their own, whatever stands beside
+#: them.  Any other element it converts writes what it holds into a line of
+#: text, a link's or emphasis's, and strips the blank lines a `<pre>`'s fence
+#: stands between: the fence began mid-line, where Python-Markdown does not
+#: read one, and the code was Markdown (docs/09 P59).  An element this does
+#: not name is taken to write into a line, which is safe wherever it stands.
+#: Under a heading or in a table cell (`_inline`), and in code (`_noformat`),
+#: markdownify writes everything on one line, so neither needs naming here.
+BLOCKS = frozenset(
+    {
+        "[document]",
+        "article",
+        "blockquote",
+        "caption",
+        "dd",
+        "div",
+        "dl",
+        "dt",
+        "figcaption",
+        "li",
+        "ol",
+        "p",
+        "section",
+        "table",
+        "tr",
+        "ul",
+    }
+)
+#: A line break as Python-Markdown reads one, which ends a line of code.
+_LINE_BREAK_RE = re.compile(r"\r\n?|\n")
+#: A line break in code written into a line of text: a line feed by
+#: reference, which Markdown does not read and the page shows, its `<code>`
+#: being `CODE_LINES_CLASS`.  A `<br>` showed it too, but the capture's text
+#: surfaces drop one, and docling wrote one in a list item as its own private
+#: mark (docs/09 P59).
+CODE_LINE_BREAK = "&#10;"
 
 
 class _ListSeams:
@@ -434,6 +587,14 @@ class _ListSeams:
     list's end meets the next one's start, nothing anywhere else.  A list
     nested in an item, a table cell, a heading or a `<pre>` is not marked.
 
+    Quotations and definition lists are marked too, because Python-Markdown
+    makes a quotation that follows a quotation part of it, and adds a term
+    that follows a definition list to it (docs/09 P63).  Their seams are
+    resolved in a pass of their own, before the lists', and their marks taken
+    away then, so that the lists' pass reads what it read before they were
+    marked: a document with no two of them side by side is written as before.
+    As with lists, one in an item is not marked.
+
     A mark holds a token drawn for this instance, so no document's text, a
     `<pre>`'s included, can hold one.  `resolve` must see every string these
     marks went into before any of them is used.
@@ -444,18 +605,28 @@ class _ListSeams:
         # into the text either side of it.
         token = f"\ue000{secrets.token_hex(8)}"
         self._begin, self._end = f"{token}begin", f"{token}end"
-        self._marks = re.compile(f"{token}(?:begin|end)(?:ol|ul)\ue001")
-        # What markdownify writes between the two: blank lines, which in a
-        # blockquote are `>`, and on the second list's line the indentation
-        # that keeps it in its blockquote (`> `) or definition (four spaces).
-        self._seams = re.compile(
-            f"{self._end}(?P<kind>ol|ul)\ue001"
-            r"(?P<gap>[ \t>]*\n(?:[ \t>]*\n)*)(?P<indent>(?:> ?| {4})*)"
-            f"{self._begin}(?P=kind)\ue001"
-        )
+
+        def seams(kinds: str) -> re.Pattern[str]:
+            # What markdownify writes between the two: blank lines, which in a
+            # blockquote are `>`, and on the second one's line the indentation
+            # that keeps it in its blockquote (`> `) or definition (four
+            # spaces).
+            return re.compile(
+                f"{self._end}(?P<kind>{kinds})\ue001"
+                r"(?P<gap>[ \t>]*\n(?:[ \t>]*\n)*)(?P<indent>(?:> ?| {4})*)"
+                f"{self._begin}(?P=kind)\ue001"
+            )
+
+        def marks(kinds: str) -> re.Pattern[str]:
+            return re.compile(f"{token}(?:begin|end)(?:{kinds})\ue001")
+
+        self._passes = [
+            (seams(kinds), marks(kinds)) for kinds in ("blockquote|dl", "ol|ul")
+        ]
 
     def mark(self, kind: str, block: str) -> str:
-        """`block`, a list markdownify wrote, marked inside its blank lines.
+        """`block`, a list, quotation or definition list markdownify wrote,
+        marked inside its blank lines, as `kind`: its tag.
 
         Inside, because markdownify collapses the blank lines between two
         blocks by counting the newlines each one starts and ends with.  A list
@@ -472,20 +643,285 @@ class _ListSeams:
         )
 
     def resolve(self, markdown: str) -> str:
-        """`markdown` with its marks gone, and a separator where lists meet."""
+        """`markdown` with its marks gone, and a separator where two meet."""
 
         def separate(seam: re.Match[str]) -> str:
             gap, indent = seam["gap"], seam["indent"]
-            # The separator goes on a line of its own at the second list's
+            # The separator goes on a line of its own at the second one's
             # indentation.  Where a blank line between them has other
             # indentation the two are in different blocks, which Markdown
             # keeps apart already.
             blank = indent.rstrip()
             if any(line.rstrip() != blank for line in gap.split("\n")[1:-1]):
                 return seam[0]
+            # A definition list that opens with a definition, `:   `, would
+            # take the separator's paragraph for its term: an empty `<dt>`.
+            if seam["kind"] == "dl" and seam.string.startswith(":", seam.end()):
+                return seam[0]
             return f"{gap}{indent}{LIST_SEPARATOR}\n{blank}\n{indent}"
 
-        return self._marks.sub("", self._seams.sub(separate, markdown))
+        for seams, marks in self._passes:
+            markdown = marks.sub("", seams.sub(separate, markdown))
+        return markdown
+
+
+@dataclass(slots=True)
+class _ItemPart:
+    """Some of an item's Markdown: its own, a list nested in it, or its code."""
+
+    #: `ol` or `ul` for a nested list, `CODE` for a code block; None for the
+    #: item's own Markdown.
+    kind: str | None
+    #: The list's items, each as markdownify wrote it; the code block; or the
+    #: item's own Markdown in the pieces it was found in.
+    pieces: list[str]
+    #: Which list the items are of, so that two lists side by side stay two;
+    #: which `<pre>` the code is, so that two side by side stay two.
+    list_id: int | None = None
+
+
+class _NestedItems:
+    """The items of lists nested in an item, found again in the item's Markdown.
+
+    markdownify hands an item its children's Markdown as one string, and by
+    then where a nested list ends, and whether another begins after it, is
+    lost.  So each nested item is written between marks that name its list,
+    and the item it sits in reads its lists back out and takes the marks away:
+    none is left once the outermost item is written.  A code block in an item
+    is marked the same way, so that what follows it, and what it follows, can
+    be kept apart from it, and so that nothing between it and the item strips
+    its first line's indentation.  A quotation or a definition takes its own
+    code blocks' marks away (`code_blocks`), so an item finds only its own.  A
+    mark that does not begin a line is in a blockquote or a table cell, and is
+    only taken away.
+
+    A mark holds a token drawn for this instance, so no document's text, a
+    `<pre>`'s included, can hold one.
+    """
+
+    def __init__(self) -> None:
+        # Private-use characters around the token, so that a mark cannot run
+        # into the text either side of it.
+        token = f"\ue002{secrets.token_hex(8)}"
+        self._begin, self._end = token, f"{token}end\ue003"
+        self._items = re.compile(
+            f"{token}(?P<kind>ol|ul|{CODE})(?P<list>[0-9]+)\ue003(?P<item>.*?){self._end}",
+            re.DOTALL,
+        )
+        self._code = re.compile(
+            f"{token}{CODE}[0-9]+\ue003(?P<code>.*?){self._end}", re.DOTALL
+        )
+
+    def mark(self, kind: str, list_id: int, item: str) -> str:
+        return f"{self._begin}{kind}{list_id}\ue003{item}{self._end}"
+
+    def code_blocks(self, text: str) -> str:
+        """`text`, a quotation's or a definition's Markdown, its code unmarked.
+
+        Each code block follows `LIST_SEPARATOR` and a blank line.  An indented
+        block straight after a list, a definition list or another code block is
+        more of it to Python-Markdown, which places such a block by its depth
+        alone; a definition's text cannot be a code block on its `:` line; and
+        with something before it, the container's strip of its own text leaves
+        the code's first line's indentation alone (docs/09 P47).
+        """
+        return self._code.sub(
+            lambda match: f"{LIST_SEPARATOR}\n\n{match['code']}", text
+        )
+
+    def parts(self, text: str) -> list[_ItemPart]:
+        """`text`, an item's Markdown, as its own and the lists nested in it."""
+        parts: list[_ItemPart] = []
+
+        def own(markdown: str) -> None:
+            if parts and parts[-1].kind is None:
+                parts[-1].pieces.append(markdown)
+            else:
+                parts.append(_ItemPart(None, [markdown]))
+
+        position = 0
+        for match in self._items.finditer(text):
+            before, position = text[position : match.start()], match.end()
+            list_id = int(match["list"])
+            if match.start() and text[match.start() - 1] != "\n":
+                own(before + match["item"])
+            elif parts and parts[-1].list_id == list_id and not before.strip():
+                parts[-1].pieces.append(match["item"])
+            else:
+                own(before)
+                parts.append(_ItemPart(match["kind"], [match["item"]], list_id))
+        own(text[position:])
+        return parts
+
+
+def _code_of(block: str) -> str:
+    """The code in `block`, a `<pre>` as markdownify fences it.
+
+    As its `strip_pre` option trims it, without the fence or a language.
+    """
+    opening = block.index("\n", block.index("```"))
+    return block[opening + 1 : block.rindex("```") - 1]
+
+
+def _with_its_gap(item: str) -> str:
+    """A list item and the break after it.
+
+    A blank line after an item of more than one block, or Python-Markdown
+    reads the next item as more of its last block.
+    """
+    return item + ("\n\n" if "\n\n" in item else "\n")
+
+
+def _item_lines(parts: list[_ItemPart]) -> tuple[list[str], int]:
+    """An item's Markdown as lines to indent, and how many are its first block.
+
+    The blocks keep the blank lines markdownify wrote between them, but for
+    two places Python-Markdown needs one.  It reads a line straight after a
+    nested list as more of the list's last item, so a blank line goes there,
+    and `LIST_SEPARATOR` too where the next block is a list of the same kind.
+    And it nests a list with no blank line before it only straight after the
+    item's first block: after any later one, the list is that block's text.
+    The first block is the item's own text up to a blank line or a list; it is
+    nothing where the item opens with a list or a code block.
+
+    A code block has a blank line either side, or it is read as text.  It
+    follows `LIST_SEPARATOR` where it follows a nested list or another code
+    block: Python-Markdown places an indented block by its depth alone, and a
+    code block's depth is a nested item's text's, so after a list it became
+    the list's last item's paragraph; after a code block it was more of it.
+    """
+    # Each block's kind, its Markdown, and whether a blank line follows it.
+    blocks: list[tuple[str | None, str, bool]] = []
+    for part in parts:
+        if part.kind is None:
+            markdown = "".join(part.pieces)
+            body, blank_after = (
+                markdown.strip(),
+                markdown.rstrip(" \t").endswith("\n\n"),
+            )
+        elif part.kind == CODE:
+            # Indented already, and the first line's indentation is the code's.
+            body, blank_after = "".join(part.pieces), True
+        else:
+            body = "".join(map(_with_its_gap, part.pieces)).rstrip("\n")
+            blank_after = True
+        if body:
+            blocks.append((part.kind, body, blank_after))
+    lines: list[str] = []
+    first_block = 0
+    for index, (kind, body, _) in enumerate(blocks):
+        if index:
+            previous_kind, _, blank = blocks[index - 1]
+            if blank or kind == CODE or not (index == 1 and first_block == len(lines)):
+                lines.append("")
+            if previous_kind is not None and kind in (previous_kind, CODE):
+                lines += [LIST_SEPARATOR, ""]
+        elif kind == CODE:
+            # After `EMPTY_ITEM`, which `convert_li` writes first.
+            lines.append("")
+        own = [line if line.strip() else "" for line in body.split("\n")]
+        if index == 0 and kind is None:
+            first_block = own.index("") if "" in own else len(own)
+        lines += own
+    return lines, first_block
+
+
+def _in_a_definition(el: Any) -> bool:
+    """Whether `el` is in a `<dd>` that is nearer to it than any `<li>`."""
+    for ancestor in el.parents:
+        if ancestor.name in ("dd", "li"):
+            return bool(ancestor.name == "dd")
+    return False
+
+
+def _code_on_one_line(text: str, parent_tags: Iterable[str]) -> str:
+    """Inline code's text, written on one line.
+
+    A code span's text is not encoded, Markdown keeping it literal, but
+    Python-Markdown reads a heading, a quotation, a rule or raw HTML wherever a
+    line of a paragraph begins with one, and a blank line ends the paragraph:
+    `<code>` whose text went on to a line `# h` and then to
+    `<img src="https://…">` put the image on the page (docs/09 P59).  The
+    browser shows a line break in inline code as a space, so it is written as
+    one.  Inside `pre`, `code`, `kbd` or `samp` it is markdownify's, part of
+    the code around it.
+    """
+    if "_noformat" in parent_tags:
+        return text
+    return _LINE_BREAK_RE.sub(" ", text)
+
+
+#: The ASCII characters `str.strip()` takes as whitespace, which `chomp`
+#: strips: space, tab, the line breaks, and the four separators.  Derived from
+#: Python rather than listed, so the set is the one `chomp` actually uses.
+_ASCII_WHITESPACE_RUN = re.compile(
+    "[" + re.escape("".join(c for c in map(chr, range(128)) if c.isspace())) + "]+"
+)
+
+
+def _outside_markup(edge: str, *, literal: bool) -> str:
+    """The whitespace at one edge of an inline element, as written outside it.
+
+    Each run of ASCII whitespace is one space, which is what `chomp` writes
+    for an edge of spaces, so output that was right does not move; a newline
+    or the line break markdownify writes for a `<br>` is one too, so an edge
+    never begins a line, which beside the newline of the next text could make
+    a blank one and end the paragraph or list item (docs/09 P49).  A space
+    outside ASCII is written as the document has it (docs/09 P43).  Inside
+    `pre`, `code`, `kbd` and `samp` (`literal`) markdownify writes text as it
+    stands, so every edge is written so too.
+    """
+    if literal:
+        return edge
+    return _ASCII_WHITESPACE_RUN.sub(" ", edge)
+
+
+def _keeping_edge_spaces(
+    convert: Callable[..., str], *, one_line: bool = False
+) -> Callable[..., str]:
+    """`convert`, with the whitespace at the edges of its text kept.
+
+    markdownify's `chomp` takes an inline element's edges with `str.strip()`,
+    and puts back one space where the text began or ended with a plain space,
+    and nothing otherwise.  So a no-break space, a newline or a `<br>` at the
+    edge of bold text was lost, and an element holding whitespace alone wrote
+    nothing at all: the words either side of it ran together on the page
+    (docs/09 P43, P49).  MarkItDown's `<a>` dropped even a plain space where it
+    returns before its markup: with no target, inside `pre`, and where the
+    text is the address.
+
+    So `convert` is never shown an edge.  It converts the text between them,
+    and each edge is written outside the markup (`_outside_markup`); whitespace
+    alone is written as one edge.  The page shows each as it shows the same
+    whitespace between two words, and content.md and content.txt read it as a
+    space, as they already read one between two words.
+
+    `one_line` is for inline code, whose text is put on one line first
+    (`_code_on_one_line`), so that its edges are the ones of the line it is
+    written as.  It is done here, not in a code converter of the writer's
+    own, because such a converter takes this one's place in the class, and
+    the edges were lost when one did.
+    """
+
+    @functools.wraps(convert)
+    def implementation(self: Any, el: Any, text: str, *args: Any, **kwargs: Any) -> str:
+        parent_tags = kwargs.get("parent_tags", args[0] if args else ())
+        literal = "_noformat" in parent_tags
+        if one_line:
+            text = _code_on_one_line(text, parent_tags)
+        inner = text.strip()
+        if not inner:
+            return _outside_markup(text, literal=literal)
+        lead = text[: len(text) - len(text.lstrip())]
+        trail = text[len(text.rstrip()) :]
+        converted: str = convert(self, el, inner, *args, **kwargs)
+        return (
+            _outside_markup(lead, literal=literal)
+            + converted
+            + _outside_markup(trail, literal=literal)
+        )
+
+    return implementation
 
 
 class _TextMarkdownify(_CustomMarkdownify):
@@ -497,9 +933,27 @@ class _TextMarkdownify(_CustomMarkdownify):
     markdownify's would print its backslashes.  It is not called inside `pre`,
     `code`, `kbd` or `samp`, whose text Markdown keeps literal.
 
-    Its lists are marked with `list_seams`, which whoever reads the Markdown
-    resolves.
+    Its lists, quotations and definition lists are marked with `list_seams`,
+    which whoever reads the Markdown resolves.
+
+    Every converter that `chomp`s its text keeps the whitespace at its edges
+    (`_keeping_edge_spaces`); `strike` is `s`'s, through `self`.  Inline code's
+    converters write it on one line there too (`_code_on_one_line`).
     """
+
+    convert_a = _keeping_edge_spaces(_CustomMarkdownify.convert_a)
+    convert_b = _keeping_edge_spaces(_CustomMarkdownify.convert_b)
+    convert_code = _keeping_edge_spaces(_CustomMarkdownify.convert_code, one_line=True)
+    convert_del = _keeping_edge_spaces(_CustomMarkdownify.convert_del)
+    convert_em = _keeping_edge_spaces(_CustomMarkdownify.convert_em)
+    convert_i = _keeping_edge_spaces(_CustomMarkdownify.convert_i)
+    convert_kbd = _keeping_edge_spaces(_CustomMarkdownify.convert_kbd, one_line=True)
+    convert_s = _keeping_edge_spaces(_CustomMarkdownify.convert_s)
+    convert_samp = _keeping_edge_spaces(_CustomMarkdownify.convert_samp, one_line=True)
+    convert_strong = _keeping_edge_spaces(_CustomMarkdownify.convert_strong)
+    convert_sub = _keeping_edge_spaces(_CustomMarkdownify.convert_sub)
+    convert_sup = _keeping_edge_spaces(_CustomMarkdownify.convert_sup)
+    convert_u = _keeping_edge_spaces(_CustomMarkdownify.convert_u)
 
     def __init__(self, *, list_seams: _ListSeams, **options: Any) -> None:
         super().__init__(**options)
@@ -514,15 +968,96 @@ class _TextMarkdownify(_CustomMarkdownify):
             return _as_text(text)
         return _as_text_lines(text)
 
-    def convert_pre(self, el: object, text: str, parent_tags: object) -> str:
+    @functools.cached_property
+    def _nested_items(self) -> _NestedItems:
+        return _NestedItems()
+
+    def convert_li(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
+        """An item, with what belongs to it indented as Python-Markdown reads it.
+
+        markdownify indents an item's other lines by its marker's width, and
+        Python-Markdown takes a nested list only at `ITEM_INDENT`: under `* `
+        a sub-list became items of the parent's list, under `1. ` text in the
+        parent item, and an item's second paragraph left the list (docs/09
+        P40).  Every line after the first is indented by `ITEM_INDENT` here,
+        but for the rest of the item's first block, kept shallower: a `>` four
+        spaces in is not a blockquote there.  An item that opens with a list
+        has `EMPTY_ITEM` for its text, and so has one whose first block holds
+        a line Python-Markdown would read as an item nested in it; there the
+        block follows after a blank line, at `ITEM_INDENT` (docs/09 P62).
+        Inside `pre`, `code`, `kbd` or `samp`, whose text Markdown keeps
+        literal, it is markdownify's.
+        """
+        tags = set(parent_tags)
+        if "_noformat" in tags:
+            literal: str = super().convert_li(el, text, parent_tags)
+            return literal
+        lines, first_block = _item_lines(self._nested_items.parts(text or ""))
+        if not lines:
+            return "\n"
+        # markdownify's marker for this item: `*`, `+` or `-` by its depth,
+        # or its number in an ordered list.
+        marker = super().convert_li(el, "-", parent_tags).removesuffix("-\n")
+        shallow = " " * min(len(marker), len(ITEM_INDENT) - 1)
+        if not first_block:
+            lines = [EMPTY_ITEM, *lines]
+        elif any(
+            _NESTED_ITEM_LINE_RE.match(shallow + line) for line in lines[1:first_block]
+        ):
+            # The first block would not stay one, so it is the item's second.
+            lines, first_block = [EMPTY_ITEM, "", *lines], 0
+        item = "\n".join(
+            [marker + lines[0]]
+            + [
+                line and (shallow if index < first_block else ITEM_INDENT) + line
+                for index, line in enumerate(lines[1:], 1)
+            ]
+        )
+        parent = el.parent
+        if (
+            "li" in tags
+            and parent is not None
+            and parent.name in ("ol", "ul")
+            and not _in_a_definition(parent)
+        ):
+            # Nested: the item this list sits in takes the marks away.
+            item = self._nested_items.mark(parent.name, id(parent), item)
+        return _with_its_gap(item)
+
+    def convert_pre(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
         """A code block, fenced so that none of its own lines can close it.
 
         markdownify always fences with three backticks, and Python-Markdown
         ends the block at the first line that is those three alone: a `<pre>`
         showing a fenced example closed early, and everything after it was
-        read as Markdown, raw HTML included.
+        read as Markdown, raw HTML included.  In what writes it into a line of
+        text (`BLOCKS`) it is inline code (`_code_in_a_line`), however deep in
+        it, a list item, a quotation or a definition between them or not: no
+        block survives being written into a line whole.  Elsewhere in a list
+        item, a quotation or a definition it is indented instead
+        (`_code_block`), where nothing but `CODE_HOLDERS` stands between them
+        (`_held_as_a_block`); in `code`, `kbd` or `samp` it is their text; in
+        a table cell or a heading, which is one line, inside `pre`, and
+        anywhere else, it is markdownify's.
         """
         block: str = super().convert_pre(el, text, parent_tags)
+        tags = set(parent_tags)
+        if block and "_noformat" in tags and el.find_parent("pre") is None:
+            # A code span, which `convert_code` writes on one line.
+            return f" {_code_of(block)} "
+        if (
+            block
+            and not tags & {"_inline", "_noformat"}
+            and self._written_into_a_line(el)
+        ):
+            return self._code_in_a_line(block)
+        if (
+            block
+            and tags & CODE_CONTAINERS
+            and not tags & {"_inline", "_noformat"}
+            and self._held_as_a_block(el)
+        ):
+            return self._code_block(el, block)
         fence = _fence(text, minimum=3)
         if fence == "```":
             return block
@@ -535,21 +1070,152 @@ class _TextMarkdownify(_CustomMarkdownify):
             + block[closing + 3 :]
         )
 
+    def _written_into_a_line(self, el: Any) -> bool:
+        """Whether an element `el` is in writes it into a line of text."""
+        return any(
+            parent.name not in BLOCKS
+            and self.get_conv_fn_cached(parent.name) is not None
+            for parent in el.parents
+        )
+
+    @staticmethod
+    def _code_in_a_line(block: str) -> str:
+        """`block`, markdownify's fenced code, as code in a line of text.
+
+        A link, emphasis, `<sub>` or `<q>` writes what it holds into a line,
+        and there markdownify's fence began mid-line, where `fenced_code` does
+        not read one.  The page showed the code as inline code while it was
+        one paragraph; but its text is not encoded, a code block's being
+        literal, so a blank line in it ended the paragraph, as a line opening
+        with `#`, `>`, `***` or `<div>` split it, and what followed was
+        Markdown: `<img src="https://…">` typed in the code was an image the
+        capture fetched (docs/09 P59, the class of P28).  No block can begin
+        in a line of text, so the code is `<code>`, its text encoded as every
+        other string a document holds is, and all of it on the one line of
+        Markdown.  Each line break is `CODE_LINE_BREAK`, which the page shows
+        as a line break in `CODE_LINES_CLASS`.  Tabs are expanded
+        first, so that a tab stop falls where it does in the same `<pre>` at
+        the top level.
+        """
+        lines = _LINE_BREAK_RE.split(_code_of(block))
+        code = CODE_LINE_BREAK.join(
+            _as_text(line.expandtabs(len(ITEM_INDENT))) for line in lines
+        )
+        return f' <code class="{CODE_LINES_CLASS}">{code}</code> '
+
+    # Inline code is written on one line (`_code_on_one_line`, docs/09 P59) by
+    # `convert_code`, `convert_kbd` and `convert_samp` above, which keep its
+    # edges too (docs/09 P43).  A method here would take their place.
+
+    def _held_as_a_block(self, el: Any) -> bool:
+        """Whether nothing between `el` and its container writes it into a line.
+
+        Its container is the nearest of `CODE_CONTAINERS` around it.  A
+        definition in a list item is none, unless a quotation stands between
+        them: Python-Markdown's list indentation is read before a definition's,
+        so a block indented in such a definition is the item's, and its code
+        reached the page in the item, four spaces deeper (docs/09 P47-4).
+        """
+        parents = iter(el.parents)
+        for parent in parents:
+            if parent.name == "dd":
+                return all(
+                    outer.name != "li"
+                    for outer in itertools.takewhile(
+                        lambda outer: outer.name != "blockquote", parents
+                    )
+                )
+            if parent.name in CODE_CONTAINERS:
+                return True
+            if (
+                parent.name not in CODE_HOLDERS
+                and self.get_conv_fn_cached(parent.name) is not None
+            ):
+                return False
+        return False
+
+    def _code_block(self, el: object, block: str) -> str:
+        """`block`, markdownify's fenced code, as a container's code block.
+
+        Python-Markdown's `fenced_code` reads a fence only where a line begins,
+        and in an item the fence is indented, in a quotation behind `> ` and in
+        a definition behind `:   ` or indented: the code was printed as one
+        line of text in a paragraph (docs/09 P44, P47).  So the code is
+        indented by `CODE_INDENT`, which its container adds its own
+        indentation or `> ` to, and needs no fence, so a run of backticks in it
+        is text.  The code is markdownify's, as its `strip_pre` option trims
+        it; tabs are expanded here, as Python-Markdown expands them from the
+        start of a line, so that how far in the code is written moves no tab
+        stop.  Each `\\r` is a line break, as it is to Python-Markdown.  A
+        `<pre>` of blank lines is nothing: an indented code block cannot be
+        empty.
+        """
+        lines = _LINE_BREAK_RE.split(_code_of(block).expandtabs(len(CODE_INDENT)))
+        if not any(line.strip() for line in lines):
+            return ""
+        indented = "\n".join(line and CODE_INDENT + line for line in lines)
+        return f"\n\n{self._nested_items.mark(CODE, id(el), indented)}\n\n"
+
+    def convert_blockquote(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
+        """A quotation, its code blocks unmarked (`_NestedItems.code_blocks`),
+        and marked where it begins and ends (docs/09 P63).
+
+        Not marked in an item, which markdownify indents by its marker's width
+        and Python-Markdown reads at four (docs/09 P32-5): a seam found there
+        is found by chance, and its separator can fall in what Python-Markdown
+        takes for code, and print (docs/09 P63-4).  Nor in a table cell or
+        heading, which markdownify writes into the cell's line, nor in a
+        `<pre>`, which is code.  Its code blocks are unmarked wherever it is:
+        a quotation in an item holds its own (docs/09 P47).  One method does
+        both, as a second would take the first's place in the class.
+        """
+        block: str = super().convert_blockquote(
+            el, self._nested_items.code_blocks(text or ""), parent_tags
+        )
+        if {"li", "_inline", "_noformat"} & set(parent_tags):
+            return block
+        return self._list_seams.mark("blockquote", block)
+
+    def convert_dd(self, el: object, text: str, parent_tags: Iterable[str]) -> str:
+        """A definition, its code blocks unmarked (`_NestedItems.code_blocks`).
+
+        markdownify indents what it holds by four, after `:   `, and an
+        indented code block is four further in, as in an item.
+        """
+        definition: str = super().convert_dd(
+            el, self._nested_items.code_blocks(text or ""), parent_tags
+        )
+        return definition
+
     def convert_list(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
         """A list, marked where it begins and ends unless it sits in another.
 
         One nested in an item is written without a blank line before it, and
         one in a table cell or heading on the cell's line, so neither is a
         list Markdown starts after a blank line; one in a `<pre>` is code.
+        One in a definition is a block of the definition's, even where the
+        definition is in an item: markdownify wrote it on the line after the
+        definition's text, and Python-Markdown read it as that text (docs/09
+        P62).  So it is written as one in no item is.
         """
-        block: str = super().convert_list(el, text, parent_tags)
-        if {"li", "_inline", "_noformat"} & set(parent_tags):
+        tags = set(parent_tags)
+        if not {"_inline", "_noformat"} & tags and _in_a_definition(el):
+            tags.discard("li")
+        block: str = super().convert_list(el, text, tags)
+        if {"li", "_inline", "_noformat"} & tags:
             return block
         return self._list_seams.mark(el.name, block)
 
     # markdownify binds these to its own `convert_list` when its class is made.
     convert_ol = convert_list
     convert_ul = convert_list
+
+    def convert_dl(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
+        """A definition list, marked as a quotation is (docs/09 P63)."""
+        block: str = super().convert_dl(el, text, parent_tags)
+        if {"li", "_inline", "_noformat"} & set(parent_tags):
+            return block
+        return self._list_seams.mark("dl", block)
 
 
 def _attributes_as_text(soup: BeautifulSoup) -> None:
@@ -581,7 +1247,8 @@ class _TextHtmlConverter(HtmlConverter):
     bytes or said to be missing (docs/09 P36), the attributes markdownify
     writes are made safe, the writer is `_TextMarkdownify`, the text the
     too-deeply-nested fallback returns is encoded, where upstream writes it
-    into Markdown raw, and two lists that meet are kept apart.
+    into Markdown raw, and two lists, quotations or definition lists that meet
+    are kept apart.
 
     `list_seams` is for a reader that joins several documents' Markdown, as
     EPUB joins its chapters: their lists are left marked, and it resolves them
@@ -690,7 +1357,8 @@ class _TextEpubConverter(EpubConverter):
 
     MarkItDown joins the chapters with a blank line, so a chapter that ends
     with a list and one that begins with a list of the same kind made one list
-    too; their lists are resolved once the book is joined (docs/09 P32).
+    too; their lists are resolved once the book is joined (docs/09 P32), and
+    their quotations and definition lists with them (docs/09 P63).
     """
 
     def __init__(self) -> None:
@@ -1226,23 +1894,30 @@ def _convert_bytes(
     """One file's bytes as Markdown, read as the format `suffix` names.
 
     What a file on its own and a member of a zip share: the CSV escape, the
-    `ooxml` rewrite and its fallback, and the warnings each leaves.  Kept in
-    one place so a member cannot be read by a path the file was not, which is
-    how a zipped deck came to skip the rewrite (docs/09 P29).  `name` is the
-    file's own, for the reader and for an error.  A failed read raises, and
-    the caller decides what that costs.
+    encoding MarkItDown is told, the `ooxml` rewrite and its fallback, and the
+    warnings each leaves.  Kept in one place so a member cannot be read by a
+    path the file was not, which is how a zipped deck came to skip the
+    rewrite (docs/09 P29).  `name` is the file's own, for the reader and for
+    an error.  A failed read raises, and the caller decides what that costs.
     """
     original = data
     conversion_warnings: list[str] = []
+    charset: str | None = None
     if suffix in (".csv", ".tsv"):
-        data = _as_escaped_csv(data, "\t" if suffix == ".tsv" else ",", name)
+        data, conversion_warnings = _as_escaped_csv(
+            data, "\t" if suffix == ".tsv" else ",", name
+        )
         suffix = ".csv"
+        # WebShot wrote these bytes, so their encoding is a fact, not a guess.
+        charset = "utf-8"
     elif suffix == ".pptx":
         data, conversion_warnings = ooxml.prepare_pptx(data, _equation_latex)
     elif suffix == ".docx":
         data, conversion_warnings = ooxml.prepare_docx(data, _equation_latex)
+    else:
+        charset = _declared_charset(data)
 
-    stream_info = StreamInfo(extension=suffix, filename=name)
+    stream_info = StreamInfo(extension=suffix, filename=name, charset=charset)
     try:
         result = markitdown.convert_stream(
             io.BytesIO(data), stream_info=stream_info, keep_data_uris=True

@@ -26,6 +26,11 @@ versions rather than assumed (docs/09 S3 and the Phase 2 corrections):
   and "un<b>break</b>able" as "un break able". Where a formatted part touches
   the text beside it is carried through the backend as two marker characters
   (docs/09 P14-56, P48).
+- The backend makes no item of an `<li>` with no text of its own, so a list
+  that item holds hangs straight off the outer list, the item has no line in
+  content.md, and an ordered list given a start number counts the items after
+  it one short. A third marker character stands in for the item's text until
+  the document is built (docs/09 P45).
 - The backend reads a `<pre>` in a list item into the item's line with its
   whitespace joined, and docling-core indents only the first line of a list
   item's child, so an item's code reached content.md as one line. The bridge
@@ -35,6 +40,18 @@ versions rather than assumed (docs/09 S3 and the Phase 2 corrections):
   a heading inside one, and the rest of that footer, on the body layer. The
   conversion runs through a subclass that files everything the backend made
   inside a footer on the furniture layer (docs/09 P65).
+- The backend writes each `<br>` as a private-use character while it parses
+  and turns it back into a line break only in a paragraph's or a cell's text,
+  so a list item, heading, caption or `<pre>` with a `<br>` carried U+E000
+  into every text surface, and an item or caption with nothing else in it
+  was made where an empty one is not. The bridge takes out the `<br>` of an
+  element with no text before the backend reads it, and writes every other
+  one out as the backend reads whitespace there (docs/09 P56).
+- The backend strips and space-joins the text nodes of a `<pre>`, so
+  highlighted code, every token an element, lost its indentation and most of
+  its lines, and docling-core fences code with three backticks whatever it
+  holds. The bridge reads a `<pre>`'s text as the page lays it out, and fences
+  it with more backticks than any run in the code (docs/09 P55).
 """
 
 from __future__ import annotations
@@ -42,7 +59,7 @@ from __future__ import annotations
 import json
 import re
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import cache
@@ -99,6 +116,30 @@ class ExtractionResult:
 
 
 _CHROME_TAGS = frozenset({"header", "nav", "footer", "aside"})
+#: The ARIA landmark roles of those four elements (banner is a page header's,
+#: contentinfo a page footer's), which a page gives a <div> or a <table> to
+#: mark the same chrome without the element (docs/09 P71).
+_CHROME_ROLES = frozenset({"banner", "navigation", "contentinfo", "complementary"})
+#: Elements that never hold content, so never close: one carrying a landmark
+#: role cannot open a chrome region, or all that follows it would be chrome,
+#: and the item parsers below (P45, P56) never wait for one to close.
+_VOID_TAGS = frozenset(
+    {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "source",
+        "track",
+        "wbr",
+    }
+)
 _HEADING_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 
 
@@ -106,7 +147,7 @@ _HEADING_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 class _Position:
     """Where one `<img>` or `<table>` stands in the snapshot."""
 
-    #: Inside header/nav/footer/aside.
+    #: Inside header/nav/footer/aside, or an element with one of their roles.
     chrome: bool
     #: Where the backend files content as furniture: above the page's first
     #: heading outside a table, or inside a <footer>.
@@ -154,28 +195,47 @@ def ocr_reading(
 class _SnapshotFacts(HTMLParser):
     """Document-order facts the backend does not preserve: which `<img>` is
     which harvested asset, what each `<table>`'s caption said, and which text,
-    images and tables belong to page chrome (header/nav/footer/aside) — the
-    one kind of content that legitimately lands on the furniture layer."""
+    images and tables belong to page chrome (header/nav/footer/aside, or an
+    element with one of their landmark roles) — the one kind of content that
+    legitimately lands on the furniture layer.
 
-    def __init__(self) -> None:
+    `clean` writes text as the backend writes an item's text. Chrome text is
+    compared that way, because that is how every item's text arrives: the
+    backend makes dashes and quotes plain and drops soft hyphens, so a menu
+    item the page spells with a curly apostrophe is an item with a straight
+    one, which the region as the page spells it does not contain (docs/09
+    P58). It is required, not defaulted, so no comparison can be made without
+    it."""
+
+    def __init__(self, *, clean: Callable[[str], str]) -> None:
         super().__init__(convert_charrefs=True)
+        self._clean = clean
         self.image_asset_ids: list[str | None] = []
         #: Where each `<img>` stands, in the same order.
         self.image_positions: list[_Position] = []
         self.table_captions: list[str] = []
         #: Where each `<table>` stands, in the same order.
         self.table_positions: list[_Position] = []
-        #: One entry per top-level chrome region: its whole-space-normalized
-        #: text, in reading order.
+        #: One entry per top-level chrome region: its text cleaned as the
+        #: backend cleans text and whole-space-normalized, in reading order.
         self.chrome_regions: list[str] = []
         self._caption_depth = 0
         self._caption_parts: list[str] = []
         self._chrome_depth = 0
         self._chrome_parts: list[str] = []
+        #: The open elements, innermost last, each with whether it opened a
+        #: chrome region: a <div> given a landmark role closes at its own
+        #: </div>, which a count of open chrome tags cannot tell apart.
+        self._open: list[tuple[str, bool]] = []
         self._footer_depth = 0
         self._table_depth = 0
         #: Past the backend's first heading, the one it starts the body at.
         self._headed = False
+        #: The open `<pre>`s, and the text of the outermost so far. The bridge
+        #: reads a `<pre>`'s text as the page lays it out, so a token of code
+        #: split across elements is one word, as in its code item (P55).
+        self._pre_depth = 0
+        self._pre_parts: list[str] = []
 
     def _position(self) -> _Position:
         return _Position(
@@ -184,8 +244,27 @@ class _SnapshotFacts(HTMLParser):
         )
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self._pre_depth and (tag == "br" or tag in _PRE_LINE_TAGS):
+            self._pre_parts.append(" ")
+        if tag == "pre":
+            self._pre_depth += 1
+        attributes = dict(attrs)
+        # Any tokens after the first are fallbacks, which ARIA reads only for
+        # a role it does not know; it knows every landmark role.
+        role = next(iter((attributes.get("role") or "").lower().split()), "")
+        chrome = tag not in _VOID_TAGS and (
+            tag in _CHROME_TAGS or role in _CHROME_ROLES
+        )
+        if tag not in _VOID_TAGS:
+            self._open.append((tag, chrome))
+        # Opened before the element's own position is taken, so a
+        # <table role="navigation"> stands inside the region it opens.
+        if chrome:
+            if not self._chrome_depth:
+                self._chrome_parts = []
+            self._chrome_depth += 1
         if tag == "img":
-            self.image_asset_ids.append(dict(attrs).get("data-webshot-asset-id"))
+            self.image_asset_ids.append(attributes.get("data-webshot-asset-id"))
             self.image_positions.append(self._position())
         elif tag == "table":
             self.table_captions.append("")
@@ -198,29 +277,55 @@ class _SnapshotFacts(HTMLParser):
             self._headed = True
         elif tag == "footer":
             self._footer_depth += 1
-        if tag in _CHROME_TAGS:
-            if not self._chrome_depth:
-                self._chrome_parts = []
-            self._chrome_depth += 1
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "table" and self._table_depth:
             self._table_depth -= 1
         elif tag == "footer" and self._footer_depth:
             self._footer_depth -= 1
+        if tag == "pre" and self._pre_depth:
+            self._pre_depth -= 1
+            if not self._pre_depth:
+                self._chrome_data("".join(self._pre_parts))
+                self._pre_parts = []
+        elif self._pre_depth and tag in _PRE_LINE_TAGS:
+            self._pre_parts.append(" ")
         if tag == "caption" and self._caption_depth:
             self._caption_depth -= 1
             self.table_captions[-1] = " ".join(" ".join(self._caption_parts).split())
-        if tag in _CHROME_TAGS and self._chrome_depth:
-            self._chrome_depth -= 1
-            if not self._chrome_depth:
-                self.chrome_regions.append(" ".join(self._chrome_parts))
+        # The end tag closes the innermost element of its name, and every
+        # element still open inside it; one that closes nothing open is ignored.
+        for index in range(len(self._open) - 1, -1, -1):
+            if self._open[index][0] == tag:
+                closed = self._open[index:]
+                del self._open[index:]
+                break
+        else:
+            closed = []
+        for _, chrome in closed:
+            if chrome:
+                self._chrome_depth -= 1
+                if not self._chrome_depth:
+                    self.chrome_regions.append(
+                        self._normalized(" ".join(self._chrome_parts))
+                    )
 
     def handle_data(self, data: str) -> None:
         if self._caption_depth:
             self._caption_parts.append(data)
+        if self._pre_depth:
+            self._pre_parts.append(data)
+        else:
+            self._chrome_data(data)
+
+    def _chrome_data(self, data: str) -> None:
         if self._chrome_depth and data.strip():
             self._chrome_parts.extend(data.split())
+
+    def _normalized(self, text: str) -> str:
+        # Cleaned before it is split: a soft hyphen or a zero-width space is
+        # not whitespace, so the backend joins the two halves of the word.
+        return " ".join(self._clean(text).split())
 
     def is_chrome_text(self, text: str) -> bool:
         """Whether `text` reads out of one chrome region.
@@ -229,9 +334,13 @@ class _SnapshotFacts(HTMLParser):
         pooled word bag, which would misfile a lede whose every word happens
         to appear *somewhere* across a large page's chrome.  Only ever asked
         about items the backend already classified as furniture, so a false
-        positive keeps a furniture item on the furniture layer.
+        positive keeps a furniture item on the furniture layer.  Both sides
+        are cleaned as the backend cleans text, so a lede with a straight
+        apostrophe stays furniture under a menu holding the same words with a
+        curly one, as it would under a menu with a straight one: the same
+        false positive, now at either spelling (docs/09 P53, P58).
         """
-        normalized = " ".join(text.split())
+        normalized = self._normalized(text)
         return bool(normalized) and any(
             normalized in region for region in self.chrome_regions
         )
@@ -443,6 +552,458 @@ def unmark_joins(text: str) -> str:
     return _JOIN_MARK_RE.sub("", text)
 
 
+#: A third noncharacter: the text of a list item that has none of its own but
+#: holds a list, so the backend makes an item of it (docs/09 P45).
+EMPTY_ITEM = "\ufdd2"
+#: The stand-in as a character reference, which the backend's parser reads as
+#: the character and `html.unescape` drops, as it drops every noncharacter.
+_EMPTY_ITEM_REF_RE = re.compile(
+    r"&#[xX]0*[fF][dD][dD]2(?![0-9a-fA-F])|&#0*64978(?![0-9])"
+)
+
+#: The lists an `<li>` belongs to, and the lists one can hold.
+_ITEM_LIST_TAGS = frozenset({"ul", "ol"})
+_LIST_TAGS = _ITEM_LIST_TAGS | {"dl"}
+#: What a list item may hold beside its lists and still have no text of its
+#: own, as the backend reads one: elements that carry nothing but their text.
+#: Anything else (an image, a checkbox, a table) is left as the backend reads it,
+#: and so is a `<br>`, which the backend writes as a character of its own
+#: (U+E000), so it makes an item of one with nothing else in it. `extract`
+#: takes out the `<br>`s of an item with no text before this reads the page
+#: (`drop_lone_line_breaks`, docs/09 P56), so an item whose only content
+#: beside its lists was line breaks reaches this holding only its lists.
+_CARRIER_TAGS = INLINE_TAGS | frozenset({"div", "p"})
+
+
+@dataclass(slots=True)
+class _OpenItem:
+    #: Where the item's content starts, which is where its stand-in text goes.
+    at: int
+    #: How many lists of its own are open, so text inside them is theirs.
+    lists: int = 0
+    holds_list: bool = False
+    holds_other: bool = False
+
+
+class _EmptyItems(HTMLParser):
+    """Where each `<li>` that holds a list and no text of its own opens.
+
+    The backend makes no item of such an `<li>`: it reads the item's text with
+    its lists left out, finds none, and hangs the lists straight off the outer
+    list. content.md then has no line for the item, and a list holding nothing
+    but lists is the shape an invalid `<ul><ul>` gives too, so it cannot be
+    told apart once the document is built (docs/09 P45).
+    """
+
+    def __init__(self, source: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self._line_starts = [0, *(match.end() for match in re.finditer("\n", source))]
+        self.marks: list[int] = []
+        self._open: list[str] = []
+        self._items: list[tuple[int, _OpenItem]] = []
+
+    def _offset(self) -> int:
+        line, column = self.getpos()
+        return self._line_starts[line - 1] + column
+
+    def _inside(self) -> _OpenItem | None:
+        """The innermost open item, when what comes next is its own content."""
+        if self._items and not self._items[-1][1].lists:
+            return self._items[-1][1]
+        return None
+
+    def _element(self, tag: str) -> None:
+        item = self._inside()
+        if item is not None:
+            if tag in _LIST_TAGS:
+                item.holds_list = True
+            elif tag not in _CARRIER_TAGS:
+                item.holds_other = True
+        if self._items and tag in _LIST_TAGS:
+            self._items[-1][1].lists += 1
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._element(tag)
+        if tag == "li" and self._open and self._open[-1] in _ITEM_LIST_TAGS:
+            at = self._offset() + len(self.get_starttag_text() or "")
+            self._items.append((len(self._open), _OpenItem(at)))
+        if tag not in _VOID_TAGS:
+            self._open.append(tag)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._element(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag not in self._open:
+            return
+        while self._open:
+            closed = self._open.pop()
+            if self._items and self._items[-1][0] == len(self._open):
+                _, item = self._items.pop()
+                if item.holds_list and not item.holds_other:
+                    self.marks.append(item.at)
+            elif closed in _LIST_TAGS and self._items:
+                self._items[-1][1].lists -= 1
+            if closed == tag:
+                return
+
+    def handle_data(self, data: str) -> None:
+        item = self._inside()
+        if item is not None and data.strip():
+            item.holds_other = True
+
+
+def mark_empty_items(html: str) -> str:
+    """`html` with `EMPTY_ITEM` as the text of each item that holds only lists.
+
+    The backend then makes an item of it, numbered among its siblings, with
+    its lists inside it, and `extract` empties its text once the document is
+    built. A marked page opens with a byte-order mark, as `mark_inline_joins`
+    explains.
+    """
+    if "<li" not in html.lower():
+        return html
+    parser = _EmptyItems(html)
+    parser.feed(html)
+    parser.close()
+    if not parser.marks:
+        return html
+    # Built in one pass: slicing the page once per mark, as the join markers
+    # are inserted, copies it each time, and 2,000 items on a 1.1 MB page took
+    # 1.5 s (docs/09 P45-3).
+    pieces: list[str] = []
+    start = 0
+    for offset in sorted(parser.marks):
+        pieces += (html[start:offset], EMPTY_ITEM)
+        start = offset
+    pieces.append(html[start:])
+    marked = "".join(pieces)
+    return marked if marked.startswith("\ufeff") else "\ufeff" + marked
+
+
+#: A list item's marker, as docling-core's Markdown serializer writes one.
+_ITEM_MARKER_RE = re.compile(r"[-*+]|\d+[.)]")
+#: The stand-in as the end of its item's line.
+_STAND_IN = f" {EMPTY_ITEM}"
+#: A stand-in inside a line, where a table cell flattened its list onto one:
+#: the marker before it, then the spaces of the line break and indent after.
+_INLINE_STAND_IN_RE = re.compile(
+    rf"(?:^|(?<= ))({_ITEM_MARKER_RE.pattern}){_STAND_IN} +(?=\S)", re.MULTILINE
+)
+
+
+def write_empty_items(markdown: str) -> str:
+    """`markdown` with each stand-in item written as CommonMark writes one.
+
+    An item that holds only a list goes on the line of its list's first item,
+    `-   - Gorvane`, its marker padded to where docling indents the list, so
+    the next item of that list lines up beneath it. A marker on a line of its
+    own (`-`) is an empty item, which CommonMark does not let interrupt a
+    paragraph: under an item with text, it read as that text's setext
+    underline and the list beneath it as a code block (docs/09 P45). A
+    stand-in with no deeper line after it, or with a marker too wide for
+    docling's four-space indent (`1000.`), keeps its line with the marker
+    alone. In a table cell, which docling writes on one line, the item is its
+    marker before its list's first, `- - Gorvane`. A stand-in anywhere else is
+    left for the caller to find.
+    """
+    if EMPTY_ITEM not in markdown:
+        return markdown
+    lines = markdown.split("\n")
+    out: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        index += 1
+        while line.endswith(_STAND_IN) and index < len(lines):
+            head = line[: -len(_STAND_IN)]
+            nested = lines[index]
+            pad = len(nested) - len(nested.lstrip(" ")) - len(head)
+            if not (
+                _ITEM_MARKER_RE.fullmatch(head.rsplit(" ", 1)[-1])
+                and nested.strip()
+                and 1 <= pad <= 4
+            ):
+                break
+            line = head + " " * pad + nested.lstrip(" ")
+            index += 1
+        out.append(line.removesuffix(_STAND_IN))
+    return _INLINE_STAND_IN_RE.sub(r"\1 ", "\n".join(out))
+
+
+#: The character the backend writes for each `<br>` while it parses
+#: (`_BR_SENTINEL` in docling's HTML backend). It deletes the page's own from
+#: the page's text first, but not from an attribute it reads into a text (an
+#: image's alt text, a field's value), where the page's own reads as one.
+LINE_BREAK = "\ue000"
+#: The page's own U+E000, as a character reference.
+_LINE_BREAK_REF_RE = re.compile(r"&#[xX]0*[eE]000(?![0-9a-fA-F])|&#0*57344(?![0-9])")
+
+
+def write_line_breaks(text: str, *, lines: bool) -> str:
+    """`text` with each line break the backend left in it written out.
+
+    The backend joins the runs of a text with a space, so a line break
+    arrives with one either side of it, and those go with it. In a block of
+    code (`lines`) each one is a line ending, as a paragraph's is. Anywhere
+    else the backend reads the text onto one line, joining each run of
+    whitespace in it into a space, and a line break is whitespace there too.
+    One at either end of the text ends a line that ends there anyway.
+    """
+    if LINE_BREAK not in text:
+        return text
+    pieces = text.split(LINE_BREAK)
+    pieces = [
+        pieces[0].rstrip(" "),
+        *(piece.strip(" ") for piece in pieces[1:-1]),
+        pieces[-1].lstrip(" "),
+    ]
+    if not lines:
+        return " ".join(piece for piece in pieces if piece)
+    written = [index for index, piece in enumerate(pieces) if piece]
+    return "\n".join(pieces[written[0] : written[-1] + 1]) if written else ""
+
+
+#: The elements the backend reads as one line of text and makes an item of
+#: only when that text is not empty, by the element each must sit in to be read.
+_LINE_HOLDERS = {
+    "li": frozenset({"ul", "ol"}),
+    "dt": frozenset({"dl"}),
+    "dd": frozenset({"dl"}),
+}
+#: The captions, which the backend reads whole and keeps only with text.
+_CAPTION_TAGS = frozenset({"caption", "figcaption"})
+#: What a list item's own text leaves out, as the backend reads it: the lists
+#: and tables it holds, which are content of their own.
+_OWN_TEXT_SKIPS = frozenset({"ul", "ol", "dl", "table"})
+
+
+@dataclass(slots=True)
+class _Holder:
+    caption: bool
+    #: Where each of its own `<br>` tags starts and ends.
+    breaks: list[tuple[int, int]] = field(default_factory=list)
+    text: bool = False
+    #: How many lists or tables of its own are open, whose text is theirs.
+    skipping: int = 0
+
+
+class _LoneBreaks(HTMLParser):
+    """The `<br>` tags of each list item, term, description or caption with no text.
+
+    What counts as an element's text is what the backend reads as it: a list
+    item's, term's or description's leaves out the lists and tables it holds,
+    and a caption's is all of it. The page's own U+E000 is no text, as the
+    backend deletes it.
+    """
+
+    def __init__(self, source: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self._line_starts = [0, *(match.end() for match in re.finditer("\n", source))]
+        self.spans: list[tuple[int, int]] = []
+        #: Per open element: its tag, the holder it opened, and the holder
+        #: whose own text it is left out of.
+        self._open: list[tuple[str, _Holder | None, _Holder | None]] = []
+        self._holders: list[_Holder] = []
+
+    def _line_break(self) -> None:
+        holder = self._holders[-1] if self._holders else None
+        if holder is not None and not holder.skipping:
+            line, column = self.getpos()
+            start = self._line_starts[line - 1] + column
+            holder.breaks.append((start, start + len(self.get_starttag_text() or "")))
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "br":
+            self._line_break()
+        if tag in _VOID_TAGS:
+            return
+        within = self._open[-1][0] if self._open else ""
+        opened = None
+        if tag in _CAPTION_TAGS or within in _LINE_HOLDERS.get(tag, ()):
+            opened = _Holder(caption=tag in _CAPTION_TAGS)
+            self._holders.append(opened)
+        skipped = None
+        if (
+            opened is None
+            and tag in _OWN_TEXT_SKIPS
+            and self._holders
+            and not self._holders[-1].caption
+        ):
+            skipped = self._holders[-1]
+            skipped.skipping += 1
+        self._open.append((tag, opened, skipped))
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "br":
+            self._line_break()
+
+    def handle_endtag(self, tag: str) -> None:
+        if all(open_tag != tag for open_tag, _, _ in self._open):
+            return
+        while self._open:
+            closed, opened, skipped = self._open.pop()
+            self._close(opened, skipped)
+            if closed == tag:
+                return
+
+    def _close(self, opened: _Holder | None, skipped: _Holder | None) -> None:
+        if opened is not None:
+            self._holders.pop()
+            if not opened.text:
+                self.spans.extend(opened.breaks)
+        if skipped is not None:
+            skipped.skipping -= 1
+
+    def handle_data(self, data: str) -> None:
+        if not data.replace(LINE_BREAK, "").strip():
+            return
+        for holder in reversed(self._holders):
+            if holder.skipping:
+                break
+            holder.text = True
+
+    def close(self) -> None:
+        super().close()
+        while self._open:
+            _, opened, skipped = self._open.pop()
+            self._close(opened, skipped)
+
+
+def drop_lone_line_breaks(html: str) -> str:
+    """`html` without the `<br>` tags of the elements that hold no text but them.
+
+    The backend makes an item of a list item, term or description, or a
+    caption, only when its text is not empty, and the character it writes
+    for a `<br>` is not whitespace to it: `<li><br></li>` was an item, and
+    `<li><br><ul>` an item holding the list, where `<li></li>` is none and
+    the list it holds is the outer list's. Without its line breaks such an
+    element reads as it does empty, numbered, nested and captioned as the
+    backend does that (docs/09 P56).
+    """
+    if "<br" not in html:
+        return html
+    parser = _LoneBreaks(html)
+    parser.feed(html)
+    parser.close()
+    if not parser.spans:
+        return html
+    pieces: list[str] = []
+    start = 0
+    for begin, end in sorted(parser.spans):
+        pieces.append(html[start:begin])
+        start = end
+    pieces.append(html[start:])
+    return "".join(pieces)
+
+
+def _write_document_line_breaks(document: Any) -> None:
+    """Every line break the backend left in `document`'s texts, written out.
+
+    A `<pre>`'s code keeps its lines. Every other text the backend left one
+    in, it read onto one line: a list item's, with its parts and any code in
+    it, a heading's, a caption's, a checkbox's label. A text that was only
+    line breaks is what the backend makes of whitespace there: none for a
+    part of an item's line, which goes, and an empty heading, checkbox or
+    block of code, which stays. A list item or caption that held only line
+    breaks had them taken out before the backend read it
+    (`drop_lone_line_breaks`), so one that comes here empty is one that
+    function did not foresee, and goes as the backend makes none.
+    """
+    from docling_core.types.doc.document import CodeItem, InlineGroup, ListItem
+    from docling_core.types.doc.labels import DocItemLabel
+
+    def parent_of(item: Any) -> Any:
+        return item.parent.resolve(document) if item.parent else None
+
+    gone: list[Any] = []
+    for item in document.texts:
+        if LINE_BREAK not in item.text and LINE_BREAK not in item.orig:
+            continue
+        holder = parent_of(item)
+        part = isinstance(holder, InlineGroup)
+        in_item_line = part and isinstance(parent_of(holder), ListItem)
+        lines = isinstance(item, CodeItem) and not in_item_line
+        item.text = write_line_breaks(item.text, lines=lines)
+        item.orig = write_line_breaks(item.orig, lines=lines)
+        if not (item.text or item.children) and (
+            part or isinstance(item, ListItem) or item.label == DocItemLabel.CAPTION
+        ):
+            gone.append(item)
+    # An inline group, and a list item whose text was all its line's parts,
+    # go with the last of the parts they held.
+    refs = {item.self_ref for item in gone}
+    holders = [parent_of(item) for item in gone]
+    while holders:
+        climbed = []
+        for holder in {id(holder): holder for holder in holders}.values():
+            if (
+                (
+                    isinstance(holder, InlineGroup)
+                    or (isinstance(holder, ListItem) and not holder.text)
+                )
+                and holder.self_ref not in refs
+                and all(child.cref in refs for child in holder.children)
+            ):
+                refs.add(holder.self_ref)
+                climbed.append(parent_of(holder))
+        holders = climbed
+    if refs:
+        _remove_items(document, refs)
+
+
+def _remove_items(document: Any, refs: set[str]) -> None:
+    """`document` without the text items and groups whose references are `refs`.
+
+    The document docling-core's `delete_items` leaves, in one pass over it.
+    `delete_items` counts, for every reference left, the items removed before
+    it, so removing 1,000 empty list items took it 2.3 s, and ten times as
+    many would take a hundred times as long (docs/09 P56). Here every
+    reference in the document is renumbered at once, and one to a removed
+    item is dropped from the list that held it. No removed item holds
+    anything that stays.
+    """
+    from docling_core.types.doc.document import RefItem
+    from pydantic import BaseModel
+
+    renumbered: dict[str, str] = {}
+    for label in ("texts", "groups"):
+        kept = [item for item in getattr(document, label) if item.self_ref not in refs]
+        for index, item in enumerate(kept):
+            renumbered[item.self_ref] = f"#/{label}/{index}"
+        setattr(document, label, kept)
+
+    def visit(value: Any) -> None:
+        if isinstance(value, RefItem):
+            value.cref = renumbered.get(value.cref, value.cref)
+        elif isinstance(value, BaseModel):
+            for name in type(value).model_fields:
+                # Read past the attribute, which raises for a field
+                # docling-core has deprecated.
+                field_value = value.__dict__.get(name)
+                if name == "self_ref" and isinstance(field_value, str):
+                    setattr(value, name, renumbered.get(field_value, field_value))
+                elif isinstance(field_value, list) and any(
+                    isinstance(entry, RefItem) and entry.cref in refs
+                    for entry in field_value
+                ):
+                    field_value = [
+                        entry
+                        for entry in field_value
+                        if not (isinstance(entry, RefItem) and entry.cref in refs)
+                    ]
+                    setattr(value, name, field_value)
+                visit(field_value)
+        elif isinstance(value, list | tuple):
+            for entry in value:
+                visit(entry)
+        elif isinstance(value, dict):
+            for entry in value.values():
+                visit(entry)
+
+    visit(document)
+
+
 def _aligned(
     items: Sequence[_Item], facts: Sequence[_Fact]
 ) -> list[tuple[_Item, _Fact]] | None:
@@ -487,17 +1048,22 @@ def _outside_chrome(
     return None
 
 
-def _captions_missing(snapshot: Sequence[str], carried: Sequence[str]) -> list[str]:
+def _captions_missing(
+    snapshot: Sequence[str], carried: Sequence[str], *, clean: Callable[[str], str]
+) -> list[str]:
     """The snapshot's table captions that no table in the document carries.
 
     Compared as whitespace-collapsed text and as a multiset, so two tables
     captioned alike need two carried captions.  An empty caption is a table
-    without one, not a caption to find.
+    without one, not a caption to find.  Both sides go through `clean`, which
+    writes text as the backend does, as `_SnapshotFacts` compares chrome: the
+    backend writes a caption's curly quote straight, so the page's spelling
+    would report missing a caption the document carries (docs/09 P58).
     """
-    remaining = [" ".join(text.split()) for text in carried]
+    remaining = [" ".join(clean(text).split()) for text in carried]
     missing: list[str] = []
     for caption in snapshot:
-        wanted = " ".join(caption.split())
+        wanted = " ".join(clean(caption).split())
         if not wanted:
             continue
         if wanted in remaining:
@@ -576,28 +1142,83 @@ _CODE_HOLDING_BLOCKS = frozenset({"ul", "ol", "dl", "table", "pre"})
 _NESTED_CONTENT_TAGS = ["img", "ul", "ol", "dl", "table"]
 #: A line ending, as CommonMark reads one: a carriage return on its own is one.
 _LINE_END_RE = re.compile(r"\r\n|\r|\n")
+#: The blank lines before a `<pre>`'s first line of text.
+_LEADING_BLANK_LINES_RE = re.compile(r"(?:[^\S\r\n]*(?:\r\n|\r|\n))+")
+#: Elements a browser lays out as blocks, so in a `<pre>` each of them starts
+#: a line and ends one: Docusaurus writes each line of code as a `<div>`
+#: ending in a `<br>`, with no line ending between them (docs/09 P55).
+_PRE_LINE_TAGS = frozenset(
+    {
+        "address",
+        "article",
+        "aside",
+        "blockquote",
+        "dd",
+        "details",
+        "div",
+        "dl",
+        "dt",
+        "figcaption",
+        "figure",
+        "footer",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "header",
+        "hr",
+        "li",
+        "main",
+        "nav",
+        "ol",
+        "p",
+        "pre",
+        "section",
+        "summary",
+        "table",
+        "tr",
+        "ul",
+    }
+)
 #: The backend methods `_code_block_backend` overrides or calls. They are
-#: private to docling, so `extract` checks they are still there, with
-#: `AnnotatedTextList.simplify_text_elements`, which it calls too.
+#: private to docling, so `extract` checks they are still there.
 _BACKEND_HOOKS = (
     "_add_list_item_with_content",
+    "_clean_unicode",
+    "_code_language_hint",
     "_extract_text_and_hyperlink_recursively",
     "_handle_block",
     "_is_suppressed_tag",
+    "_make_prov",
     "_make_text_prov",
     "_process_nested_element",
 )
+#: What `_code_block_backend` reads from the backend's module: the character
+#: the backend puts in place of each `<br>`, and its guess at a code's language.
+_BACKEND_MODULE_HOOKS = ("_BR_SENTINEL", "detect_code_language")
+
+
+def _without_edge_blank_lines(text: str) -> str:
+    """`text` without the blank lines before its first line of text and after
+    its last. A line's own indentation is the code's; a line of only
+    whitespace is not, and the HTML parser drops a line ending just after
+    `<pre>`, which docling's parser keeps."""
+    leading = _LEADING_BLANK_LINES_RE.match(text)
+    if leading:
+        text = text[leading.end() :]
+    ending = _LINE_END_RE.search(text, len(text.rstrip()))
+    return text[: ending.start()] if ending else text
 
 
 def _backend_hooked() -> bool:
-    """Whether docling's backend still has everything `_code_block_backend` uses."""
+    """Whether docling's HTML backend still has all `_code_block_backend` uses."""
     from docling.backend import html_backend
 
     return all(
         hasattr(html_backend.HTMLDocumentBackend, hook) for hook in _BACKEND_HOOKS
-    ) and hasattr(
-        getattr(html_backend, "AnnotatedTextList", None), "simplify_text_elements"
-    )
+    ) and all(hasattr(html_backend, hook) for hook in _BACKEND_MODULE_HOOKS)
 
 
 @cache
@@ -613,24 +1234,161 @@ def _code_block_backend() -> type[Any]:
     walked in the order the item holds it, as the item's lists are. An item
     whose only text was its code becomes an item with no text that holds the
     code.
+
+    It reads every `<pre>` as the page lays its text out, into one `code`
+    item (docs/09 P55). The backend strips each text node in it, drops one of
+    only whitespace unless it is only line endings, joins what is left with a
+    space, and strips the result, so highlighted code, whose every token is an
+    element, lost its indentation and most of its lines, and the first line of
+    any code its indentation. Code with emphasis or a link in it was several
+    runs, each a `code` item of an inline group, written inline with its lines
+    joined; one inside a link the backend reread without its lines.
     """
+    from bs4.element import NavigableString, PreformattedString, Tag
+    from docling.backend import html_backend
     from docling.backend.html_backend import AnnotatedTextList, HTMLDocumentBackend
 
     class _CodeBlockBackend(HTMLDocumentBackend):
         #: The `<pre>` elements, by id, of the item whose own text is being read.
         _reading: frozenset[int] = frozenset()
 
+        def _pre_text(self, pre: Any) -> str:
+            """The text of `pre` as the page lays it out, blank edge lines and all.
+
+            Each text node as it is, a `<br>` a line ending, and an element a
+            browser lays out as a block on lines of its own. An element the
+            backend hides, and a comment, give no text, as they give the
+            backend's own reading none.
+            """
+            parts: list[str] = []
+            # A block closed or opened since the last text, so the next text
+            # starts a line, unless the text before it ended one.
+            pending = False
+
+            def add(text: str) -> None:
+                nonlocal pending
+                if not text:
+                    return
+                if pending and parts and not parts[-1].endswith(("\n", "\r")):
+                    parts.append("\n")
+                pending = False
+                parts.append(text)
+
+            def walk(node: Any) -> None:
+                nonlocal pending
+                for child in node.children:
+                    if isinstance(child, PreformattedString):
+                        continue
+                    if isinstance(child, NavigableString):
+                        add(str(child).replace(html_backend._BR_SENTINEL, "\n"))
+                    elif isinstance(child, Tag) and not self._is_suppressed_tag(child):
+                        block = child.name in _PRE_LINE_TAGS
+                        pending = pending or block
+                        walk(child)
+                        pending = pending or block
+
+            walk(pre)
+            return "".join(parts)
+
+        def _gutter_code(self, table: Any) -> Any:
+            """The `<pre>` of code that `table` sets beside its line numbers.
+
+            Pygments, Rouge and Chroma number a block's lines in a table of one
+            row: a `<pre>` of the numbers, one a line, and a `<pre>` of the
+            code. The backend wrote it as a table row, the code on one line.
+            A table is one only if it holds nothing else, no other row, cell
+            or text, and its numbers count up by one, with no fewer of them
+            than the code has lines.
+            """
+            rows = table.find_all("tr")
+            if len(rows) != 1:
+                return None
+            cells = rows[0].find_all(["td", "th"], recursive=False)
+            held = [cell.find_all("pre") for cell in cells]
+            if len(cells) != 2 or any(len(pres) != 1 for pres in held):
+                return None
+            pres = [pre for (pre,) in held]
+            if any(self._is_suppressed_tag(pre) for pre in pres):
+                return None
+            # By identity: bs4 compares two tags by their markup.
+            beside = (
+                text
+                for text in table.find_all(string=True)
+                if not any(parent is pre for parent in text.parents for pre in pres)
+            )
+            if any(
+                text.replace(html_backend._BR_SENTINEL, "").strip() for text in beside
+            ):
+                return None
+            numbers, code = (
+                _without_edge_blank_lines(self._pre_text(pre)) for pre in pres
+            )
+            lines = _LINE_END_RE.split(numbers)
+            if not code.strip() or not all(
+                re.fullmatch(r"\s*[0-9]+\s*", line) for line in lines
+            ):
+                return None
+            first = int(lines[0])
+            if [int(line) for line in lines] != list(range(first, first + len(lines))):
+                return None
+            if len(_LINE_END_RE.split(code)) > len(lines):
+                return None
+            return pres[1]
+
+        def _handle_block(self, tag: Any, doc: Any) -> Any:
+            if tag.name.lower() == "table":
+                code = self._gutter_code(tag)
+                if code is not None:
+                    # The code, as a `<pre>` on its own; the numbers are the
+                    # page's count of its lines (docs/09 P55).
+                    return self._handle_block(code, doc)
+            if tag.name.lower() != "pre":
+                return super()._handle_block(tag, doc)
+            orig = _without_edge_blank_lines(self._pre_text(tag))
+            if not orig.strip():
+                return []
+            # The backend's own runs, for what annotates them: a link or
+            # formatting all of the code has is the code item's, as the
+            # backend gave one run's to its item. Parts of it have no field.
+            runs = [
+                run
+                for run in self._extract_text_and_hyperlink_recursively(
+                    tag, find_parent_annotation=True, keep_newlines=True
+                )
+                if run.text.strip()
+            ]
+
+            def common(values: list[Any]) -> Any:
+                return (
+                    values[0]
+                    if values and values.count(values[0]) == len(values)
+                    else None
+                )
+
+            text = HTMLDocumentBackend._clean_unicode(orig)
+            source_tag_id = common([run.source_tag_id for run in runs])
+            code = doc.add_code(
+                parent=self.parents[self.level],
+                text=text,
+                orig=orig,
+                code_language=html_backend.detect_code_language(
+                    text, hint=self._code_language_hint(tag)
+                ),
+                content_layer=self.content_layer,
+                formatting=common([run.formatting for run in runs]),
+                hyperlink=common([run.hyperlink for run in runs]),
+                prov=self._make_prov(text=text, tag=tag, source_tag_id=source_tag_id),
+            )
+            return [code.get_ref()]
+
         def _is_code_block(self, pre: Any, item: Any) -> bool:
             """Whether `item` holds `pre` as a block of code of its own.
 
             A list or table between the two reads the `<pre>` as its own
             content, and a `<pre>` the backend hides, or that is in an element
-            it hides, gave the item no text, so it stays out. So does one that
-            holds an image, a list or a table, which walking the item made an
-            item of its own, and one the backend reads as several runs, which
-            formatting in the code makes: those it writes inline, their lines
-            joined, outside a list too, and in the item's line they read as
-            they did.
+            it hides, or that holds no text, gave the item no text, so it stays
+            out. So does one that holds an image, a list or a table, which
+            walking the item made an item of its own.
             """
             node = pre
             while node is not None and node is not item:
@@ -646,10 +1404,7 @@ def _code_block_backend() -> type[Any]:
             if pre.find(_NESTED_CONTENT_TAGS) is not None:
                 return False
             # As `_handle_block` reads a `<pre>`.
-            runs = self._extract_text_and_hyperlink_recursively(
-                pre, find_parent_annotation=True, keep_newlines=True
-            ).simplify_text_elements()
-            return len(runs) == 1 and bool(runs[0].text.strip())
+            return bool(self._pre_text(pre).strip())
 
         def _add_list_item_with_content(
             self,
@@ -844,14 +1599,23 @@ def _code_block_serializers() -> tuple[type[Any], type[Any]]:
                 )
             if isinstance(item, CodeItem):
                 owner = item.parent.resolve(doc) if item.parent else None
-                if not isinstance(owner, ListItem):
-                    return None
                 params = MarkdownParams(**kwargs)
-                column = self._column(owner, *args, params, kwargs)
+                if isinstance(owner, ListItem):
+                    column = self._column(owner, *args, params, kwargs)
+                    return create_ser_result(
+                        text=_indented(
+                            self._lines(item, *args, params, kwargs),
+                            column,
+                            " " * column,
+                        ),
+                        span_source=item,
+                    )
+                if not params.format_code_blocks or item.captions:
+                    return None
+                # At the margin, as docling writes it, in a fence no line of
+                # the code closes (docs/09 P55).
                 return create_ser_result(
-                    text=_indented(
-                        self._lines(item, *args, params, kwargs), column, " " * column
-                    ),
+                    text="\n".join(self._lines(item, *args, params, kwargs)),
                     span_source=item,
                 )
             if item.text or not item.children or visited is None:
@@ -883,13 +1647,23 @@ def _code_block_serializers() -> tuple[type[Any], type[Any]]:
             params: Any,
             kwargs: dict[str, Any],
         ) -> list[str]:
-            """The lines of `code` as a block, before its item's indentation."""
-            if params.include_hyperlinks and code.hyperlink:
-                # docling writes a linked code item as the link's text, inline.
-                text = self._docling(
-                    code, doc_serializer, doc, False, set(), kwargs
-                ).text
-                return _LINE_END_RE.split(text)
+            """The lines of `code` as a block, before its item's indentation.
+
+            One line of code with a link of its own is inline code in the
+            link, as docling writes it: a paragraph that is only linked code
+            stays a link. docling writes more lines with a link as inline code
+            too, which joins them, and wraps emphasis around a fence, which
+            makes the fence text, so those are a block with neither:
+            content.json keeps them, and links.json the link (docs/09 P55).
+            """
+            if (
+                params.include_hyperlinks
+                and code.hyperlink
+                and not _LINE_END_RE.search(code.text)
+            ):
+                return [
+                    self._docling(code, doc_serializer, doc, False, set(), kwargs).text
+                ]
             lines = _LINE_END_RE.split(code.text)
             if not params.format_code_blocks:
                 return lines
@@ -936,7 +1710,7 @@ def _code_block_serializers() -> tuple[type[Any], type[Any]]:
 
 def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     """Sanitized snapshot -> DoclingDocument -> serialized artifacts and seeds."""
-    from docling.backend.html_backend import HTMLDocumentBackend
+    from docling.backend.html_backend import _BR_SENTINEL, HTMLDocumentBackend
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.document import InputDocument
     from docling_core.transforms.chunker.hierarchical_chunker import (
@@ -958,7 +1732,9 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         ContentLayer,
         DocItem,
         DoclingDocument,
+        FloatingItem,
         Formatting,
+        GroupItem,
         InlineGroup,
         ListItem,
         NodeItem,
@@ -967,7 +1743,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         Script,
         TextItem,
     )
-    from docling_core.types.doc.labels import DocItemLabel
+    from docling_core.types.doc.labels import DocItemLabel, GroupLabel
 
     extraction_warnings: list[str] = []
 
@@ -1000,6 +1776,29 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             "content.txt and chunks.jsonl separate each such part from its "
             "neighbours with a space (docs/09 P14-56, P48)."
         )
+    # Likewise a page carrying the stand-in for an item's missing text.
+    items_markable = EMPTY_ITEM not in docling_html and not _EMPTY_ITEM_REF_RE.search(
+        docling_html
+    )
+    if not items_markable:
+        extraction_warnings.append(
+            "the page contains U+FDD2, the character WebShot uses to stand in "
+            "for the text of a list item that holds only a list, so content.md, "
+            "content.txt and chunks.jsonl write such an item as docling does, "
+            "with no line of its own, and an ordered list given a start number "
+            "numbers the items after it one too low (docs/09 P45)."
+        )
+    own_line_breaks = LINE_BREAK in docling_html or bool(
+        _LINE_BREAK_REF_RE.search(docling_html)
+    )
+    if own_line_breaks:
+        extraction_warnings.append(
+            "the page contains U+E000, the character docling's HTML backend "
+            "writes for a line break while it parses: the backend deletes the "
+            "page's own from its text, and one an attribute carried into a "
+            "text (an image's alt text, a field's value) is read as a line "
+            "break there, a space (docs/09 P56)."
+        )
     # The methods the backend's subclass relies on are private to docling.
     # Without one, the page is read by docling's own backend, an item's code
     # into the item's line, and the record says so.
@@ -1008,13 +1807,18 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     if not hooked:
         extraction_warnings.append(
             "docling's HTML backend no longer has the methods WebShot extends to "
-            "read a list item's <pre> as a block of code, so content.md, "
-            "content.txt and chunks.jsonl hold each such block on one line, in "
-            "its item's text (docs/09 P50)."
+            "read a <pre>'s text as the page lays it out and a list item's <pre> "
+            "as a block of code, so content.md, content.txt and chunks.jsonl "
+            "hold code as docling reads it: highlighted code with its lines "
+            "joined, a first line without its indentation, and each list item's "
+            "block on one line, in its item's text (docs/09 P50, P55)."
         )
     # Every item the backend made inside a <footer>, which stays on the
-    # furniture layer whatever its text.
-    in_footer: set[str] = set()
+    # furniture layer whatever its text. Held as the items, not their
+    # references, until the document is done changing: writing out its
+    # line breaks removes an item made of one and renumbers every item
+    # after it (docs/09 P56).
+    made_in_footer: list[NodeItem] = []
 
     # Built on whichever backend reads the page, which mypy cannot follow.
     class _FooterBackend(base):  # type: ignore[misc,valid-type]
@@ -1040,7 +1844,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 for item in items[made.get(name, 0) :]:
                     if isinstance(item, NodeItem):
                         item.content_layer = ContentLayer.FURNITURE
-                        in_footer.add(item.self_ref)
+                        made_in_footer.append(item)
 
     # `_use_footer` is private to docling too. Without it the override never
     # runs, so a page with a footer says what that costs.
@@ -1063,12 +1867,29 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             backend=backend,
             filename="content.html",
         )
-        parsed = mark_inline_joins(docling_html) if markable else docling_html
+        parsed = drop_lone_line_breaks(docling_html)
+        if markable:
+            parsed = mark_inline_joins(parsed)
+        # After the lone line breaks are out: an item whose only content
+        # beside its lists was `<br>`s holds only its lists (docs/09 P45, P56).
+        if items_markable:
+            parsed = mark_empty_items(parsed)
         document: DoclingDocument = backend(
             in_doc=in_doc, path_or_stream=BytesIO(parsed.encode("utf-8"))
         ).convert()
     except Exception as exc:
         raise BundleBuildError(f"docling could not parse the snapshot: {exc}") from exc
+
+    # Before anything reads a text: the chrome and caption checks below match
+    # texts against the page's own, where a `<br>` reads as a space, so a
+    # chrome item with one moved into the body and a caption with one read as
+    # lost (docs/09 P56).
+    _write_document_line_breaks(document)
+    # The footer's items by the references they have now. One the line breaks
+    # removed is in none of the document's lists, and its old reference may
+    # now be another item's.
+    held = {id(item) for _, items in _item_lists(document) for item in items}
+    in_footer = {item.self_ref for item in made_in_footer if id(item) in held}
 
     # Take the join markers back out before anything reads a text, keeping
     # which items they opened or closed. A marker inside a text, where the
@@ -1088,23 +1909,159 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             for cell in table.data.table_cells:
                 cell.text = unmark_joins(cell.text)
 
-    facts = _SnapshotFacts()
+    # Each stand-in becomes what the page had, an item with no text. Chunking
+    # and content.md put it back while they write the item's line.
+    empty_items: list[ListItem] = []
+    if items_markable:
+        for item in document.texts:
+            if isinstance(item, ListItem) and item.text == EMPTY_ITEM:
+                item.text = item.orig = ""
+                empty_items.append(item)
+        # A cell's own text is its content's, flattened, stand-in and all.
+        for table in document.tables:
+            for cell in table.data.table_cells:
+                cell.text = cell.text.replace(EMPTY_ITEM, "")
+
+    @contextmanager
+    def _standing_in() -> Iterator[None]:
+        """The empty items with their stand-in, while a surface writes their lines.
+
+        content.md, content.txt and the chunks write an item as `marker text`,
+        so an item with no text is a bare marker there, which
+        `write_empty_items` cannot tell from any other; with the stand-in it
+        can. content.json and the doctags hold the item as it is, empty.
+        """
+        for item in empty_items:
+            item.text = EMPTY_ITEM
+        try:
+            yield
+        finally:
+            for item in empty_items:
+                item.text = ""
+
+    def as_the_backend_writes(text: str) -> str:
+        """`text` as the backend writes an item's text, for comparing the two.
+
+        Cleaned as it cleans every item's text, and with the character it
+        writes for a `<br>` in a list item or a caption read as the break it
+        stands for: it deletes the page's own copies of that character before
+        parsing, so in an item's text it is always a `<br>` (docs/09 P58).
+        """
+        cleaned: str = HTMLDocumentBackend._clean_unicode(text)
+        return cleaned.replace(_BR_SENTINEL, " ")
+
+    facts = _SnapshotFacts(clean=as_the_backend_writes)
     facts.feed(sanitized_html)
 
     # The backend files everything before the first heading on the furniture
     # layer, which serializers and the chunker skip. That is right for page
     # chrome and wrong for document content (an adapter page's descriptor, a
     # lede before the h1) — v2 recorded such text and parity holds v3 to it.
-    # Content that did not come from header/nav/footer/aside moves back to
-    # the body layer. What the backend made inside a footer is known to have
-    # come from one, so it stays without a text test.
+    # Content outside header/nav/footer/aside and their landmark roles moves
+    # back to the body layer (docs/09 P71). What the backend made inside a footer is known to have
+    # come from one, so it stays without a text test. The stand-in made for
+    # an <li> that holds only a list is placed by the loop below (P45).
+    #
+    # What the backend filed under a <footer>, before the first heading or
+    # after it, is chrome by where it sits, the same element the bridge counts
+    # as chrome, so it is not tested again by its text. A test there could
+    # only agree, or misfire where the backend's text is not the page's, as
+    # a picture's alt text is: it becomes a caption no page text holds
+    # (docs/09 P58). The backend hangs a picture's caption from the body, not
+    # from the footer, so each table's and picture's captions are carried
+    # along with it.
+    # P65's backend notes what it made inside each footer while it reads the
+    # page, which is the footer exactly: under the footer's group can also
+    # hang content after the footer, from a heading made inside it. Without
+    # that hook, what hangs under a footer group is all that is known.
+    if not footer_hooked:
+        for group in document.groups:
+            if group.name != "footer" or group.label != GroupLabel.SECTION:
+                continue
+            for node, _ in document.iterate_items(
+                root=group,
+                with_groups=True,
+                traverse_pictures=True,
+                included_content_layers=set(ContentLayer),
+            ):
+                in_footer.add(node.self_ref)
+                if isinstance(node, FloatingItem):
+                    in_footer.update(caption.cref for caption in node.captions)
+
+    # A group the backend hung off the body (a list, a paragraph's inline
+    # runs, a details section) moves as one block, with everything
+    # under it, or stays as one, by its whole text. Item by item, its items
+    # went back and the group did not, so the serializers met each one on its
+    # own: a nested list was written flat and loose, a paragraph a line per
+    # bold or linked run, and a run as short as "Terms" read out of a menu and
+    # left its sentence (docs/09 P53). The block's text is compared as the
+    # backend writes text, as every text is (`as_the_backend_writes`), or one
+    # curly quote or line break in a menu sends it all to the body. A group
+    # with no text has nothing to tell chrome by and stays.
+    # What the backend made inside a footer is in no block: it stays where
+    # it was filed, and a footer's own section group, hung off the body, is
+    # no block at all, since content after the footer can hang from what
+    # the footer made (P65). Without P65's hook, the footer is what hangs
+    # under its group (P58).
+    def _descendants(node: NodeItem) -> list[NodeItem]:
+        """Every node under `node`, on any layer, in document order."""
+        found: list[NodeItem] = []
+        pending = [ref.resolve(document) for ref in reversed(node.children)]
+        while pending:
+            current = pending.pop()
+            found.append(current)
+            pending += (ref.resolve(document) for ref in reversed(current.children))
+        return found
+
+    decided: set[str] = set()
+    for child in document.body.children:
+        group = child.resolve(document)
+        if (
+            group.content_layer != ContentLayer.FURNITURE
+            or not isinstance(group, GroupItem)
+            or group.self_ref in in_footer
+        ):
+            continue
+        block = [
+            node
+            for node in (group, *_descendants(group))
+            if node.self_ref not in in_footer
+        ]
+        decided.update(node.self_ref for node in block)
+        block_text = " ".join(node.text for node in block if isinstance(node, TextItem))
+        if not block_text.strip():
+            continue
+        layer = (
+            ContentLayer.FURNITURE
+            if facts.is_chrome_text(block_text)
+            else ContentLayer.BODY
+        )
+        for node in block:
+            node.content_layer = layer
+    # A text on its own keeps the test it had, and so does furniture under a
+    # heading, which only the backend's <footer> rule puts there.
+    standing_in = {item.self_ref for item in empty_items}
     for item in document.texts:
         if (
             item.content_layer == ContentLayer.FURNITURE
             and item.self_ref not in in_footer
+            and item.self_ref not in standing_in
+            and item.self_ref not in decided
             and not facts.is_chrome_text(item.text)
         ):
             item.content_layer = ContentLayer.BODY
+    # An empty item has no text to tell chrome by, so it goes where its own
+    # items went: back to the body if any of them did, innermost first. Moved
+    # on its own, an item of a nav menu was a bare marker in content.md.
+    for empty in reversed(empty_items):
+        if empty.content_layer == ContentLayer.FURNITURE and any(
+            item.content_layer == ContentLayer.BODY
+            for item, _ in document.iterate_items(
+                root=empty, included_content_layers=set(ContentLayer)
+            )
+            if item is not empty
+        ):
+            empty.content_layer = ContentLayer.BODY
     # An item with no text that holds its code has no text to tell chrome by,
     # so it stays on its code's layer: moved alone, a footer's item was in the
     # body, and its code written there with it (docs/09 P50).
@@ -1115,8 +2072,9 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 item.content_layer = code.content_layer
 
     # A table or picture has no text to tell chrome by, so where its element
-    # stands in the snapshot decides it: one inside header/nav/footer/aside
-    # stays furniture, any other goes back to the body. Left on furniture, a
+    # stands in the snapshot decides it: one inside header/nav/footer/aside, or
+    # an element with one of their landmark roles (docs/09 P71), stays
+    # furniture, any other goes back to the body. Left on furniture, a
     # table or picture above the first heading reached content.json and
     # content.doctags and none of content.md, content.txt or chunks.jsonl, and
     # a picture took the OCR text attached to it along (docs/09 P57).
@@ -1136,10 +2094,11 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 "a footer may be missing from content.md, content.txt and "
                 f"chunks.jsonl: docling produced {len(items)} {kind}(s) for "
                 f"{len(positions)} in the snapshot, and some of those docling files "
-                "there sit in page chrome (header, nav, footer, aside) and some "
-                "do not, so which of them is chrome could not be told by "
-                "position, and all were left out as chrome. content.json and "
-                "content.doctags hold them (docs/09 P57)."
+                "there sit in page chrome (a header, nav, footer or aside, or an "
+                "element with one of their landmark roles) and some do not, so "
+                "which of them is chrome could not be told by position, and all "
+                "were left out as chrome. content.json and content.doctags hold "
+                "them (docs/09 P57)."
             )
             continue
         for item in outside:
@@ -1161,7 +2120,9 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             for table in document.tables
             for caption in table.captions
         ]
-        missing = _captions_missing(facts.table_captions, carried)
+        missing = _captions_missing(
+            facts.table_captions, carried, clean=as_the_backend_writes
+        )
         if missing:
             extraction_warnings.append(
                 f"{len(missing)} table caption(s) could not be attached: docling "
@@ -1464,12 +2425,14 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         serializer_provider=_TableProvider(), always_emit_headings=True
     )
     seeds: list[ChunkSeed] = []
-    for chunk in chunker.chunk(document):
+    with _standing_in():
+        chunks = list(chunker.chunk(document))
+    for chunk in chunks:
         doc_items = chunk.meta.doc_items if chunk.text else chunk.meta.doc_items[-1:]
         labels = {str(item.label) for item in doc_items}
         seeds.append(
             ChunkSeed(
-                text=chunk.text,
+                text=write_empty_items(chunk.text),
                 headings=tuple(chunk.meta.headings or ()),
                 doc_items=tuple(item.self_ref for item in doc_items),
                 kind="table" if DocItemLabel.TABLE.value in labels else "text",
@@ -1541,30 +2504,33 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         document_dict = document.export_to_dict()
         # `export_to_markdown()` and `export_to_text()` with their defaults,
         # which are the serializers' own, and the OCR marked.
-        markdown = (
-            _unpadded(
-                MarkdownDocSerializer(
-                    doc=document,
-                    text_serializer=markdown_text(),
-                    annotation_serializer=_MarkedOcr(),
-                    inline_serializer=_JoinedInline(),
+        with _standing_in():
+            markdown = (
+                _unpadded(
+                    MarkdownDocSerializer(
+                        doc=document,
+                        text_serializer=markdown_text(),
+                        annotation_serializer=_MarkedOcr(),
+                        inline_serializer=_JoinedInline(),
+                    )
                 )
+                .serialize()
+                .text
             )
-            .serialize()
-            .text
-        )
-        text = (
-            _unpadded(
-                PlainTextDocSerializer(
-                    doc=document,
-                    text_serializer=plain_text(),
-                    annotation_serializer=_MarkedOcr(),
-                    inline_serializer=_JoinedInline(),
+            text = (
+                _unpadded(
+                    PlainTextDocSerializer(
+                        doc=document,
+                        text_serializer=plain_text(),
+                        annotation_serializer=_MarkedOcr(),
+                        inline_serializer=_JoinedInline(),
+                    )
                 )
+                .serialize()
+                .text
             )
-            .serialize()
-            .text
-        )
+        markdown = write_empty_items(markdown)
+        text = write_empty_items(text)
         doctags = _doctags()
 
     surfaces = {
@@ -1608,6 +2574,78 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 f"rejoin ({', '.join(leaked)}); it was removed there, and that "
                 "text may separate the part from its neighbours with a space "
                 "(docs/09 P14-56, P48)."
+            )
+    if items_markable:
+        # The stand-in was taken out of its item, the cells, and the item's
+        # line. One anywhere else stood in for no item there, so it goes too,
+        # and the record says where.
+        strayed = [name for name, value in surfaces.items() if EMPTY_ITEM in value]
+        if any(EMPTY_ITEM in cell for grid in tables for row in grid for cell in row):
+            strayed.append("tables")
+        if any(
+            EMPTY_ITEM in seed.text or any(EMPTY_ITEM in part for part in seed.headings)
+            for seed in seeds
+        ):
+            strayed.append("chunks.jsonl")
+        if strayed:
+            surfaces = {
+                name: value.replace(EMPTY_ITEM, "") for name, value in surfaces.items()
+            }
+            tables = [
+                [[cell.replace(EMPTY_ITEM, "") for cell in row] for row in grid]
+                for grid in tables
+            ]
+            seeds = [
+                replace(
+                    seed,
+                    text=seed.text.replace(EMPTY_ITEM, ""),
+                    headings=tuple(
+                        part.replace(EMPTY_ITEM, "") for part in seed.headings
+                    ),
+                )
+                for seed in seeds
+            ]
+            extraction_warnings.append(
+                "the stand-in for the text of a list item that holds only a "
+                f"list reached a field it does not belong in ({', '.join(strayed)}); "
+                "it was removed there, and the item may have no line of its own "
+                "there (docs/09 P45)."
+            )
+    if not own_line_breaks:
+        # Every text item had its line breaks written out. One that reached
+        # any other field came from a path of the backend's that the bridge
+        # has not measured, so it is read there as whitespace, and the record
+        # says where, rather than deliver a character the page never had.
+        stray = [name for name, value in surfaces.items() if LINE_BREAK in value]
+        if any(LINE_BREAK in cell for grid in tables for row in grid for cell in row):
+            stray.append("tables")
+        if any(
+            LINE_BREAK in seed.text or any(LINE_BREAK in h for h in seed.headings)
+            for seed in seeds
+        ):
+            stray.append("chunks.jsonl")
+        if stray:
+
+            def unbroken(value: str) -> str:
+                return value.replace(LINE_BREAK, " ")
+
+            surfaces = {name: unbroken(value) for name, value in surfaces.items()}
+            tables = [
+                [[unbroken(cell) for cell in row] for row in grid] for grid in tables
+            ]
+            seeds = [
+                replace(
+                    seed,
+                    text=unbroken(seed.text),
+                    headings=tuple(map(unbroken, seed.headings)),
+                )
+                for seed in seeds
+            ]
+            extraction_warnings.append(
+                "docling's HTML backend left the character it writes for a line "
+                f"break (U+E000) in a field WebShot does not write it out of "
+                f"({', '.join(stray)}); it was written there as a space "
+                "(docs/09 P56)."
             )
 
     return ExtractionResult(

@@ -37,18 +37,65 @@ out of the page, each of which the manifest must name (docs/09 P33).
 
 `adjacent_lists_book.epub` holds lists with nothing between them but markup
 that writes no text, which Python-Markdown read as one list (docs/09 P32).
+
+`late_utf8.csv` and `late_utf8_archive.zip` are UTF-8 text whose first
+character outside ASCII comes after the 64 KB MarkItDown guesses an encoding
+from, so that guess is ASCII (docs/09 P35).  Their sentinels are that
+character's words.
+
+The three `nested_*` fixtures hold lists nested in lists, at every depth and
+marker width a reader writes, which Python-Markdown read at their parent's
+level (docs/09 P40); `nested_archive.zip` holds an HTML page and the Word file.
+
+The three `code_items_*` fixtures hold a `<pre>` in list items at every depth
+and next to everything else an item holds, whose lines Python-Markdown ran
+together into one (docs/09 P44).  The Word file carries a mammoth style map,
+the one way a `.docx` reaches markdownify with a `<pre>`.
+
+The two `definition_*` fixtures hold definition lists in list items, each
+definition holding more than its first paragraph, which Python-Markdown read
+into the item instead (docs/09 P62); `definition_archive.zip` holds an HTML
+page and the book.
+
+The three `inline_code_*` fixtures hold a `<pre>` in a link, emphasis, struck
+text, a subscript, a quotation and inline code, and inline code over several
+lines: markdownify wrote each into a line of text, where Python-Markdown read
+the code as Markdown, and an `<img>` aimed at a `.invalid` host typed in it
+became an element (docs/09 P59).
+
+The three `quoted_code_*` fixtures hold a `<pre>` in quotations and in
+definitions, nested in each other and next to what else they hold, whose
+lines Python-Markdown ran together the same way, and whose markup after a
+blank line it read as HTML (docs/09 P47).
+
+The three `edge_space_*` fixtures — Word, an EPUB, and an HTML page in a zip —
+hold paragraphs whose words are kept apart only by a Unicode space at the edge
+of bold, italic, a link, code and the rest (docs/09 P43).
+
+The three `whitespace_run_*` fixtures hold paragraphs whose words are kept
+apart only by ASCII whitespace or a line break in formatted text: a run of it
+alone, a newline or a `<br>` at the run's edge, and a space at the edge of a
+link that MarkItDown writes without its markup (docs/09 P49).
+
+The three `adjacent_blocks_*` fixtures hold quotations and definition lists
+side by side, which Python-Markdown read as one (docs/09 P63): an EPUB of two
+chapters, a Word file whose embedded mammoth style map writes them, and a zip
+of an HTML page and that Word file.
 """
 
 from __future__ import annotations
 
 import base64
 import csv
+import html
 import io
+import json
 import plistlib
 import re
 import struct
 import tempfile
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +128,33 @@ SENTINELS = {
     "picture_deck.pptx": "SENTINEL PPTX PICTURE KOALA",
     "picture_report.docx": "SENTINEL DOCX PICTURE LEMUR",
     "picture_book.epub": "SENTINEL EPUB PICTURE MANATEE",
+    # Each ends its file, past MarkItDown's 64 KB sample, so it reaches the
+    # bundle only if the file is decoded as the UTF-8 it is.
+    "late_utf8.csv": "SENTINEL CSV LATE \N{LATIN CAPITAL LETTER N WITH TILDE}AND\N{LATIN CAPITAL LETTER U WITH ACUTE}",
+    "late_utf8_archive.zip": "SENTINEL ZIP LATE P\N{LATIN CAPITAL LETTER E WITH ACUTE}CARI",
+    "nested_book.epub": "SENTINEL EPUB NESTED CAPYBARA",
+    "nested_report.docx": "SENTINEL DOCX NESTED BINTURONG",
+    "nested_archive.zip": "SENTINEL ZIP NESTED FOSSA",
+    "code_items_book.epub": "SENTINEL EPUB CODE GENET",
+    "code_items_report.docx": "SENTINEL DOCX CODE HYRAX",
+    "code_items_archive.zip": "SENTINEL ZIP CODE ICHNEUMON",
+    "definition_book.epub": "SENTINEL EPUB DEFINITION MARGAY",
+    "definition_archive.zip": "SENTINEL ZIP DEFINITION SERVAL",
+    "inline_code_book.epub": "SENTINEL EPUB INLINE NUMBAT",
+    "inline_code_report.docx": "SENTINEL DOCX INLINE OLINGO",
+    "inline_code_archive.zip": "SENTINEL ZIP INLINE QUOLL",
+    "quoted_code_book.epub": "SENTINEL EPUB QUOTED JACANA",
+    "quoted_code_report.docx": "SENTINEL DOCX QUOTED LORIS",
+    "quoted_code_archive.zip": "SENTINEL ZIP QUOTED MARGAY",
+    "edge_space_report.docx": "SENTINEL DOCX EDGE SPACE LORIS",
+    "edge_space_book.epub": "SENTINEL EPUB EDGE SPACE MARGAY",
+    "edge_space_archive.zip": "SENTINEL ZIP EDGE SPACE NUMBAT",
+    "whitespace_run_report.docx": "SENTINEL DOCX WHITESPACE RUN SERVAL",
+    "whitespace_run_book.epub": "SENTINEL EPUB WHITESPACE RUN TAPIR",
+    "whitespace_run_archive.zip": "SENTINEL ZIP WHITESPACE RUN VICUNA",
+    "adjacent_blocks_book.epub": "SENTINEL EPUB BLOCKS LORIS",
+    "adjacent_blocks_report.docx": "SENTINEL DOCX BLOCKS MARGAY",
+    "adjacent_blocks_archive.zip": "SENTINEL ZIP BLOCKS NUMBAT",
 }
 
 #: Deterministic timestamp for every archive member, so regenerating a fixture
@@ -1267,6 +1341,1818 @@ def write_picture_book(path: Path) -> None:
     )
 
 
+# --------------------------------------------------------------------------- #
+# Text whose first character outside ASCII is past MarkItDown's sample
+# --------------------------------------------------------------------------- #
+
+#: Bytes of ASCII before each late character: past the 65,536 MarkItDown's
+#: `_read_charset_sample` reads, with room to spare.
+LATE_AFTER = 80_000
+#: The late character's words in the members that do not carry the sentinel.
+LATE_WORDS = (
+    "\N{LATIN CAPITAL LETTER N WITH TILDE}and\N{LATIN SMALL LETTER U WITH ACUTE}"
+)
+
+
+def _repeated(line: str) -> str:
+    """`line` as many times as it takes to fill `LATE_AFTER` bytes."""
+    return line * (LATE_AFTER // len(line) + 1)
+
+
+#: A long cell, so a table passes `LATE_AFTER` in few rows: capturing a
+#: table costs time with the square of its rows (docling-core's DocTags
+#: serializer rebuilds the table's grid once per row), and 11,431 short rows
+#: took the round-trip test past 40 minutes.
+LATE_CELL = " ".join(
+    ["Counted on the morning walk, one line per stretch of the path"] * 16
+)
+
+
+def _late_rows(delimiter: str, last: str) -> str:
+    """A header, numbered rows of `LATE_CELL` past `LATE_AFTER`, and `last`.
+
+    Numbered, because Magika must take the file for CSV, and so for text,
+    for MarkItDown to guess its encoding at all: ending in the sentinel after
+    rows of `x,1`, it was a file Magika could not name.
+    """
+    count = LATE_AFTER // len(f"00{delimiter}{LATE_CELL}\n") + 1
+    rows = "".join(f"{index}{delimiter}{LATE_CELL}\n" for index in range(count))
+    return f"id{delimiter}notes\n{rows}{count}{delimiter}{last}\n"
+
+
+def write_late_utf8_csv(path: Path) -> None:
+    """docs/09 P35's measured case: on its own, it ended the run with exit 2."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_late_rows(",", SENTINELS["late_utf8.csv"]).encode("utf-8"))
+
+
+def _late_notebook() -> str:
+    # Prose, not code: charset_normalizer guessed UTF-8 for a sample of
+    # `total = total + 1`, ASCII though it was, and the notebook read.
+    cells = [
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": _repeated("Counting, one row at a time.\n").splitlines(
+                keepends=True
+            ),
+        },
+        {"cell_type": "markdown", "metadata": {}, "source": [f"# {LATE_WORDS}\n"]},
+    ]
+    notebook = {"cells": cells, "metadata": {}, "nbformat": 4, "nbformat_minor": 5}
+    return json.dumps(notebook, ensure_ascii=False, indent=1) + "\n"
+
+
+def write_late_utf8_archive(path: Path) -> None:
+    """A member of each kind the late character cost, and three it did not.
+
+    Read by its 64 KB guess, MarkItDown failed the Python, JSON, YAML,
+    notebook and TSV members with `UnicodeDecodeError`.  Of the two short
+    files behind a byte order mark, it found no reader for the YAML one, whose
+    content Magika could not name, and put the mark on the page as U+FEFF for
+    the text one, which Magika named.  `windows.csv` is Windows-1252, which
+    WebShot reads only as UTF-8, and says so.  Every word is made up.
+    """
+    module = (
+        '"""Generated values."""\n\n\n'
+        + "".join(
+            f"def value_{index}(x):\n    return x + {index}\n\n\n"
+            for index in range(LATE_AFTER // 40 + 1)
+        )
+        + f'NAME = "{SENTINELS["late_utf8_archive.zip"]}"\n'
+    )
+    members: list[tuple[str, str | bytes]] = [
+        ("src/values.py", module),
+        (
+            "data/records.json",
+            "[\n"
+            + _repeated('  {"id": 1, "name": "x"},\n')
+            + f'  {{"id": 2, "name": "{LATE_WORDS}"}}\n]\n',
+        ),
+        (
+            "data/records.yaml",
+            "items:\n"
+            + _repeated("  - name: x\n    id: 1\n")
+            + f"  - name: {LATE_WORDS}\n",
+        ),
+        ("notebooks/count.ipynb", _late_notebook()),
+        ("data/rows.tsv", _late_rows("\t", LATE_WORDS)),
+        ("data/marked.yaml", "\ufeffname: " + LATE_WORDS + "\n"),
+        (
+            "notes/marked.txt",
+            "\ufeffNotes\n\nThe first line of a note, written in a text editor "
+            "that marks its encoding.\nA second line follows it, and a third.\n",
+        ),
+        ("data/windows.csv", f"a,b\n{LATE_WORDS},1\n".encode("cp1252")),
+    ]
+    _write_archive(path, members)
+
+
+# --------------------------------------------------------------------------- #
+# Lists nested in lists (docs/09 P40)
+# --------------------------------------------------------------------------- #
+
+#: A list as the page should hold it: its tag, and each item's own text with
+#: the lists nested in it.  The words are made up.
+NestedList = tuple[str, list[tuple[str, list["NestedList"]]]]
+
+#: The book's lists, by what each section shows.  markdownify indented every
+#: nested list by its parent's marker width, and Python-Markdown nests only at
+#: four spaces, so each of these but the quotation lost its nesting.
+NESTED_BOOK_SECTIONS = {
+    "Bullets under bullets": (
+        "<ul><li>Arvel<ul><li>Bostrin</li><li>Calvane</li></ul></li>"
+        "<li>Dempor</li></ul>"
+    ),
+    "Three levels, each kind in turn": (
+        "<ul><li>Elvorn<ol><li>Fanrow<ul><li>Gesh</li></ul></li>"
+        "<li>Hollet</li></ol></li></ul>"
+    ),
+    "Numbers under numbers": (
+        "<ol><li>Imbrel<ol><li>Jastow<ol><li>Kelvorn</li></ol></li></ol></li>"
+        "<li>Lumbret</li></ol>"
+    ),
+    "Numbers of one digit and of two": (
+        '<ol start="9"><li>Mivash<ul><li>Norvel</li></ul></li>'
+        "<li>Orbisk<ul><li>Pellow</li></ul></li></ol>"
+    ),
+    "Items of more than one paragraph": (
+        "<ol><li><p>Quorvane</p><p>Rasket</p></li><li><p>Sulvane</p></li></ol>"
+    ),
+    "A bulleted list and a numbered one in one item": (
+        "<ol><li>Tornish<ul><li>Umbrel</li></ul><ol><li>Vasket</li></ol></li>"
+        "<li>Wendrel</li></ol>"
+    ),
+    "Two numbered lists in one item": (
+        "<ul><li>Zelvane<ol><li>Abrisk</li></ol><ol><li>Bentrow</li></ol></li></ul>"
+    ),
+    "Text after a nested list": (
+        "<ul><li>Corvel<ul><li>Dastrin</li></ul>and Elbrisk after it</li>"
+        "<li>Fennick</li></ul>"
+    ),
+    "An item that is only a list": (
+        "<ul><li><ul><li>Gorvane</li><li>Holvish</li></ul></li><li>Istrel</li></ul>"
+    ),
+    "A quotation in an item": (
+        "<ul><li>Jorvel<blockquote><p>Kestrin</p></blockquote></li></ul>"
+    ),
+}
+
+#: `NESTED_BOOK_SECTIONS`' lists as the page holds them, in order.
+NESTED_BOOK_PAGE: list[NestedList] = [
+    ("ul", [("Arvel", [("ul", [("Bostrin", []), ("Calvane", [])])]), ("Dempor", [])]),
+    (
+        "ul",
+        [("Elvorn", [("ol", [("Fanrow", [("ul", [("Gesh", [])])]), ("Hollet", [])])])],
+    ),
+    (
+        "ol",
+        [
+            ("Imbrel", [("ol", [("Jastow", [("ol", [("Kelvorn", [])])])])]),
+            ("Lumbret", []),
+        ],
+    ),
+    (
+        "ol",
+        [
+            ("Mivash", [("ul", [("Norvel", [])])]),
+            ("Orbisk", [("ul", [("Pellow", [])])]),
+        ],
+    ),
+    ("ol", [("Quorvane Rasket", []), ("Sulvane", [])]),
+    (
+        "ol",
+        [
+            ("Tornish", [("ul", [("Umbrel", [])]), ("ol", [("Vasket", [])])]),
+            ("Wendrel", []),
+        ],
+    ),
+    ("ul", [("Zelvane", [("ol", [("Abrisk", [])]), ("ol", [("Bentrow", [])])])]),
+    (
+        "ul",
+        [("Corvel and Elbrisk after it", [("ul", [("Dastrin", [])])]), ("Fennick", [])],
+    ),
+    ("ul", [("", [("ul", [("Gorvane", []), ("Holvish", [])])]), ("Istrel", [])]),
+    ("ul", [("Jorvel Kestrin", [])]),
+]
+
+
+def write_nested_book(path: Path) -> None:
+    sections = "".join(
+        f"<h2>{heading}</h2>{lists}" for heading, lists in NESTED_BOOK_SECTIONS.items()
+    )
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Nested</title></head>
+<body>
+  <h1>Lists Within Lists</h1>
+  <p>{SENTINELS["nested_book.epub"]}</p>
+  {sections}
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", _EPUB_OPF),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+#: Word's numbering: an outline numbered 1., a., i. by level, and bullets.
+_NESTED_FORMATS = {
+    1: ("decimal", "lowerLetter", "lowerRoman"),
+    2: ("bullet", "bullet", "bullet"),
+}
+
+#: The report's list paragraphs: (numbering, level, text), and None for a
+#: paragraph of body text, which ends a list.  The second list is the shape
+#: mammoth writes as a bulleted list and a numbered one in a single item.
+NESTED_REPORT_PARAGRAPHS: list[tuple[int, int, str] | None] = [
+    (1, 0, "Lorvane"),
+    (1, 1, "Mestrin"),
+    (1, 1, "Nolvish"),
+    (1, 2, "Ospret"),
+    (1, 0, "Pindrel"),
+    None,
+    (1, 0, "Quellan"),
+    (2, 1, "Rostrel"),
+    (1, 1, "Sabrine"),
+    (1, 0, "Tolvane"),
+    None,
+    (2, 0, "Umbrisk"),
+    (2, 1, "Vellow"),
+    (2, 2, "Wistrel"),
+    (2, 0, "Yorvane"),
+]
+
+NESTED_REPORT_PAGE: list[NestedList] = [
+    (
+        "ol",
+        [
+            (
+                "Lorvane",
+                [("ol", [("Mestrin", []), ("Nolvish", [("ol", [("Ospret", [])])])])],
+            ),
+            ("Pindrel", []),
+        ],
+    ),
+    (
+        "ol",
+        [
+            ("Quellan", [("ul", [("Rostrel", [])]), ("ol", [("Sabrine", [])])]),
+            ("Tolvane", []),
+        ],
+    ),
+    (
+        "ul",
+        [
+            ("Umbrisk", [("ul", [("Vellow", [("ul", [("Wistrel", [])])])])]),
+            ("Yorvane", []),
+        ],
+    ),
+]
+
+_NESTED_DOCX_CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+</Types>
+"""
+
+
+def write_nested_report(path: Path) -> None:
+    abstracts = "".join(
+        f'<w:abstractNum w:abstractNumId="{number}">'
+        + "".join(
+            f'<w:lvl w:ilvl="{level}"><w:start w:val="1"/>'
+            f'<w:numFmt w:val="{fmt}"/><w:lvlText w:val="%{level + 1}."/></w:lvl>'
+            for level, fmt in enumerate(formats)
+        )
+        + "</w:abstractNum>"
+        for number, formats in _NESTED_FORMATS.items()
+    )
+    instances = "".join(
+        f'<w:num w:numId="{number}"><w:abstractNumId w:val="{number}"/></w:num>'
+        for number in _NESTED_FORMATS
+    )
+    numbering = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f'<w:numbering xmlns:w="{_OOXML["w"]}">{abstracts}{instances}</w:numbering>\n'
+    )
+    items = "".join(
+        _docx_paragraph("The lists go on below.")
+        if paragraph is None
+        else (
+            f'<w:p><w:pPr><w:numPr><w:ilvl w:val="{paragraph[1]}"/>'
+            f'<w:numId w:val="{paragraph[0]}"/></w:numPr></w:pPr>'
+            f"{_word_run(paragraph[2])}</w:p>"
+        )
+        for paragraph in NESTED_REPORT_PARAGRAPHS
+    )
+    body = (
+        _docx_paragraph("Lists Within Lists", "Heading1")
+        + _docx_paragraph(SENTINELS["nested_report.docx"])
+        + items
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering"'
+        ' Target="numbering.xml"/></Relationships>\n'
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", _NESTED_DOCX_CONTENT_TYPES),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+            ("word/numbering.xml", numbering),
+        ],
+    )
+
+
+#: An HTML page in the archive: a zip member is read by the same writer.
+_NESTED_MEMBER_PAGE = f"""<!DOCTYPE html>
+<html><head><title>Steps</title></head>
+<body>
+  <p>{SENTINELS["nested_archive.zip"]}</p>
+  <ul><li>Zandrel<ol><li>Arbisk<ul><li>Belvane</li></ul></li></ol></li></ul>
+</body></html>
+"""
+
+#: What the archive's page holds: its own page's list, then the report's.
+NESTED_ARCHIVE_PAGE: list[NestedList] = [
+    ("ul", [("Zandrel", [("ol", [("Arbisk", [("ul", [("Belvane", [])])])])])]),
+    *NESTED_REPORT_PAGE,
+]
+
+
+def write_nested_archive(path: Path) -> None:
+    """An HTML page with a nested list, and the nested report as it is."""
+    with tempfile.TemporaryDirectory() as scratch:
+        report = Path(scratch) / "nested_report.docx"
+        write_nested_report(report)
+        _write_archive(
+            path,
+            [
+                ("notes/steps.html", _NESTED_MEMBER_PAGE),
+                ("reports/nested_report.docx", report.read_bytes()),
+            ],
+        )
+
+
+#: The book's items, by what each section shows: a definition list in a list
+#: item, whose definitions hold more than a paragraph.  Python-Markdown read
+#: every block after a definition's first into the item, so each section but
+#: the first-paragraph-only parts lost its definition's structure.  The words
+#: are made up.
+DEFINITION_BOOK_SECTIONS = {
+    "A definition's second paragraph": (
+        "<ul><li>Arbelt<dl><dt>Brosken</dt><dd><p>Cavrel</p><p>Dunmorrow</p>"
+        "</dd></dl></li><li>Elvast</li></ul>"
+    ),
+    "A numbered list in a definition": (
+        "<ol><li>Farnish<dl><dt>Gorvel</dt><dd>Hastrel<ol><li>Ilvane</li>"
+        "<li>Jorvish</li></ol></dd></dl></li><li>Kembrisk</li></ol>"
+    ),
+    "A bulleted list two deep in a definition": (
+        "<ul><li>Lumvar<dl><dt>Mostrel</dt><dd>Nevish<ul><li>Orbane<ul>"
+        "<li>Pelvish</li></ul></li></ul></dd></dl></li></ul>"
+    ),
+    "A definition list in a definition": (
+        "<ol><li>Quarvel<dl><dt>Rostrin</dt><dd>Selvane<dl><dt>Tormish</dt>"
+        "<dd><p>Ulbrin</p><p>Vastrow</p></dd></dl></dd></dl></li></ol>"
+    ),
+    "A quotation in a definition": (
+        "<ul><li>Wendrisk<dl><dt>Yarbel</dt><dd>Zolvane<blockquote>"
+        "<p>Arnwick</p><p>Belstrow</p></blockquote></dd></dl></li></ul>"
+    ),
+    "Three items deep": (
+        "<ol><li>Corbish<ul><li>Delvar<ol><li>Emberwick<dl><dt>Falstrin</dt>"
+        "<dd><p>Gemvar</p><p>Holbrisk</p></dd></dl></li></ol></li></ul></li></ol>"
+    ),
+    "An item that opens with a definition list": (
+        "<ul><li><dl><dt>Ivrenn</dt><dd><ol><li>Jalbrin</li><li>Korvash</li>"
+        "</ol></dd></dl></li><li>Lendrow</li></ul>"
+    ),
+    "The item's own text after its definition list": (
+        "<ol><li>Marvisk<dl><dt>Norbel</dt><dd><p>Olvish</p><p>Parnow</p></dd>"
+        "</dl><p>Quilvane</p></li></ol>"
+    ),
+}
+
+
+def write_definition_book(path: Path) -> None:
+    sections = "".join(
+        f"<h2>{heading}</h2>{body}"
+        for heading, body in DEFINITION_BOOK_SECTIONS.items()
+    )
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Terms</title></head>
+<body>
+  <h1>Terms Within Lists</h1>
+  <p>{SENTINELS["definition_book.epub"]}</p>
+  {sections}
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", _EPUB_OPF),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+#: The archive's HTML page's own item: a definition of two paragraphs and a
+#: list, in a numbered item.
+DEFINITION_MEMBER_ITEMS = (
+    "<ol><li>Rendlow<dl><dt>Sarvish</dt><dd><p>Talbrin</p><p>Umbrisk</p>"
+    "<ul><li>Velnor</li></ul></dd></dl></li><li>Wistrel</li></ol>"
+)
+
+_DEFINITION_MEMBER_PAGE = f"""<!DOCTYPE html>
+<html><head><title>Glossary</title></head>
+<body>
+  <p>{SENTINELS["definition_archive.zip"]}</p>
+  {DEFINITION_MEMBER_ITEMS}
+</body></html>
+"""
+
+
+def write_definition_archive(path: Path) -> None:
+    """An HTML page with a definition list in an item, and the book as it is."""
+    with tempfile.TemporaryDirectory() as scratch:
+        book = Path(scratch) / "definition_book.epub"
+        write_definition_book(book)
+        _write_archive(
+            path,
+            [
+                ("notes/glossary.html", _DEFINITION_MEMBER_PAGE),
+                ("books/definition_book.epub", book.read_bytes()),
+            ],
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Code in list items (docs/09 P44)
+# --------------------------------------------------------------------------- #
+
+#: A code block as the page should hold it: how many items it sits in (0 at
+#: the top level), the text of the item that holds it but for its code and its
+#: nested lists, and the code.  The words are made up.
+ItemCode = tuple[int, str, str]
+
+#: The book's code, by what each section shows.  markdownify fenced each
+#: `<pre>` and the item indented the fence, which Python-Markdown reads only
+#: where a line begins: every block but the last became one line of text.
+CODE_ITEMS_BOOK_SECTIONS = {
+    "Code under a bullet": (
+        "<ul><li>Arbel<pre>plinth = gorvane(7)\n  wex plinth</pre></li>"
+        "<li>Bostick</li></ul>"
+    ),
+    "Code two levels down": (
+        "<ol><li>Cestor<ol><li>Dravik<pre>hollow(3)\n    tamber</pre></li>"
+        "<li>Elkin</li></ol></li><li>Forrel</li></ol>"
+    ),
+    "Code three levels down": (
+        "<ul><li>Gantry<ol><li>Hesk<ul><li>Ivrel<pre>quill\n  quorn\n    quiver"
+        "</pre></li></ul></li></ol></li><li>Jabrel</li></ul>"
+    ),
+    "An item that opens with code": (
+        "<ul><li><pre>opal = 1\nopine = 2</pre></li><li>Jessop</li></ul>"
+    ),
+    "Code after a nested list": (
+        "<ol><li>Kelvane<ul><li>Lurrow</li></ul><pre>after lurrow\n  still kelvane"
+        "</pre></li><li>Mordel</li></ol>"
+    ),
+    "Two blocks of code in one item": (
+        "<ul><li>Nostrel<pre>first block</pre><pre>second block</pre></li>"
+        "<li>Ostler</li></ul>"
+    ),
+    "Blank lines, indentation, tabs, backticks and markup": (
+        "<ul><li>Orvash<pre>\n   lead\n\nmid\n\tTabbed\n```\nfence\n````\n"
+        "``x`` &lt;b&gt;not bold&lt;/b&gt; &amp;amp;\n</pre>and Pemberly after it"
+        "</li><li>Quell</li></ul>"
+    ),
+    "Numbers of one digit and of two": (
+        '<ol start="9"><li>Rendel<pre>nine</pre></li><li>Sorvel<pre>ten</pre></li></ol>'
+    ),
+    "Code outside a list": "<pre>top level\n  unchanged</pre>",
+}
+
+#: Every `<pre>` in `CODE_ITEMS_BOOK_SECTIONS`, as the page holds it, in order.
+#: The tab is four spaces: Python-Markdown expands tabs, at the top level too.
+CODE_ITEMS_BOOK_CODE: list[ItemCode] = [
+    (1, "Arbel", "plinth = gorvane(7)\n  wex plinth"),
+    (2, "Dravik", "hollow(3)\n    tamber"),
+    (3, "Ivrel", "quill\n  quorn\n    quiver"),
+    (1, "", "opal = 1\nopine = 2"),
+    (1, "Kelvane", "after lurrow\n  still kelvane"),
+    (1, "Nostrel", "first block"),
+    (1, "Nostrel", "second block"),
+    (
+        1,
+        "Orvash and Pemberly after it",
+        "   lead\n\nmid\n    Tabbed\n```\nfence\n````\n``x`` <b>not bold</b> &amp;",
+    ),
+    (1, "Rendel", "nine"),
+    (1, "Sorvel", "ten"),
+    (0, "", "top level\n  unchanged"),
+]
+
+#: `CODE_ITEMS_BOOK_SECTIONS`' lists as the page holds them, code left out.
+CODE_ITEMS_BOOK_PAGE: list[NestedList] = [
+    ("ul", [("Arbel", []), ("Bostick", [])]),
+    ("ol", [("Cestor", [("ol", [("Dravik", []), ("Elkin", [])])]), ("Forrel", [])]),
+    (
+        "ul",
+        [
+            ("Gantry", [("ol", [("Hesk", [("ul", [("Ivrel", [])])])])]),
+            ("Jabrel", []),
+        ],
+    ),
+    ("ul", [("", []), ("Jessop", [])]),
+    ("ol", [("Kelvane", [("ul", [("Lurrow", [])])]), ("Mordel", [])]),
+    ("ul", [("Nostrel", []), ("Ostler", [])]),
+    ("ul", [("Orvash and Pemberly after it", []), ("Quell", [])]),
+    ("ol", [("Rendel", []), ("Sorvel", [])]),
+]
+
+
+def write_code_items_book(path: Path) -> None:
+    sections = "".join(
+        f"<h2>{heading}</h2>{body}"
+        for heading, body in CODE_ITEMS_BOOK_SECTIONS.items()
+    )
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Code</title></head>
+<body>
+  <h1>Code Within Lists</h1>
+  <p>{SENTINELS["code_items_book.epub"]}</p>
+  {sections}
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", _EPUB_OPF),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+#: mammoth writes a `<pre>` only where a style map says to.  A Word file can
+#: carry one, and MarkItDown reads it: code paragraphs, each style a level of
+#: list item deep, and consecutive ones one block.
+CODE_ITEMS_STYLE_MAP = (
+    "p.ItemCode => ul|ol > li > pre:separator('\\n')\n"
+    "p.SubItemCode => ul|ol > li > ul|ol > li > pre:separator('\\n')\n"
+)
+
+#: The report's paragraphs: (level, text) for an item of a list numbered at
+#: level 0 and bulleted at level 1; (style, text) for a line of code; None for
+#: a paragraph of body text, which ends a list.
+CODE_ITEMS_REPORT_PARAGRAPHS: list[tuple[int | str, str] | None] = [
+    (0, "Vellum"),
+    ("ItemCode", "wendle(3)"),
+    ("ItemCode", "    yarrow = 2"),
+    (1, "Wistan"),
+    ("SubItemCode", "zephyr()"),
+    ("SubItemCode", "  ablet"),
+    (0, "Xandrel"),
+    None,
+    (0, "Yolvane"),
+    (1, "Zamber"),
+    ("ItemCode", "after zamber"),
+    (0, "Abernot"),
+]
+
+CODE_ITEMS_REPORT_CODE: list[ItemCode] = [
+    (1, "Vellum", "wendle(3)\n    yarrow = 2"),
+    (2, "Wistan", "zephyr()\n  ablet"),
+    (1, "Yolvane", "after zamber"),
+]
+
+CODE_ITEMS_REPORT_PAGE: list[NestedList] = [
+    ("ol", [("Vellum", [("ul", [("Wistan", [])])]), ("Xandrel", [])]),
+    ("ol", [("Yolvane", [("ul", [("Zamber", [])])]), ("Abernot", [])]),
+]
+
+_CODE_ITEMS_NUMBERING = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    f'<w:numbering xmlns:w="{_OOXML["w"]}">'
+    '<w:abstractNum w:abstractNumId="1">'
+    '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>'
+    '<w:lvlText w:val="%1."/></w:lvl>'
+    '<w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="bullet"/>'
+    '<w:lvlText w:val="-"/></w:lvl>'
+    "</w:abstractNum>"
+    '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>'
+    "</w:numbering>\n"
+)
+
+
+def write_code_items_report(path: Path) -> None:
+    """A Word file whose embedded style map puts code in its list items.
+
+    Laid out as mammoth's own `embed_style_map` writes one: the map at
+    `mammoth/style-map`, named in the content types and the document's
+    relationships.
+    """
+    paragraphs = []
+    for paragraph in CODE_ITEMS_REPORT_PARAGRAPHS:
+        if paragraph is None:
+            paragraphs.append(_docx_paragraph("The lists go on below."))
+        elif isinstance(paragraph[0], str):
+            paragraphs.append(_docx_paragraph(paragraph[1], paragraph[0]))
+        else:
+            paragraphs.append(
+                f'<w:p><w:pPr><w:numPr><w:ilvl w:val="{paragraph[0]}"/>'
+                f'<w:numId w:val="1"/></w:numPr></w:pPr>'
+                f"{_word_run(paragraph[1])}</w:p>"
+            )
+    body = (
+        _docx_paragraph("Code Within Lists", "Heading1")
+        + _docx_paragraph(SENTINELS["code_items_report.docx"])
+        + "".join(paragraphs)
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    content_types = _NESTED_DOCX_CONTENT_TYPES.replace(
+        "</Types>",
+        '  <Override PartName="/mammoth/style-map"'
+        ' ContentType="text/prs.mammoth.style-map"/>\n</Types>',
+    )
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering"'
+        ' Target="numbering.xml"/>'
+        '<Relationship Id="rMammothStyleMap" Type="http://schemas.zwobble.org/mammoth/style-map"'
+        ' Target="/mammoth/style-map"/></Relationships>\n'
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+            ("word/numbering.xml", _CODE_ITEMS_NUMBERING),
+            ("mammoth/style-map", CODE_ITEMS_STYLE_MAP),
+        ],
+    )
+
+
+#: An HTML page in the archive: a zip member is read by the same writer.
+_CODE_ITEMS_MEMBER_PAGE = f"""<!DOCTYPE html>
+<html><head><title>Snippets</title></head>
+<body>
+  <p>{SENTINELS["code_items_archive.zip"]}</p>
+  <ol><li>Bramble<ul><li>Cindrel<pre>cindrel --go\n  --far</pre></li></ul></li>
+  <li>Dunmore</li></ol>
+</body></html>
+"""
+
+#: What the archive's page holds: its own page's, then the report's.
+CODE_ITEMS_ARCHIVE_CODE: list[ItemCode] = [
+    (2, "Cindrel", "cindrel --go\n  --far"),
+    *CODE_ITEMS_REPORT_CODE,
+]
+CODE_ITEMS_ARCHIVE_PAGE: list[NestedList] = [
+    ("ol", [("Bramble", [("ul", [("Cindrel", [])])]), ("Dunmore", [])]),
+    *CODE_ITEMS_REPORT_PAGE,
+]
+
+
+def write_code_items_archive(path: Path) -> None:
+    """An HTML page with code in a nested item, and the code report as it is."""
+    with tempfile.TemporaryDirectory() as scratch:
+        report = Path(scratch) / "code_items_report.docx"
+        write_code_items_report(report)
+        _write_archive(
+            path,
+            [
+                ("notes/snippets.html", _CODE_ITEMS_MEMBER_PAGE),
+                ("reports/code_items_report.docx", report.read_bytes()),
+            ],
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Code in a line of text (docs/09 P59)
+# --------------------------------------------------------------------------- #
+
+#: Code as the page should hold it in a line of text: the element its
+#: `<code>` sits in, and its text, each `<br>` a line break.
+InlineCode = tuple[str, str]
+
+
+def _beacon(spot: str) -> str:
+    """An `<img>` typed in code, aimed at a `.invalid` host named for its spot."""
+    return f'<img src="{BEACON}/inline-{spot}.png">'
+
+
+#: Code that markdownify wrote into a line of text, each holding what took
+#: the page there: a blank line, or a line Python-Markdown reads wherever a
+#: paragraph's line begins — a heading, a rule, a quotation, a `<div>`.
+INLINE_LINK = f"gorvel(2)\n\n{_beacon('link')}"
+INLINE_STRONG = f"drest = 4\n\n![tamsin]({BEACON}/inline-strong.png)"
+INLINE_EM = f"pell\n# not a heading\n{_beacon('em')}"
+INLINE_DEL = f"quarrow\n***\n{_beacon('del')}"
+INLINE_SUB = f"sennet\n> not quoted\n{_beacon('sub')}"
+INLINE_Q = f"tolly\n<div>{_beacon('q')}</div>"
+INLINE_CODE = f"ulvar\n\n{_beacon('code')}"
+INLINE_LINES = f"harl = 2\n# not a heading\n{_beacon('lines')}"
+
+#: The book's code, by what each section shows.
+INLINE_CODE_BOOK_SECTIONS = {
+    "Code in a link": (
+        '<p>Read <a href="chapter.xhtml"><pre>'
+        f"{html.escape(INLINE_LINK)}</pre></a> first.</p>"
+    ),
+    "Code in strong emphasis": (
+        f"<p><strong><pre>{html.escape(INLINE_STRONG)}</pre></strong></p>"
+    ),
+    "Code in emphasis, in an item": (
+        f"<ul><li>Quessel <em><pre>{html.escape(INLINE_EM)}</pre></em></li>"
+        "<li>Rellick</li></ul>"
+    ),
+    "Code in struck text": f"<p><del><pre>{html.escape(INLINE_DEL)}</pre></del></p>",
+    "Code in a subscript, after a word": (
+        f"<p>Wrenfold<sub><pre>{html.escape(INLINE_SUB)}</pre></sub>tail</p>"
+    ),
+    "Code in a quotation": (
+        f"<p>Ostrel said <q><pre>{html.escape(INLINE_Q)}</pre></q></p>"
+    ),
+    "Code in inline code": (
+        f"<p><code><pre>{html.escape(INLINE_CODE)}</pre></code></p>"
+    ),
+    "Inline code over three lines": (
+        f"<p><code>{html.escape(INLINE_LINES)}</code></p>"
+    ),
+    "Code with no blank line, in a link": (
+        '<p><a href="chapter.xhtml"><pre>plain one\n  plain two</pre></a></p>'
+    ),
+    "Code outside a line of text": "<pre>top level\n  unchanged</pre>",
+}
+
+#: Every `<code>` the page holds outside a code block, in order.  Python-
+#: Markdown has no struck text, so `~~` is the paragraph's; a quotation and a
+#: subscript are written as their text.  In inline code a line break is a
+#: space, as the browser shows one there.
+INLINE_CODE_BOOK_CODE: list[InlineCode] = [
+    ("a", INLINE_LINK),
+    ("strong", INLINE_STRONG),
+    ("em", INLINE_EM),
+    ("p", INLINE_DEL),
+    ("p", INLINE_SUB),
+    ("p", INLINE_Q),
+    ("p", INLINE_CODE.replace("\n", " ")),
+    ("p", INLINE_LINES.replace("\n", " ")),
+    ("a", "plain one\n  plain two"),
+]
+#: Every code block the page holds, which a `<pre>` outside a line keeps.
+INLINE_CODE_BOOK_BLOCKS = ["top level\n  unchanged"]
+
+
+def write_inline_code_book(path: Path) -> None:
+    sections = "".join(
+        f"<h2>{heading}</h2>{body}"
+        for heading, body in INLINE_CODE_BOOK_SECTIONS.items()
+    )
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Inline</title></head>
+<body>
+  <h1>Code Within Text</h1>
+  <p>{SENTINELS["inline_code_book.epub"]}</p>
+  {sections}
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", _EPUB_OPF),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+#: A style map that writes code paragraphs into strong text after the body
+#: text before them, and into emphasis in a list item.  mammoth drops an
+#: empty paragraph, so these reach the page by a line, not a blank one.
+INLINE_CODE_STYLE_MAP = (
+    "p.StrongCode => p > strong > pre:separator('\\n')\n"
+    "p.ItemEmCode => ul > li > em > pre:separator('\\n')\n"
+)
+INLINE_REPORT_STRONG = f"wendle(3)\n***\n{_beacon('report-strong')}"
+INLINE_REPORT_EM = f"zephyr()\n# not a heading\n{_beacon('report-em')}"
+INLINE_CODE_REPORT_CODE: list[InlineCode] = [
+    ("strong", INLINE_REPORT_STRONG),
+    ("em", INLINE_REPORT_EM),
+]
+
+
+def write_inline_code_report(path: Path) -> None:
+    """A Word file whose embedded style map puts code into a line of text."""
+    paragraphs = [
+        _docx_paragraph("Code Within Text", "Heading1"),
+        _docx_paragraph(SENTINELS["inline_code_report.docx"]),
+        _docx_paragraph("Vantor writes"),
+        *(
+            _docx_paragraph(html.escape(line, quote=False), "StrongCode")
+            for line in INLINE_REPORT_STRONG.split("\n")
+        ),
+        _docx_paragraph("And in a list:"),
+        *(
+            _docx_paragraph(html.escape(line, quote=False), "ItemEmCode")
+            for line in INLINE_REPORT_EM.split("\n")
+        ),
+    ]
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{''.join(paragraphs)}</w:body></w:document>\n"
+    )
+    content_types = _DOCX_CONTENT_TYPES.replace(
+        "</Types>",
+        '  <Override PartName="/mammoth/style-map"'
+        ' ContentType="text/prs.mammoth.style-map"/>\n</Types>',
+    )
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rMammothStyleMap" Type="http://schemas.zwobble.org/mammoth/style-map"'
+        ' Target="/mammoth/style-map"/></Relationships>\n'
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+            ("mammoth/style-map", INLINE_CODE_STYLE_MAP),
+        ],
+    )
+
+
+INLINE_MEMBER_LINK = f"brisk --run\n\n{_beacon('member-link')}"
+INLINE_MEMBER_ITEM = f"cobble\n***\n{_beacon('member-item')}"
+INLINE_MEMBER_KBD = f"dorrit\n> not quoted\n{_beacon('member-kbd')}"
+
+#: An HTML page in the archive: a zip member is read by the same writer.
+_INLINE_CODE_MEMBER_PAGE = f"""<!DOCTYPE html>
+<html><head><title>Snippets</title></head>
+<body>
+  <p>{SENTINELS["inline_code_archive.zip"]}</p>
+  <p><a href="#top"><pre>{html.escape(INLINE_MEMBER_LINK)}</pre></a></p>
+  <ol><li>Bramwell <strong><pre>{html.escape(INLINE_MEMBER_ITEM)}</pre></strong></li>
+  <li>Corvid</li></ol>
+  <p>Press <kbd>{html.escape(INLINE_MEMBER_KBD)}</kbd> to go on.</p>
+</body></html>
+"""
+
+#: What the archive's page holds: its own page's, then the report's.
+INLINE_CODE_ARCHIVE_CODE: list[InlineCode] = [
+    ("a", INLINE_MEMBER_LINK),
+    ("strong", INLINE_MEMBER_ITEM),
+    ("p", INLINE_MEMBER_KBD.replace("\n", " ")),
+    *INLINE_CODE_REPORT_CODE,
+]
+
+
+def write_inline_code_archive(path: Path) -> None:
+    """An HTML page with code in a line of text, and the inline code report."""
+    with tempfile.TemporaryDirectory() as scratch:
+        report = Path(scratch) / "inline_code_report.docx"
+        write_inline_code_report(report)
+        _write_archive(
+            path,
+            [
+                ("notes/snippets.html", _INLINE_CODE_MEMBER_PAGE),
+                ("reports/inline_code_report.docx", report.read_bytes()),
+            ],
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Code in quotations and definitions (docs/09 P47)
+# --------------------------------------------------------------------------- #
+
+#: A code block as the page should hold it: the quotations (`blockquote`),
+#: definitions (`dd`) and list items (`li`) it sits in, outermost first and
+#: joined by `/` ("" at the top level), and the code.  The words are made up.
+QuotedCode = tuple[str, str]
+
+#: Code holding blank lines, indentation, a tab, backtick runs and markup:
+#: markdownify fenced it, and behind `> ` or `:   ` the fence was text, so
+#: the lines after a blank line were read as Markdown with raw HTML.
+_QUOTED_MARKUP_CODE = (
+    "\n   lead\n\nmid\n\tTabbed\n```\nfence\n````\n``x`` &lt;b&gt;not bold&lt;/b&gt;"
+    ' &amp;amp;\n\n&lt;img src="https://tracker.invalid/quoted.png"&gt;\n'
+)
+#: `_QUOTED_MARKUP_CODE` as the page holds it: its blank lines at either end
+#: trimmed, its tab four spaces, as Python-Markdown expands tabs everywhere.
+_QUOTED_MARKUP_PAGE = (
+    "   lead\n\nmid\n    Tabbed\n```\nfence\n````\n``x`` <b>not bold</b> &amp;\n\n"
+    '<img src="https://tracker.invalid/quoted.png">'
+)
+
+#: The book's code, by what each section shows.  Before, every block but the
+#: last was one line of text, or two paragraphs where it held a blank line.
+QUOTED_CODE_BOOK_SECTIONS = {
+    "Code in a quotation": (
+        "<blockquote><p>Quillon wrote</p><pre>hollin(2)\n  vesper</pre>"
+        "<p>Rastel replied</p></blockquote>"
+    ),
+    "A quotation of code alone": "<blockquote><pre>tamsk = 4\n    ulmer</pre></blockquote>",
+    "Code in a quotation in a quotation": (
+        "<blockquote><p>Sorrel</p><blockquote><p>Tibbet</p>"
+        "<pre>nested(1)\n  deeper</pre></blockquote><p>Umber</p></blockquote>"
+    ),
+    "Code three quotations deep": (
+        "<blockquote><blockquote><blockquote><pre>third\n  level</pre>"
+        "</blockquote></blockquote></blockquote>"
+    ),
+    "Two blocks of code in a quotation": (
+        "<blockquote><pre>first wend</pre><pre>second wend</pre></blockquote>"
+    ),
+    "Code after a list in a quotation": (
+        "<blockquote><ul><li>Vantor</li></ul><pre>after vantor\n  still quoted</pre>"
+        "</blockquote>"
+    ),
+    "Code in a definition": (
+        "<dl><dt>Wexley</dt><dd><pre>wex --all\n  --quiet</pre></dd>"
+        "<dt>Yarrow</dt><dd>Plain zell</dd></dl>"
+    ),
+    "Code after a definition's text": (
+        "<dl><dt>Abbet</dt><dd>Brindle<pre>brindle()\n  cog</pre>"
+        "and Corvy after it</dd></dl>"
+    ),
+    "Code in a definition in a quotation": (
+        "<blockquote><dl><dt>Dunlin</dt><dd><pre>dunlin = 5\n  fen</pre></dd></dl>"
+        "</blockquote>"
+    ),
+    "Code in a quotation in a definition": (
+        "<dl><dt>Ember</dt><dd><blockquote><pre>ember\n  glow</pre></blockquote>"
+        "</dd></dl>"
+    ),
+    "Blank lines, indentation, tabs, backticks and markup in a quotation": (
+        f"<blockquote><pre>{_QUOTED_MARKUP_CODE}</pre></blockquote>"
+    ),
+    "Blank lines, indentation, tabs, backticks and markup in a definition": (
+        f"<dl><dt>Farrow</dt><dd><pre>{_QUOTED_MARKUP_CODE}</pre></dd></dl>"
+    ),
+    "Code outside a quotation": "<pre>top level\n  unchanged</pre>",
+}
+
+#: Every `<pre>` in `QUOTED_CODE_BOOK_SECTIONS`, as the page holds it, in order.
+QUOTED_CODE_BOOK_CODE: list[QuotedCode] = [
+    ("blockquote", "hollin(2)\n  vesper"),
+    ("blockquote", "tamsk = 4\n    ulmer"),
+    ("blockquote/blockquote", "nested(1)\n  deeper"),
+    ("blockquote/blockquote/blockquote", "third\n  level"),
+    ("blockquote", "first wend"),
+    ("blockquote", "second wend"),
+    ("blockquote", "after vantor\n  still quoted"),
+    ("dd", "wex --all\n  --quiet"),
+    ("dd", "brindle()\n  cog"),
+    ("blockquote/dd", "dunlin = 5\n  fen"),
+    ("dd/blockquote", "ember\n  glow"),
+    ("blockquote", _QUOTED_MARKUP_PAGE),
+    ("dd", _QUOTED_MARKUP_PAGE),
+    ("", "top level\n  unchanged"),
+]
+
+
+def write_quoted_code_book(path: Path) -> None:
+    sections = "".join(
+        f"<h2>{heading}</h2>{body}"
+        for heading, body in QUOTED_CODE_BOOK_SECTIONS.items()
+    )
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Quoted</title></head>
+<body>
+  <h1>Code Within Quotations</h1>
+  <p>{SENTINELS["quoted_code_book.epub"]}</p>
+  {sections}
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", _EPUB_OPF),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+#: A style for a quotation's paragraphs and its code, a definition list's
+#: terms, text and code, and code in a definition in a quotation: consecutive
+#: code paragraphs are one block.
+QUOTED_CODE_STYLE_MAP = (
+    "p.Quote => blockquote > p:fresh\n"
+    "p.QuoteCode => blockquote > pre:separator('\\n')\n"
+    "p.Term => dl > dt:fresh\n"
+    "p.Definition => dl > dd:fresh > p:fresh\n"
+    "p.DefinitionCode => dl > dd > pre:separator('\\n')\n"
+    "p.QuoteTerm => blockquote > dl > dt:fresh\n"
+    "p.QuoteDefinitionCode => blockquote > dl > dd > pre:separator('\\n')\n"
+)
+
+#: The report's paragraphs, each its style and its text; a style of None is
+#: body text, which ends a quotation or a definition list.
+QUOTED_CODE_REPORT_PARAGRAPHS: list[tuple[str | None, str]] = [
+    ("Quote", "Fennick wrote"),
+    ("QuoteCode", "gorse(3)"),
+    ("QuoteCode", "    hazel = 2"),
+    ("Quote", "and Fennick went on"),
+    (None, "The definitions follow."),
+    ("Term", "Ilsey"),
+    ("DefinitionCode", "jorum()"),
+    ("DefinitionCode", "  kestle"),
+    ("Term", "Lathom"),
+    ("Definition", "Mallow text"),
+    ("DefinitionCode", "after mallow"),
+    (None, "A quoted definition follows."),
+    ("QuoteTerm", "Nimbel"),
+    ("QuoteDefinitionCode", "nimbel --on"),
+    ("QuoteDefinitionCode", "  --oriel"),
+]
+
+QUOTED_CODE_REPORT_CODE: list[QuotedCode] = [
+    ("blockquote", "gorse(3)\n    hazel = 2"),
+    ("dd", "jorum()\n  kestle"),
+    ("dd", "after mallow"),
+    ("blockquote/dd", "nimbel --on\n  --oriel"),
+]
+
+
+def write_quoted_code_report(path: Path) -> None:
+    """A Word file whose embedded style map puts code in quotations and
+    definitions, laid out as `write_code_items_report`'s is."""
+    body = (
+        _docx_paragraph("Code Within Quotations", "Heading1")
+        + _docx_paragraph(SENTINELS["quoted_code_report.docx"])
+        + "".join(
+            _docx_paragraph(text, style)
+            for style, text in QUOTED_CODE_REPORT_PARAGRAPHS
+        )
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    content_types = _DOCX_CONTENT_TYPES.replace(
+        "</Types>",
+        '  <Override PartName="/mammoth/style-map"'
+        ' ContentType="text/prs.mammoth.style-map"/>\n</Types>',
+    )
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rMammothStyleMap" Type="http://schemas.zwobble.org/mammoth/style-map"'
+        ' Target="/mammoth/style-map"/></Relationships>\n'
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+            ("mammoth/style-map", QUOTED_CODE_STYLE_MAP),
+        ],
+    )
+
+
+#: An HTML page in the archive: a zip member is read by the same writer.
+_QUOTED_CODE_MEMBER_PAGE = f"""<!DOCTYPE html>
+<html><head><title>Quoted snippets</title></head>
+<body>
+  <p>{SENTINELS["quoted_code_archive.zip"]}</p>
+  <blockquote><p>Oxley</p><blockquote><pre>oxley(1)\n  pell</pre></blockquote>
+  </blockquote>
+  <dl><dt>Quarrel</dt><dd><p>Rook</p><pre>quarrel = 7\n  sedge</pre></dd></dl>
+</body></html>
+"""
+
+#: What the archive's page holds: its own page's, then the report's.
+QUOTED_CODE_ARCHIVE_CODE: list[QuotedCode] = [
+    ("blockquote/blockquote", "oxley(1)\n  pell"),
+    ("dd", "quarrel = 7\n  sedge"),
+    *QUOTED_CODE_REPORT_CODE,
+]
+
+
+def write_quoted_code_archive(path: Path) -> None:
+    """An HTML page with code in a quotation and a definition, and the quoted
+    code report as it is."""
+    with tempfile.TemporaryDirectory() as scratch:
+        report = Path(scratch) / "quoted_code_report.docx"
+        write_quoted_code_report(report)
+        _write_archive(
+            path,
+            [
+                ("notes/quoted.html", _QUOTED_CODE_MEMBER_PAGE),
+                ("reports/quoted_code_report.docx", report.read_bytes()),
+            ],
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Edge spaces — a Unicode space at the edge of formatted text (docs/09 P43)
+# --------------------------------------------------------------------------- #
+
+#: Spaces outside ASCII that `str.strip` takes from the edge of a run, one of
+#: each kind a document is likely to hold.  `tests/test_edge_spaces.py` derives
+#: the full set from Python itself; these are the ones the fixtures carry.
+EDGE_SPACES = {
+    "nbsp": "\N{NO-BREAK SPACE}",
+    "ensp": "\N{EN SPACE}",
+    "thinsp": "\N{THIN SPACE}",
+    "nnbsp": "\N{NARROW NO-BREAK SPACE}",
+    "ideosp": "\N{IDEOGRAPHIC SPACE}",
+}
+
+
+@dataclass(frozen=True)
+class EdgeSpaceLine:
+    """One paragraph of an `edge_space_*` fixture: three made-up words, the
+    middle one formatted, and every space between them exactly as written.
+
+    `opening` and `closing` are the markup around the middle word: HTML tags
+    for a book or a page, the names in `_WORD_RUN_PROPERTIES` for Word.
+    """
+
+    opening: str
+    closing: str
+    before: str
+    lead: str
+    inside: str
+    trail: str
+    after: str
+
+    @property
+    def run(self) -> str:
+        """The formatted run's own text, its edge spaces included."""
+        return self.lead + self.inside + self.trail
+
+    @property
+    def text(self) -> str:
+        """The paragraph as the page must read it, character for character."""
+        return self.before + self.run + self.after
+
+
+def _edge_space_line(
+    opening: str, closing: str, label: str, space: str, where: str
+) -> EdgeSpaceLine:
+    """A paragraph whose words are kept apart only by `space`, at `where`.
+
+    Every word is `label` and `where` with a suffix, so each is unique in its
+    fixture and a failure names the case.  An edge without `space` has an
+    ASCII space outside the run instead; `only` is a run of the space alone.
+    """
+    stem = f"{label}{where}"
+    if where == "only":
+        return EdgeSpaceLine(
+            opening, closing, f"{stem}before", space, "", "", f"{stem}after"
+        )
+    lead = space if where in ("lead", "both") else ""
+    trail = space if where in ("trail", "both") else ""
+    return EdgeSpaceLine(
+        opening,
+        closing,
+        f"{stem}before" + ("" if lead else " "),
+        lead,
+        f"{stem}inside",
+        trail,
+        ("" if trail else " ") + f"{stem}after",
+    )
+
+
+def _edge_space_lines(kinds: dict[str, tuple[str, str]]) -> list[EdgeSpaceLine]:
+    """Each kind with a no-break space at each edge, each other space at both
+    edges of the first kind, and two lines whose output must not move: ASCII
+    spaces at the run's edges, and spaces outside it."""
+    lines = [
+        _edge_space_line(opening, closing, label, EDGE_SPACES["nbsp"], where)
+        for label, (opening, closing) in kinds.items()
+        for where in ("lead", "trail", "both", "only")
+    ]
+    first, (opening, closing) = next(iter(kinds.items()))
+    lines += [
+        _edge_space_line(opening, closing, f"{first}{name}", space, "both")
+        for name, space in EDGE_SPACES.items()
+        if name != "nbsp"
+    ]
+    lines.append(_edge_space_line(opening, closing, f"{first}ascii", " ", "both"))
+    lines.append(_edge_space_line(opening, closing, f"{first}outside", "", "both"))
+    return lines
+
+
+#: The formatting Word gives a run, by the element mammoth writes for it.
+_WORD_RUN_PROPERTIES = {
+    "bold": "<w:b/>",
+    "italic": "<w:i/>",
+    "bolditalic": "<w:b/><w:i/>",
+    "strike": "<w:strike/>",
+    "subscript": '<w:vertAlign w:val="subscript"/>',
+    "superscript": '<w:vertAlign w:val="superscript"/>',
+    "link": "",
+}
+#: Where the Word fixture's links point; `.invalid` never resolves.
+EDGE_SPACE_HREF = "https://example.invalid/edge"
+#: Every inline element markdownify `chomp`s, and two it reaches through them:
+#: `strike` is `s`, and `a` without an `href` is text.
+_HTML_INLINE = {
+    "strong": ("<strong>", "</strong>"),
+    "b": ("<b>", "</b>"),
+    "em": ("<em>", "</em>"),
+    "i": ("<i>", "</i>"),
+    "nested": ("<strong><em>", "</em></strong>"),
+    "code": ("<code>", "</code>"),
+    "kbd": ("<kbd>", "</kbd>"),
+    "samp": ("<samp>", "</samp>"),
+    "del": ("<del>", "</del>"),
+    "s": ("<s>", "</s>"),
+    "strike": ("<strike>", "</strike>"),
+    "sub": ("<sub>", "</sub>"),
+    "sup": ("<sup>", "</sup>"),
+    "u": ("<u>", "</u>"),
+    "link": (f'<a href="{EDGE_SPACE_HREF}">', "</a>"),
+    "anchor": ('<a id="edge">', "</a>"),
+}
+
+
+def edge_space_lines(name: str) -> list[EdgeSpaceLine]:
+    """The paragraphs of the `edge_space_*` fixture called `name`."""
+    if name == "edge_space_report.docx":
+        return _edge_space_lines({kind: (kind, "") for kind in _WORD_RUN_PROPERTIES})
+    return _edge_space_lines(_HTML_INLINE)
+
+
+def _word_edge_paragraph(line: EdgeSpaceLine) -> str:
+    def plain(text: str) -> str:
+        return _word_run(text) if text else ""
+
+    properties = _WORD_RUN_PROPERTIES[line.opening]
+    run = f'<w:r><w:rPr>{properties}</w:rPr><w:t xml:space="preserve">{line.run}</w:t></w:r>'
+    if line.opening == "link":
+        run = f'<w:hyperlink r:id="rId2">{_word_run(line.run)}</w:hyperlink>'
+    return f"<w:p>{plain(line.before)}{run}{plain(line.after)}</w:p>"
+
+
+def write_edge_space_report(path: Path) -> None:
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"'
+        f' Target="{EDGE_SPACE_HREF}" TargetMode="External"/></Relationships>\n'
+    )
+    body = _docx_paragraph(SENTINELS["edge_space_report.docx"]) + "".join(
+        _word_edge_paragraph(line)
+        for line in edge_space_lines("edge_space_report.docx")
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", _DOCX_CONTENT_TYPES),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+        ],
+    )
+
+
+def _edge_space_html(name: str) -> str:
+    return "\n".join(
+        f"  <p>{line.before}{line.opening}{line.run}{line.closing}{line.after}</p>"
+        for line in edge_space_lines(name)
+    )
+
+
+def write_edge_space_book(path: Path) -> None:
+    opf = _EPUB_OPF.replace("webshot-office-fixture", "webshot-edge-space-fixture")
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head>
+<body>
+  <p>{SENTINELS["edge_space_book.epub"]}</p>
+{_edge_space_html("edge_space_book.epub")}
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", opf),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+def write_edge_space_archive(path: Path) -> None:
+    """An HTML page in a zip: the one way a page reaches MarkItDown's HTML
+    reader, since WebShot opens an `.html` file in the browser itself."""
+    page = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Edge spaces</title></head>
+<body>
+  <p>{SENTINELS["edge_space_archive.zip"]}</p>
+{_edge_space_html("edge_space_archive.zip")}
+</body></html>
+"""
+    _write_archive(path, [("pages/edge-spaces.html", page)])
+
+
+# --------------------------------------------------------------------------- #
+# Whitespace runs — ASCII whitespace or a line break in formatted text (P49)
+# --------------------------------------------------------------------------- #
+
+#: What a formatted run holds, as HTML, and whether a plain space stands
+#: before and after it.  `{inside}` is a made-up word; a space stands outside
+#: the run only at an edge the run does not fill, so that only what the run
+#: holds keeps the words apart.  The `space` edges were written right before
+#: P49, except in an `<a>` MarkItDown writes without its markup.
+_WHITESPACE_CASES = {
+    "space": (" ", False, False),
+    "spaces": ("  ", False, False),
+    "tab": ("\t", False, False),
+    "newline": ("\n", False, False),
+    "br": ("<br/>", False, False),
+    "leadnewline": ("\n{inside}", False, True),
+    "trailnewline": ("{inside}\n", True, False),
+    "leadbr": ("<br/>{inside}", False, True),
+    "trailbr": ("{inside}<br/>", True, False),
+    "leadspace": (" {inside}", False, True),
+    "trailspace": ("{inside} ", True, False),
+}
+#: The same runs as Word holds them, inside one `w:r`: Word has no newline in
+#: a run's text, and writes a tab and a line break as elements of their own.
+_WORD_WHITESPACE_CASES = {
+    "space": ('<w:t xml:space="preserve"> </w:t>', False, False),
+    "spaces": ('<w:t xml:space="preserve">  </w:t>', False, False),
+    "tab": ("<w:tab/>", False, False),
+    "br": ("<w:br/>", False, False),
+    "leadbr": ("<w:br/><w:t>{inside}</w:t>", False, True),
+    "trailbr": ("<w:t>{inside}</w:t><w:br/>", True, False),
+    "leadspace": ('<w:t xml:space="preserve"> {inside}</w:t>', False, True),
+    "trailspace": ('<w:t xml:space="preserve">{inside} </w:t>', True, False),
+}
+#: A link whose text is its address, which MarkItDown writes as `<address>`.
+WHITESPACE_RUN_HREF = "https://example.invalid/whitespace"
+
+
+@dataclass(frozen=True)
+class WhitespaceRunLine:
+    """One paragraph of a `whitespace_run_*` fixture.
+
+    `run` is the formatted run as the document holds it: HTML for a book or a
+    page, a `w:r` or `w:hyperlink` for Word.  `before` and `after` are the
+    plain text either side.  `words` are what the page must read, with
+    whitespace between each and nowhere else.
+    """
+
+    before: str
+    run: str
+    after: str
+    words: tuple[str, ...]
+
+    @property
+    def text(self) -> str:
+        """The paragraph as a reader reads it: its words, one space apart."""
+        return " ".join(self.words)
+
+
+def _whitespace_line(
+    label: str, content: str, space_before: bool, space_after: bool, wrap: Any
+) -> WhitespaceRunLine:
+    """A paragraph `{label}prior`, a formatted run, `{label}next`.
+
+    `content` is what the run holds; its word, where it has one, is
+    `{label}core`.  `wrap` puts the content inside the run's formatting.
+    """
+    prior, core, following = f"{label}prior", f"{label}core", f"{label}next"
+    words = (prior, core, following) if "{inside}" in content else (prior, following)
+    return WhitespaceRunLine(
+        prior + (" " if space_before else ""),
+        wrap(content.replace("{inside}", core)),
+        (" " if space_after else "") + following,
+        words,
+    )
+
+
+def whitespace_run_lines(name: str) -> list[WhitespaceRunLine]:
+    """The paragraphs of the `whitespace_run_*` fixture called `name`."""
+    if name == "whitespace_run_report.docx":
+        return [
+            _whitespace_line(
+                f"{kind}{case}",
+                content,
+                space_before,
+                space_after,
+                lambda inner, kind=kind: _word_whitespace_run(kind, inner),
+            )
+            for kind in _WORD_RUN_PROPERTIES
+            for case, (
+                content,
+                space_before,
+                space_after,
+            ) in _WORD_WHITESPACE_CASES.items()
+        ]
+    lines = [
+        _whitespace_line(
+            f"{kind}{case}",
+            content,
+            space_before,
+            space_after,
+            lambda inner, tags=tags: tags[0] + inner + tags[1],
+        )
+        for kind, tags in _HTML_INLINE.items()
+        for case, (content, space_before, space_after) in _WHITESPACE_CASES.items()
+    ]
+    lines.append(
+        WhitespaceRunLine(
+            "autolinkprior",
+            f'<a href="{WHITESPACE_RUN_HREF}"> {WHITESPACE_RUN_HREF} </a>',
+            "autolinknext",
+            ("autolinkprior", WHITESPACE_RUN_HREF, "autolinknext"),
+        )
+    )
+    return lines
+
+
+def _word_whitespace_run(kind: str, content: str) -> str:
+    if kind == "link":
+        return f'<w:hyperlink r:id="rId2"><w:r>{content}</w:r></w:hyperlink>'
+    return f"<w:r><w:rPr>{_WORD_RUN_PROPERTIES[kind]}</w:rPr>{content}</w:r>"
+
+
+def write_whitespace_run_report(path: Path) -> None:
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"'
+        f' Target="{EDGE_SPACE_HREF}" TargetMode="External"/></Relationships>\n'
+    )
+
+    body = _docx_paragraph(SENTINELS["whitespace_run_report.docx"]) + "".join(
+        f"<w:p>{_word_run(line.before)}{line.run}{_word_run(line.after)}</w:p>"
+        for line in whitespace_run_lines("whitespace_run_report.docx")
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", _DOCX_CONTENT_TYPES),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+        ],
+    )
+
+
+def _whitespace_run_html(name: str) -> str:
+    return "\n".join(
+        f"  <p>{line.before}{line.run}{line.after}</p>"
+        for line in whitespace_run_lines(name)
+    )
+
+
+def write_whitespace_run_book(path: Path) -> None:
+    opf = _EPUB_OPF.replace("webshot-office-fixture", "webshot-whitespace-run-fixture")
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head>
+<body>
+  <p>{SENTINELS["whitespace_run_book.epub"]}</p>
+{_whitespace_run_html("whitespace_run_book.epub")}
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", opf),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+def write_whitespace_run_archive(path: Path) -> None:
+    """An HTML page in a zip, as `write_edge_space_archive` explains."""
+    page = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Whitespace runs</title></head>
+<body>
+  <p>{SENTINELS["whitespace_run_archive.zip"]}</p>
+{_whitespace_run_html("whitespace_run_archive.zip")}
+</body></html>
+"""
+    _write_archive(path, [("pages/whitespace-runs.html", page)])
+
+
+# --------------------------------------------------------------------------- #
+# Quotations and definition lists side by side (docs/09 P63)
+# --------------------------------------------------------------------------- #
+
+
+def _block_html(block: tuple[str, list[Any]]) -> str:
+    """A quotation's or a definition list's HTML: `("blockquote", words)`
+    holds a paragraph of each word, `("dl", pairs)` a term and a definition
+    for each."""
+    tag, content = block
+    if tag == "blockquote":
+        return (
+            "<blockquote>" + "".join(f"<p>{w}</p>" for w in content) + "</blockquote>"
+        )
+    return "<dl>" + "".join(f"<dt>{t}</dt><dd>{d}</dd>" for t, d in content) + "</dl>"
+
+
+#: Each pair, by what stands between or around it in the chapter, and the
+#: blocks it holds.  Python-Markdown read every pair but the last as one block
+#: until the bridge kept them apart; the last, a quotation and a definition
+#: list, it never joined.  A pair in a quotation or a definition is written
+#: inside one.  The words are made up.
+ADJACENT_BLOCKS: dict[str, tuple[str, list[tuple[str, list[Any]]]]] = {
+    "Two quotations": (
+        "{0}{1}",
+        [("blockquote", ["Arvolt", "Belsk"]), ("blockquote", ["Corwine"])],
+    ),
+    "Three quotations": (
+        "{0}{1}{2}",
+        [
+            ("blockquote", ["Dremmet"]),
+            ("blockquote", ["Elvast"]),
+            ("blockquote", ["Frindle"]),
+        ],
+    ),
+    "Two definition lists": (
+        "{0}{1}",
+        [
+            ("dl", [("Gantry", "Holvet"), ("Iskel", "Jarrow")]),
+            ("dl", [("Kelp", "Lunt")]),
+        ],
+    ),
+    "Nothing that shows between them": (
+        "{0}\n  <div></div><p></p><!-- a note --><br/>{1}",
+        [("dl", [("Morrow", "Nesk")]), ("dl", [("Orlin", "Pask")])],
+    ),
+    "Each in a division of its own": (
+        "<div>{0}</div><div>{1}</div>",
+        [("blockquote", ["Quillet"]), ("blockquote", ["Rusket"])],
+    ),
+    "Inside one quotation": (
+        "<blockquote>{0}{1}</blockquote>",
+        [("blockquote", ["Sallow"]), ("blockquote", ["Tamsk"])],
+    ),
+    "Inside one definition": (
+        "<dl><dt>Umbrel</dt><dd>{0}{1}</dd></dl>",
+        [("dl", [("Vintry", "Wexel")]), ("dl", [("Yarrel", "Zoffet")])],
+    ),
+    "A quotation, then a definition list": (
+        "{0}{1}",
+        [("blockquote", ["Abbot"]), ("dl", [("Brisk", "Cawdle")])],
+    ),
+}
+
+#: What chapter one ends with and chapter two begins with.
+ADJACENT_BLOCKS_ACROSS: list[tuple[str, list[Any]]] = [
+    ("blockquote", ["Dunnage"]),
+    ("blockquote", ["Effrin"]),
+]
+
+
+def adjacent_blocks_page(
+    sections: dict[str, tuple[str, list[tuple[str, list[Any]]]]],
+) -> list[tuple[str, list[str]]]:
+    """The quotations and definition lists a page of `sections` holds, in the
+    order their tags open: each tag and its words, a term and its definition
+    one after the other."""
+    page: list[tuple[str, list[str]]] = []
+    for layout, blocks in sections.values():
+        if layout.startswith("<blockquote>"):
+            page.append(("blockquote", []))
+        if layout.startswith("<dl>"):
+            page.append(("dl", ["Umbrel"]))
+        for tag, content in blocks:
+            words = (
+                content
+                if tag == "blockquote"
+                else [w for pair in content for w in pair]
+            )
+            page.append((tag, list(words)))
+    return page
+
+
+#: The book's quotations and definition lists as its page holds them.
+ADJACENT_BLOCKS_PAGE = adjacent_blocks_page(ADJACENT_BLOCKS) + [
+    (tag, list(words)) for tag, words in ADJACENT_BLOCKS_ACROSS
+]
+
+
+def _adjacent_blocks_sections() -> str:
+    return "".join(
+        f"<h2>{heading}</h2>" + layout.format(*map(_block_html, blocks))
+        for heading, (layout, blocks) in ADJACENT_BLOCKS.items()
+    )
+
+
+def write_adjacent_blocks_book(path: Path) -> None:
+    """Pairs of quotations and of definition lists, in two chapters.
+
+    The first chapter ends with a quotation and the second begins with one:
+    MarkItDown converts each chapter on its own and joins them with a blank
+    line, so the two met only once the book was whole.
+    """
+    first = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Blocks</title></head>
+<body>
+  <h1>Quotations Side by Side</h1>
+  <p>{SENTINELS["adjacent_blocks_book.epub"]}</p>
+  {_adjacent_blocks_sections()}
+  <h2>Across two chapters</h2>
+  {_block_html(ADJACENT_BLOCKS_ACROSS[0])}
+</body></html>
+"""
+    second = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>More</title></head>
+<body>
+  {_block_html(ADJACENT_BLOCKS_ACROSS[1])}
+  <p>The second chapter goes on after its quotation.</p>
+</body></html>
+"""
+    opf = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="book-id">urn:uuid:webshot-adjacent-blocks-fixture</dc:identifier>
+    <dc:title>Quotations Side by Side</dc:title>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="one" href="one.xhtml" media-type="application/xhtml+xml"/>
+    <item id="two" href="two.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="one"/><itemref idref="two"/></spine>
+</package>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", opf),
+            ("OEBPS/one.xhtml", first),
+            ("OEBPS/two.xhtml", second),
+        ],
+        first_stored=True,
+    )
+
+
+#: mammoth writes a quotation or a definition list only where a style map says
+#: to.  A Word file can carry one, and MarkItDown reads it: every `Quote`
+#: paragraph a quotation of its own, and a `NewTerm` beginning a definition
+#: list where a `Term` goes on with the one before.
+ADJACENT_BLOCKS_STYLE_MAP = (
+    "p.Quote => blockquote:fresh > p:fresh\n"
+    "p.NewTerm => dl:fresh > dt:fresh\n"
+    "p.Term => dl > dt:fresh\n"
+    "p.Definition => dl > dd:fresh\n"
+)
+
+#: The report's paragraphs, each its style and its text; a style of None is
+#: body text.
+ADJACENT_BLOCKS_REPORT_PARAGRAPHS: list[tuple[str | None, str]] = [
+    ("Quote", "Fallow"),
+    ("Quote", "Gimbrel"),
+    (None, "Two definition lists follow."),
+    ("NewTerm", "Hessock"),
+    ("Definition", "Ilvane"),
+    ("Term", "Jessamy"),
+    ("Definition", "Kildrum"),
+    ("NewTerm", "Lorrimer"),
+    ("Definition", "Mossel"),
+]
+
+ADJACENT_BLOCKS_REPORT_PAGE: list[tuple[str, list[str]]] = [
+    ("blockquote", ["Fallow"]),
+    ("blockquote", ["Gimbrel"]),
+    ("dl", ["Hessock", "Ilvane", "Jessamy", "Kildrum"]),
+    ("dl", ["Lorrimer", "Mossel"]),
+]
+
+
+def write_adjacent_blocks_report(path: Path) -> None:
+    """A Word file whose embedded style map writes quotations and definition
+    lists side by side.
+
+    Laid out as mammoth's own `embed_style_map` writes one: the map at
+    `mammoth/style-map`, named in the content types and the document's
+    relationships.
+    """
+    body = (
+        _docx_paragraph("Quotations Side by Side", "Heading1")
+        + _docx_paragraph(SENTINELS["adjacent_blocks_report.docx"])
+        + "".join(
+            _docx_paragraph(text, style)
+            for style, text in ADJACENT_BLOCKS_REPORT_PARAGRAPHS
+        )
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    content_types = _DOCX_CONTENT_TYPES.replace(
+        "</Types>",
+        '  <Override PartName="/mammoth/style-map"'
+        ' ContentType="text/prs.mammoth.style-map"/>\n</Types>',
+    )
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rMammothStyleMap" Type="http://schemas.zwobble.org/mammoth/style-map"'
+        ' Target="/mammoth/style-map"/></Relationships>\n'
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+            ("mammoth/style-map", ADJACENT_BLOCKS_STYLE_MAP),
+        ],
+    )
+
+
+#: An HTML page in the archive: a zip member is read by the same writer.
+_ADJACENT_BLOCKS_MEMBER_PAGE = f"""<!DOCTYPE html>
+<html><head><title>Side by side</title></head>
+<body>
+  <p>{SENTINELS["adjacent_blocks_archive.zip"]}</p>
+  <blockquote><p>Nettle</p></blockquote><blockquote><p>Orpin</p></blockquote>
+  <dl><dt>Pelter</dt><dd>Quist</dd></dl><dl><dt>Rennet</dt><dd>Sorrel</dd></dl>
+</body></html>
+"""
+
+#: What the archive's page holds: its own page's, then the report's.
+ADJACENT_BLOCKS_ARCHIVE_PAGE: list[tuple[str, list[str]]] = [
+    ("blockquote", ["Nettle"]),
+    ("blockquote", ["Orpin"]),
+    ("dl", ["Pelter", "Quist"]),
+    ("dl", ["Rennet", "Sorrel"]),
+    *ADJACENT_BLOCKS_REPORT_PAGE,
+]
+
+
+def write_adjacent_blocks_archive(path: Path) -> None:
+    """An HTML page of quotations and definition lists side by side, and the
+    report as it is."""
+    with tempfile.TemporaryDirectory() as scratch:
+        report = Path(scratch) / "adjacent_blocks_report.docx"
+        write_adjacent_blocks_report(report)
+        _write_archive(
+            path,
+            [
+                ("notes/side-by-side.html", _ADJACENT_BLOCKS_MEMBER_PAGE),
+                ("reports/adjacent_blocks_report.docx", report.read_bytes()),
+            ],
+        )
+
+
 WRITERS = {
     "sample_report.docx": write_docx,
     "sample_deck.pptx": write_pptx,
@@ -1287,6 +3173,31 @@ WRITERS = {
     "picture_deck.pptx": write_picture_deck,
     "picture_report.docx": write_picture_report,
     "picture_book.epub": write_picture_book,
+    "late_utf8.csv": write_late_utf8_csv,
+    "late_utf8_archive.zip": write_late_utf8_archive,
+    "nested_book.epub": write_nested_book,
+    "nested_report.docx": write_nested_report,
+    "nested_archive.zip": write_nested_archive,
+    "code_items_book.epub": write_code_items_book,
+    "code_items_report.docx": write_code_items_report,
+    "code_items_archive.zip": write_code_items_archive,
+    "definition_book.epub": write_definition_book,
+    "definition_archive.zip": write_definition_archive,
+    "inline_code_book.epub": write_inline_code_book,
+    "inline_code_report.docx": write_inline_code_report,
+    "inline_code_archive.zip": write_inline_code_archive,
+    "quoted_code_book.epub": write_quoted_code_book,
+    "quoted_code_report.docx": write_quoted_code_report,
+    "quoted_code_archive.zip": write_quoted_code_archive,
+    "edge_space_report.docx": write_edge_space_report,
+    "edge_space_book.epub": write_edge_space_book,
+    "edge_space_archive.zip": write_edge_space_archive,
+    "whitespace_run_report.docx": write_whitespace_run_report,
+    "whitespace_run_book.epub": write_whitespace_run_book,
+    "whitespace_run_archive.zip": write_whitespace_run_archive,
+    "adjacent_blocks_book.epub": write_adjacent_blocks_book,
+    "adjacent_blocks_report.docx": write_adjacent_blocks_report,
+    "adjacent_blocks_archive.zip": write_adjacent_blocks_archive,
 }
 
 

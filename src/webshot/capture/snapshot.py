@@ -481,6 +481,22 @@ async def extract_semantic_content(
                 return getComputedStyle(element).visibility !== 'hidden'
                     && element.getClientRects().length > 0;
             };
+            // In preformatted text a line ending lays out a line too, and an
+            // element holding only one has a box with no width, so
+            // `visible()` is false for it and the line went with it. Chroma,
+            // Hugo's highlighter, writes each line of code as an element that
+            // ends in its line ending, so every blank line in the code was one
+            // (docs/09 P55). Its line endings are shown when it has a box and
+            // is not `visibility: hidden`, and they keep it.
+            const breaksLines = element => {
+                if (element.closest('[data-webshot-hidden="true"]')) return false;
+                const style = getComputedStyle(element);
+                const collapse = style.whiteSpaceCollapse
+                    || {pre: 'preserve', 'pre-wrap': 'preserve', 'pre-line': 'preserve-breaks', 'break-spaces': 'break-spaces'}[style.whiteSpace];
+                return ['preserve', 'preserve-breaks', 'break-spaces'].includes(collapse)
+                    && style.visibility !== 'hidden'
+                    && [...element.getClientRects()].some(rect => rect.height > 0);
+            };
             const copyOf = node => {
                 if (node.nodeType === Node.TEXT_NODE) return inert.createTextNode(node.data);
                 if (node.nodeType !== Node.ELEMENT_NODE) return null;
@@ -534,13 +550,17 @@ async def extract_semantic_content(
                 // removes it from the copy; its label is read off the live one.
                 if (node.localName === 'svg') liveOf.set(copy, node);
                 const ownText = !shown && showsOwnText(node);
+                // Asked once, and only of an element that has a line break.
+                let lineBreaks = null;
+                const breaks = () => (lineBreaks ??= !shown && !ownText && breaksLines(node));
                 let keepsChild = false;
                 for (const child of [...flat.children(node, body)]) {
                     const childCopy = copyOf(child);
                     if (!childCopy) continue;
                     copy.appendChild(childCopy);
                     keepsChild ||= kept.has(childCopy)
-                        || (ownText && child.nodeType === Node.TEXT_NODE && rendered(child));
+                        || (ownText && child.nodeType === Node.TEXT_NODE && rendered(child))
+                        || (child.nodeType === Node.TEXT_NODE && /[\\n\\r]/.test(child.data) && breaks());
                 }
                 // A frame that was read is kept for what is in it, not for its
                 // own box: an empty one (an `about:blank` player not yet
