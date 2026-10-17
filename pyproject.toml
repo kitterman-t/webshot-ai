@@ -104,7 +104,7 @@ office = ["markitdown[docx,pptx,xlsx]>=0.1.8,<0.2"]
 # system binary. rapidocr declares no inference backend of its own, so the
 # extra names onnxruntime explicitly rather than leaning on the copy magika
 # drags in through MarkItDown.
-ocr-rapid = ["rapidocr>=3.9,<4", "onnxruntime>=1.30.0"]
+ocr-rapid = ["rapidocr>=3.9,<4", "onnxruntime>=1.31.0"]
 # Docling's tokenizer-aware HybridChunker, refuted as the DEFAULT by spike S4
 # (downloads a HuggingFace tokenizer; ≈140 MB of extras). Installing this
 # equips the environment to re-chunk content.json downstream with it; the
