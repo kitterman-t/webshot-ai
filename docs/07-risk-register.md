@@ -7,7 +7,7 @@ Scored L/M/H for likelihood × impact. Owner is the maintainer unless noted.
 | R1 | **Docling API churn** (fast-moving project; slim packaging is new) breaks the bridge | M | M | Single-file bridge seam; exact version pins; bridge contract tests run against pinned lib in CI; Dependabot PRs upgrade deliberately | bridge tests fail on upgrade PR |
 | R2 | ~~HybridChunker offline risk~~ **RETIRED — resolved by spike (09 S4)**: HierarchicalChunker + chonkie adopted; HybridChunker optional | — | — | ADR-0008 | closed |
 | R3 | ~~Web-path tag stripping~~ **RETIRED — confirmed by spike (09 S7)**: web-path `--pdfa` rejected; protected-path-only, PDF/A-3, final-composed veraPDF check | — | — | ADR-0010 | closed |
-| R4 | **System-binary drift** (tesseract/gs missing, wrong versions) generates support burden | H | L | `webshot doctor`; actionable error taxonomy; docs matrix per OS | issue reports |
+| R4 | **System-binary drift** (tesseract/gs missing, wrong versions) generates support burden | H | L | `webshot doctor`; actionable error taxonomy; docs matrix per OS; the golden check records and names the OS release, Tesseract, Leptonica, Ghostscript, Chromium and each changed font against the recording, and warns on the pull request when one differs (docs/09 P85) | issue reports; the golden job's `Golden corpus environment` warning |
 | R5 | **Bundle format break** disrupts existing consumers | M | M | `bundle_format: 3` self-description; `--legacy-bundle` for one release; migration guide; schemas published | parity harness |
 | R6 | **SharePoint viewer DOM changes** break protected capture (upstream-hard problem; cf. Browsertrix #140) | H | H | **Mitigated in Phase 1:** the selectors and toolbar names are constants in `protected/viewer.py` (data, not literals buried in JavaScript), `tests/fixtures/viewer/dom/` reproduces the accessibility-tree contract, and `tests/test_viewer_dom.py` checks the fixtures against those same constants; capture is resumable so partial progress survives; `SUPPORTED_VIEWERS` records the builds covered. Honest monitor, restated: the fixtures were **authored from the contract, not exported from a tenant** (docs/09 P1-6), and frozen recordings cannot detect *live* DOM drift either way — they prevent regressions in WebShot, not drift in Microsoft. Detection stays user reports plus the supported-versions table | `tests/test_viewer_dom.py` fails |
 | R7 | **License drift** in transitive deps | L | H | pip-licenses CI gate (deny GPL/AGPL/SSPL); components doc is the allowlist of record | CI |
@@ -62,3 +62,17 @@ manifest warning (never silent, never a failed capture; full OCR records stay
 in assets.json); bridge contract tests pin both directions, including the
 real mismatch shapes docling produces (img-in-pre, nested tables). Monitor:
 bridge tests on Dependabot upgrade PRs.
+
+New on 2026-10-17: **R17 — the update pipeline stops without a word.**
+Dependabot, its pull requests' CI and auto-merge each fail silently: a
+Dependabot at its limit of open pull requests proposes nothing, a pull request
+whose CI never starts never fails, and a disabled workflow emails nobody. For
+about a week in October 2026 no update arrived and nothing said so (docs/09
+P84). L: M · I: M, since a stalled pipeline is how R1's churn piles up into
+one large, risky upgrade. Mitigation: a daily dependency watch, on a
+GitHub-hosted runner, judges the results (direct dependencies and pinned
+actions past their cooldown plus two weeks, a moved action tag, Dependabot
+pull requests that failed, never ran CI, lost auto-merge or waited three
+days), fails when it cannot read an input, and keeps an issue open that
+GitHub notifies the owner of; a release cooldown keeps a fresh release from
+merging on its first day. Monitor: that issue.

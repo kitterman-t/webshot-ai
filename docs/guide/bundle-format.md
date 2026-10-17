@@ -212,9 +212,14 @@ Five fields are worth knowing about:
   `explicit`, `trafilatura`, `static-selectors`, or `full-page` — so a
   surprising capture can be explained rather than guessed at.
 - **`page_metadata`** is what the DOM declared; **`discovered_metadata`** is what
-  Trafilatura read. They are kept apart so a consumer can tell where a value came
-  from, and an empty string means the page declared nothing — WebShot does not
-  infer.
+  Trafilatura read, except its `date`. They are kept apart so a consumer can tell
+  where a value came from. `discovered_metadata.date` is a date the page
+  declares in its markup (a date `<meta>` such as `article:published_time`, a
+  schema.org `datePublished`, `dateCreated` or `dateModified` in JSON-LD or
+  microdata, or a `<time>`), written `YYYY-MM-DD`, and empty when it declares
+  none in a form WebShot reads. WebShot does not infer one from the text, the
+  URL or a heading. Its `author` and `sitename` are Trafilatura's: an author
+  can come from a byline's text, and a sitename from the URL's host name.
 - **`ocr.engine`** is the engine that actually recognized something, not the one
   that was requested. A capture with nothing to recognize names no engine.
 

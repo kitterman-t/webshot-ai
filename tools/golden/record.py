@@ -27,6 +27,7 @@ from tools.golden.harness import (
     chunk_digest_failures,
     default_entrypoint,
     environment,
+    environment_summary,
     profile_for,
     run_case,
     selected_cases,
@@ -77,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     current = environment()
     if not arguments.cases:
         (GOLDEN_ROOT / "environment.json").write_text(_dump(current), "utf-8")
-        print("recorded environment.json:", json.dumps(current))
+        print("recorded environment.json:", environment_summary(current))
     else:
         # environment.json describes the whole corpus, so a subset re-recorded
         # elsewhere would leave the other cases claiming an environment they

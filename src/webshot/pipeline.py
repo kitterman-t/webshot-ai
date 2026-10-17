@@ -96,6 +96,7 @@ from .outputlock import OutputLock
 from .protected.assemble import build_protected_viewer_artifacts
 from .protected.viewer import capture_sharepoint_pdf_viewer
 from .render.clipping import clipping_warnings, find_clipped_text, printed_width
+from .render.covering import covered_text_warnings, find_covered_text
 from .render.embed import collect_payloads, embed_bundle
 from .render.frames import fit_frames
 from .render.images import image_reduction_warnings, reduce_oversized_images
@@ -812,6 +813,19 @@ async def capture_open_page(
             warnings.append(failed)
             if ai_result:
                 ai_result.warnings.append(failed)
+        # After the render, which it measures by printing the page again with
+        # its fixed and sticky boxes in colours of their own, and first of the
+        # checks that follow it: the clipping check narrows the viewport, which
+        # can load images and move the layout this one must match. Before
+        # embedding, which copies the warnings into `capture.json` (docs/09
+        # P83).
+        crash.step = "checking the printed page for boxes over its text"
+        for covered in covered_text_warnings(
+            await find_covered_text(page, options, temporary_output)
+        ):
+            warnings.append(covered)
+            if ai_result:
+                ai_result.warnings.append(covered)
         # After the render, so the check cannot move what it checks: it prints
         # the page a second time and narrows the viewport, and the PDF is
         # already written. Before embedding, which copies the warnings into

@@ -4,6 +4,20 @@ version: 2
 # updates arrive as reviewable pull requests rather than as a surprise during a
 # release. Anything that changes recorded output must be re-recorded in its own
 # pull request — see CONTRIBUTING.md.
+#
+# Cooldown: a release is not proposed until it is this many days old. A green
+# bump merges itself, so a release proposed on its first day is installed on
+# its first day, and the first days are when a hijacked or broken release is
+# still live: compromised releases of a popular PyPI package (ultralytics,
+# December 2024) and moved tags of a popular action (tj-actions/changed-files,
+# March 2025) were each found and pulled within about a day. A withdrawn
+# release is usually yanked within the same few days, and a broken minor or
+# major one gets its x.y.1 then. Cooldown applies to version updates only:
+# GitHub sends security updates as soon as the advisory exists, and none of
+# this delays one (docs/06-quality-and-testing.md, "Dependency updates").
+# tools/audit/staleness.py holds the same numbers, plus 14 days, as the age at
+# which a release that has still not arrived means the pipeline has stopped;
+# tests/test_dependency_staleness.py holds the two to each other.
 
 updates:
   - package-ecosystem: uv
@@ -12,6 +26,16 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # Patch releases are fixes and should arrive soon; three days outlasts the
+    # incidents above. Minor releases add features and with them regressions,
+    # which a week usually surfaces. A major release breaks an API on purpose,
+    # usually needs a bridge change and re-recorded goldens anyway, and its
+    # first fixes follow within two weeks; waiting for them costs nothing.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       dev-tooling:
         patterns:
@@ -28,6 +52,13 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Dependabot takes only `default-days` for actions: it cannot tell their
+    # major releases from their patches. An action runs with the job's token,
+    # and its tags are what an attacker moves, so a week; an action bump is
+    # rarely urgent, and a vulnerable action is a security update, which
+    # arrives at once.
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - ci

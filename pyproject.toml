@@ -56,6 +56,12 @@ dependencies = [
     # >=6 is required: the AF-embedding code already uses the EmbeddedFile API,
     # which the previous >=4.2 floor did not guarantee (docs/05 task 0.1).
     "pypdf>=6.19.0,<7",
+    # Reads a PDF as a viewer draws it: every object in paint order with its
+    # bounds and colour, and every character's box, which pypdf does not
+    # give. The covered-text check needs both from the PDF Chromium printed
+    # (docs/09 P83). In the tree already through OCRmyPDF; direct because
+    # WebShot now calls it, through render/pdfium_bridge.py alone.
+    "pypdfium2>=5.13.0,<6",
     "pydantic>=2.13.5,<3",
     "Markdown>=3.6,<4",
     # Pillow < 12.3 carries 25 known CVEs (pip-audit/OSV, Aug 2026); the
@@ -224,6 +230,12 @@ module = [
     "pptx.*",
 ]
 follow_imports = "skip"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# pypdfium2 ships no type information. Its bridge is its only importer and
+# hands out WebShot's own records, never a PDFium handle (docs/09 P83).
+module = ["pypdfium2.*"]
 ignore_missing_imports = true
 
 [tool.uv]

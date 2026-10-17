@@ -1,0 +1,18 @@
+# Updates held back on purpose, read by tools/audit/staleness.py.
+#
+# A direct dependency or a pinned action that is behind its newest release
+# for longer than Dependabot's cooldown plus two weeks fails the dependency
+# watch (docs/06-quality-and-testing.md, "Dependency updates"). When it is
+# behind for a reason someone has decided, hold it here instead of letting
+# the alarm stay red: an alarm that is always red is one nobody reads.
+#
+# Each hold names one package (its PyPI name) or one action (owner/repo),
+# says why in a sentence that will still make sense in a month, and gives a
+# date to look again. A hold that has expired fails the watch, and so does a
+# hold on something that is no longer behind, so the list cannot outlive
+# its reasons.
+#
+# [[hold]]
+# package = "example"
+# reason = "2.0 drops the API the bridge uses; upstream issue #123"
+# until = 2026-12-01

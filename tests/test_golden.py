@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -490,3 +491,141 @@ def test_the_strict_profile_masks_the_ocr_path_versions_too() -> None:
     assert comparable(
         _ocr_path_snapshot("OCRmyPDF 17.12.1", "Skia/PDF m151"), "strict"
     ) != comparable(_ocr_path_snapshot("OCRmyPDF 17.12.1", "Skia/PDF m152"), "strict")
+
+
+# --------------------------------------------------------------------------- #
+# The environment a run used, named against the recording (docs/09 P85)
+# --------------------------------------------------------------------------- #
+
+
+def test_the_recorded_font_list_is_the_recorded_fingerprint() -> None:
+    """The list is what names a changed font; the fingerprint is what chooses
+    the profile. They must describe the same fonts, or the names lie."""
+    from tools.golden.harness import GOLDEN_ROOT, fingerprint_of
+
+    recorded = json.loads((GOLDEN_ROOT / "environment.json").read_text("utf-8"))
+    assert recorded["font_files"] == sorted(recorded["font_files"])
+    assert fingerprint_of(recorded["font_files"]) == recorded["fonts"]
+
+
+def test_the_fingerprint_is_the_digest_of_the_font_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.golden import harness
+
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "One.ttf").write_bytes(b"x" * 3)
+    (tmp_path / "Two.otf").write_bytes(b"y" * 5)
+    monkeypatch.setattr(harness, "FONT_DIRECTORIES", (str(tmp_path),))
+    assert harness.font_files() == ["One.ttf:3", "Two.otf:5"]
+    assert harness.font_fingerprint() == harness.fingerprint_of(harness.font_files())
+
+
+def test_a_font_that_changed_is_named() -> None:
+    """P7-14: a macOS update rewrote Helvetica.ttc and twelve cases failed
+    under "environment matches the recording". The fingerprint now says that
+    the fonts moved; this says which."""
+    from tools.golden.harness import font_changes
+
+    before = ["Helvetica.ttc:1000", "Menlo.ttc:20", "Old.ttf:5"]
+    after = ["Helvetica.ttc:1200", "Menlo.ttc:20", "New.otf:7"]
+    assert font_changes(before, after) == (
+        "1 changed (Helvetica.ttc 1000 -> 1200 bytes); 1 added (New.otf); "
+        "1 removed (Old.ttf)"
+    )
+    many = [f"F{i}.ttf:{i}" for i in range(12)]
+    assert font_changes([], many, limit=2) == "12 added (F0.ttf, F1.ttf, and 10 more)"
+    assert font_changes(before, before) == "the same fonts"
+
+
+def test_every_dimension_that_differs_is_named_and_unrecorded_is_not_a_match() -> None:
+    from tools.golden.harness import environment_drift
+
+    recorded = {
+        "platform": "Darwin",
+        "python": "3.12",
+        "playwright": "1.63.0",
+        "tesseract": "tesseract 5.5.3",
+        "fonts": "2 fonts, aaaaaaaaaaaa",
+        "font_files": ["A.ttf:1", "B.ttf:2"],
+        "chromium": "153.0.8010.12",
+    }
+    current = {
+        **recorded,
+        "fonts": "2 fonts, bbbbbbbbbbbb",
+        "font_files": ["A.ttf:1", "B.ttf:3"],
+        "os": "macOS 27.1 (26B10)",
+        "ghostscript": "10.07.1",
+        "runner": "self-hosted",
+    }
+    assert environment_drift(recorded, current) == [
+        "fonts: recorded '2 fonts, aaaaaaaaaaaa', this machine '2 fonts, "
+        "bbbbbbbbbbbb': 1 changed (B.ttf 2 -> 3 bytes)",
+        "os: not recorded; this machine has 'macOS 27.1 (26B10)'",
+        "ghostscript: not recorded; this machine has '10.07.1'",
+    ]
+    # The runner is reported, never compared: the recording machine runs CI
+    # as "self-hosted" and records as "local".
+    assert not any(
+        line.startswith("runner") for line in environment_drift(recorded, current)
+    )
+
+
+def test_the_named_dimensions_do_not_choose_the_profile() -> None:
+    """They are new to the recording; one that matched by default must not
+    force the portable profile the day it is first written."""
+    from tools.golden.harness import NAMED_KEYS, PROFILE_KEYS, profile_for
+
+    recorded = dict.fromkeys(PROFILE_KEYS, "x")
+    current = {**recorded, **dict.fromkeys(NAMED_KEYS, "y")}
+    assert profile_for(recorded, current) == (
+        "strict",
+        "environment matches the recording",
+    )
+
+
+def test_only_a_real_difference_becomes_a_ci_warning() -> None:
+    from tools.golden.check import drift_annotation
+
+    assert drift_annotation(["os: not recorded; this machine has 'macOS 27.0'"]) is None
+    assert drift_annotation([]) is None
+    warning = drift_annotation(
+        [
+            "fonts: recorded 'a', this machine 'b': 1 changed (H.ttc 1 -> 2 bytes)",
+            "x: 100%",
+        ]
+    )
+    assert warning == (
+        "::warning title=Golden corpus environment::fonts: recorded 'a', this "
+        "machine 'b': 1 changed (H.ttc 1 -> 2 bytes) | x: 100%25"
+    )
+
+
+def test_the_bundled_chromium_is_read_from_the_locked_playwright() -> None:
+    """Chromium is pinned through Playwright's version in uv.lock. If a
+    Playwright release moves the file this reads, this fails rather than
+    the record saying "unknown" from then on."""
+    from importlib.metadata import version
+
+    from tools.golden.harness import GOLDEN_ROOT, bundled_chromium
+
+    found = bundled_chromium()
+    assert re.fullmatch(r"\d+\.\d+\.\d+\.\d+", found), found
+    recorded = json.loads((GOLDEN_ROOT / "environment.json").read_text("utf-8"))
+    if recorded["playwright"] == version("playwright"):
+        assert recorded["chromium"] == found
+
+
+def test_the_environment_names_the_os_release_and_each_tool() -> None:
+    from tools.golden.harness import (
+        NAMED_KEYS,
+        PROFILE_KEYS,
+        REPORTED_KEYS,
+        environment,
+    )
+
+    current = environment()
+    assert set(current) == {*PROFILE_KEYS, *NAMED_KEYS, *REPORTED_KEYS, "font_files"}
+    assert current["os"] and current["os"] != current["platform"]
+    for key in ("tesseract", "leptonica", "ghostscript"):
+        assert current[key], key  # "absent" when not installed, never empty

@@ -31,6 +31,7 @@ EXPECTED = {
     "ci.yml",
     "claude-review.yml",
     "dependabot-auto-merge.yml",
+    "dependency-watch.yml",
     "docs.yml",
     "release.yml",
     "windows-smoke.yml",

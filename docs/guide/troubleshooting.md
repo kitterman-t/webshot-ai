@@ -201,6 +201,32 @@ names it instead. A wide table, unlike a pushed or centred layout, gets more
 room from a smaller `--scale`. In WebShot's own twelve-column test page,
 `--scale 0.7` with the CSS above cleared both warnings.
 
+### A box is printed over the text
+
+If the manifest warns that "a fixed box ... prints over" some of the page's
+text, a box the page pins to the window, such as a site header, a notice bar
+or a chat button, was printed over the words beneath it. On screen the page
+scrolls out from under such a box; a PDF cannot scroll, and Chromium prints a
+fixed box on every page, at the same place on each. A "sticky" box is printed
+once, where the window left it, so one stuck to the bottom of the window can
+land over the first page's text. The words stay in the PDF's text layer, so a
+search finds them, but on the page the box is drawn over them.
+
+The warning names the box, the pages where it covers text, how many
+characters and lines it covers, and the first words it covers, so you can
+find the spot. When it prints on more pages than it covers text on, it says
+that too. A box over blank margin, a box the page draws text above, and a box
+too faint to hide anything are not reported. Pass the name the warning gives
+to `--exclude` to capture the page without the box:
+
+```bash
+webshot https://example.com/article --exclude "div.notice-bar"
+```
+
+WebShot does not hide these boxes itself, because some are part of the page.
+The consent dialogs it knows are the exception: both modes hide them, and a
+separate warning names them.
+
 ### A warning says the text layer has ligature characters
 
 WebShot prints every page with ligatures off. Otherwise Chromium records "fi"
