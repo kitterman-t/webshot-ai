@@ -62,6 +62,7 @@ SENTINELS = {
     "sample_deck.pptx": "SENTINEL PPTX SLIDE PANGOLIN",
     "sample_workbook.xlsx": "SENTINEL XLSX CELL AXOLOTL",
     "sample_book.epub": "SENTINEL EPUB CHAPTER NARWHAL",
+    "numbered_book.epub": "SENTINEL EPUB NUMBERED KINKAJOU",
     "sample_archive.zip": "SENTINEL ZIP MEMBER OKAPI",
     # Inside the text box PowerPoint wraps in `mc:AlternateContent`, so it
     # reaches the bundle only if that box does.
@@ -77,6 +78,9 @@ SENTINELS = {
     "markup_archive.zip": "SENTINEL ZIP MARKUP JERBOA",
     "left_out_archive.zip": "SENTINEL ZIP KEPT KINKAJOU",
     "adjacent_lists_book.epub": "SENTINEL EPUB LISTS TAMARIN",
+    "picture_deck.pptx": "SENTINEL PPTX PICTURE KOALA",
+    "picture_report.docx": "SENTINEL DOCX PICTURE LEMUR",
+    "picture_book.epub": "SENTINEL EPUB PICTURE MANATEE",
 }
 
 #: Deterministic timestamp for every archive member, so regenerating a fixture
@@ -200,6 +204,39 @@ def write_epub(path: Path) -> None:
             ("META-INF/container.xml", _EPUB_CONTAINER),
             ("OEBPS/content.opf", _EPUB_OPF),
             ("OEBPS/chapter.xhtml", _EPUB_CHAPTER),
+        ],
+        first_stored=True,
+    )
+
+
+#: Lists that begin past 1, which markdownify writes as Markdown that begins
+#: at that number (docs/09 P30). Each is closed by a paragraph: two adjacent
+#: lists were one list to Python-Markdown until docs/09 P32.
+_EPUB_NUMBERED_CHAPTER = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter Two</title></head>
+<body>
+  <h1>Chapter Two</h1>
+  <p>{SENTINELS["numbered_book.epub"]}</p>
+  <p>The survey resumes where the first chapter stopped.</p>
+  <ol start="5"><li>Count the marsh plots</li><li>Weigh the samples</li></ol>
+  <p>A list that begins at zero.</p>
+  <ol start="0"><li>Calibrate the scale</li></ol>
+  <p>A list inside a list.</p>
+  <ol start="12"><li>Log the tide<ol start="4"><li>Note the wind</li></ol></li></ol>
+  <p>A list that begins at one.</p>
+  <ol><li>File the notebook</li></ol>
+</body></html>
+"""
+
+
+def write_numbered_epub(path: Path) -> None:
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", _EPUB_OPF),
+            ("OEBPS/chapter.xhtml", _EPUB_NUMBERED_CHAPTER),
         ],
         first_stored=True,
     )
@@ -1061,11 +1098,181 @@ def write_adjacent_lists_book(path: Path) -> None:
     )
 
 
+# --------------------------------------------------------------------------- #
+# Pictures — held, convertible, undrawable, linked, and named but missing
+# --------------------------------------------------------------------------- #
+
+#: A picture's alt text, which a placeholder and a warning both quote.
+PICTURE_ALTS = {
+    "png": "A blue rectangle",
+    "tiff": "A green rectangle, stored as TIFF",
+    "metafile": "A red rectangle, stored as a metafile",
+    "linked": "A picture the deck only links to",
+    "missing": "A picture the book names but does not hold",
+}
+
+
+def _picture(rgb: tuple[int, int, int], kind: str) -> bytes:
+    """A small solid rectangle, in `kind` (`PNG` or `TIFF`), the same each run."""
+    from PIL import Image
+
+    output = io.BytesIO()
+    Image.new("RGB", (120, 80), rgb).save(output, kind)
+    return output.getvalue()
+
+
+#: The smallest Windows Metafile Pillow and python-pptx take for one: a
+#: placeable header, the metafile header and its end record, and nothing
+#: drawn.  Nothing here draws a metafile, so the type is what the fixture is
+#: for.  Real decks hold WMF clip art and Equation Editor previews (docs/09 P36).
+_METAFILE = (
+    struct.pack("<IHhhhhHIH", 0x9AC6CDD7, 0, 0, 0, 1200, 800, 1440, 0, 0)
+    + struct.pack("<HHHIHIH", 1, 9, 0x300, 12, 0, 3, 0)
+    + struct.pack("<IH", 3, 0)
+)
+
+
+def write_picture_deck(path: Path) -> None:
+    from pptx import Presentation
+    from pptx.opc.constants import RELATIONSHIP_TYPE
+    from pptx.oxml.ns import qn
+    from pptx.util import Inches
+
+    presentation = Presentation()
+
+    def picture(slide: Any, data: bytes, alt: str, left: float) -> Any:
+        shape = slide.shapes.add_picture(
+            io.BytesIO(data), Inches(left), Inches(2.5), Inches(2.5), Inches(1.7)
+        )
+        shape._element.nvPicPr.cNvPr.set("descr", alt)
+        return shape
+
+    held = presentation.slides.add_slide(presentation.slide_layouts[5])
+    held.shapes.title.text = "Pictures the deck holds"
+    box = held.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(9), Inches(0.6))
+    box.text_frame.text = SENTINELS["picture_deck.pptx"]
+    picture(held, _picture((20, 60, 200), "PNG"), PICTURE_ALTS["png"], 0.5)
+    picture(held, _picture((20, 160, 60), "TIFF"), PICTURE_ALTS["tiff"], 3.5)
+
+    unread = presentation.slides.add_slide(presentation.slide_layouts[5])
+    unread.shapes.title.text = "Pictures the page cannot draw"
+    picture(unread, _METAFILE, PICTURE_ALTS["metafile"], 0.5)
+    # A linked picture: the blip names an external target and holds nothing.
+    linked = picture(unread, _picture((90, 90, 90), "PNG"), PICTURE_ALTS["linked"], 3.5)
+    blip = linked._element.blipFill.blip
+    target = unread.part.relate_to(
+        "https://example.invalid/linked.png", RELATIONSHIP_TYPE.IMAGE, is_external=True
+    )
+    del blip.attrib[qn("r:embed")]
+    blip.set(qn("r:link"), target)
+
+    buffer = io.BytesIO()
+    presentation.save(buffer)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_without_clock(buffer.getvalue()))
+
+
+def write_picture_report(path: Path) -> None:
+    def drawing(number: int, alt: str) -> str:
+        return (
+            f'<w:p><w:r><w:drawing><wp:inline><wp:extent cx="1143000" cy="762000"/>'
+            f'<wp:docPr id="{number}" name="Picture {number}" descr="{alt}"/>'
+            '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+            '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+            f'<pic:nvPicPr><pic:cNvPr id="0" name="picture{number}"/><pic:cNvPicPr/></pic:nvPicPr>'
+            f'<pic:blipFill><a:blip r:embed="rId{number}"/></pic:blipFill><pic:spPr/></pic:pic>'
+            "</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"
+        )
+
+    media = [
+        ("image1.png", _picture((20, 60, 200), "PNG"), PICTURE_ALTS["png"]),
+        ("image2.tiff", _picture((20, 160, 60), "TIFF"), PICTURE_ALTS["tiff"]),
+        ("image3.emf", _METAFILE, PICTURE_ALTS["metafile"]),
+    ]
+    body = _docx_paragraph(SENTINELS["picture_report.docx"]) + "".join(
+        drawing(number, alt) for number, (_, _, alt) in enumerate(media, start=1)
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + "".join(
+            f'<Relationship Id="rId{number}" Type="http://schemas.openxmlformats.org/'
+            f'officeDocument/2006/relationships/image" Target="media/{name}"/>'
+            for number, (name, _, _) in enumerate(media, start=1)
+        )
+        + "</Relationships>\n"
+    )
+    content_types = _DOCX_CONTENT_TYPES.replace(
+        "  <Override",
+        '  <Default Extension="png" ContentType="image/png"/>\n'
+        '  <Default Extension="tiff" ContentType="image/tiff"/>\n'
+        '  <Default Extension="emf" ContentType="image/x-emf"/>\n'
+        "  <Override",
+        1,
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+            *((f"word/media/{name}", data) for name, data, _ in media),
+        ],
+    )
+
+
+def write_picture_book(path: Path) -> None:
+    opf = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="book-id">urn:uuid:webshot-picture-fixture</dc:identifier>
+    <dc:title>The Picture Book</dc:title>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="chapter" href="text/chapter.xhtml" media-type="application/xhtml+xml"/>
+    <item id="blue" href="images/blue.png" media-type="image/png"/>
+    <item id="green" href="images/green.tif" media-type="image/tiff"/>
+  </manifest>
+  <spine><itemref idref="chapter"/></spine>
+</package>
+"""
+    # The chapter sits a folder down, so its pictures are named `../images/…`.
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter</title></head>
+<body>
+  <h1>Chapter One</h1>
+  <p>{SENTINELS["picture_book.epub"]}</p>
+  <p><img src="../images/blue.png" alt="{PICTURE_ALTS["png"]}"/></p>
+  <p><img src="../images/green.tif" alt="{PICTURE_ALTS["tiff"]}"/></p>
+  <p><img src="../images/missing.png" alt="{PICTURE_ALTS["missing"]}"/></p>
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", opf),
+            ("OEBPS/text/chapter.xhtml", chapter),
+            ("OEBPS/images/blue.png", _picture((20, 60, 200), "PNG")),
+            ("OEBPS/images/green.tif", _picture((20, 160, 60), "TIFF")),
+        ],
+        first_stored=True,
+    )
+
+
 WRITERS = {
     "sample_report.docx": write_docx,
     "sample_deck.pptx": write_pptx,
     "sample_workbook.xlsx": write_xlsx,
     "sample_book.epub": write_epub,
+    "numbered_book.epub": write_numbered_epub,
     "sample_archive.zip": write_zip,
     "equation_deck.pptx": write_equation_deck,
     "equation_report.docx": write_equation_report,
@@ -1077,6 +1284,9 @@ WRITERS = {
     "markup_archive.zip": write_markup_archive,
     "left_out_archive.zip": write_left_out_archive,
     "adjacent_lists_book.epub": write_adjacent_lists_book,
+    "picture_deck.pptx": write_picture_deck,
+    "picture_report.docx": write_picture_report,
+    "picture_book.epub": write_picture_book,
 }
 
 

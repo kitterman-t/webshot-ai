@@ -55,6 +55,7 @@ from .capture.landing import (
     sign_in_wall,
     sign_in_wall_message,
 )
+from .capture.media_controls import settle_media_controls
 from .capture.prepare import (
     BASE_PRINT_CSS,
     CLEAN_PRINT_CSS,
@@ -642,6 +643,9 @@ async def capture_open_page(
                 fitted.released,
             )
         warnings.extend(fitted.warnings)
+        # Before the bundle's screenshots and the print, either of which could
+        # otherwise catch a video's controls mid-spinner (docs/09 P66).
+        await settle_media_controls(page)
         clock.mark("capture")
 
         # How the bundle spells this machine's paths. Inactive, and so the

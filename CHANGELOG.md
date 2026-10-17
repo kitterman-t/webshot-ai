@@ -282,6 +282,56 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **A list keeps the number it starts at.** A Markdown list that began `3.`,
+  and an EPUB list that began at 5, were numbered from 1 on the page, because
+  the local-document allowlist dropped `ol[start]`. The snapshot kept the
+  attribute with whatever text the page wrote, so `start="²"` failed the
+  capture with exit 8 when docling read it as a number, and `start="٣"` was
+  recorded as 3 where the browser showed 1. Both allowlists now keep `start`
+  as the integer Chromium reads from it, and drop it where Chromium reads none.
+  Word lists are still numbered from 1: mammoth does not read where one
+  starts. See docs/09 P30.
+- **A box on a page that scrolls smoothly prints from where the page had it.**
+  The visual harvest puts back every scroll position its screenshots moved,
+  because Chromium prints a scrolling box and a frame as they stand. It did so
+  in a way that obeys the page's `scroll-behavior`, so on a page that sets
+  `smooth` it only started an animation. From the second capture in a
+  process, the MCP server's case, the PDF printed 62 to 82 ms later, with
+  each box partway back and none of its text where the page had it, and no
+  warning. Positions now go back at once and are read back, and one that did
+  not go back is a warning. See docs/09 P39.
+- **A video is photographed and printed the same however fast or loaded the
+  machine is.** Chromium's controls show a loading spinner on a
+  `<video controls>` for about 1.4 s after the page loads, `preload="none"`
+  included, and longer when the renderer is starved. A capture that reached the
+  video inside that window recorded the spinner, at an angle set by the clock,
+  in the video's asset and could print it too. `animations="disabled"` does not
+  reach the controls. The prepare stage now takes each paused video out of the
+  page and puts it back where it was, which ends the spinner and leaves the
+  bundle's snapshot as it was. The golden corpus's `lms-module` and
+  `lms-module-videos` cases recorded a different asset digest from run to run
+  because of it. See docs/09 P66.
+- **A video whose load ends after the page is prepared is photographed the
+  same way, and one still loading says so.** A `preload="metadata"` request
+  that answered or failed after the prepare stage started the spinner again,
+  and the harvest could photograph it in the video's asset or in that of a
+  frame holding the video. The harvest now settles each video it is about to
+  photograph, the visual itself or one inside it, just before the screenshot.
+  A video still loading keeps its spinner, and its warning now says that its
+  image shows the browser's loading indicator rather than a frame of the
+  video, instead of saying its frame was preserved. See docs/09 P67.
+- **A table or picture before a page's first heading reaches `content.md`,
+  `content.txt` and `chunks.jsonl`.** docling files everything above the
+  first heading as page furniture, which those three skip, and WebShot moved
+  only text back. A table or an image there, such as a deck's first slide
+  picture or an EPUB's cover, was in `content.json` and `content.doctags`
+  only, and so was the text OCR read from the image. Each is now kept out only
+  if it sits inside the page's header, nav, footer or aside, and it reads as it
+  would on a page with no heading. Where docling's tables or pictures cannot
+  be paired with the page's to tell, the manifest says so. A cross-origin
+  frame shown as its screenshot above the first heading was reported as having
+  its recognized text in `content.md` and `content.txt`, which held none of
+  it; the warning now says where that text is. See docs/09 P57.
 - **Two lists side by side in a converted document stay two lists.** Where an
   EPUB chapter or an HTML file in a zip had one list straight after another of
   the same kind, the page showed one list: numbered on from the first, so a
@@ -295,6 +345,16 @@ which records the measurements behind each change.
   list. The two now keep their own numbering and close spacing, and the
   comment that separates them is removed from the page. A `.md` file is
   rendered as before. See docs/09 P32.
+- **A converted document's pictures are in the page.** MarkItDown wrote a
+  slide's picture as a made-up file name, which the page looked for beside the
+  deck: the request failed, or another file of that name was captured as the
+  picture, with no warning. Word pictures were cut short and drawn broken, and
+  an EPUB's pictures were looked for beside the book. Each picture is now the
+  document's own bytes, a TIFF is converted to PNG, and a picture no browser
+  draws (WMF, EMF), one a deck only links to, or one a book names but does
+  not hold is a line of text in the page and a warning naming where it was.
+  For a local file, `assets.json` records such a picture's `data:` URL by type
+  and length, since the bytes are in `source/`. See docs/09 P36.
 - **A slide's text box with an equation in it reaches the page.** PowerPoint
   wraps such a box in `mc:AlternateContent`, beside a picture of it for older
   readers, and python-pptx reads neither, so the slide came out as its title
@@ -326,6 +386,23 @@ which records the measurements behind each change.
   a zip are left out and counted: read as text, they had put a file's
   quarantine record and the address it was downloaded from on the page. See
   docs/09 P33.
+- **A protected document's segments are shot where the viewer is.** The
+  SharePoint capture scrolls its viewer to each half of a tall page and waits
+  500 ms before the screenshot. On a viewer that scrolls smoothly, the first
+  scroll, from wherever the reader had left the viewer, was still moving when
+  page 1 was shot: from the last page of a three-page test document, page 1's
+  upper half came out 89 to 159 px out of place, with no warning. The viewer
+  now moves at once, and its position is read back before every segment. One
+  that is not where the segment assumes, because the viewer snapped or
+  clamped the scroll, stops the capture with both positions instead of
+  stitching a page that holds part of itself twice. See docs/09 P42.
+- **A long table's capture time no longer grows with the square of its
+  size.** docling-core rebuilt a table's whole grid for each cell it wrote
+  into `content.doctags`, so a 1,000-row, 2-column CSV built four million
+  cells, and doubling a table's rows quadrupled the time spent there. WebShot
+  now has each table's grid built once for that export. Every file it writes
+  is the same, byte for byte. A 2,000-row HTML table took 174 s to capture
+  before and 28 s after. See docs/09 P41.
 - **A word with a bold, italic, code or linked part is one word in the
   bundle.** docling spaced every formatted run from the text beside it, so
   `un<b>break</b>able` read `un **break** able` in `content.md` and "un break
@@ -355,6 +432,18 @@ which records the measurements behind each change.
   of backticks in the code. `content.json` holds it as a code item under the
   list item, with its lines. A list with no code in its items is written as
   before. See docs/09 P50.
+- **A heading in a page's footer no longer brings the footer into the text.**
+  docling files a `<footer>` as page chrome, but a heading inside one, such as
+  a site footer's "Company" or "Resources" column, put the heading and the
+  rest of the footer into `content.md`, `content.txt` and `chunks.jsonl`, and
+  the text after the footer was chunked under the footer's last heading. On
+  three of ten public pages captured in faithful mode, and one of them in
+  clean mode too, the footer was from a third to nearly two thirds of
+  `content.md`. Everything inside a footer now stays out of those files and
+  in `content.json` as chrome, headings included. So do a footer's pictures,
+  and the alt text, empty list items and rewritten dashes that got through
+  even without a heading. A picture in a footer keeps its figure chunk. See
+  docs/09 P65.
 - **A page that enforces Trusted Types is captured.** A site that sends
   `require-trusted-types-for 'script'` made the bundle stage throw on its
   first `DOMParser` call, and the capture exited 5. Large video sites' watch
@@ -398,6 +487,12 @@ which records the measurements behind each change.
   now carries "nothing separated these" through the conversion, so the text
   surfaces read "H0" and a search finds the bundle as well as the PDF;
   `content.json` still records the script. See docs/09 P14-56.
+- **A page's own U+FDD0 or U+FDD1 survives being written as a reference.**
+  Given HTML with `&#xFDD0;` or `&#64977;`, the docling bridge read the
+  character as one of its join markers and removed it, with no warning. It
+  now keeps the page's character and gives the warning a page carrying the
+  raw character gets. A capture was not affected: the browser and the
+  sanitizer decode the reference before the bridge sees it. See docs/09 P54.
 
 - **Tesseract no longer stalls when several pages are read at once.** WebShot
   recognizes pages and assets in parallel, and an OpenMP build of Tesseract

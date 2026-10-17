@@ -5499,6 +5499,10 @@ docling's record of the source, which is now exact. The goldens were
 re-recorded for those six lines only; the new digests equal the ones the
 hosted runner computed.
 
+### P10-32 — the macOS test legs run one interpreter here (2026-10-11)
+
+*Historical: this entry concerns the private repository's self-hosted runners, which this copy does not use.*
+
 ## P14 — a signed-in reading page, captured from a browser export (2026-09-06)
 
 Captures of a signed-in reading page, exported from the browser and captured for
@@ -5820,9 +5824,9 @@ while its base is, and a spaced superscript; its tests in
 between other inline parts, as in `<b>Note</b>: text`, which still reads
 "**Note** : text". `<b>H</b><sub>2</sub>O` gives
 `**H2**O`, because the source's own emphasis ends inside the word. A page that
-already carries U+FDD0 or U+FDD1 keeps docling's spacing and says so in
-`warnings`; a marker found in a field the bridge does not rejoin is removed,
-with a warning.
+already carries U+FDD0 or U+FDD1, as a character or (since P54) a character
+reference, keeps docling's spacing and says so in `warnings`; a marker found
+in a field the bridge does not rejoin is removed, with a warning.
 
 ### P14-61 — a local capture's bundle named the capture machine's folders
 
@@ -6083,6 +6087,12 @@ font drift, masked by the portable profile, so those two lines were restored
 rather than re-pinned. `protected-viewer`'s pdf-text is masked under the
 portable profile too, so its stale golden still passed. It was re-recorded
 because the output did change.
+
+*Corrected by P66:* the `asset-002` move was not font drift, which would have
+moved the digest in every run on that machine. `asset-002` is the fixture's
+`<video controls>`, which Chromium draws with a loading spinner for about 1.4 s
+after the page loads, and a run that photographs it inside that window records
+a different digest each time.
 
 **What this costs, stated rather than measured:** text is printed without
 ligatures, so "fi" draws as two glyphs. An Arabic font that puts lam-alef in
@@ -8358,7 +8368,7 @@ whose parts are now parsed and written again.
 - P27's rewrite does not reach a deck or a Word file inside a zip. P29
   closes this.
 - `ol[start]` is not in `MARKDOWN_POLICY`, so a real list that starts at 3 is
-  still numbered from 1.
+  still numbered from 1. P30 closes this.
 - A picture is still MarkItDown's `![name](name.jpg)`, a `file:` request that
   fails (P27-6).
 
@@ -8471,6 +8481,129 @@ that a zip with no Office member has no warning.
 `tests/test_office_formats.py` captures the archive end to end. It finds the
 deck's sentinel, which sits in the wrapped text box, and the five warnings in
 the manifest under their members' names.
+
+## P30: the number a list starts at (2026-10-11)
+
+P28-7 recorded that `MARKDOWN_POLICY` does not allow `ol[start]`, so a list
+that starts at 3 in a local document was numbered from 1 on its page.
+Measured with Python-Markdown 3.10.3, MarkItDown 0.1.8, markdownify 1.2.3,
+mammoth 1.11.0, nh3 0.3.7, docling-slim 2.132.0 and Chromium 153.0.8010.12, on
+master 34d9f06. The fixtures are `tests/fixtures/numbered_lists.md`,
+`tests/fixtures/office/numbered_book.epub` (written by
+`tools/fixtures/office.py`) and `tests/fixtures/list_numbering.html`.
+
+### P30-1: what each path did
+
+| Input | What reaches Python-Markdown | Page before | Page now |
+|---|---|---|---|
+| `.md`, a list beginning `3.` | the file | `<ol>` | `<ol start="3">` |
+| `.md`, a list beginning `0.`; one nested, beginning `7.` | the file | `<ol>` | `<ol start="0">`; `<ol start="7">` |
+| EPUB `<ol start="5">`, and nested `<ol start="4">` | `5.`, `4.` from markdownify | `<ol>` | `<ol start="5">`, `<ol start="4">` |
+| EPUB `<ol start="-2">` | `1.`: markdownify reads a start only where `isnumeric()` holds | `<ol>` | `<ol>` |
+| EPUB `<ol reversed start="3">` | `3.`, `4.`: markdownify counts up | `<ol>` | `<ol start="3">`, counting up |
+| `.docx`, a list Word starts at 4 (`w:startOverride`) or 3 (`w:start`), or continues past a paragraph | `1.`: mammoth writes `<ol>` | `<ol>` | `<ol>` |
+
+Python-Markdown writes the first item's digits as they are (`03.` becomes
+`start="03"`); the page then carries the number, below.
+
+### P30-2: the snapshot kept whatever the page wrote
+
+`SNAPSHOT_POLICY` is built on nh3's defaults, which allow `ol[start]`, so a
+page's own value reached `content.html` as written. docling's HTML backend
+takes it where `str.isnumeric()` holds and reads it with `int()`:
+
+| A page's `start` | Chromium numbers the list from | `content.md` said |
+|---|---|---|
+| `²` | 1 | nothing: the capture exited 8, "docling could not parse the snapshot: invalid literal for int()" |
+| `٣` (Arabic-Indic three) | 1 | 3 |
+| `99999999999` | 1 | 99999999999 |
+| `3abc`, `+3`, `\t3` | 3 | 1 |
+| `-2` | -2 | 1 |
+
+So one character in a page's markup failed the whole capture, and in the other
+rows the record and the page disagreed about a number a reader saw.
+
+### P30-3: what Chromium reads from the attribute
+
+HTML's rules for parsing integers, then a signed 32-bit range: leading ASCII
+whitespace is skipped, one `+` or `-` is taken, ASCII digits are read, and
+whatever follows them is ignored (`3abc`, `3.5` and `0x10` read as 3, 3 and 0).
+No digits, a no-break or figure space before them, a non-ASCII digit, or a
+value outside -2147483648 to 2147483647 reads as no number, and the list starts
+at 1. `CHROMIUM_READS` in the tests is the table, and a browser test reads
+`ol.start` from Chromium for the fixture page, so a disagreement fails rather
+than drifting.
+
+### P30-4: the change
+
+`sanitize.py` keeps `ol[start]` as the number Chromium reads, written as plain
+decimal, and drops it where Chromium reads none, through nh3's
+`attribute_filter`. It is applied in `sanitize()`, so both documents share it,
+as they share the URL schemes: a local document's page is captured, and its
+snapshot sanitized again. `MARKDOWN_POLICY` now allows the attribute;
+`SNAPSHOT_EXTRA_ATTRIBUTES` names it, so it is no longer held only by an
+upstream default that could shrink.
+
+Spec §6.5 is unaffected: `start` is not a URL or a handler, and its value can
+only be `-?[0-9]+`. The filter is called for every allowed attribute: on a
+9.9 MB synthetic snapshot with 360,000 of them, sanitizing took 0.38 s instead
+of 0.28 s (best of three), with identical output.
+
+The filter must not raise, because nh3 does not refuse an attribute whose
+filter raised. It reports the exception as unraisable and keeps the attribute
+as written: a filter that fails, fails open. The first version passed every
+run of digits to `int()`, which raises past 4,300 digits on Python 3.12. A
+`start` of 5,000 ones therefore reached the snapshot whole, and docling's own
+`int()` failed the capture with exit 8, as `²` had. The review of #179 found
+the raise. `html_integer` now strips leading zeros and refuses more than ten
+digits before converting. Chromium agrees: it reads 5,000 ones as no number,
+5,000 zeros and a 7 as 7, and 5,000 zeros after a minus sign and before a 2
+as -2.
+
+### P30-5: real files
+
+Over 231 real files (53 Markdown files, 81 Word files, 23 decks, 6 workbooks,
+1 EPUB, 5 zips, 62 CSVs), 228 rendered and 3 failed as before, on archive
+limits. The page of 6 changed, and in each the only change was a `start` on an
+`<ol>`, 9 lists in all. One was a Markdown README whose list begins at 4. The
+other 8 were in 3 Word files and 2 decks, where a paragraph typed as `2.` or
+`3.` had been read as a list: before, each read 1; now each reads the number
+typed. Those runs were on master before P28 merged. With P28 merged, the six
+files were rendered again: the five Word files and decks have no `start` and
+show the typed numbers as text, and the README's list still begins at 4.
+Rendering all 231 took 57.9 s before and 60.8 s after, one run each.
+
+### P30-6: what this does not cover
+
+- **Word numbering.** mammoth's numbering model holds a level and whether it
+  is ordered, no start, so every Word list is numbered from 1 and a list Word
+  continues past a paragraph restarts. Carrying it would take reading
+  `numbering.xml` beside mammoth.
+- **Two adjacent lists.** Python-Markdown reads two lists with nothing between
+  them as one: markdownify's `5. Fifth` followed by an `<ol>` of its own,
+  `1. One`, became one list numbered 5 and 6. `numbered_book.epub` closes
+  each list with a paragraph for that reason. P32 closes this.
+- **`reversed`, `type` and `li[value]`.** Neither allowlist keeps them, and
+  docling reads none, so a list counting down is recorded counting up and a
+  lettered list as numbered. markdownify writes a negative start as 1, and
+  docling numbers one from 1 in `content.md` though `content.html` keeps it.
+
+### P30-7: the tests
+
+`tests/test_list_numbering.py` holds `html_integer` to the table Chromium was
+measured against and both allowlists to the same table, 5,000-digit values
+included. Property tests, over short text and over long runs of digits (up to
+6,000 leading zeros and 6,309 more digits),
+check that `html_integer` returns None or an in-range number, that a kept
+`start` is only ever a plain 32-bit integer, and that sanitizing again changes
+nothing. The `²` and 5,000-digit snapshots that failed now extract. The two local
+fixtures are rendered and their lists' openings compared, and both are
+captured end to end and their numbers found in `content.md`. A browser test
+loads `list_numbering.html`, reads `ol.start` for each of its 20 lists from
+Chromium, and requires the snapshot to keep exactly those numbers and
+`content.md` to list each first item under it, a negative start excepted
+(P30-6). `tests/test_office_formats.py` captures `numbered_book.epub` with the
+other fixtures.
 
 ## P32: two lists side by side became one (2026-10-11)
 
@@ -8895,6 +9028,612 @@ once, so every other variant renders as before. `#late-frame-smooth` adds
 give the pass 60 s, so a hang fails rather than stalling the run. With the
 old scroll calls put back, the smooth `unrendered` case fails that way.
 
+## P37: the lazy-load pass's slow steps were smooth scrolling, not its measurement (2026-10-11)
+
+P34-4 timed the pass on three real pages at the default 0.25 s
+`--scroll-delay`. A step took about 0.75 s on developer.mozilla.org and
+github.com, and 0.25 s on Wikipedia. The suspect for the extra half second was
+`LAZY_LOAD_STATE_JS` (P23-8). When the capture removes anything (clean mode's
+`NOISE_SELECTORS`, or `--exclude`), that script matches the removed regions,
+walks every element outside them and into open shadow roots, reads a box for
+each leaf, and sizes each region. Faithful mode without `--exclude` skips all
+of it. The suspect was the wrong one. The script costs about 5 ms a step on
+those pages. The half second is the scroll call waiting for the page's
+smooth-scroll animation.
+
+### P37-1: how it was measured
+
+A script replayed the pass as P34-3 left it (measure, scroll, wait for a
+frame, `--scroll-delay`), with the module's own rules for ending it, and timed
+each call separately:
+
+- a `() => 0` round trip, the floor for any call into the page;
+- the state script's round trip, and inside it, by `performance.now()`, the
+  selector match, the walk with its box reads, and the region sizing;
+- the scroll call and the frame wait.
+
+Each page was opened as a capture opens it: `DEFAULT_VIEWPORT`,
+`domcontentloaded`, 1 s, then the pass at 0.25 s. Each page ran four times in
+clean mode and four in faithful mode, alternating which went first, in
+headless Chromium 153.0.8010.12 under Playwright 1.63. No
+`requestAnimationFrame` loop was added; the pass's own frame wait was the only
+one. A fifth run read the renderer main thread's CPU time (`ThreadTime`, from
+DevTools' `Performance.getMetrics`) around each state call.
+
+The Mac's load average stayed between 118 and 353 throughout, most of it other
+sessions' work, and no quieter window came. Neither finding depends on it. The
+state script's time inside the page matched its main-thread CPU time to within
+1 ms a call (58.2 ms against 58.7 ms at YouTube's step 47), so load did not
+stretch it. And the scroll's half second is an animation of fixed length.
+
+### P37-2: what each part of a step costs
+
+Medians per step in clean mode, in milliseconds. "Script" is the state
+script's round trip. "Match" and "walk" are its parts timed inside the page,
+and the walk includes its box reads and the timers around them. The kept count
+includes open shadow roots, which is why MDN's is larger than the 1,049
+elements in its document.
+
+| Page | Steps | Kept | Script | Match | Walk | Scroll call | Frame wait |
+|---|---|---|---|---|---|---|---|
+| developer.mozilla.org, Intersection Observer API | 28 | 5,366 | 5.7 | 0.3 | 4.0 | 492 | 16 |
+| github.com/microsoft/playwright | 13 | 2,325 | 5.9 | 2.0 | 2.0 | 492 | 16 |
+| en.wikipedia.org/wiki/Lighthouse | 19 | 2,316 | 4.8 | 1.3 | 1.7 | 1.0 | 9 |
+| en.wikipedia.org/wiki/World_War_II | 64–65 | 13,733 | 17.1 | 4.9 | 10.0 | 1.1 | 13 |
+| a YouTube watch page | 33–59 | 16,359 | 42.7 | 29.8 | 6.6 | 1.5 | 17 |
+
+In faithful mode the script's round trip was 1.0–1.7 ms, no more than the
+`() => 0` floor (1.2–1.6 ms). The scroll call and the frame wait were the same
+as in clean mode.
+
+Whole passes say the same. On MDN, github.com and Lighthouse, 9 of the 12
+clean and faithful pairs took the same time to within 0.5 s, with clean as
+often faster as slower. The other three were faithful passes, slower by 1.7 s,
+5.6 s and 33 s, most of it in their scroll calls. On World War II, clean took
+0.9–3.1 s longer than faithful in all four pairs. Its script added up to
+1.0–1.3 s a pass, and the rest of the gap was not attributed. On YouTube,
+clean passes ended at `removed-growth` after 33–59 steps in 11.2–22.5 s, with
+the script 10–16% of each pass. Three faithful passes ran to the 100-step
+limit in 30.9–34.0 s, and one was served a page that ended after 6 steps.
+
+### P37-3: the half second is the page's smooth scrolling
+
+In this Chromium, `window.scrollBy` returns a Promise that settles when the
+scroll has finished, and `page.evaluate` waits for a Promise its expression
+returns. MDN and github.com set `html { scroll-behavior: smooth }`. Each
+step's scroll therefore animated, and the call came back about 500 ms later,
+in clean and faithful mode alike. Wikipedia's `scroll-behavior` is `auto`,
+and the call came back in 0.6–2.3 ms, each pass's median. On MDN and
+github.com, `void window.scrollBy(...)` and `behavior: 'instant'` both came
+back in under 1 ms. The animation is the whole difference between those pages' steps of
+0.61–0.75 s and Wikipedia's of 0.25–0.29 s, and it is in P34-4's figures for
+both the old pass and the new.
+
+The same Promise hung the pass on a page that does not render. With a page's
+first frame held behind a render-blocking script, a smooth `scrollBy` came back
+3.50 s after a 3 s hold and 10.50 s after a 10 s hold. With `auto` it came
+back in 0.01 s either way. On #182 at 3931f5c, with the frame wait cut to
+1.5 s and `#late-frame` held for ever, the pass ended `unrendered` after
+1.5 s. With `html { scroll-behavior: smooth; }` added to the fixture, it had
+not returned after 20 s, when the probe cancelled it. The 30 s guard could not
+fire, because the call that waited was the scroll and not the frame wait.
+Making only the step's scroll `instant` moved the hang to the final
+`window.scrollTo(0, 0)`. With both `instant`, the smooth page ended
+`unrendered` in 1.5 s like the plain one. On master at f2be8dd, which has no
+frame wait, the held smooth page had not returned after 20 s either, and the
+held plain page ended `bottom` at step 5, P34's failure. The print CSS sets
+`html { scroll-behavior: auto !important; }`, but only after the pass. P34-5
+makes both scrolls instant and adds a smooth variant of the fixture.
+
+### P37-4: where the state script does cost something
+
+On the YouTube page the script grows with the page, and what grows is the
+match, not the walk. One clean pass, in milliseconds:
+
+| Step | Elements in the document | In removed regions | Kept | Script | Match | Walk |
+|---|---|---|---|---|---|---|
+| 1 | 4,435 | 122 | 3,516 | 6.6 | 3.2 | 2.9 |
+| 31 | 50,439 | 38,147 | 11,495 | 52.9 | 43.4 | 8.3 |
+| 59 | 87,716 | 70,560 | 16,359 | 96.2 | 80.1 | 12.6 |
+
+The match is a `document.querySelectorAll` per selector list, about 0.9 µs
+for each element in the document. By the end most of the document is inside
+the comment feed, which the walk never enters but the match still searches.
+Matching during the walk instead, with `Element.matches` on each light-tree
+element the walk reaches, would test the 16,359 kept elements and the regions'
+roots rather than 87,716 elements. It was not built. Its saving is at most the
+match's median 30 ms of a 340–440 ms step, on the largest page measured. And
+the pass has to decide exactly as before, so the new match would have to
+reproduce what `document.querySelectorAll` does and does not see: shadow trees
+it does not search, a match on `html` or `body`, and the selector-by-selector
+fallback for an invalid `--exclude`.
+
+The pass is not changed here. The walk is not the cost on any page measured,
+and the smooth-scroll hang is fixed where the frame wait is, in P34-5.
+## P36: a converted document's pictures were not its own (2026-10-11)
+
+A deck with one picture was captured with no picture in it, one failed
+`file:` request, and the generic warning "1 request for the page's resources
+failed". MarkItDown 0.1.8 reads decks with python-pptx 1.0.2 and Word files
+with mammoth 1.11.0. Master was f2be8dd. The fixtures are `picture_deck.pptx`,
+`picture_report.docx` and `picture_book.epub` in `tests/fixtures/office/`,
+written by `tools/fixtures/office.py`.
+
+### P36-1: what each reader did with a picture
+
+| Format | What MarkItDown wrote | What the capture did |
+|---|---|---|
+| `.pptx` | `![alt](Picture2.jpg)`, a name made from the shape's | requested `Picture2.jpg` in the deck's folder |
+| `.docx` | `![alt](data:image/png;base64...)`, cut short | drew a broken image, with no request and no warning |
+| `.epub` | the chapter's own path, `images/blue.png` | requested it in the book's folder |
+| `.xlsx` | nothing: MarkItDown writes no picture unless asked | unchanged |
+
+The page's base is the document's folder, so a name or a path resolved there.
+With nothing of that name it failed. With something of that name it worked:
+a red PNG called `Picture2.jpg` beside the deck became the slide's picture,
+under the deck's own alt text, and the capture said nothing. Two pictures in a
+deck can be given the same name, so both took the same file. A picture that
+failed to load still became a visual asset, a screenshot of the broken frame
+around its alt text, 140 by 26 pixels, sent to OCR like any picture.
+
+### P36-2: each picture is its own bytes, or a line saying why not
+
+- MarkItDown's `keep_data_uris` option makes a deck's picture a `data:` URL
+  of its own bytes, and keeps mammoth's `data:` URL whole.
+- An EPUB chapter's path is read from inside the book, resolved against the
+  chapter's own path there, and becomes a `data:` URL.
+- Chromium draws PNG, JPEG, GIF, WebP, BMP, SVG, AVIF and icons. A TIFF is
+  written again as PNG through Pillow. A WMF, an EMF or a JPEG XR is drawn by
+  nothing WebShot ships, so it becomes a line of text in the page, `[Picture:
+  alt — not shown: a Windows Metafile (WMF), which a browser cannot draw]`,
+  and a warning naming its slide.
+- A deck picture with no bytes, which the deck only links to, gets the same
+  treatment.
+- A converted page never names a picture by a path for the browser to
+  resolve: a path the reader cannot read becomes text and a warning. A remote
+  picture is the document's own and is fetched, as an HTML file's is.
+- MarkItDown's Markdown for a picture is read strictly. A release that writes
+  it differently raises an error rather than putting an unchecked URL in the page.
+- `img` is held to the page's width, since a slide's photograph is often
+  wider than the column.
+
+Recording each `data:` URL verbatim then put the pictures into `assets.json`
+as base64: 5 MB for one deck of 26 pictures. When the capture keeps its source
+file under `source/`, the bytes are already in the bundle. So `assets.json`
+records such a URL by its type and length:
+`data:image/png;base64,… (123,456 characters; the picture is in source/)`.
+A web page's `data:` URL holds the only copy of its picture as the page had
+it, and is recorded whole, as before.
+
+### P36-3: real files
+
+Over 178 real files (23 decks, 81 Word files, 6 workbooks, 1 EPUB, 5 zips, 62
+CSVs), the page body of 138 was byte-identical. The other 40 differed in their
+pictures alone: 301 pictures drawn (220 PNG, 74 JPEG, 7 GIF) where none had
+been. Five decks hold 26 WMF pictures, the clip art of older Office versions,
+and one holds a TIFF. A zipped web page names its two pictures by path. These
+are now warnings, and the TIFF is drawn. Conversion took 2.94 s before and
+11.46 s after for the decks, 13.58 s and 17.10 s for the Word files, and 0.73 s
+and 1.34 s for the EPUB. The rest were level. For the largest deck, 0.56 s of
+4.1 s is Python-Markdown's link parser reading each picture's URL a character
+at a time.
+
+Three decks captured end to end:
+- The one with 26 pictures went from a 512 KB PDF with 5 failed requests to a
+  4.0 MB PDF with every picture in it and none failed. Its `assets.json` went
+  from 20 KB to 17 KB.
+- The one with 17 WMF pictures went from 17 broken-frame assets and 8 failed
+  requests to no assets, none failed, and 17 warnings, one per slide.
+- The one with the TIFF went from 11 failed requests to none, with the TIFF
+  drawn.
+
+### P36-4: what this does not cover
+
+- A WMF or EMF picture is named, not drawn: no renderer here reads one.
+- A picture an HTML file in a zip names by path is not read from the zip; it
+  is a line of text. The real case is a web page saved with its pictures.
+- A `.md` file is Markdown, in a zip or not, and a picture it names by path
+  still resolves beside it.
+- A picture is drawn whole: a crop set on the slide (`a:srcRect`) is not
+  applied, and nor is the size it was given there.
+- MarkItDown writes no picture from a workbook.
+
+### P36-5: the tests
+
+`tests/test_office_pictures.py` covers:
+- which formats pass as they are, and the TIFF written again as PNG with its
+  pixels;
+- each format refused, with its reason, and a path never left for the browser;
+- each fixture's pictures, placeholders and warnings, with the deck read
+  beside a file for every name MarkItDown makes up;
+- alt text in a placeholder, encoded once all the way to the page;
+- `assets.json`'s record of a kept file's `data:` URL against a web page's.
+
+`tests/test_office_formats.py` captures the three fixtures end to end and
+checks:
+- no request failed;
+- the warnings in the manifest;
+- the visual assets, by alt text;
+- each asset's recorded source, by type and length.
+
+Two P28 tests expected mammoth's cut-short URL, and now find the picture whole.
+The HTML converter's parity test now names its picture remotely, since a path
+is a placeholder here and a picture upstream.
+## P39: a page that scrolls smoothly printed its boxes partway back (2026-10-11)
+
+The visual harvest saves every scroll position before its first screenshot and
+puts each one back when it is done, because Chromium prints a scrolling box and
+a frame as they stand (P16-9, P16-12). It put them back with `scrollTo(x, y)`
+and `scrollTop =`, and both obey the page's `scroll-behavior`. On a page that
+sets `smooth` they start an animation and return. MDN and github.com set it on
+`html` (P37-3, in the entry on the lazy-load pass's step cost). The report that opened this measured a window at 1,500 px and
+a box at 900 px: both still there when the restore returned, with no failure
+counted, 1,417 and 797 at 100 ms, and 0 at 1 s.
+
+Measured with Chromium 153.0.8010.12 and Playwright 1.63 on macOS. The fixture
+is `smooth_scrolled_visuals_page.html`: P16-12's `scrolled_visuals_page.html`
+with `scroll-behavior: smooth` on the window, on each box and on the capped
+frame. Scroll positions were read with `page.evaluate` alone. No
+`requestAnimationFrame` loop went into the page, because one changes when it
+renders (P34).
+
+### P39-1: what a print during the animation shows
+
+The shadow box and the capped frame were scrolled to their end with
+`behavior: 'instant'`, as the harvest's screenshots leave them, and the window
+to 764 px. Then came the restore, a wait, and `page.pdf()`:
+
+| Print after the restore | Box and frame at the print | Each one printed |
+|---|---|---|
+| 0 ms, twice | 563 px | its bottom sentence |
+| 50 ms | 552 px | its bottom sentence |
+| 100 ms | 426 px | neither sentence |
+| 200 ms | 95 px | neither sentence |
+| 400 ms | 0 | its top sentence |
+| 800 ms, 1.5 s | 0 | its top sentence |
+
+The restore counted no failure in any row. Printing does not stop the
+animation: across the 100 ms row's print the box went on from 426 to 327 px.
+The window, 764 px away, still had 8 px to go at 400 ms.
+
+### P39-2: when a capture prints
+
+A full capture was run with `capture_visual_assets`, `extract_semantic_content`
+and `Page.pdf` wrapped to read the positions as each was reached. The harvest
+left the shadow box and the frame at their end, 518 px, and the window at 0.
+
+- **The snapshot** starts 1 to 2 ms after the restore, with both at 518 px. It
+  is not affected: of an element's geometry it reads only whether its box has
+  a width and a height (`VISIBLE_JS` and `rendered`), and scrolling changes
+  neither.
+- **The print, in the first capture in a process**, came 2.8 to 12.6 s after
+  the restore, because the extraction between them pays docling's start-up.
+  The animation had ended, and the PDF was right.
+- **The print, from the second capture on**, came 62, 79 and 82 ms after the
+  restore, in three captures in one process, with both at 448 to 488 px. The
+  clipping check's print followed at 106 to 149 ms, with both at 162 to 280
+  px. The PDF printed neither of the shadow box's sentences nor either of the
+  capped frame's, and no warning said so.
+
+The MCP server runs each capture inside its own long-running process, so every
+capture after its first is the second case. A single CLI capture was safe only
+because docling took longer to start than the animation took to finish. That
+depends on how fast the machine is.
+
+### P39-3: put back at once, and read back
+
+`RESTORE_SCROLL_JS` now scrolls with `behavior: 'instant'`: `scrollTo({left,
+top, behavior})` on a window and on an element alike. It still returns a
+count, never the promise Chromium 153's scroll methods return, so `evaluate`
+waits on no scroll (P34). With it, every row of P39-1 printed both top
+sentences, and the restore returned with both at 0. Three captures in one
+process printed them too, 61 to 108 ms after the restore.
+
+The count rose only when something threw, and a scroll that does not take
+throws nothing. That is how a restore that left every box where the harvest
+had put it reported none that would not go back. Each position is now read
+back after its scroll, and one that differs is counted, so the existing
+warning fires. A box whose content shrank below its saved position is one. A
+box or frame the page removed is skipped, because neither prints. Inside a
+removed frame an element is still `isConnected`, to a document whose
+`defaultView` is null, and the first version of this counted that frame's
+`html`. The comparison is exact. An offset of 100.7 px in a box under
+`zoom: 1.37`, which reads 100.72992706298828, read back the same at device
+scale factors 1, 1.25, 2 and 3.
+
+### P39-4: the other scrolls in `src/webshot`
+
+- **Playwright's scroll into view before a screenshot** is instant. On the
+  smooth page the harvest's last screenshot had left both boxes at their end,
+  518 px, by the time it returned.
+- **The lazy-load pass** scrolls with `window.scrollBy` and
+  `window.scrollTo(0, 0)`. P34-5 (#182) makes both instant.
+- **The protected viewer's `set_scroll`** sets `scrollTop` and waits 500 ms
+  before each segment's screenshot. Its jumps are a page apart, and a 764 px
+  smooth scroll was still moving at 400 ms, so if SharePoint's viewer scrolls
+  smoothly a segment could be taken short of where it is clipped. Nothing here
+  says whether it does. `tests/fixtures/viewer/dom/` records the viewer's
+  accessibility tree, not its CSS, and no test drives the segmented capture in
+  a browser. So it is left as it is, and noted as follow-up work.
+- Nothing else scrolls: `scrollTo`, `scrollBy`, `scrollTop =`, `scrollLeft =`,
+  `scrollIntoView` and `mouse.wheel` appear nowhere else.
+
+### P39-5: the tests
+
+In `tests/test_shadow_frame_visuals.py`, all three fail without the change:
+
+- `test_the_harvest_puts_back_every_scroll_position_it_moved` runs on both
+  pages. Before, on the smooth one, the boxes were still at the harvest's
+  positions when it returned.
+- `test_a_position_that_did_not_go_back_is_counted`: a box whose content
+  shrinks below its position counts, and a removed box and a removed frame do
+  not. Before, the count was 0.
+- `test_a_smoothly_scrolling_box_prints_from_where_the_page_had_it` captures the
+  smooth page twice in one process. Before, the second capture printed neither
+  of the shadow box's sentences.
+## P42: a smoothly scrolling viewer had its first segment shot mid-scroll (2026-10-11)
+
+P39-4 left one scroll in `src/webshot` as it was: the protected viewer's
+`set_scroll`. It set the viewer's `scrollTop`, dispatched a `scroll` event,
+waited 500 ms, and the segment's screenshot was then clipped as if the viewer
+stood at the target. `scrollTop =` obeys `scroll-behavior`. Nothing recorded
+whether SharePoint's viewer scrolls smoothly, because
+`tests/fixtures/viewer/dom/` holds its accessibility tree and not its CSS, and
+no test drove the segmented capture in a browser.
+
+Measured with Chromium 153.0.8010.12 and Playwright 1.63 on macOS, at the
+capture's own geometry: a 1440 × 1000 window at device scale factor 2. The
+fixtures are `sharepoint-portrait.html`, whose three pages now draw eleven
+96 px colour bands each, no two alike, and `sharepoint-portrait-smooth.html`,
+the same page with `scroll-behavior: smooth` on the viewer container. Its
+viewer is 820 px tall, and its pages 1,056 px with 24 px between them.
+Positions were read with `page.evaluate` alone. No `requestAnimationFrame`
+loop went into the page, because one changes when it renders (P34).
+
+### P42-1: how long a smooth scroll of the viewer takes
+
+Each distance was set with `scrollTop =` from the top, and the position read
+back every 20 ms or so, so an arrival time is late by up to about 25 ms:
+
+| Distance | Still to go at 400 ms | at 500 ms | Arrived |
+|---|---|---|---|
+| 236 px | arrived | arrived | 247 ms |
+| 844 px | 6 px | arrived | 470 ms |
+| 900 px | 9 px | arrived | 489 ms |
+| 1,000 px | 17 px | 1 px | 547 ms |
+| 1,500 px | 102 px | 30 px | 635 ms |
+| 2,000 px | 225 px | 82 px | 739 ms |
+| 3,000 px | 528 px | 317 px | 909 ms |
+
+From one segment to the next, the capture scrolls either by a page's overhang
+(its height less the viewer's, 236 px here) or by the viewer's height plus the
+gap between pages (844 px here). The two segments of a page must overlap, so
+neither is longer than about the viewer's height plus the gap. In this fixture
+both landed inside the wait, the longer by about 30 ms. A viewer that filled
+more of the 1,000 px window would cut that: a 1,000 px scroll was still 1 px
+short at 500 ms.
+
+The first scroll is different. It starts wherever the viewer is, which P8-45
+says is wherever the reader left it, and from there it can cross the whole
+document.
+
+### P42-2: the segments the capture took
+
+The capture ran on each fixture from the top and from the last page, with
+`scrollTop` read just before each screenshot:
+
+- **The plain fixture**, from either start: every segment at its target.
+- **The smooth fixture, from the top**: every segment at its target. The
+  scrolls were 24, 236 and 844 px.
+- **The smooth fixture, from the last page**: the first scroll is 2,444 px,
+  from 2,468 to 24. Just before page 1's top segment was shot the viewer read
+  205 or 229 px, and the next scroll found it at 163, so the shot came while
+  it moved. In five runs of the test below, page 1's stitched upper half was
+  89 to 159 px out of place. Every later segment was at its target, because
+  each later scroll started from where the first had got to. The capture
+  reported nothing.
+- **The synthetic `scroll` event** fired before the box had moved, every time
+  the viewer scrolled smoothly: `scrollTop` read straight after the call still
+  held the old position.
+
+### P42-3: scroll at once, and read it back
+
+`set_scroll` now calls `viewer.scrollTo({top, behavior: 'instant'})`, so the
+viewer is at the target, and dispatches the synthetic event after the move.
+The function hands back nothing, because Chromium 153's `scrollTo` returns a
+promise that `page.evaluate` would wait on (P34-5).
+
+`scroll_to_segment` then reads `scrollTop` back after the 500 ms wait, as the
+screenshot will find it, and raises with both positions when it is more than
+half a pixel from the target. The half pixel is Chromium's rounding. The
+target comes from `getBoundingClientRect`, so it can be fractional, and the
+viewer keeps its offset in whole CSS pixels at device scale factors 1, 1.25, 2
+and 3: 24.3 read back 24, 1104.5 read back 1105 and 2467.9 read back 2468. A
+target past the end of the scroll range reads back clamped: 2,500 read back
+2,468.
+
+The scroll back to the top after the last segment is not checked. Nothing is
+shot after it, and a viewer that will not sit at 0 should not cost a finished
+capture. The 500 ms wait stays: it is there for the viewer to draw what the
+scroll reveals, which an instant scroll does not change. With the change
+every segment, on both fixtures from both starts, was shot at its target, and
+a capture took about 3.4 s, as before.
+
+### P42-4: what reading it back catches
+
+A viewer that snaps its scroll to points inside its pages. With
+`scroll-snap-type: y mandatory` on the container and `scroll-snap-align:
+start` on the fixture's bands, page 1's bottom segment, asked for at 260 px,
+went to the band at 216. The old code shot every bottom segment 44 px high:
+each stitched page held 44 px of itself twice at the seam, as a band 280 rows
+tall where it draws 192, and lost its last 44 px, and the capture reported
+nothing. Now it stops: "The viewer was scrolled to 260px for a page segment
+but is at 216px". Snap points on whole pages hold nothing. A snap area taller
+than the viewer lets any position inside it stand, so every segment stayed
+where it was put.
+
+### P42-5: what it does not catch
+
+Every page is shot where page 1's position and height, and the step from page
+1 to page 2, say it is: page *n* at `page_top + (n - 1) * step`. In a document
+whose pages differ in size, every page after the first that differs is shot
+from the wrong place, and the scroll there still takes, so the read-back sees
+nothing wrong. It is caught only when the error puts a segment past the end
+of the scroll range, and there the capture now stops where it used to stitch
+the page with its seam out of place. This is from the code, not measured.
+Measuring each page before its segments are shot would fix both, and is left
+as follow-up work.
+
+Whether SharePoint's viewer scrolls smoothly is still unrecorded. The capture
+no longer depends on it.
+
+### P42-6: the tests
+
+In `tests/test_protected_viewer.py`, both fail without the change:
+
+- `test_each_stitched_page_is_its_own_page_band_for_band` runs the capture on
+  both fixtures from the last page and names every row of each stitched
+  page's middle column by the band it shows. Before, the smooth fixture failed
+  on page 1 in five runs of five.
+- `test_a_segment_the_viewer_would_not_scroll_to_is_refused` runs it on the
+  snapping viewer above. Before, the capture did not raise.
+## P41: a table's capture time grew with the square of its cells (2026-10-11)
+
+P35-3 (pull request #192) recorded it: captures of a 2-column CSV took 26 s,
+57 s and 179 s at 500, 1,000 and 2,000 rows, an 11,431-row one ran past 40
+minutes, and a profile put 23.6 s of a 76 s capture in docling-core's DocTags
+writer rebuilding `TableData.grid`. Measured here on master at 5a5a6ab with
+docling-core 2.99.0, the version `uv.lock` pins, and on 2.101.1, the newest
+release (2026-10-08).
+
+### P41-1: where the grid is read
+
+`TableData.grid` is a pydantic computed property. Every read builds the whole
+grid again: a list per row, the table's own cell at each position it covers
+and a new empty `TableCell` everywhere else. `TableItem.export_to_otsl`, which
+`DocTagsTableSerializer` calls for each table in `export_to_doctags()`, reads
+`self.data.grid[i][j]` inside its loop over rows and columns. That is one
+build per cell, not per row as P35-3 has it, so a table of n cells builds n
+grids and n² cells, and a table twice as wide costs four times as much too.
+
+Counting the builds over one capture of a 250-row, 2-column CSV gave 510:
+502 from `export_to_otsl` (251 rows, the header among them, times 2), and 8
+that do not grow with the table: the Markdown table serializer reads it twice
+and runs three times, for `content.md`, `content.txt` and the chunker, then
+`export_to_dict` and the bridge's own `tables` read it once each. The 1,000-row profile's
+2,010 reads are the same split: 2,002 and 8.
+
+docling-core's DocLang writer, `DocLangTableSerializer._emit_otsl`, reads the
+grid per cell the same way; WebShot does not write DocLang. docling-core fixed
+this pattern in its HTML serializer (docling-project/docling-core#373) and its
+DataFrame export (docling-project/docling-core#754) but not in these two, and 2.101.1 and its main branch at 0d5a7bd still read
+per cell. On main, `export_to_doctags()` alone took 2.1 s, 11.9 s and 57.7 s
+for a constructed 500, 1,000 and 2,000-row table of 2 columns.
+
+### P41-2: the fix
+
+The bridge wraps `export_to_doctags()` in `_grids_built_once`. For the
+export, each table's `data` is swapped for an instance of a `TableData`
+subclass whose `grid` is one grid built up front, and the original is put back
+afterwards, as `_doctags` already does with code languages it cannot spell.
+The copy shares the original's cells; only its `grid` differs, and the grid
+is a function of the cells and the table's size, which an export does not
+change. A `data` of any type but `TableData` itself is left alone, since a
+copy would drop what a subclass adds. The 250-row capture now builds 9 grids,
+and the count no longer depends on the table.
+
+The output is byte for byte docling-core's. On `spanning_table.html`, whose
+table has header rows spanning columns, a header spanning rows, row headers,
+cells spanning rows, columns and both, empty cells, and cells holding a list,
+bold text and a nested table, `extract` with and without the swap gives the
+same DocTags, `content.json`, Markdown and tables. Its DocTags hold every OTSL
+token but `srow`, which docling's HTML backend writes only for a
+`row_section` class, an attribute the snapshot sanitizer removes. Bundles of
+the 250-row CSV from master and the branch differ only in `captured_at`, the
+PDF's name and its digest.
+
+### P41-3: what it costs now
+
+End to end, `webshot <file> --output x.pdf --no-ocr` on synthetic inputs,
+master and the branch alternating, two rounds. The machine was running three
+CI runners' test suites and other sessions' gauntlets at the same time (load
+average 120 to 350), so single times swing widely; the 145.5 s is the branch
+during the worst of it.
+
+| Input | Master, round 1 | Branch, round 1 | Master, round 2 | Branch, round 2 |
+| --- | ---: | ---: | ---: | ---: |
+| CSV, 500 × 2 | 14.9 s | 14.4 s | 18.0 s | 20.0 s |
+| CSV, 1,000 × 2 | 42.0 s | 25.7 s | 34.3 s | 145.5 s |
+| CSV, 2,000 × 2 | 83.6 s | 39.2 s | 209.7 s | 40.1 s |
+| HTML `<table>`, 2,000 × 3 | 174.0 s | 28.1 s | 227.9 s | 29.6 s |
+
+The changed step on its own: `docling_bridge.extract` run once on each
+capture's `content.html` (the snapshot it was handed, identical from both
+sides), master's bridge and the branch's in separate processes, with process
+CPU time, which the load disturbs less than wall time.
+
+| Input | Cells | Grid builds, master | CPU, master | Grid builds, branch | CPU, branch |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| CSV, 500 × 2 | 1,002 | 1,010 | 3.16 s | 9 | 1.12 s |
+| CSV, 1,000 × 2 | 2,002 | 2,010 | 12.65 s | 9 | 1.35 s |
+| CSV, 2,000 × 2 | 4,002 | 4,010 | 58.99 s | 9 | 2.04 s |
+| HTML `<table>`, 2,000 × 3 | 6,003 | 6,011 | 131.94 s | 9 | 1.77 s |
+
+Every `ExtractionResult` field was equal between the two, and each capture's
+`content.*`, `chunks.jsonl` and `tables/` were byte-identical across the two
+bundles. The 1,000-row count, 2,010, is P35-3's profile's.
+
+### P41-4: real files
+
+Every CSV in one real folder outside vendored packages: 31 files, 14 distinct
+by content, copied out and captured with the branch. For nine of them
+`extract` ran on the capture's snapshot with master's bridge and the
+branch's, as in P41-3. Every field was equal, and the branch built 9 grids
+for each.
+
+| Rows × columns | Cells | Grid builds, master | CPU, master | CPU, branch |
+| --- | ---: | ---: | ---: | ---: |
+| 35 × 2 | 70 | 78 | 0.97 s | 0.96 s |
+| 26 × 3 | 78 | 86 | 0.88 s | 0.89 s |
+| 11 × 11 | 121 | 129 | 0.92 s | 0.89 s |
+| 7 × 33 | 231 | 239 | 0.96 s | 0.88 s |
+| 151 × 5 | 755 | 763 | 2.11 s | 0.99 s |
+| 261 × 8 | 2,088 | 2,096 | 11.51 s | 1.22 s |
+| 261 × 10 | 2,610 | 2,618 | 18.98 s | 1.33 s |
+| 681 × 7 | 4,767 | 4,775 | 73.15 s | 1.65 s |
+| 1,075 × 10 | 10,750 | 10,758 | 398.09 s | 2.51 s |
+
+Rows count the header. Master was not run on the rest, since the cost grows
+with the square of the cells: two more 1,075 × 10 files, and three larger
+ones. A 299 × 75 survey export (22,425 cells) took 4.38 s on the branch with
+9 builds, and by the square about 29 minutes on master; its capture took 94 s
+end to end. The largest, 54,832 × 3 (164,496 cells), finished its bundle,
+extraction included, and reached the PDF step 661 s into the capture. There
+Chromium's renderer crashed on a page 1,864,558 px tall and the run exited 7,
+a long-page limit this change does not touch. By the square, master would have
+spent about 26 hours of CPU building grids for it. An 875 × 85 survey export
+(74,375 cells) was stopped after 24 minutes in the lazy-load pass, under the
+load above, before it reached extraction.
+
+### P41-5: the tests, and upstream
+
+`tests/test_table_grid_builds.py` counts `TableData.grid` builds rather than
+timing anything: `spanning_table.html` must build as many grids as the same
+table with its last body ten times as long. With the swap turned off it fails
+on the fixture alone, 65 builds against a bound of 52 (the fixture's 52
+cells). It also holds the DocTags, `content.json`, Markdown and tables to the
+unswapped export's, requires every OTSL token but `srow` in them, and checks
+that a table gets its own `data` back when the export raises. The bridge's
+tests pass on docling-core 2.101.1 as on 2.99.0.
+
+Reported upstream as docling-project/docling-core#862, with the fix,
+reading the grid once before the loop in both writers, as
+docling-project/docling-core#863. Its test counts grid reads too, and fails on
+main. On main, `export_to_doctags()` of a 2,000 × 2 table took 57.7 s and with
+the change 0.010 s. Once a docling-core release carries it, the swap changes
+nothing, since the writer then reads the grid once itself, and
+`_grids_built_once` can go; the count test holds either way.
+
 ## P48: a word with a bold, italic, code or linked part was split on every text surface but the PDF (2026-10-11)
 
 P43-4 recorded it: an EPUB chapter `<p>un<b>break</b>able and pre<i>fix</i>ed
@@ -9292,3 +10031,799 @@ an item's code is still a picture; and that a footer's code stays off the
 body. Every other HTML fixture is held to docling's own output on every
 surface. It checks the backend still has the methods the bridge extends, and
 that without one the capture completes as docling reads it, with a warning.
+
+## P54: a page's own U+FDD0 written as a reference was removed as a join marker (2026-10-11)
+
+P14-56 marks where a sub/superscript touches its neighbours with U+FDD0 and
+U+FDD1, and leaves a page that already carries either unmarked, with a
+warning, so the page's own characters are not removed with the markers. That
+check looked for the characters only. docling's HTML backend parses with
+BeautifulSoup on `html.parser`, whose `handle_charref` decodes a numeric
+reference with `chr()`, so `&#xFDD0;` reached the document as U+FDD0, and
+`unmark_joins` removed it and the space before it. On master 5a5a6ab,
+`extract()` given `<p>H<sub>0</sub> and odd &#xFDD0; here</p>` wrote
+`content.txt` as "H0 and odd here", with no warning. Every spelling tried did
+the same, for both characters: hex with `x` or `X`, either case of digit,
+leading zeros, decimal, with and without the semicolon (12 cases).
+
+`html.unescape` cannot find these: it returns nothing for a noncharacter
+reference instead of decoding it. The check now also searches the page for
+`&#[xX]0*[fF][dD][dD][01](?![0-9a-fA-F])` or `&#0*6497[67](?![0-9])`. Such a
+page keeps its character and docling's spacing, "H 0 and odd U+FDD0 here",
+and gets P14-56's warning. A reference to any other character leaves the page
+marked, as before: `&#xFDD0A;` (U+FDD0A), `&#649760;`, `&amp;#xFDD0;`,
+`&#xFDD2;`.
+
+A capture was not affected. Chromium decodes the reference when it parses the
+page, `innerHTML` writes the character, and nh3 writes any reference as the
+character it names (`nh3.clean('<p>a &#xFDD0; b</p>')` returns the raw
+character). `webshot` run on master against a local file holding the reference
+kept the character and gave the warning. The defect was in `extract()` itself,
+reached by a caller that hands it HTML no browser or sanitizer has read.
+
+The search can match where the backend does not read the character: in an
+attribute value, where `html.parser` uses `html.unescape`, in a comment, or as
+`&#64976a`. The page then keeps docling's spacing and says it contains the
+character, which by the HTML standard it does. The raw-character check
+already did the same in those places. Separately, Python 3.12's `html.parser`
+gives up on any decimal reference followed by a hex letter and reads the rest
+of the page as text (`<p>x &#65a y</p><p>z</p>` reads "x &#65a y</p><p>z</p>").
+That holds for any number, and a capture cannot reach it for the reason above,
+so it is not changed here.
+
+`tests/test_docling_bridge.py` adds the 12 spellings, which all fail on
+master, and the 4 references to other characters, which pass on both.
+## P66: a video's controls photographed mid-spinner (2026-10-11)
+
+The golden job on #196 (run 38178914074, the self-hosted Mac) failed on
+`lms-module-videos` alone: `assets.json` recorded `asset-002` as `1344ff94…`
+where the golden has `baf4a4a3…`, and the manifest's digest of `assets.json`
+moved with it. #196 changes the DocTags export, which cannot reach a PNG. On
+the same Mac, six runs of the case at master cd41eb2 gave `baf4a4a3` three
+times and `c2f61120`, `6cfe925d` and `1344ff94` once each; #196's branch gave
+`baf4a4a3` five times and `3cd88f4f` once; and `tools/golden/check.py --case
+lms-module-videos` failed one run in three, with yet another digest.
+`asset-002` is the 640 × 240 screenshot of the fixture's plain
+`<video preload="none" controls>`. The golden shows idle controls. Every
+other digest shows Chromium's loading spinner, a partial arc caught at a
+different angle. `lms-module`, the command-line case, records the same
+element as `baf4a4a3`, and another session saw it vary the same day on the
+same Mac at a load average near 600: three runs of `tools/golden/check.py
+--case lms-module` on a branch gave `5637b29e…`, `a7e474c0…` and the recorded
+`baf4a4a3…`, with the recognized text unchanged. P16-5 put an earlier move of
+this digest down to font drift; it was this.
+
+### P66-1: every load of the page starts the spinner
+
+The question was why the controls entered a loading state in the in-process
+video case and not in the command-line case. They enter it in both, on every
+load. Measured here, on Linux with Chromium 141.0.7390.37 driven by Playwright
+1.63 (its own build, 1243, is not installed here), by reading the element that
+holds the spinner through DevTools (`DOM.getDocument` with `pierce`, which is
+the only way into the controls' user-agent shadow root): opened on its own,
+the fixture's video had the spinner showing from the first poll, 0.02 to 0.04
+s after navigation began, until 1.39 to 1.41 s. Screenshots of the video taken
+with the capture's own arguments at 0.35, 0.77 and 1.17 s were three different
+images, and those at 1.47, 1.78 and 2.65 s were one. Twenty loads photographed
+at a random moment up to 1.2 s after load gave 16 different digests, and the
+same twenty photographed again 1.6 s later gave one.
+
+The page sees nothing of it. Its `loadstart` and `suspend` events both arrived
+within 11 ms of the document starting, both reporting `networkState` IDLE, and
+no other media event followed.
+
+So whether a capture records the spinner depends only on when it photographs
+the video. Here, with OCR off as the video case runs, the pipeline
+photographed `asset-002` 2.09 to 2.20 s after navigation began (three runs),
+and with OCR on, as `lms-module` runs, 2.22 to 2.24 s. Both are past the
+window, and six runs of the case gave one digest, `e706909e`. With
+`--delay 0`, `lms-module`'s configuration recorded `asset-002` as `e706909e`,
+`a0ca583c` and `3cf9bbc5` in three runs: the first, in a fresh process, came
+after the window and the other two inside it. Its `--delay 1` gave `e706909e`
+three times.
+
+The window is longer when the renderer is starved, because the spinner goes
+only when a rendering update delivers `animationend`. With the renderer's CPU
+throttled through DevTools (`Emulation.setCPUThrottlingRate`), the spinner was
+gone 1.40 s after navigation began at 1×, 1.61 to 1.63 s at 6× and 2.29 to
+2.41 s at 20×, two loads each. At 20× that is past the 2.09 to 2.20 s at which
+the pipeline photographed the video here. The Mac's timings were not measured.
+It was at a load average near 600 when both cases varied, and its variant
+images are the spinner, so in those runs it photographed the video inside the
+window.
+
+The printed page carries it too. Printed with print media emulated at 0.2
+and 0.7 s after the page loaded, page 1 rasterized to two different images,
+both unlike the one printed at 2.5 s, and the difference lay inside the
+video's box, where the spinner is.
+
+### P66-2: why, in Chromium
+
+From the source of 153.0.8010.12, which the Mac and CI run, checked against
+141's where it differs. Resource selection sets the network state to LOADING
+(`HTMLMediaElement::SelectMediaResource`, step 7) before `LoadResource` looks
+at `preload`, and `SetNetworkState` tells the controls at once. Their state is
+"loading metadata" (LOADING, `HAVE_NOTHING`, paused), so the loading panel
+(`-internal-media-controls-loading-panel`) shows its spinner, set to repeat
+for ever. With `preload="none"` the same step then defers the load and sets
+the state to IDLE, and the panel goes to `kCoolingDown`: it sets the
+animation's iteration count to the turns already completed plus one and hides
+itself on `animationend`. The watched animation (`mask-1-spin`) runs 1,333 ms
+a turn, so the spinner stays for the rest of its first turn, which is the
+window measured above. The panel's code and its stylesheet are byte for byte
+the same in 141 and 153, and so is `MediaControlsImpl::State`.
+
+`animations="disabled"` cannot help. Playwright finds the animations to stop
+through `getAnimations()` on the document and each open shadow root it can
+reach, and the controls are in the element's user-agent shadow root, which no
+page script reaches.
+
+### P66-3: the change
+
+At the end of the prepare stage, `capture/media_controls.py` takes each paused
+`<video controls>` out of the page and puts it back where it was, in every
+frame and open shadow root. Removed, the element's controls are hidden
+(`MediaControlsImpl::RemovedFrom` calls `Hide`), and hiding ends the spinner
+at once (`OnControlsHidden`). Reinserted, the controls are shown in the state
+the element is in, which for a video not loading its metadata has no spinner.
+An element whose network state is not EMPTY does not select its source again
+when it is reinserted (`HTMLMediaElement::InsertedInto`), so nothing is
+fetched. Thirty loads reinserted at a random moment up to 1.2 s after load
+all gave the image taken after the window, and so did each again 1.6 s later.
+On three more, reinserted at 0, 0.5 and 1.0 s, the spinner was gone at once,
+no media event fired, and `networkState`, `readyState` and the element's
+`outerHTML` were unchanged.
+
+Removing and restoring `controls` ends the spinner the same way, and gave the
+same image on 30 loads of 30. It was not kept because it moves `controls` to
+the end of the element's attributes, and `content.html` writes them in the
+element's order, so the `lms-module` and `lms-module-videos` goldens would have
+changed. Waiting for the spinner
+to end was not chosen: it would add up to 1.4 s to any capture with a video
+and tie WebShot to Chromium's animation length.
+
+Four kinds of video are left as they are. A playing video's controls fade out
+on a timer that showing them again would restart. A video whose network state
+is EMPTY would start loading if reinserted. A video loading its metadata shows
+the spinner because that is its state, and reinserting it would only restart
+the turn. A focused video would lose its focus. The stage logs nothing at the
+default level, so the recorded `stderr.txt` of the cases with videos does not
+change.
+
+With the page's animation clock stopped through DevTools
+(`Animation.setPlaybackRate` 0), the spinner the page starts with never ends.
+Run that way, `lms-module-videos` recorded `asset-002` as `f12b5db2` three
+times out of three without this change, and `e706909e` three times out of
+three with it, the digest it records here with the clock running, before and
+after the change. With the change, `lms-module`'s configuration with
+`--delay 0` gave `e706909e` three times out of three.
+
+### P66-4: what this does not cover
+
+- A video still loading its metadata when the stage ends, which on a live page
+  means a slow server, is photographed with its spinner at whatever angle the
+  clock gives. If the metadata arrives between the stage and the screenshot,
+  the spinner finishes its turn as it did here.
+- In Chromium 153, a `loading="lazy"` video does not select its source until
+  it is scrolled into view. With `--no-scroll`, the screenshot's own scroll
+  could be the first, and the spinner would start inside the screenshot. Read
+  from the source, not measured: 141 has no such deferral.
+- A frame Playwright cannot script is skipped, with a debug line.
+- The warning for a video asset says its current visual frame was preserved,
+  which is untrue of a video photographed with its spinner. Settling again
+  just before each screenshot, which would cover a load that ends after the
+  stage, and a warning of its own for a video still loading, are left to a
+  follow-up.
+- None of this was measured on the Mac, and one green golden run there
+  cannot show the flake is gone. What was measured is that the race is certain
+  with the clock stopped, and gone with the change.
+
+### P66-5: the tests
+
+`tests/fixtures/video_controls.html` has a `<video controls preload="none">`
+in the document, one in an open shadow root and one in a frame, and one video
+without controls. `tests/test_media_controls.py` captures it twice through
+the whole pipeline: once with the page's animation clock stopped from before
+the page opens, so the race is certain on any machine, and once with the clock
+running, settling nothing and waiting, before the bundle, until no spinner is
+left. It reads the spinners through DevTools as the prepare stage settles
+them, as the bundle begins and as the print begins. The first test asserts
+all three were showing before the settle, so it cannot pass on a browser that
+shows none, and that none was left for the screenshots or the print. The
+second asserts that the two captures' assets are identical. The third asserts
+that their `content.html` is too.
+
+With the call taken out of the pipeline, the first test fails ("the pipeline
+never settled the video controls"), with all three spinners showing at the
+print, and the second fails with four of five asset digests different: the
+three videos with controls and the frame that holds one. With `controls`
+removed and restored instead of the element, the third fails on `controls=""`
+moved after `height`.
+
+## P67: a spinner that started after the prepare stage (2026-10-11)
+
+P66 ends, once, at the end of the prepare stage, the spinner every
+`<video controls>` starts with the page. P66-4 left two things. A load that
+ends after the stage starts the spinner's last turn again, and the harvest can
+photograph it. And a video still loading is photographed with its spinner
+while its warning says "Its current visual frame was preserved". This entry
+covers both. The same asset moved in other branches' runs that day, under the
+same load: one visual asset of `lms-module` in #204's verify run and
+`lms-module-videos`' asset-002 in #202's, each matching again when run alone.
+
+### P67-1: a later load starts another turn
+
+Measured on Linux with Chromium 141.0.7390.37, against the loading panel's
+source, which is byte for byte the same in 153. Setting a video's `src` to the
+value it has re-runs the load the page made, deferral included, so the turn
+starts again on demand. `load()` does not: it sets `ignore_preload_none_`,
+fetches the source, and ends in NETWORK_NO_SOURCE, with controls that look
+different from before. A `preload="metadata"` video whose request fails
+leaves loading when the error arrives, and its spinner takes the same last
+turn then. With the page's animation clock slowed to 0.02
+(`Animation.setPlaybackRate`, so a turn lasts about a minute), a screenshot
+taken right after either restart differed from the settled image, for each
+of three players and for a frame holding one.
+
+Before P66, the harvest's settle alone was measured over the whole pipeline
+on `lms_page.html`, with the clock at 0.1 from navigation on. Without it, three
+runs gave three digests for asset-002, each the spinner at another angle.
+With it, `e706909e` three times out of three, and the same at full speed:
+the digest the unchanged pipeline gives at full speed, so the settled image
+kept its bytes. The machine's load did not reproduce the race here: under 48
+busy loops (load average 20 to 43 on four cores) the case gave one digest in
+six runs, and with the renderer throttled 8x one in four, below the 20x that
+P66-1 found widens the window past the screenshot.
+
+### P67-2: settled again just before each screenshot
+
+The harvest now runs `SETTLE_INSIDE_SCRIPT` on each visual just before it
+photographs it. That settles the visual, if it is a video, and every video
+inside it, in a frame's document, a shadow root and the frames within them,
+as `FLAT_TREE_JS` walks them. A frame or a background asset holding a player
+is photographed before the player's own turn comes, if it comes at all. Each
+video goes through `SETTLE_ONE_JS`, which the stage now uses too, so both
+leave alone the videos P66-3 lists: playing, with no source selected, loading
+its metadata, or focused.
+
+The script also returns whether the visual is itself a video whose controls
+are in a loading state, by Chromium's own test (`IsInLoadingState`: loading
+with nothing yet, or playing with too little to go on). Its spinner stays,
+because it is still true, and its angle depends on the clock. Its warning now
+says that it was still loading, so its image shows the browser's loading
+indicator rather than a frame of the video, and can differ between captures.
+
+### P67-3: what this does not cover
+
+- A frame the page cannot script: the harvest's walk does not enter it. The
+  stage reaches it through Playwright, but only once.
+- A load that ends in the milliseconds between the settle and the screenshot.
+- The print. The stage settles every video before it, and the harvest every
+  video it photographed, but a load that ends after both can still be
+  printed mid-turn.
+- A video still loading is reported, not settled: its image still depends on
+  the clock.
+- None of this was measured on the Mac.
+
+### P67-4: the tests
+
+`tests/fixtures/video_controls_harvest.html` holds three players with native
+controls: one `preload="none"`, one `preload="metadata"`, and the first again
+in a `srcdoc` frame. `tests/test_harvest_video_controls.py` routes their host
+and lets nothing through. It photographs each settled player and the frame,
+slows the clock to 0.02, restarts each load (the second's request fails
+again), and checks that a plain screenshot of each of the four now differs
+from its settled image. If one does not, the run reproduced nothing and the
+test fails saying so. Then it runs the harvest alone, as if after the stage,
+and each asset must be its settled image byte for byte. With the harvest's
+settle taken out, all four fail. With only the visual itself settled, the
+frame fails. A second test holds the metadata request open and expects the
+still-loading warning for that video alone.
+## P57: a table or picture before the first heading never reached content.md (2026-10-11)
+
+docling's HTML backend files everything before a page's first heading on the
+furniture layer, which content.md, content.txt and the chunker skip, and the
+bridge moves content back to the body (P2-3). It moved text items only, each
+one unless its text read out of a header, nav, footer or aside region. A
+table or picture stayed on furniture. Measured with docling-slim 2.132.0 and
+docling-core 2.99.0 on master 9bf4eeb, without a browser:
+
+```html
+<img src="assets/asset-001.png" alt="Chart" data-webshot-asset-id="asset-001">
+<table><tr><td>Cellvalue</td></tr></table><h1>T</h1><p>Body.</p>
+```
+
+with asset-001 carrying OCR text, gave content.md `# T` and `Body.` and
+nothing else. The fixture is `tests/fixtures/pre_heading_blocks.html`; every
+word in it is made up.
+
+### P57-1: what each surface held
+
+| Surface | Before the fix |
+|---|---|
+| content.md, content.txt | neither the table, nor the picture, its alt text or its OCR text |
+| chunks.jsonl | no table chunk; the picture's figure chunk, which the bridge builds for every attached picture whatever its layer |
+| content.doctags | both: docling-core's doctags export writes every layer |
+| content.json | both, on `furniture` |
+| `ExtractionResult.tables` | the table's grid |
+| `pictured_asset_ids` | `asset-001` |
+
+`pictured_asset_ids` said each listed asset's OCR text "reached content.md,
+content.txt and chunks.jsonl". It listed every attached picture, so it was
+untrue for two of the three surfaces wherever the picture stayed furniture,
+including a picture in a `<footer>`, which is right to stay. The field
+decides the unread-frame warning (P16-7): a cross-origin frame captured as a
+screenshot above the first heading was reported as having its recognized
+text in content.md and content.txt, which held none of it.
+
+### P57-2: position, not text
+
+A picture has no text to tell chrome by. The chrome test compares an item's
+text with each chrome region's, and an `<img>`'s alt text is in no region's
+text, so a test by text would move every logo to the body. The snapshot
+parser already walks the snapshot in document order to pair each `<img>` with
+the backend's pictures and each `<table>` with its tables (P2-4). It now
+records for each element whether it sits inside header, nav, footer or aside,
+and whether it stands where the backend files furniture: above the first
+heading that is not inside a table (the backend's own test), or inside a
+`<footer>` (its other rule, which applies anywhere). A furniture table or
+picture whose element is outside chrome goes to the body; one inside chrome
+stays.
+
+When the counts disagree (an image inside `<pre>` makes no picture), pairing
+would be a guess. Every furniture item still came from an element where the
+backend files furniture, since the backend only skips or merges. So if those
+elements are all chrome nothing moves, and if none is, every furniture table
+or picture moves. With elements of both kinds there, nothing moves and the
+manifest says how many tables or pictures may be missing from the three
+surfaces, with both counts. A mismatch elsewhere in the page decides nothing:
+a header logo above the heading and an image in `<pre>` below it leave the
+logo on furniture without a warning.
+
+The pass moves furniture to the body and never the reverse, so chrome below
+the first heading outside a `<footer>`, which the backend files on the body,
+stays where it was.
+
+### P57-3: `pictured_asset_ids`
+
+The field now lists the assets attached to a picture on the body layer. For
+each, the tests find the opening line of its OCR reading in content.md,
+content.txt and a chunk. A new field, `chrome_pictured_asset_ids`, lists those
+attached to a picture kept as chrome: content.json holds their OCR text as an
+annotation and chunks.jsonl as their figure chunk, and neither content.md nor
+content.txt does. The unread-frame warning has a case for those, rather than
+saying the text is "in assets.json only", which the annotation and the figure
+chunk contradict, and `unread_text_warnings` takes the second set as a
+required argument, so a caller cannot leave it out and have every chrome frame
+reported that way.
+
+Whether a chrome picture should have a figure chunk at all is unchanged: v2's
+visual chunks covered every visual asset, and P57 does not change chunks.jsonl
+for chrome.
+
+### P57-4: what changed
+
+**Golden corpus:** 25 of 26 cases identical, none of them holding a table or
+picture on furniture before or after. `lms-module-videos` differed once in the
+hash of `asset-002.png`, a video frame the capture takes before extraction
+runs, and of `assets.json` in the manifest; the case alone then matched twice.
+The full gauntlet's second golden path differed in the same hash once, and
+that case alone on the second path then matched.
+
+**Real files:** every document in the folder P27, P28 and P40 scanned,
+copied first and read only: 256 files (82 Word, 23 decks, 6
+workbooks, 1 EPUB, 5 zips, 62 CSVs, 58 Markdown, 19 HTML). Each was rendered
+into its page once, and the page extracted with master's docling bridge and
+this one, without a browser.
+
+- **3 render on neither**, on WebShot's archive limits: a zip holding a
+  symbolic link, and a deck and a zip that expand past 100 MB.
+- **244 hold no table or picture on furniture**, and are unchanged by
+  construction: the pass has nothing to move.
+- **9 changed, and each change is explained.** In every one, content.md and
+  the chunks only gain: no line and no chunk went missing, the doctags are
+  identical, and everything from the first heading on is identical in
+  content.md.
+  - **Three copies of one syllabus and a second syllabus** have no heading
+    until late in the document, so every table above it was missing: a
+    grading scale, a table of points per assignment and the semester's
+    week-by-week schedule in the first (38 lines of content.md, 3 table
+    chunks), and the learning-outcomes table, grading scale and schedule in
+    the second (54 lines, 4 chunks), which also gains a small picture from
+    inside a list item, written as a picture on its own.
+  - **Three decks** whose first slide shows a picture before the slide's
+    title: each gains its alt text and `<!-- image -->`, as every later
+    slide's picture is already written.
+  - **The EPUB** gains its cover image and a front-matter figure, each as its
+    alt text and `<!-- image -->`.
+  - **A saved journal article page** gains its banner: a one-column layout
+    table holding the publisher's logo twice and an "Article Navigation"
+    button. It is chrome by function, but a `<table role="presentation">`
+    inside a non-standard `<banner>` element, not a header, nav, footer or
+    aside. Text in that position already reached content.md under the same
+    rule; a table now does too.
+
+
+### P57-5: with P53
+
+P53 (on its own branch at the time of writing) moves a group hung off the
+body as one block, decided by its whole text. This pass runs after it and
+looks only at tables and pictures still on furniture. `git merge-tree` of the
+two branches merges the bridge without a conflict, and on the merged tree
+both test files pass, 45 of 45. Where the two disagree (a block whose text
+reads out of a menu, holding an image that is not in one), the image goes to
+the body by its position and its block stays: a picture written on its own
+beats one missing. P53-5's first bullet is this entry.
+
+### P57-6: what this does not cover
+
+- **Chrome the page does not mark as chrome.** A banner in a layout table, a
+  `<div class="menu">`, or a landmark given only by an ARIA `role` (`banner`,
+  `navigation`, `contentinfo`, `complementary`, which the sanitizer keeps)
+  reads as content. Text in those places already did; tables and pictures
+  now follow the same rule.
+- **Chrome below the first heading outside a `<footer>`.** The backend files a
+  header, nav or aside there on the body, and the bridge only ever moves
+  furniture to the body, so it reaches content.md as before.
+- **Counts that disagree with chrome and content both above the heading** are
+  left as the backend filed them, with the warning, rather than guessed.
+
+### P57-7: the tests
+
+`tests/test_pre_heading_blocks.py` extracts the fixture and checks every
+surface: the lead picture, figure, linked badge and both tables, with their
+OCR text, in content.md, content.txt and the chunks; the header's and footer's
+out of all three, still in content.doctags and `tables`; the layers in
+content.json; and both asset lists against the OCR readings each surface
+holds. Ten kinds of table or picture before a heading (a picture with and
+without alt text, a table with and without a caption, a figure, a linked
+picture in a paragraph, a table in a `<div>`, a picture and table in a
+`<section>`, a table holding a picture, and two pictures around a table) must
+read as they do on a page with no heading, on every surface; five kinds of
+chrome must stay out. A picture and a table inside a list item before a
+heading must reach every surface, whatever P53 does with the list around
+them. Three cases cover counts that disagree: all content,
+chrome above with the mismatch below, and both kinds above, which warns. The
+snapshot parser's positions are checked directly, including a heading inside
+a table that does not end the lead. Against master's bridge, all ten kinds,
+both list items and the fixture fail; the five chrome cases pass, guarding
+what must not change.
+## P65: a heading in a page's footer sent the rest of the footer to the body (2026-10-12)
+
+docling's HTML backend files a `<footer>`'s content on the furniture layer,
+which every text surface skips, but its heading handler sets the body layer at
+every heading, inside a footer as anywhere, and that holds until the footer
+ends. So
+
+```html
+<h1>T</h1><p>Body.</p><footer><h2>Company</h2><p>About us</p></footer>
+```
+
+wrote `## Company` and `About us` into content.md, content.txt and a chunk.
+Site footers with column headings ("Company", "Resources", "Contact") are
+common, and on the three real pages below that had one, the footer was from a
+third to nearly two thirds of content.md. Measured with docling-slim 2.132.0 and
+docling-core 2.99.0 on master 1a40fc6, without a browser; every figure below
+was taken again against master 1d3ba20, with P50's backend, and holds. P58-5 recorded the
+case. The fixture is `tests/fixtures/footer_headings.html`; every word in it
+is made up.
+
+### P65-1: what the backend made of a footer with a heading
+
+- **The heading and all that follows it in the footer** went on the body
+  layer. Where the page has a heading before the footer, the footer's heading
+  hangs from that one, not from the footer's `footer` section group, which is
+  left empty, and what follows hangs from the footer's heading.
+- **What follows the footer was chunked under the footer's last heading.** The
+  chunker tracks headings in reading order, so `<p>After.</p>` after the
+  example above was chunked under `T` › `Company`, and in the fixture the
+  paragraph after the footer under `Planting a spring garden` › `Company` ›
+  `Privacy`. An `<h1>` in a footer started a section of its own.
+- **A picture after the heading** went on the body, and the text recognized
+  in it into content.md and content.txt; an `<img>` in the heading itself left
+  its alt text as a caption hung from the document's root.
+- **The tree does not say where the footer ends.** A heading in a footer's
+  table cell or `<details>` sent the rest of the footer to the body without
+  being the parent of any of it: after the table or the details closed, the
+  footer's text hung from the footer group again, on the body. The other way,
+  a heading deeper than the section it is in (`<h4>` under an `<h1>`) makes the
+  backend open `header-N` groups inside the footer group, and content after
+  the footer then hangs from them, inside the footer's subtree. Neither "the
+  footer heading's subtree" nor "under the footer group" is the footer.
+
+The bridge's own reflow (P2-3) let some footer content through as well. It
+tested every furniture text against the text of the page's
+header/nav/footer/aside regions, and a footer item fails that test when its
+text is not the region's as the page spells it: a picture's alt text, which
+the backend makes a caption; a list item whose text is in an inline group
+under it, which is empty and was written `- ` (P53-2 lists the others, a curly
+quote or a dash the backend rewrites).
+
+### P65-2: everything the backend made inside a footer stays there
+
+The bridge converts with a subclass of `HTMLDocumentBackend` that overrides
+`_use_footer`, the context the backend opens for each `<footer>`. It notes how
+long each of the document's item lists is when the footer opens, and when it
+closes files every item made since on the furniture layer: the footer's
+section group, its headings and the `header-N` groups they open, its lists,
+tables, table-cell groups, pictures and their captions. The backend never
+deletes an item while it walks the page (rich table cells only re-parent
+theirs), so what a list gained in between is exactly what the backend made
+inside that footer. The reflow leaves those items on furniture without a text
+test, since they are known to have come from a footer. The backend's own
+state when a footer closes is as it was, so what comes after a footer is
+filed as before; it is only no longer chunked under the footer's headings.
+
+The tree is left as docling built it: in content.json a footer heading still
+hangs from the page's heading, now on the furniture layer with all under it.
+Everything that was not made inside a `<footer>` keeps the text test, so
+content before the first heading and header, nav and aside chrome are decided
+as before.
+
+Two other ways were considered and dropped. Marking each heading inside a
+footer in the HTML handed to the backend, as P14-56 marks sub- and
+superscripts, and filing the marked heading's subtree, misses the table-cell
+and `<details>` shapes above. Matching the snapshot's footer regions by text
+inherits the text test's misreadings, and a footer's words can also be the
+page's. Overriding the heading handler instead would have needed a second fix
+for what the handler makes besides the heading (its groups, a picture and
+caption inside it); the footer's own context covers them with one rule.
+
+`_use_footer` is the backend's private method, as the ones P50's backend
+extends are, and the subclass is built on whichever backend reads the page,
+P50's or docling's own. The bridge checks the method is there, as it checks
+P50's: a docling that renames it fails a test, and a capture then reads the
+page without the override, and on a page with a `<footer>` a manifest warning
+says that a heading in one sends the rest of it to the text. If the method
+changes its signature, the call fails and the bundle build says docling could
+not parse the snapshot.
+
+### P65-3: real pages
+
+Ten public pages, each captured with `--mode faithful` and with the default
+clean mode, `--no-ocr --no-videos`, in a cloud container whose Chromium is
+141, standing in for the pinned 153. Each capture's `content.html` was then
+extracted with master's bridge and this one. Three more could not be
+captured: www.gov.uk exited 5 because its Content-Security-Policy refuses
+the print stylesheet WebShot adds, www.w3.org answered a Cloudflare bot check
+(exit 4), and stripe.com did not finish in 300 s in either mode.
+
+| Page | Mode | `<footer>`s | headings in them | content.md lines | chunks |
+|---|---|---|---|---|---|
+| www.apple.com | faithful | 1 | 12 (`h2`, `h3`) | 154 → 64 | 47 → 30 |
+| getbootstrap.com | faithful | 1 | 4 (`h5`) | 41 → 15 | 17 → 11 |
+| www.mozilla.org/en-US/ | faithful | 2 | 5 (`h2`) | 120 → 81 | 49 → 38 |
+| www.mozilla.org/en-US/ | clean | 2 | 5 (`h2`) | 118 → 81 | 47 → 38 |
+
+Lines are content.md's non-blank lines. Clean mode hides a `<footer>` only
+where it is a child of `<body>`, which is why Apple's and Bootstrap's are gone
+there and Mozilla's is not. Of the other pages, bbc.com/news,
+developer.mozilla.org (the `<footer>` reference page), www.python.org,
+react.dev/learn and en.wikipedia.org/wiki/Footer keep a footer with no heading
+in both modes, and wordpress.org/news and www.nhs.uk/conditions/flu have no
+`<footer>` in their snapshot. Those 16 captures' content.md, content.txt,
+chunk seeds and doctags are byte for byte as before.
+
+Every line that left content.md was footer text, and none was added. Of the
+214 text items that moved to furniture, all are text, alt text or a
+placeholder inside one of that page's footers, checked against the
+`content.html` with the standard library's parser, and none moved the other
+way. 206 moved because a footer heading had put them on the body. The other
+8 were footer furniture the text test had sent there: the alt text of the
+footer logo on bbc.com and MDN, in both modes, a caption of a furniture
+picture that no surface writes, so only content.json changes; Bootstrap's
+two empty list items, written `- - `; and Mozilla's newsletter sign-up
+text, whose dash the backend rewrites, with its e-mail field's placeholder.
+
+No chunk outside a footer changed its heading path on these pages.
+
+### P65-4: golden corpus
+
+No case's output moved. Every golden `content.html` was extracted with
+master's bridge and this one, and content.json, content.md, content.txt,
+the doctags, the chunk seeds and the warnings are identical for all 24. Three
+fixtures carry a footer and none holds a heading; the only footer in a
+golden's `content.html`, `article-faithful`'s, is one line of text the text
+test already kept.
+
+### P65-5: what this does not cover
+
+- **A footer picture's figure chunk.** WebShot writes a figure chunk for every
+  picture matched to a harvested asset, on either layer (docs/04-spec.md
+  §5.6), under the heading the capture recorded beside the image. A footer
+  logo keeps its chunk, as a header logo does: 6 of the 20 captures had one,
+  and on www.mozilla.org its heading was the footer's "Follow @Firefox". For
+  such a picture `pictured_asset_ids` also says its recognized text reached
+  content.md and content.txt, which a furniture picture's does not. That was
+  already so for chrome pictures before the first heading.
+- **Header, nav and aside after the first heading.** The backend files those
+  on furniture only by its first-heading rule, and the bridge moves furniture
+  back, never forward, so after the first heading they are body. Not all of
+  that is chrome: on wordpress.org/news each post's own `<header>` holds its
+  title and date, and www.mozilla.org's sections have headers of their own.
+  How much is chrome was not measured.
+- **A footer that is content.** A quotation's attribution
+  (`<blockquote>…<footer>`) or an article's byline footer is furniture by
+  docling's footer rule and was before; with a heading in it, now all of it is.
+  None of the captured pages had a heading in such a footer.
+
+### P65-6: the tests
+
+`tests/test_footer_headings.py` reads what the page says inside and outside
+its footers off the source with the standard library's parser, never off
+docling's model. On the fixture, whose footer has a heading, a deeper linked
+heading with a picture after it, a heading in a table cell, one in a
+`<details>` and a curly apostrophe, it checks that no footer text reaches
+content.md, content.txt or a text chunk, that the picture's recognized text is
+in neither text surface, that the body layer is exactly the text outside the
+footer, that content.json keeps every footer line on the furniture layer with
+its four headings as headings, and that the paragraph after the footer is
+chunked under the page's own section. Eight smaller pages each hold one shape:
+the case as reported, the deeper heading, the table cell, the `<details>`, a
+heading that is only an image, an `<h1>` in an article's footer, a page whose
+only heading is in its footer, and nested footers. A page without a footer
+heading reads as before. Two more check that the backend still has
+`_use_footer`, and that without it a page with a footer is read as docling
+reads it and says so in its warnings, while one without a footer says nothing.
+Against master's bridge, 15 of the 16 fail; the one that passes is the guard
+for a page without a footer heading.
+## P76: a frame wait that ran out blamed the page (2026-10-12)
+
+After P34 merged (cd41eb2), a full `tools/verify.py` on `fix/smooth-scroll-restore`
+with that master merged in, at a load average near 650 on the Mac, failed in
+three places, each at the pass's first step. In the golden corpus's second
+path, `captions-read`'s stderr went from "Lazy-load pass finished after 4
+step(s)" to "after 1 step(s)", with P34's `unrendered` warning added. In
+pytest, `test_growth_only_where_clean_mode_removes_ends_the_pass[light]`
+failed with `LazyLoadPass(steps=1, ended='unrendered', height=1968)`, and
+`test_the_pass_waits_for_a_page_that_has_not_rendered_yet[late-frame-smooth]`
+failed too. Both tests passed when run again alone, at a load near 620.
+
+So the first step's frame wait ran out: the page's 30 s timer fired and no
+`requestAnimationFrame` callback came. P34-3 had measured the longest
+first-step wait at 3.4 s in 256 runs at a load of 520 to 680, and twenty
+sequential runs on master 1a40fc6 at a load near 600 waited 0.154 s at most.
+
+### P76-1: load alone does not stop frames here
+
+This was measured on a 4-core Linux VM, not the Mac, with the Chromium the
+project pins (153.0.8010.12, headless shell, Playwright 1.63). macOS's
+scheduler, its memory compressor and its GPU stack were not available.
+
+The probe ran the real `scroll_to_load` over `endless_feed.html#light` in clean
+mode, four workers at a time, each with its own browser as an xdist worker
+has. Only the frame wait was replaced, by the same wait with one more timer
+in it: no `requestAnimationFrame` loop. When a wait passed 5 s, the probe
+recorded what the page saw (`visibilityState`, its `paint` entries, how late
+that timer fired) and, for every thread of every browser process, its state,
+its CPU time, its time waiting to run (`schedstat`) and its `wchan`, with the
+browser's own account from `SystemInfo.getProcessInfo`. Chromium logged to
+stderr (`--enable-logging=stderr --v=0`), collected through Playwright's
+`pw:browser` output.
+
+| Load | Runs | Waits | First step: median / p99 / max | Later steps: max | Over 5 s |
+|---|---|---|---|---|---|
+| pytest `-n 4` and the golden corpus, each in a loop, and 140 busy processes; load average 156 (39 runnable a core) | 282 | 3,964 | 38 / 116 / 167 ms | 131 ms | 0 |
+| 100 busy processes, and memory held to 1.6–3.1 GB free for two minutes (memory pressure, PSI "some", up to 20%) | 247 | 3,495 | 22 / 78 / 97 ms | 148 ms | 0 |
+| 40 busy processes, and 16.5 GiB held against the session's 13.4 GiB memory limit with 8 GiB of swap: 11 GiB swapped in and 15 GiB out over the run, PSI "some" 11 to 41% | 343 | 5,307 | 9 / 62 / 71 ms | 188 ms | 0 |
+
+Every run ended `removed-growth` with all 80 related logs. In the first
+load, the pytest round failed only one test, one that fails at idle on this
+machine too; the endless-feed tests passed, and the golden corpus showed no
+change to a lazy-load line. (On Linux it differs in 20 of 26 cases at idle,
+because the goldens are a macOS recording.) In the second, the OOM killer
+ended the larger of the two memory holders after two minutes, as it was set
+up to.
+
+At the Mac's per-core load, no frame here was later than 0.19 s. A 30 s wait is
+not every process running slowly. Something stopped.
+
+### P76-2: which stop ends the pass that way
+
+Each of these ran once, at idle. At the first step, the probe stopped one
+process of its own browser (`SIGSTOP`, found by PID in its own process tree)
+or one thread of one (`PTRACE_SEIZE` and `PTRACE_INTERRUPT`, which stop that
+thread alone), or killed the GPU process. Where the GPU process could
+otherwise have drawn a frame before the stop took hold, it was stopped first.
+The bound was 30 s, as in a capture, unless a row says otherwise.
+
+| Stopped | For | Frame wait | Pass |
+|---|---|---|---|
+| GPU process (bound 90 s) | 40 s | frame at 40.0 s, when it resumed | `removed-growth` |
+| GPU process | 35 s | ran out at 30.0 s | `unrendered`, step 1 |
+| its display compositor thread (`VizCompositorThread`) alone | 35 s | ran out at 30.0 s | `unrendered`, step 1 |
+| its main thread alone | 35 s | ran out at 30.0 s | `unrendered`, step 1 |
+| renderer, with the GPU process | 35 s | frame at 35.5 s, when they resumed | `removed-growth` |
+| renderer; GPU process let go after 1 s | 35 s | frame at 36.5 s, when the renderer resumed | `removed-growth` |
+| renderer's compositor thread alone | 35 s | frame at 35.1 s, when it resumed | `removed-growth` |
+| every process of the browser | 35 s | frame at 35.5 s | `removed-growth` |
+| browser process; GPU process let go after 1 s | 35 s | frame at 1.5 s | `removed-growth` |
+| network service; GPU process let go after 1 s | 35 s | frame at 1.5 s | `removed-growth` |
+| GPU process killed, once; twice, 3 s apart | | 24 ms; 27 ms | `removed-growth` |
+
+In each `unrendered` row, the page was `visible`, had a first paint 36 to 76 ms
+after it opened, and its 5 s timer fired at 5,000 to 5,000.7 ms. While the
+whole GPU process was stopped, its threads stood in state `T` and their CPU
+time did not move from the 5 s sample to the 30 s one. The renderer's threads
+were sleeping (`S`), not waiting to run. `SystemInfo.getProcessInfo` still
+answered, and it showed the GPU process's CPU time fixed at 0.06 s. Chromium
+logged nothing for any stop, and nothing in the GPU process acted on a stopped
+main thread within 35 s. A kill was logged as "GPU process exited
+unexpectedly: exit_code=9" and "The GPU process has crashed 1 time(s)", and
+the relaunch took 9 to 10 ms by Chromium's own report.
+
+Two stops leave the page's main thread unable to run: its own process, and the
+renderer's compositor thread, on which the main thread blocked (its 5 s timer
+never fired). In all four runs where the page's process or compositor thread
+was stopped, the page drew a frame before its overdue timer ran when it
+resumed, so the wait could not run out. Stopping the browser process did not
+stop frames. What the page answered reached the probe only when the browser
+resumed, 37 s in, and it said a frame had come.
+
+### P76-3: what happened on the Mac
+
+The reported failure needs a timer that fired while no frame came. The only
+stops that gave that were in the GPU process, which in this build holds the
+display compositor that starts every frame: the process, its compositor
+thread or its main thread. There, the page was running, and nothing drew it.
+So `unrendered` was true: no frame came for 30 s. What was wrong was the
+warning, which said "the page did not render" and did not say that the page
+was running, visible, and drawn before.
+
+What held the Mac's GPU process was not reproduced, and is not known. Nothing
+measured here supports another bound. The longest wait under load here was
+0.19 s, and the Mac's was more than 30 s, by an unknown amount. A capture that
+waited longer would wait longer on every page that is not drawn.
+
+### P76-4: the change
+
+When it runs out, the frame wait now resolves to what the page could see:
+`document.visibilityState`, whether a `paint` entry is on record, and how late
+its own timer fired. `LazyLoadPass.stall` (`FrameStall`) carries these, and
+the warning says which of them holds, testing the first that applies in this
+order:
+
+| The page saw | The warning adds |
+|---|---|
+| it was hidden | a browser does not render a hidden page |
+| its timer fired 1 s or more late | its main thread was busy or not run, so it cannot say what the browser did |
+| it was drawn before, visible, timers on time | the page was running and the browser drew no frame for it; capturing again may get further |
+| never drawn, visible, timers on time | something held back its first frame: a render-blocking resource, or a browser that had not drawn one |
+
+The lateness test comes before the claim that the page was running, because
+that claim rests on the timer being on time. A second is more than five
+times the longest wait measured under load here. No stop measured here
+reaches that branch, since a page that was not run drew its frame first.
+It guards against a claim the page could not support. The hidden branch rests
+on the HTML standard (a hidden document gets no rendering opportunities), not
+on a measurement: a headless page is always visible.
+
+The tests that scroll the fixture now print the browser's processes, each
+with its type, PID and CPU time, before and after the pass when an assertion
+fails. On the Mac, the next failure says whether the GPU process was replaced,
+idle, or busy.
+
+### P76-5: the tests
+
+`test_a_browser_that_stops_drawing_is_told_apart_from_the_page` waits for the
+fixture's first paint, polling on a timer rather than on frames, and finds
+the GPU process through `SystemInfo.getProcessInfo`. It fails if there is
+none. It stops the process with `SIGSTOP`, waits 0.5 s for any frame already
+on its way, and runs the pass with a 1.5 s bound. The pass ends `unrendered`
+at step 1 with 20 related logs, and the page reports that it was visible and
+drawn before. On Windows, which has no `SIGSTOP`, it is skipped. On master,
+the pass ends the same way, and the test fails because nothing records what
+the page saw. The held `#late-frame` cases now also check that the page was
+visible and never drawn. A unit test pins the text of each of the four
+warnings.
+
+### P76-6: what this does not cover
+
+- **macOS.** Nothing here ran on the Mac, and why its GPU process stopped
+  drawing for 30 s is open. The new test runs in CI's macOS leg, which shows
+  whether stopping the GPU process stops frames there as it does on Linux.
+- **The renderer's own scheduling.** That a resumed page draws before its
+  overdue timer runs was seen in four runs, in this build. It is Blink's
+  scheduler, not a contract.
+- **Memory.** Linux's swap is not macOS's compressor, and the run without swap
+  held memory pressure for two minutes only.

@@ -582,6 +582,7 @@ def test_each_unread_frame_says_what_the_bundle_holds_of_it() -> None:
             (2, "", "asset-002"),
             (3, "", "asset-003"),
             (4, "", ""),
+            (5, "", "asset-005"),
         ]
     ]
     warnings = unread_text_warnings(
@@ -590,11 +591,14 @@ def test_each_unread_frame_says_what_the_bundle_holds_of_it() -> None:
             _asset("asset-001", "recognized"),
             _asset("asset-002", "recognized"),
             _asset("asset-003", ""),
+            _asset("asset-005", "recognized"),
         ],
         # asset-002's picture was not attached: the count check skipped it.
         pictured={"asset-001", "asset-003"},
+        # asset-005's picture stayed page chrome, which no serializer writes.
+        chrome_pictured={"asset-005"},
     )
-    assert len(warnings) == 4
+    assert len(warnings) == 5
     assert '`body > iframe:nth-of-type(1)` ("A")' in warnings[0]
     assert (
         "content.html holds its screenshot, asset-001, in its place, and the "
@@ -614,6 +618,13 @@ def test_each_unread_frame_says_what_the_bundle_holds_of_it() -> None:
     )
     assert "Its text is in the PDF but not in content.html" in warnings[2]
     assert "It was not captured as a visual asset either." in warnings[3]
+    # Its figure chunk and its picture's annotation hold the text; content.md
+    # and content.txt do not (docs/09 P57).
+    assert (
+        "The text OCR recognized there, not the frame's own, is in content.json "
+        "and chunks.jsonl, and not in content.md or content.txt." in warnings[4]
+    )
+    assert "assets.json only" not in warnings[4]
 
 
 def test_a_frame_is_dom_only_when_the_snapshot_read_its_document() -> None:
@@ -632,11 +643,17 @@ def test_a_frame_is_dom_only_when_the_snapshot_read_its_document() -> None:
 def test_a_closed_root_check_that_did_not_run_says_so() -> None:
     """None is "could not look", which is not the same as "found none"."""
     ran = unread_text_warnings(
-        {"unreadFrames": [], "closedShadowHosts": []}, [], pictured=()
+        {"unreadFrames": [], "closedShadowHosts": []},
+        [],
+        pictured=(),
+        chrome_pictured=(),
     )
     assert ran == []
     failed = unread_text_warnings(
-        {"unreadFrames": [], "closedShadowHosts": None}, [], pictured=()
+        {"unreadFrames": [], "closedShadowHosts": None},
+        [],
+        pictured=(),
+        chrome_pictured=(),
     )
     assert len(failed) == 1
     assert failed[0].startswith("Closed shadow roots could not be checked")
@@ -644,6 +661,7 @@ def test_a_closed_root_check_that_did_not_run_says_so() -> None:
         {"unreadFrames": [], "closedShadowHosts": ["div#a", "x-card >> div#b"]},
         [],
         pictured=(),
+        chrome_pictured=(),
     )
     assert found[0].startswith(
         "2 closed shadow root(s) hold text, on `div#a`, `x-card >> div#b`."

@@ -356,12 +356,13 @@ there with its reason, and the run's job summary lists every skip.
    screenshot scrolls what it photographs into view, and Chromium prints a
    frame and a scrolling box as they stand, so every scroll position the
    harvest moved, in every tree, is put back once its visuals are captured.
-   One that cannot be put back is a warning (P16-9, P16-12). A frame prints
-   its box, not its document. So before the bundle, each frame the page can
-   script, and a reader can scroll, is grown on trial to its document's height
-   at the printed width. What still falls outside a frame's box is a warning
-   naming the frame. A frame whose author turned its scrolling off is not
-   grown, and its warning says that neither the page nor the PDF shows the
+   It is put back at once, whatever the page's `scroll-behavior`, and read
+   back. One that did not go back is a warning (P16-9, P16-12, P39). A frame
+   prints its box, not its document. So before the bundle, each frame the page
+   can script, and a reader can scroll, is grown on trial to its document's
+   height at the printed width. What still falls outside a frame's box is a
+   warning naming the frame. A frame whose author turned its scrolling off is
+   not grown, and its warning says that neither the page nor the PDF shows the
    text it hides (P16-16).
    Extraction stops at the page-script line; print preparation may cross it,
    decided frame by frame (item 10, docs/09 P16-21). A frame from another origin may

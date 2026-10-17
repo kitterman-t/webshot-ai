@@ -106,6 +106,13 @@ once everything else has held still for a few seconds, and a warning names the
 part that was still growing. To keep that part, use `--mode faithful`; the
 pass then scrolls on, up to `--max-scrolls`.
 
+A page sees a scroll only when the browser draws it, so the pass also stops
+when nothing is drawn for 30 seconds after a scroll, and the warning says what
+the page saw. If the page was running and the browser drew no frame for it,
+the stall was the browser's, not the page's: capture again. If the page had
+never been drawn, something held back its first frame, often a script or
+stylesheet that blocks rendering and has not arrived.
+
 ### The run stops with "The browser's process for this page crashed"
 
 The browser's renderer for the page died, and nothing was captured (exit 5).

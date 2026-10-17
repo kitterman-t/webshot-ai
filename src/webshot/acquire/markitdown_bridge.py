@@ -50,10 +50,13 @@ and `ooxml` rewrite are read through `defusedxml` too.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import csv
 import dataclasses
 import html
 import io
+import mimetypes
 import posixpath
 import re
 import secrets
@@ -65,7 +68,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 from xml.etree.ElementTree import Element
 
 from bs4 import BeautifulSoup
@@ -190,6 +193,156 @@ class ConvertedMarkdown:
     title: str | None
     #: What the conversion could not carry into `markdown`, for the manifest.
     warnings: tuple[str, ...] = ()
+
+
+class _WarnedResult(DocumentConverterResult):
+    """A converter's Markdown, and what it could not carry into it.
+
+    MarkItDown's result has no field for that, and returns the object a
+    converter made as it is, so whatever a converter here says reaches
+    `_convert_bytes` the same way a zip's does.
+    """
+
+    def __init__(
+        self, markdown: str, warnings: tuple[str, ...] = (), *, title: str | None = None
+    ) -> None:
+        super().__init__(markdown, title=title)
+        self.warnings = warnings
+
+
+# --------------------------------------------------------------------------- #
+# Pictures
+# --------------------------------------------------------------------------- #
+
+#: The picture formats Chromium draws in an `<img>`.  Anything else renders as
+#: a broken frame around the alt text, which the capture then keeps as if it
+#: were the picture (docs/09 P36).
+DRAWABLE_PICTURES = frozenset(
+    {
+        "image/apng",
+        "image/avif",
+        "image/bmp",
+        "image/gif",
+        "image/jpeg",
+        "image/png",
+        "image/svg+xml",
+        "image/vnd.microsoft.icon",
+        "image/webp",
+        "image/x-icon",
+    }
+)
+#: Formats Pillow reads that Chromium does not draw: written again as PNG.
+CONVERTED_PICTURES = frozenset({"image/tiff"})
+#: What a format nothing here draws is called, for a person reading why.
+PICTURE_FORMAT_NAMES = {
+    "image/emf": "an Enhanced Metafile (EMF)",
+    "image/x-emf": "an Enhanced Metafile (EMF)",
+    "image/wmf": "a Windows Metafile (WMF)",
+    "image/x-wmf": "a Windows Metafile (WMF)",
+    "image/vnd.ms-photo": "an HD Photo (JPEG XR)",
+}
+
+
+def _as_png(data: bytes) -> bytes | None:
+    """A TIFF's first page as PNG, or None when Pillow cannot read it."""
+    from PIL import Image  # only a TIFF needs it
+
+    try:
+        with Image.open(io.BytesIO(data)) as picture:
+            if picture.mode not in ("1", "L", "LA", "P", "RGB", "RGBA"):
+                picture = picture.convert("RGBA" if "A" in picture.mode else "RGB")
+            output = io.BytesIO()
+            picture.save(output, "PNG")
+    except (OSError, ValueError, Image.DecompressionBombError):
+        return None
+    return output.getvalue()
+
+
+def _drawable(src: str) -> tuple[str | None, str]:
+    """A `data:` picture as the page can draw it, or why it cannot be.
+
+    The reason completes "a picture is not in the page: …".
+    """
+    header, _, payload = src.partition(",")
+    media_type = header[5:].split(";")[0].strip().lower()
+    if media_type in DRAWABLE_PICTURES:
+        return src, ""
+    if media_type in CONVERTED_PICTURES and header.lower().endswith(";base64"):
+        try:
+            data = base64.b64decode(payload, validate=True)
+        except (binascii.Error, ValueError):
+            return None, "its data could not be decoded"
+        png = _as_png(data)
+        if png is not None:
+            return f"data:image/png;base64,{base64.b64encode(png).decode()}", ""
+        return None, "a TIFF that Pillow could not read"
+    name = PICTURE_FORMAT_NAMES.get(media_type, media_type or "an unnamed format")
+    return None, f"{name}, which a browser cannot draw"
+
+
+def _picture_warning(alt: str, reason: str) -> str:
+    named = f" (\u201c{alt}\u201d)" if alt.strip() else ""
+    return f"a picture{named} is not in the page: {reason}."
+
+
+def _picture_placeholder(alt: str, reason: str) -> str:
+    """What the page shows where a picture could not be drawn, as plain text."""
+    named = f": {alt}" if alt.strip() else ""
+    return f"[Picture{named} \u2014 not shown: {reason}]"
+
+
+@dataclass(slots=True)
+class _BookPictures:
+    """An EPUB's archive, for the pictures its chapters name by path."""
+
+    archive: zipfile.ZipFile
+    warnings: list[str] = dataclasses.field(default_factory=list)
+
+    def picture(self, src: str, chapter: str) -> tuple[str | None, str]:
+        path = posixpath.normpath(
+            posixpath.join(posixpath.dirname(chapter), unquote(urlsplit(src).path))
+        )
+        if path not in self.archive.NameToInfo:
+            return None, f"it names {src}, which the book does not hold"
+        media_type = mimetypes.guess_type(path)[0] or ""
+        data = base64.b64encode(self.archive.read(path)).decode()
+        return _drawable(f"data:{media_type};base64,{data}")
+
+
+def _pictures_as_data(
+    soup: BeautifulSoup, book: _BookPictures | None, chapter: str | None
+) -> list[str]:
+    """Every `<img>` as a picture the page draws from its own bytes, or text.
+
+    A picture the document holds becomes a `data:` URL; one in a format the
+    browser cannot draw, or one named by a path, becomes a line of text saying
+    so, and a warning.  A path is never left for the browser to resolve: the
+    page's base is the document's folder, so a book's `images/a.png` loaded
+    whatever file of that name sat beside the book.  A remote picture is the
+    document's own, fetched as an HTML file's would be.
+    """
+    warnings: list[str] = []
+    for image in soup.find_all("img"):
+        src = image.get("src")
+        if not isinstance(src, str) or not src.strip():
+            continue
+        scheme = urlsplit(src.strip()).scheme.lower()
+        if scheme in ("http", "https"):
+            continue
+        if scheme == "data":
+            drawn, reason = _drawable(src.strip())
+        elif book is not None and chapter is not None and not scheme:
+            drawn, reason = book.picture(src.strip(), chapter)
+        else:
+            drawn, reason = None, f"it names {src}, a path the page cannot reach"
+        if drawn is not None:
+            image["src"] = drawn
+            continue
+        alt = image.get("alt")
+        alt = alt if isinstance(alt, str) else ""
+        warnings.append(_picture_warning(alt, reason))
+        image.replace_with(_picture_placeholder(alt, reason))
+    return warnings
 
 
 def _equation_latex(equation: Element) -> str:
@@ -424,9 +577,10 @@ class _TextHtmlConverter(HtmlConverter):
     `convert` is MarkItDown 0.1.8's `HtmlConverter.convert`, because upstream
     names its writer inside that method rather than taking it as a parameter;
     `test_the_text_html_converter_is_upstreams_on_plain_text` holds the copy to
-    the original.  It differs in four places: the attributes markdownify
-    writes are made safe first, the writer is `_TextMarkdownify`, the text
-    the too-deeply-nested fallback returns is encoded, where upstream writes it
+    the original.  It differs in five places: pictures are drawn from their own
+    bytes or said to be missing (docs/09 P36), the attributes markdownify
+    writes are made safe, the writer is `_TextMarkdownify`, the text the
+    too-deeply-nested fallback returns is encoded, where upstream writes it
     into Markdown raw, and two lists that meet are kept apart.
 
     `list_seams` is for a reader that joins several documents' Markdown, as
@@ -437,6 +591,10 @@ class _TextHtmlConverter(HtmlConverter):
     def __init__(self, list_seams: _ListSeams | None = None) -> None:
         super().__init__()
         self._list_seams = list_seams
+        #: The book whose chapters this is reading, set by `_TextEpubConverter`
+        #: for the length of one conversion; its chapters name pictures by
+        #: their path inside it.
+        self.book: _BookPictures | None = None
 
     def convert(
         self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
@@ -446,6 +604,14 @@ class _TextHtmlConverter(HtmlConverter):
         soup = BeautifulSoup(file_stream, "html.parser", from_encoding=encoding)
         for script in soup(["script", "style"]):
             script.extract()
+        # Before the attributes are encoded: a placeholder quotes the alt text
+        # as text, which markdownify then encodes once.
+        chapter = getattr(file_stream, "name", None) if self.book else None
+        picture_warnings = _pictures_as_data(
+            soup, self.book, chapter if isinstance(chapter, str) else None
+        )
+        if self.book is not None:
+            self.book.warnings += [f"{chapter}: {w}" for w in picture_warnings]
         _attributes_as_text(soup)
         body = soup.find("body")
         target = body if body else soup
@@ -465,9 +631,10 @@ class _TextHtmlConverter(HtmlConverter):
             markdown = _as_text_lines(target.get_text("\n", strip=True))
         if self._list_seams is None:
             markdown = seams.resolve(markdown)
-        return DocumentConverterResult(
-            markdown=markdown.strip(),
+        return _WarnedResult(
+            markdown.strip(),
             title=None if soup.title is None else soup.title.string,
+            warnings=tuple(picture_warnings),
         )
 
 
@@ -490,11 +657,28 @@ def _writing_html_as_text(
 
 
 class _TextDocxConverter(DocxConverter):
-    """Word, whose every string mammoth hands markdownify as HTML."""
+    """Word, whose every string mammoth hands markdownify as HTML.
+
+    mammoth writes each picture as a `data:` URL, which MarkItDown truncates
+    unless asked to keep it (`keep_data_uris`, docs/09 P36).
+    """
 
     def __init__(self) -> None:
         super().__init__()
         _writing_html_as_text(self)
+
+    def convert(
+        self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
+    ) -> DocumentConverterResult:
+        result: DocumentConverterResult = super().convert(
+            file_stream, stream_info, **kwargs
+        )
+        said = getattr(result, "warnings", ())
+        return _WarnedResult(
+            result.markdown,
+            title=result.title,
+            warnings=tuple(f"The document: {warning}" for warning in said),
+        )
 
 
 class _TextEpubConverter(EpubConverter):
@@ -521,13 +705,22 @@ class _TextEpubConverter(EpubConverter):
     def convert(
         self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
     ) -> DocumentConverterResult:
-        result: DocumentConverterResult = super().convert(
-            file_stream, stream_info, **kwargs
+        data = file_stream.read()
+        writer: _TextHtmlConverter = self._html_converter
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            writer.book = _BookPictures(archive)
+            try:
+                result: DocumentConverterResult = super().convert(
+                    io.BytesIO(data), stream_info, **kwargs
+                )
+                said = tuple(writer.book.warnings)
+            finally:
+                writer.book = None
+        return _WarnedResult(
+            self._list_seams.resolve(result.markdown),
+            said,
+            title=html.unescape(result.title) if result.title else result.title,
         )
-        result.markdown = self._list_seams.resolve(result.markdown)
-        if result.title:
-            result.title = html.unescape(result.title)
-        return result
 
 
 # --------------------------------------------------------------------------- #
@@ -592,17 +785,65 @@ WORKBOOK_TEXT_PARTS: dict[str, Callable[[Element], bool]] = {
 }
 
 
+#: MarkItDown's Markdown for one picture: `![alt](src)` on a line of its own,
+#: with `[`, `]` and line breaks taken out of the alt text.
+_PICTURE_MARKDOWN_RE = re.compile(r"\n!\[(?P<alt>[^\]\n]*)\]\((?P<src>[^)\s]*)\)\n")
+
+
 class _TextPptxConverter(PptxConverter):
-    """PowerPoint, whose text MarkItDown appends to the Markdown as it reads it."""
+    """PowerPoint, whose text MarkItDown appends to the Markdown as it reads it.
+
+    A picture is the deck's own bytes as a `data:` URL (`keep_data_uris`), or
+    a line of text and a warning (docs/09 P36).  Without that, MarkItDown wrote
+    `![alt](Picture2.jpg)`, a name it made up, which the page resolved in the
+    deck's folder: a request that failed, or another file of that name.
+    """
 
     def convert(
         self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
     ) -> DocumentConverterResult:
+        self._picture_warnings: list[str] = []
         deck = ooxml.rewrite_parts(file_stream.read(), DECK_TEXT_PARTS)
         result: DocumentConverterResult = super().convert(
             io.BytesIO(deck), stream_info, **kwargs
         )
-        return result
+        return _WarnedResult(
+            result.markdown,
+            title=result.title,
+            warnings=tuple(self._picture_warnings),
+        )
+
+    def _convert_picture_to_markdown(self, shape: Any, **kwargs: Any) -> str:
+        markdown: str = super()._convert_picture_to_markdown(shape, **kwargs)
+        match = _PICTURE_MARKDOWN_RE.fullmatch(markdown)
+        if match is None:
+            raise RuntimeError(
+                "MarkItDown no longer writes a picture as `![alt](src)` on a line "
+                "of its own, so WebShot cannot tell what it would have the page "
+                "load (docs/09 P36)."
+            )
+        alt, src = match["alt"], match["src"]
+        if src.lower().startswith("data:"):
+            drawn, reason = _drawable(src)
+        else:
+            # No bytes to read: the picture is linked, not held in the deck.
+            drawn, reason = None, "the deck links to it rather than holding it"
+        if drawn is not None:
+            return f"\n![{alt}]({drawn})\n"
+        self._picture_warnings.append(
+            f"{_slide_of(shape)}: {_picture_warning(alt, reason)}"
+        )
+        return f"\n{_as_text_lines(_picture_placeholder(alt, reason))}\n"
+
+
+def _slide_of(shape: Any) -> str:
+    """The slide a shape is on, as "Slide N", numbered as MarkItDown numbers them."""
+    try:
+        slide = shape.part.slide
+        slides = shape.part.package.presentation_part.presentation.slides
+        return f"Slide {slides.index(slide) + 1}"
+    except (AttributeError, ValueError):
+        return "A slide"
 
 
 class _TextXlsxConverter(XlsxConverter):
@@ -673,7 +914,7 @@ def _member_markdown(
     return dataclasses.replace(converted, markdown=f"{fence}\n{body}\n{fence}")
 
 
-class _ArchiveResult(DocumentConverterResult):
+class _ArchiveResult(_WarnedResult):
     """A zip's Markdown, and what its members' readers could not carry into it.
 
     MarkItDown's result has no field for that, and returns the object a
@@ -682,8 +923,7 @@ class _ArchiveResult(DocumentConverterResult):
     """
 
     def __init__(self, markdown: str, warnings: tuple[str, ...]) -> None:
-        super().__init__(markdown)
-        self.warnings = warnings
+        super().__init__(markdown, warnings=warnings)
 
 
 #: An AppleDouble file's first four bytes (RFC 1740).  macOS keeps a file's
@@ -1004,7 +1244,9 @@ def _convert_bytes(
 
     stream_info = StreamInfo(extension=suffix, filename=name)
     try:
-        result = markitdown.convert_stream(io.BytesIO(data), stream_info=stream_info)
+        result = markitdown.convert_stream(
+            io.BytesIO(data), stream_info=stream_info, keep_data_uris=True
+        )
     except MarkItDownException as exc:
         rewritten = suffix in (".pptx", ".docx") and data is not original
         if not rewritten or _needs_a_dependency(exc):
@@ -1014,7 +1256,7 @@ def _convert_bytes(
         # that costs: the earlier warnings described the rewrite, so they go.
         # The file is not named: a zip puts its member's name in front.
         result = markitdown.convert_stream(
-            io.BytesIO(original), stream_info=stream_info
+            io.BytesIO(original), stream_info=stream_info, keep_data_uris=True
         )
         conversion_warnings = [
             "The file could not be read once its equations, AlternateContent "
@@ -1022,7 +1264,7 @@ def _convert_bytes(
             "it was read as it is: "
             "the text in those is not in the page (docs/09 P27)."
         ]
-    if isinstance(result, _ArchiveResult):
+    if isinstance(result, _WarnedResult):
         conversion_warnings = [*conversion_warnings, *result.warnings]
     return ConvertedMarkdown(
         markdown=result.markdown,

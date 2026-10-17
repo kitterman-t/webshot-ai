@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Video controls after load</title>
+</head>
+<body>
+<!-- docs/09 P66. Chromium's controls show a loading spinner for about 1.4 s
+     after a page like this loads, preload="none" or not, and a capture that
+     photographs or prints a video inside that window records the spinner at
+     whatever angle the clock gave it. One video in the document, one in an
+     open shadow root and one in a frame, because a capture photographs all
+     three; the fourth has no controls, so no spinner, and is left alone.
+     Nothing is fetched: preload="none" defers each load, and .invalid never
+     resolves. -->
+<h1>Video controls after load</h1>
+<video src="https://media.fixture.invalid/document.mp4" preload="none" controls width="320" height="180"></video>
+<div id="host"></div>
+<iframe title="A framed video" width="360" height="220"
+  srcdoc='<video src="https://media.fixture.invalid/framed.mp4" preload="none" controls width="320" height="180"></video>'></iframe>
+<video src="https://media.fixture.invalid/no-controls.mp4" preload="none" width="320" height="180"></video>
+<script>
+  document.getElementById('host').attachShadow({mode: 'open'}).innerHTML =
+    '<video src="https://media.fixture.invalid/shadow.mp4" preload="none" controls width="320" height="180"></video>';
+</script>
+</body>
+</html>

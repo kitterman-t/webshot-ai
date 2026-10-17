@@ -411,3 +411,54 @@ def test_a_page_carrying_the_markers_keeps_docling_spacing_and_says_so() -> None
     result = extract(page, [])
     assert "H 0 and \ufdd0 kept" in result.text
     assert any("U+FDD0" in warning for warning in result.warnings)
+
+
+@pytest.mark.parametrize(
+    ("reference", "character"),
+    [
+        ("&#xFDD0;", "\ufdd0"),
+        ("&#xfdd0;", "\ufdd0"),
+        ("&#XfDd0;", "\ufdd0"),
+        ("&#x000FDD0;", "\ufdd0"),
+        ("&#64976;", "\ufdd0"),
+        ("&#0064976;", "\ufdd0"),
+        ("&#xFDD0", "\ufdd0"),
+        ("&#64976", "\ufdd0"),
+        ("&#xFDD1;", "\ufdd1"),
+        ("&#64977;", "\ufdd1"),
+        ("&#xfdd1", "\ufdd1"),
+        ("&#64977", "\ufdd1"),
+    ],
+)
+def test_a_page_carrying_a_marker_as_a_reference_keeps_it_and_says_so(
+    reference: str, character: str
+) -> None:
+    """The backend reads `&#xFDD0;` as U+FDD0, which was removed as a marker."""
+    page = (
+        '<html><head><meta charset="utf-8"></head><body><h1>T</h1>'
+        f"<p>H<sub>0</sub> and {reference} kept</p></body></html>"
+    )
+    result = extract(page, [])
+    assert f"H 0 and {character} kept" in result.text
+    assert any("U+FDD0" in warning for warning in result.warnings)
+
+
+@pytest.mark.parametrize(
+    ("reference", "read"),
+    [
+        ("&#xFDD0A;", "\U000fdd0a"),
+        ("&#649760;", "\U0009ea20"),
+        ("&amp;#xFDD0;", "&#xFDD0;"),
+        ("&#xFDD2;", "\ufdd2"),
+    ],
+)
+def test_a_reference_to_another_character_leaves_the_page_marked(
+    reference: str, read: str
+) -> None:
+    page = (
+        '<html><head><meta charset="utf-8"></head><body><h1>T</h1>'
+        f"<p>H<sub>0</sub> and {reference} kept</p></body></html>"
+    )
+    result = extract(page, [])
+    assert f"H0 and {read} kept" in result.text
+    assert not any("U+FDD0" in warning for warning in result.warnings)

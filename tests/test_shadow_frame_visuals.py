@@ -8,6 +8,8 @@ capitalized phrase for OCR to read.
 
 The heading every stage reports, and the scroll positions the harvest moves,
 are here too (docs/09 P16-12): both are facts about the same reading order.
+So is a page that scrolls smoothly, where putting a position back only started
+an animation the PDF printed partway through (P39).
 """
 
 from __future__ import annotations
@@ -24,7 +26,12 @@ from pypdf import PdfReader
 
 from webshot.capture.prepare import BASE_PRINT_CSS
 from webshot.capture.snapshot import FLAT_TREE_JS, HEADING_JS
-from webshot.capture.visuals import VisualAsset, capture_visual_assets
+from webshot.capture.visuals import (
+    RESTORE_SCROLL_JS,
+    SCROLL_POSITIONS_JS,
+    VisualAsset,
+    capture_visual_assets,
+)
 from webshot.cli import main
 from webshot.ocr.engine import OCRResult
 from webshot.ocr.tesseract import tesseract_executable
@@ -33,6 +40,9 @@ FIXTURE = (
     Path(__file__).resolve().parent / "fixtures" / "shadow_frame_visuals_page.html"
 )
 SCROLLED = FIXTURE.with_name("scrolled_visuals_page.html")
+#: The same page with `scroll-behavior: smooth` on the window, every box and
+#: the capped frame (docs/09 P39).
+SMOOTH = FIXTURE.with_name("smooth_scrolled_visuals_page.html")
 
 #: Every visual the page shows, by label, in reading order, with the heading a
 #: reader last passed before it. The light chart follows the card, so its
@@ -396,13 +406,20 @@ _SCROLL_JS = """() => {
 
 
 @pytest.mark.browser
-def test_the_harvest_puts_back_every_scroll_position_it_moved(tmp_path: Path) -> None:
+@pytest.mark.parametrize("fixture", [SCROLLED, SMOOTH], ids=["instant", "smooth"])
+def test_the_harvest_puts_back_every_scroll_position_it_moved(
+    tmp_path: Path, fixture: Path
+) -> None:
+    """Back by the time the harvest returns. On the smooth page a restore that
+    obeyed `scroll-behavior` returned with every box where the harvest left
+    it, and said nothing (docs/09 P39)."""
+
     async def body(page: Any) -> tuple[Any, Any, int]:
         before = await page.evaluate(_SCROLL_JS)
         assets = await _harvest(page, tmp_path)
         return before, await page.evaluate(_SCROLL_JS), len(assets)
 
-    before, after, harvested = _in_browser(SCROLLED.as_uri(), body)
+    before, after, harvested = _in_browser(fixture.as_uri(), body)
     # Four charts, each out of view where it sits, so every one was scrolled
     # to, and the capped frame itself.
     assert harvested == 5
@@ -443,3 +460,84 @@ def test_a_scrolling_box_prints_from_where_the_page_had_it(tmp_path: Path) -> No
     assert "Bottom of the capped frame" not in printed
     warnings = json.loads(report.read_text("utf-8"))["warnings"]
     assert not [w for w in warnings if "Scroll positions" in w], warnings
+
+
+#: A box the page scrolled itself, one it removes later, and a frame it
+#: removes later, each with more content than box.
+_UNRESTORABLE_PAGE = """<!doctype html>
+<style>.box { height: 100px; overflow: auto; }</style>
+<div class="box" id="shrinks"><div id="content" style="height: 2000px"></div></div>
+<div class="box" id="removed"><div style="height: 2000px"></div></div>
+<iframe id="frame" style="height: 100px" srcdoc="<div style='height: 3000px'></div>"></iframe>"""
+
+
+@pytest.mark.browser
+def test_a_position_that_did_not_go_back_is_counted() -> None:
+    """The restore counted only what raised, and a scroll that does not take
+    raises nothing. So a box scrolled smoothly back, still where the harvest
+    left it, and a box whose content shrank below its saved position were both
+    a clean restore (docs/09 P39). Neither a box nor a frame the page has
+    removed since prints, so neither counts."""
+
+    async def body(page: Any) -> tuple[int, dict[str, float]]:
+        await page.set_content(_UNRESTORABLE_PAGE)
+        await page.wait_for_function(
+            "document.getElementById('frame').contentDocument?.readyState === 'complete'"
+        )
+        await page.evaluate("""() => {
+            for (const id of ['shrinks', 'removed']) {
+                document.getElementById(id).scrollTo({top: 900, behavior: 'instant'});
+            }
+            document.getElementById('frame').contentWindow
+                .scrollTo({top: 500, behavior: 'instant'});
+        }""")
+        saved = await page.evaluate_handle(SCROLL_POSITIONS_JS)
+        await page.evaluate("""() => {
+            document.getElementById('content').style.height = '300px';
+            document.getElementById('removed').remove();
+            document.getElementById('frame').remove();
+        }""")
+        failed = await saved.evaluate(RESTORE_SCROLL_JS)
+        shrunk = await page.evaluate(
+            "() => document.getElementById('shrinks').scrollTop"
+        )
+        return failed, shrunk
+
+    failed, shrunk = _in_browser("about:blank", body)
+    # 300 px of content in a 100 px box scrolls 200 px at most.
+    assert shrunk == 200
+    assert failed == 1
+
+
+@pytest.mark.browser
+def test_a_smoothly_scrolling_box_prints_from_where_the_page_had_it(
+    tmp_path: Path,
+) -> None:
+    """Twice in one process, as the MCP server captures. The first capture's
+    extraction pays docling's start-up, which took 2.8 s or more, and the
+    animation had ended by the print. From the second on the print came 62 to
+    82 ms after the restore, and each box printed partway back: neither of
+    its sentences (docs/09 P39)."""
+    for run in ("first", "second"):
+        output = tmp_path / run / "capture.pdf"
+        report = tmp_path / run / "report.json"
+        output.parent.mkdir()
+        code = main(
+            [str(SMOOTH), "--output", str(output), "--no-ocr", "--report", str(report)]
+        )
+        assert code == 0, run
+        printed = _flat(
+            "\n".join(p.extract_text() or "" for p in PdfReader(output).pages)
+        )
+        assert "Top of the shadow box: printed where it starts." in printed, (
+            run,
+            printed,
+        )
+        assert "Bottom of the shadow box" not in printed, run
+        assert "Top of the capped frame: printed where it starts." in printed, (
+            run,
+            printed,
+        )
+        assert "Bottom of the capped frame" not in printed, run
+        warnings = json.loads(report.read_text("utf-8"))["warnings"]
+        assert not [w for w in warnings if "Scroll positions" in w], (run, warnings)

@@ -212,7 +212,8 @@ My work was the frame the agents worked in:
   lint, types, more than 1,300 tests, a 26-case golden corpus (fixture pages
   whose captured output is compared with a recording) run from two different
   checkout paths, a license gate, a vulnerability audit and a strict docs
-  build. "Ready to push" means it passed.
+  build. "Ready to push" means it passed — `--fast`, which skips the golden
+  corpus and parity, for a change that cannot move captured output.
 - **The record.** [docs/09-spike-report.md](docs/09-spike-report.md) logs each
   measured surprise under a number that code comments cite. Some examples:
   P2-1, a password leak in the accessibility snapshot that the previous

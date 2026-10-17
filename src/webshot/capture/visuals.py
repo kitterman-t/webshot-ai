@@ -24,6 +24,7 @@ from playwright.async_api import FrameLocator, Locator, Page
 from ..bundle.publish import sha256_file
 from ..errors import OcrUnavailableError
 from ..ocr.engine import OcrEngine, OCRResult
+from .media_controls import SETTLE_INSIDE_SCRIPT
 from .prepare import OCR_TEXT_DECLARATIONS
 from .session import renderer_crashed
 from .snapshot import FLAT_TREE_JS, HARVEST_MARKERS, READING_ORDER_JS
@@ -117,18 +118,42 @@ SCROLL_POSITIONS_JS = """() => {
 }""".replace("__FLAT_TREE__", FLAT_TREE_JS)
 
 #: Put back what `SCROLL_POSITIONS_JS` saved, and count what would not go back.
+#:
+#: `instant`, because `scrollTo(x, y)` and `scrollTop =` obey the page's
+#: `scroll-behavior`, and on a page that sets `smooth` they only start an
+#: animation. The restore then returned with every box where the harvest had
+#: left it, and from the second capture in a process, when the extraction no
+#: longer pays docling's start-up, the PDF printed 62 to 82 ms later with the
+#: boxes partway back: neither the box's top sentence nor its bottom one
+#: (docs/09 P39). The function hands back a count, never the promise Chromium
+#: 153's scroll methods return, so `evaluate` does not wait on a scroll
+#: (docs/09 P34).
+#:
+#: Read back, because a scroll that did not take raised nothing, and counting
+#: only what raised reported a clean restore of boxes that were still
+#: scrolled. A box or frame the page has removed since prints nowhere, so it
+#: is not counted. Inside a removed frame an element is still connected, to
+#: a document that no longer has a window.
 RESTORE_SCROLL_JS = """saved => {
     let failed = 0;
     for (const entry of saved) {
         try {
             if (entry.view) {
-                if (entry.view.scrollX !== entry.x || entry.view.scrollY !== entry.y) {
-                    entry.view.scrollTo(entry.x, entry.y);
+                const view = entry.view;
+                if (view.closed) continue;
+                if (view.scrollX !== entry.x || view.scrollY !== entry.y) {
+                    view.scrollTo({left: entry.x, top: entry.y, behavior: 'instant'});
+                    if (view.scrollX !== entry.x || view.scrollY !== entry.y) failed += 1;
                 }
-            } else if (entry.element.scrollLeft !== entry.left
-                    || entry.element.scrollTop !== entry.top) {
-                entry.element.scrollLeft = entry.left;
-                entry.element.scrollTop = entry.top;
+            } else {
+                const element = entry.element;
+                if (!element.isConnected || !element.ownerDocument.defaultView) continue;
+                if (element.scrollLeft !== entry.left || element.scrollTop !== entry.top) {
+                    element.scrollTo({left: entry.left, top: entry.top, behavior: 'instant'});
+                    if (element.scrollLeft !== entry.left || element.scrollTop !== entry.top) {
+                        failed += 1;
+                    }
+                }
             }
         } catch {
             failed += 1;
@@ -329,6 +354,7 @@ async def capture_visual_assets(
             asset_id = f"asset-{len(assets) + 1:03d}"
             image_path = assets_directory / f"{asset_id}.png"
             rendered_canvas = ""
+            still_loading = False
             if metadata["kind"] == "canvas":
                 rendered_canvas = await element.evaluate(
                     "canvas => canvas.toDataURL('image/png')",
@@ -337,6 +363,11 @@ async def capture_visual_assets(
                 _, encoded = rendered_canvas.split(",", 1)
                 image_path.write_bytes(base64.b64decode(encoded))
             else:
+                # A load can end after the prepare stage settled the
+                # page's videos, and start a spinner's last turn (P66, P67).
+                still_loading = await element.evaluate(
+                    SETTLE_INSIDE_SCRIPT, timeout=FOUND_ELEMENT_TIMEOUT_MS
+                )
                 await element.screenshot(
                     path=image_path,
                     animations="disabled",
@@ -451,7 +482,14 @@ async def capture_visual_assets(
             # both a saved asset and a failure, with nothing in the page or
             # the snapshot pointing at it (docs/09 P23-2).
             assets.append(asset)
-            if asset.kind == "video":
+            if asset.kind == "video" and still_loading:
+                # Not "its current visual frame": the image is of the browser
+                # waiting for one, at whatever angle its spinner had reached,
+                # so two captures of the same page can differ (docs/09 P67).
+                warnings.append(
+                    f"{asset_id} is a video that was still loading when it was captured, so its image shows the browser's loading indicator rather than a frame of the video, and can differ between captures; temporal and audio content require a source transcript or separate media processing."
+                )
+            elif asset.kind == "video":
                 warnings.append(
                     f"{asset_id} is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing."
                 )

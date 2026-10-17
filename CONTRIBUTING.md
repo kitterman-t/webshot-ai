@@ -32,6 +32,12 @@ uv run python tools/verify.py          # everything CI runs, in CI's order
 uv run python tools/verify.py --fast   # the same minus the browser-driven checks
 ```
 
+`--fast` leaves out the golden corpus and parity, which CI runs on every pull
+request. It is enough before pushing a change that cannot move captured output
+(documentation, workflow files, a tool that neither the capture pipeline nor
+the golden and parity harnesses import); anything else gets the full run
+first, because a moved golden costs a few minutes here and a round-trip on CI.
+
 `verify.py` installs each step's CI extras itself, so it does not depend on
 what `uv sync` last left in the environment. Or the individual checks — these
 do, and the office, RapidOCR and MCP tests skip without their extras:
