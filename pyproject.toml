@@ -127,7 +127,7 @@ docs = [
 ]
 dev = [
     "pytest>=8.2",
-    "ruff>=0.16.10",
+    "ruff>=0.17.0",
     "mypy>=2.4.0",
     "pip-licenses>=5",
     "pip-audit>=2.7",
