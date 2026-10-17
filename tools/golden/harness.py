@@ -1291,24 +1291,108 @@ def sentinel_failures(case: GoldenCase, files: dict[str, str]) -> list[str]:
     return failures
 
 
-def environment() -> dict[str, str]:
+def _first_lines(command: list[str], count: int) -> list[str] | None:
+    """The first *count* non-empty lines a tool prints about itself.
+
+    None when the tool is not installed, and an empty list when it is and
+    said nothing: "absent" and "?" are different answers.
+    """
+    executable = shutil.which(command[0])
+    if not executable:
+        return None
+    completed = subprocess.run(
+        [executable, *command[1:]], capture_output=True, text=True, check=False
+    )
+    text = completed.stdout or completed.stderr
+    return [line.strip() for line in text.splitlines() if line.strip()][:count]
+
+
+def _version_line(lines: list[str] | None) -> str:
+    if lines is None:
+        return "absent"
+    return lines[0] if lines else "?"
+
+
+def operating_system() -> str:
+    """The OS release, named precisely enough that an update shows as a change.
+
+    A macOS update is what moved the fonts in P7-14, and `platform: Darwin`
+    reads the same before and after it.
+    """
+    system = platform.system()
+    if system == "Darwin":
+        build = _first_lines(["sw_vers", "-buildVersion"], 1) or []
+        version = platform.mac_ver()[0] or "?"
+        return f"macOS {version}" + (f" ({build[0]})" if build else "")
+    if system == "Linux":
+        try:
+            fields = dict(
+                line.split("=", 1)
+                for line in Path("/etc/os-release").read_text("utf-8").splitlines()
+                if "=" in line
+            )
+        except OSError:
+            return f"Linux {platform.release()}"
+        return fields.get("PRETTY_NAME", "Linux").strip('"') + f", {platform.release()}"
+    return platform.platform()
+
+
+def bundled_chromium() -> str:
+    """The Chromium build the installed Playwright drives, from its own manifest.
+
+    Pinned by the Playwright version in uv.lock, so it is recorded to be
+    named, not because it can move alone. Read from the file rather than by
+    launching a browser; "unknown" if a Playwright release moves the file,
+    which tests/test_golden.py would then report.
+    """
+    import playwright
+
+    manifest = Path(playwright.__file__).parent / "driver" / "package" / "browsers.json"
+    try:
+        browsers = json.loads(manifest.read_text("utf-8"))["browsers"]
+    except (OSError, ValueError, KeyError):
+        return "unknown"
+    for browser in browsers:
+        if browser.get("name") == "chromium":
+            return str(browser.get("browserVersion", "unknown"))
+    return "unknown"
+
+
+def runner() -> str:
+    """Where this ran: a GitHub-hosted image and its version, or not hosted."""
+    if os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted":
+        image = os.environ.get("ImageOS", "?")
+        return f"github-hosted {image} {os.environ.get('ImageVersion', '?')}"
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        return "self-hosted"
+    return "local"
+
+
+def environment() -> dict[str, Any]:
     from importlib.metadata import version
 
-    tesseract = "absent"
-    executable = shutil.which("tesseract")
-    if executable:
-        completed = subprocess.run(
-            [executable, "--version"], capture_output=True, text=True, check=False
+    tesseract = _first_lines(["tesseract", "--version"], 2)
+    leptonica = (
+        "absent"
+        if tesseract is None
+        else next(
+            (line.split()[0] for line in tesseract[1:] if line.startswith("leptonica")),
+            "?",
         )
-        tesseract = (
-            completed.stdout.splitlines()[0].strip() if completed.stdout else "?"
-        )
+    )
+    ghostscript = _first_lines(["gs", "--version"], 1)
     return {
         "platform": platform.system(),
         "python": ".".join(platform.python_version_tuple()[:2]),
         "playwright": version("playwright"),
-        "tesseract": tesseract,
+        "tesseract": _version_line(tesseract),
         "fonts": font_fingerprint(),
+        "os": operating_system(),
+        "chromium": bundled_chromium(),
+        "leptonica": leptonica,
+        "ghostscript": _version_line(ghostscript),
+        "runner": runner(),
+        "font_files": font_files(),
     }
 
 
@@ -1324,6 +1408,41 @@ FONT_DIRECTORIES = (
 )
 
 _FONT_SUFFIXES = (".ttf", ".ttc", ".otf")
+
+
+def font_files() -> list[str]:
+    """Every installed system font as `name:size`, sorted: what the
+    fingerprint digests, kept whole so that a change can name the font."""
+    entries: list[str] = []
+    seen: set[Path] = set()
+    for directory in FONT_DIRECTORIES:
+        root = Path(directory)
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not (path.is_file() and path.suffix.lower() in _FONT_SUFFIXES):
+                continue
+            try:
+                resolved = path.resolve()
+            except OSError:  # pragma: no cover - a link we may not follow
+                resolved = path
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            try:
+                entries.append(f"{resolved.name}:{resolved.stat().st_size}")
+            except OSError:  # pragma: no cover - a font we may not stat
+                entries.append(f"{resolved.name}:?")
+    return sorted(entries)
+
+
+def fingerprint_of(entries: list[str]) -> str:
+    """The fingerprint of a `font_files()` list, so a recorded list can be
+    held to the recorded fingerprint."""
+    if not entries:
+        return "none"
+    digest = hashlib.sha256("\n".join(sorted(entries)).encode("utf-8")).hexdigest()
+    return f"{len(entries)} fonts, {digest[:12]}"
 
 
 def font_fingerprint() -> str:
@@ -1351,33 +1470,73 @@ def font_fingerprint() -> str:
     A font reached twice (nested roots, a symlink) is counted once, under its
     target's name, so which path the walk met first cannot change the value.
     """
-    entries: list[str] = []
-    seen: set[Path] = set()
-    for directory in FONT_DIRECTORIES:
-        root = Path(directory)
-        if not root.is_dir():
-            continue
-        for path in root.rglob("*"):
-            if not (path.is_file() and path.suffix.lower() in _FONT_SUFFIXES):
-                continue
-            try:
-                resolved = path.resolve()
-            except OSError:  # pragma: no cover - a link we may not follow
-                resolved = path
-            if resolved in seen:
-                continue
-            seen.add(resolved)
-            try:
-                entries.append(f"{resolved.name}:{resolved.stat().st_size}")
-            except OSError:  # pragma: no cover - a font we may not stat
-                entries.append(f"{resolved.name}:?")
-    if not entries:
-        return "none"
-    digest = hashlib.sha256("\n".join(sorted(entries)).encode("utf-8")).hexdigest()
-    return f"{len(entries)} fonts, {digest[:12]}"
+    return fingerprint_of(font_files())
 
 
 PROFILE_KEYS = ("platform", "playwright", "tesseract", "fonts")
+#: Recorded and compared, and named when they differ, but not part of the
+#: profile choice: each can move rendering or OCR, and a golden failure that
+#: arrives with one of them changed should say so in its first lines rather
+#: than leave the reader to find it (docs/09 P85). They choose no profile
+#: because the recording predates them; a dimension that once matched by
+#: default must not start forcing `portable` the day it is first written.
+NAMED_KEYS = ("os", "python", "chromium", "leptonica", "ghostscript")
+#: Printed, never compared: the recording machine runs CI as "self-hosted"
+#: and was recorded "local", which is one machine under two names.
+REPORTED_KEYS = ("runner",)
+
+
+def font_changes(recorded: list[str], current: list[str], limit: int = 8) -> str:
+    """Which fonts differ, by name: changed size, added, removed."""
+
+    def sizes(entries: list[str]) -> dict[str, str]:
+        return dict(entry.rsplit(":", 1) for entry in entries)
+
+    before, after = sizes(recorded), sizes(current)
+    changed = sorted(n for n in before.keys() & after.keys() if before[n] != after[n])
+    added = sorted(after.keys() - before.keys())
+    removed = sorted(before.keys() - after.keys())
+    parts = []
+    for label, names, show in (
+        ("changed", changed, lambda n: f"{n} {before[n]} -> {after[n]} bytes"),
+        ("added", added, lambda n: n),
+        ("removed", removed, lambda n: n),
+    ):
+        if names:
+            listed = ", ".join(show(n) for n in names[:limit])
+            more = f", and {len(names) - limit} more" if len(names) > limit else ""
+            parts.append(f"{len(names)} {label} ({listed}{more})")
+    return "; ".join(parts) or "the same fonts"
+
+
+def environment_drift(recorded: dict[str, Any], current: dict[str, Any]) -> list[str]:
+    """Every recorded dimension this machine differs in, each named.
+
+    A key the recording lacks is reported as not recorded, never as a match,
+    as profile_for treats it (P7-14). Fonts that differ are named one by one
+    when both sides hold the list.
+    """
+    drift = []
+    for key in (*PROFILE_KEYS, *NAMED_KEYS):
+        was, now = recorded.get(key), current.get(key)
+        if was == now:
+            continue
+        if was is None:
+            drift.append(f"{key}: not recorded; this machine has {now!r}")
+            continue
+        line = f"{key}: recorded {was!r}, this machine {now!r}"
+        if key == "fonts" and recorded.get("font_files") and current.get("font_files"):
+            line += ": " + font_changes(recorded["font_files"], current["font_files"])
+        drift.append(line)
+    return drift
+
+
+def environment_summary(current: dict[str, Any]) -> str:
+    """One line naming every tool version this run used."""
+    return "; ".join(
+        f"{key}: {current.get(key)}"
+        for key in (*PROFILE_KEYS, *NAMED_KEYS, *REPORTED_KEYS)
+    )
 
 
 def profile_for(recorded: dict[str, str], current: dict[str, str]) -> tuple[str, str]:

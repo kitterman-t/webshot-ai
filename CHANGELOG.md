@@ -197,6 +197,15 @@ which records the measurements behind each change.
   lines after it were read as Markdown with raw HTML: an
   `<img src="https://…">` there became an image the capture fetched. That
   code is now a code block, whose text is text. See docs/09 P47.
+- **A release waits out its first days, and stalled updates raise an alarm.**
+  Dependabot now waits 3, 7 or 14 days before it proposes a Python package's
+  patch, minor or major release, and 7 days for a GitHub Action, so a
+  hijacked or withdrawn release is not merged on its first day. Security
+  updates are not delayed. A daily dependency watch fails, and keeps an issue
+  open, when a direct dependency or a pinned action is two weeks past that
+  wait, when a pinned action's tag no longer names its commit, or when a
+  Dependabot pull request failed, never ran CI, lost its auto-merge or waited
+  three days. An input it cannot read fails it too. See docs/09 P84.
 
 - **NAT64, IPv4-translated and site-local IPv6 addresses are internal.** The
   private-network check classified `64:ff9b::a9fe:a9fe`, the NAT64 spelling of
@@ -319,6 +328,18 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **`discovered_metadata.date` is a date the page declares, or nothing.** It
+  was Trafilatura's, and htmldate found it even with its extensive search off.
+  It read a date from the URL's path ahead of the page's own `<meta>`, from a
+  heading ahead of a `<time>`, from a copyright year made into January 1st,
+  and from a comment nested in the article's JSON-LD. A declared date later
+  than today was dropped. htmldate 1.11 added the first `YYYY-MM-DD` anywhere
+  in the text, which put "2026-07-16" in the `text-notes` golden. WebShot now
+  reads the date itself from date `<meta>` tags, schema.org dates in JSON-LD
+  and microdata, and `<time>` elements. It takes a publication over a
+  modification and records nothing for a value that would need a guess, such
+  as `05/03/2024` or a year alone. Title, author and sitename are still
+  Trafilatura's. See docs/09 P82.
 - **A bot check's page served with HTTP 200 fails the capture.** A site behind
   DataDome answered 200, the check drew its block page over the article, and
   the capture printed "We detected unusual activity…" under the article's
@@ -868,6 +889,21 @@ which records the measurements behind each change.
   Quantcast Choice, TrustArc, Usercentrics, Sourcepoint), and a manifest
   warning names each one that was on screen. This is the one thing faithful
   mode now hides. See docs/09 P79.
+
+- **A fixed or sticky box printed over the page's text is now named in a
+  warning.** Chromium prints a box fixed to the window on every page, so a
+  site's pinned header or notice bar covered lines of text page after page,
+  and a sticky bar stuck to the window's bottom edge landed on the first page
+  over its text. Nothing said so. A news site's privacy banner covered 1,549
+  characters on 10 of 26 pages of a faithful capture. After the render,
+  WebShot now prints the page a second time with each such box in a colour of
+  its own and reads the result back with PDFium, in paint order, so it counts
+  only text the box is drawn over: a line the page raises above the box, a box
+  too faint to hide anything, and a box over blank margin are not reported.
+  One warning per box names it, the pages where it covers text, how many
+  characters and lines, and the first words covered, and suggests the
+  `--exclude` that leaves it out. pypdfium2, already installed through
+  OCRmyPDF, is now a direct dependency for this. See docs/09 P83.
 
 ## [3.0.0] — 2026-08-21
 

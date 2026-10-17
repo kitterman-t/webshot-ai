@@ -130,7 +130,7 @@
     },
     "DiscoveredMetadata": {
       "additionalProperties": false,
-      "description": "What Trafilatura read from the captured page (docs/05 task 3.4).\n\nDeliberately separate from `page_metadata`, which is the DOM's own\ndeclarations as the snapshot recorded them: a consumer that needs to know\nwhere a value came from can tell the two apart. Empty strings mean the\npage declared nothing — WebShot does not infer (docs/09 P3-3).",
+      "description": "What the captured page says about itself (docs/05 task 3.4).\n\nDeliberately separate from `page_metadata`, which is the DOM's own\ndeclarations as the snapshot recorded them: a consumer that needs to know\nwhere a value came from can tell the two apart. `title`, `author` and\n`sitename` are Trafilatura's readings. `date` is the date the page\ndeclares in its markup — a date `<meta>`, a schema.org date in JSON-LD or\nmicrodata, or a `<time>` — as `YYYY-MM-DD`, or empty when it declares\nnone WebShot reads. It is never a date found in the text, the URL or a\nheading, which is where Trafilatura's own date can come from (docs/09\nP3-3, P82).",
       "properties": {
         "title": {
           "title": "Title",

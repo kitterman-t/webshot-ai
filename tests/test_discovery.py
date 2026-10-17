@@ -1,11 +1,12 @@
 """Main-content discovery and metadata enrichment (docs/05 task 3.4).
 
-Two things are worth pinning. Trafilatura must not *invent* provenance — its
-metadata pass will guess a publication date for a page that declares none, and
-a capture tool that records a guessed date is lying about the record (docs/09
-P3-3). And the strategy that chose the content region has to be the one the
-manifest names, in all four of its outcomes, because that is the only way a
-reader can tell an isolated region from a whole page.
+Two things are worth pinning. The metadata must not *invent* provenance —
+Trafilatura's date comes from htmldate, which guesses one from the text, the
+URL or a heading when the page declares none, and a capture tool that records
+a guessed date is lying about the record (docs/09 P3-3, P82). And the strategy
+that chose the content region has to be the one the manifest names, in all
+four of its outcomes, because that is the only way a reader can tell an
+isolated region from a whole page.
 """
 
 from __future__ import annotations
@@ -17,8 +18,11 @@ from pathlib import Path
 import pytest
 from playwright.async_api import async_playwright
 
+from webshot.acquire.adapters import materialize_source
+from webshot.capture import discover
 from webshot.capture.discover import (
     DiscoveredMetadata,
+    declared_date,
     main_content_text,
     read_metadata,
     read_page,
@@ -29,9 +33,12 @@ from webshot.capture.prepare import (
     select_main_content,
 )
 from webshot.capture.snapshot import LOCATOR_JS
+from webshot.netpolicy import file_url_path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ARTICLE = REPO_ROOT / "tests" / "fixtures" / "professional_page.html"
+DATES = REPO_ROOT / "tests" / "fixtures" / "declared_dates"
+NOTES = REPO_ROOT / "tests" / "fixtures" / "sample_notes.txt"
 
 DECLARED = """<!doctype html><html><head>
 <meta property="article:published_time" content="2024-03-05T10:00:00Z">
@@ -59,8 +66,174 @@ def test_declared_metadata_is_read() -> None:
 
 
 def test_an_undeclared_date_is_not_invented() -> None:
-    """Trafilatura's default `extensive` pass guesses one; WebShot turns it off."""
+    """Trafilatura's default `extensive` pass guesses one (P3-3)."""
     assert read_metadata(UNDECLARED, url="https://example.com/notes").date == ""
+
+
+def _dated(name: str, url: str = "https://example.com/notes") -> str:
+    html = (DATES / name).read_text(encoding="utf-8")
+    return read_metadata(html, url=url).date
+
+
+def test_a_bare_date_in_the_text_is_not_a_declared_date() -> None:
+    """htmldate 1.11 returns the first `YYYY-MM-DD` in the text in fast mode
+    when nothing else matches (adbar/htmldate#193): this page got 2019-03-01
+    there, and None from 1.10 (docs/09 P82)."""
+    assert _dated("bare_date_in_paragraph.html") == ""
+
+
+def test_the_text_notes_golden_input_has_no_declared_date() -> None:
+    """The case that failed webshot-ai#30: the page WebShot builds from
+    `sample_notes.txt`, whose text says "Service restored: 2026-07-16 14:32
+    UTC", recorded that date under htmldate 1.11."""
+    materialized = materialize_source(NOTES.as_uri())
+    try:
+        page = Path(file_url_path(materialized.browser_url)).read_text("utf-8")
+    finally:
+        materialized.cleanup()
+    assert "2026-07-16" in page, "the page must still hold the date it tests"
+    assert read_metadata(page, url=materialized.browser_url).date == ""
+
+
+def test_a_declared_date_beats_a_different_date_in_the_text() -> None:
+    assert _dated("meta_date_and_body_date.html") == "2024-03-05"
+
+
+def test_a_declared_date_beats_a_date_in_the_url() -> None:
+    """htmldate reads the URL's path before any `<meta>`, and answers this
+    page with 2015-04-03 on 1.10 and 1.11 alike."""
+    url = "https://example.com/2015/04/03/notice"
+    assert _dated("meta_date_and_body_date.html", url) == "2024-03-05"
+
+
+def test_json_ld_declares_the_outermost_objects_date() -> None:
+    """The article's own `datePublished`: not the comment's nested inside it,
+    which comes first in the text, and not its `dateModified`."""
+    assert _dated("json_ld_date.html") == "2021-06-07"
+
+
+def test_a_time_element_declares_its_datetime() -> None:
+    assert _dated("time_datetime.html") == "2022-11-30"
+
+
+def test_a_heading_date_does_not_hide_a_declared_time() -> None:
+    """htmldate reads the heading first and answers 2018-12-31, on 1.10 and
+    1.11 alike; the page declares 2022-11-30."""
+    assert _dated("time_behind_heading_date.html") == "2022-11-30"
+
+
+@pytest.mark.parametrize(
+    "url", ["https://example.com/2015/04/03/audit", "https://example.com/audit"]
+)
+def test_dates_htmldate_reads_from_undeclared_cues_are_not_recorded(url: str) -> None:
+    """A URL path, a heading, an element classed `post-date` and a copyright
+    year: htmldate's fast search reads a date from each, and answers this page
+    with the URL's 2015-04-03, or without it the year made 2017-01-01 (P82)."""
+    assert _dated("undeclared_cues.html", url) == ""
+
+
+def test_a_publication_beats_a_modification_that_comes_first() -> None:
+    assert _dated("published_over_modified.html") == "2023-01-15"
+
+
+def test_a_declared_date_does_not_depend_on_the_calendar() -> None:
+    """htmldate refuses a date later than today, so its answer for this page
+    would change on 2091-01-02. The page declares the date now."""
+    assert _dated("future_declared_date.html") == "2091-01-02"
+
+
+def test_a_value_that_needs_a_guess_is_not_read() -> None:
+    """A year alone, `05/03/2024`, `0000-00-00`, and a date in words."""
+    assert _dated("unreadable_declarations.html") == ""
+
+
+@pytest.mark.parametrize(
+    ("markup", "expected"),
+    [
+        ('<meta name="citation_publication_date" content="2004/05/31">', "2004-05-31"),
+        ('<meta name="DC.date.issued" content="20190302">', "2019-03-02"),
+        ('<meta property="dcterms:issued" content="2011-11-11">', "2011-11-11"),
+        # The date the page wrote, in its own offset: no zone conversion.
+        (
+            '<meta property="article:published_time"'
+            ' content="2024-03-05T23:30:00-05:00">',
+            "2024-03-05",
+        ),
+        ("<p><time>2018-08-08</time></p>", "2018-08-08"),
+        (
+            '<time datetime="2017-07-07">a</time>'
+            '<time itemprop="datePublished" datetime="2016-06-06">b</time>',
+            "2016-06-06",
+        ),
+        (
+            '<time datetime="2017-07-07">a</time>'
+            '<time pubdate datetime="2016-06-06">b</time>',
+            "2016-06-06",
+        ),
+        ('<span itemprop="dateCreated" content="2015-05-15">May</span>', "2015-05-15"),
+        # Not a key the table names, so not read, however date-like.
+        ('<meta name="expires" content="2030-01-01">', ""),
+        ('<meta name="pdate" content="20190301">', ""),
+        # A nested comment's publication does not outrank the article's own
+        # modification: only the outermost objects that state a date count.
+        (
+            '<script type="application/ld+json">{"@type": "Article",'
+            ' "comment": [{"datePublished": "2024-06-09"}],'
+            ' "dateModified": "2024-06-01"}</script>',
+            "2024-06-01",
+        ),
+        (
+            '<script type="application/ld+json">[{"@type": "WebSite"},'
+            ' {"@graph": [{"@type": "Person"},'
+            ' {"@type": "WebPage", "datePublished": "2020-02-02"}]}]</script>',
+            "2020-02-02",
+        ),
+        # Not JSON: its structure would have to be guessed at.
+        (
+            '<script type="application/ld+json">'
+            '{"datePublished": "2019-05-05",}</script>',
+            "",
+        ),
+        # A month is not a day, and February has no 30th.
+        ('<time datetime="2019-03">March</time>', ""),
+        ('<meta name="date" content="2024-02-30">', ""),
+        ("", ""),
+    ],
+)
+def test_what_counts_as_a_declared_date(markup: str, expected: str) -> None:
+    assert declared_date(markup) == expected
+
+
+def test_trafilaturas_date_is_never_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Whatever date the installed htmldate finds, it is not the one written.
+
+    The property behind every case above, held without depending on which
+    htmldate is installed: a stand-in for Trafilatura that answers a date the
+    page does not declare changes nothing.
+    """
+
+    class _Reading:
+        title = "Field Notes"
+        author = None
+        date = "1999-09-09"
+        sitename = None
+
+    monkeypatch.setattr(discover, "extract_metadata", lambda *_a, **_k: _Reading())
+    assert read_metadata(UNDECLARED).date == ""
+    assert read_metadata(DECLARED).date == "2024-03-05"
+    assert read_metadata(DECLARED).title == "Field Notes"
+
+
+def test_a_declared_date_survives_trafilatura_failing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The date never came from Trafilatura, so its failure cannot take it."""
+
+    def _raise(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("parser exploded")
+
+    monkeypatch.setattr(discover, "extract_metadata", _raise)
+    assert read_metadata(DECLARED) == DiscoveredMetadata(date="2024-03-05")
 
 
 def test_a_page_that_declares_nothing_yields_empty_strings_not_nulls() -> None:

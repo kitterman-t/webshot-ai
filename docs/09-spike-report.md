@@ -591,6 +591,13 @@ their own.
 `article:published_time` fixture proves it); an undeclared one stays empty.
 `tests/test_discovery.py` pins both directions.
 
+*Corrected by P82:* an undeclared date did not stay empty. The fast search
+still read one from the URL's path, a heading, an element classed as a date
+and a copyright year, and htmldate 1.11 added any `YYYY-MM-DD` in the text.
+The fixture held no date anywhere, so it could not see that. The date is now
+read by WebShot from the page's declarations, and Trafilatura's is never
+recorded.
+
 ### P3-4 — RapidOCR ships its models, and narrates every one of them
 
 Two findings from adopting it behind the extra:
@@ -7104,6 +7111,130 @@ runs nowhere until the goldens are re-recorded with a font fingerprint (P7-14,
 This entry is that correction, and the comment there now says what the metric
 can no longer detect. No threshold and no metric code changed.
 
+## P85 — the system tools outside the lock, named when they move (2026-10-17)
+
+`uv.lock` pins every Python package, and Dependabot and the dependency watch
+(P84) keep those pins moving. Four things that shape a capture are not in it:
+
+- Tesseract, from Homebrew or apt, unpinned.
+- The system fonts, which a macOS update rewrites (P7-14).
+- Chromium, which comes through the Playwright version.
+- The CI runner images.
+
+When one of them moves, the first sign has been a golden failure. P7-14's
+twelve failing cases ran under the heading "environment matches the
+recording".
+
+### P85-1 — what was already recorded, and what was not
+
+Before this change, each capture's manifest recorded `tool_versions`:
+
+- WebShot and Playwright;
+- the Chromium build that actually rendered, read over CDP (P8-60);
+- MarkItDown, Trafilatura, docling-slim, docling-core, chonkie and nh3;
+- the first line of `tesseract --version`.
+
+`tests/golden/environment.json` recorded:
+
+- `platform` (`Darwin`);
+- the Python minor version;
+- Playwright;
+- that same Tesseract line;
+- a fingerprint of the fonts, `369 fonts, 9bedbc3ec25e`.
+
+`check.py` compares the four profile keys and drops to the portable profile
+on any difference.
+
+These were recorded nowhere:
+
+- **The OS release.** `platform: Darwin` reads the same before and after a
+  macOS update, and an update is what moved the fonts in P7-14.
+- **Which fonts.** The fingerprint is a count and a digest. On 2026-10-17
+  webshot-ai's golden job, on GitHub's `macos-26-arm64` image 20261013.0424,
+  printed `fonts: recorded '369 fonts, 9bedbc3ec25e', current '370 fonts,
+  33c6dbfbb6b3'`. That says the fonts differ, but not which ones, or how.
+- **Leptonica and Ghostscript.** Leptonica decodes every image Tesseract
+  reads. Ghostscript is OCRmyPDF's PDF/A converter. Neither appeared in any
+  record.
+- **The runner image** a CI job ran on, other than in the job's setup log.
+
+### P85-2 — pin where it can be pinned, name the rest
+
+| Tool | Pinned? | Recorded and named |
+|---|---|---|
+| Chromium | yes, through Playwright in `uv.lock`; one Playwright release drives one Chromium build, and CI's browser cache is keyed on the lock | the manifest's `chromium` (the build that rendered), and now the golden record's `chromium`, read from Playwright's own `browsers.json` |
+| Tesseract and Leptonica | no. Homebrew has no versioned formula for either, and apt's version is the image's Ubuntu release | `tesseract` as before; `leptonica` is new |
+| Ghostscript | no, for the same reasons | `ghostscript` is new |
+| Fonts | no, they are the OS's | `fonts` as before, and `font_files`, the list the fingerprint digests, so a change names each font |
+| The OS | no, it is the machine's | `os` is new: `macOS 27.0 (26A428)`, or the Linux `PRETTY_NAME` with the kernel |
+| Runner images | could be pinned to `macos-26` or `ubuntu-24.04` rather than `-latest`; not done here | `runner`: `github-hosted <ImageOS> <ImageVersion>`, `self-hosted` or `local`, printed and never compared |
+
+The runner labels stay `-latest` for three reasons:
+
+- GitHub retires a pinned image on its own schedule, so a pin swaps a silent
+  move for a forced one.
+- Dependabot does not bump runner labels.
+- The record now names a move either way, on the first run after it.
+
+The recording machine is a different case. On a self-hosted Mac, CI never
+upgrades Tesseract or Ghostscript (`brew list || brew install`); only a
+person does. So `brew pin tesseract leptonica ghostscript`, and deferring
+macOS updates until a recording can follow, are the owner's to choose.
+
+### P85-3 — the golden check names every difference
+
+`environment()` adds `os`, `chromium`, `leptonica`, `ghostscript`, `runner`
+and `font_files`. `PROFILE_KEYS` is unchanged, so none of them chooses the
+profile, and no golden comparison changes. A dimension the recording never
+wrote matched by default until now. It must not force `portable` on the day
+it is first written. `check.py` now prints two things after the profile line:
+
+- one line naming every version the run used;
+- an `environment differs:` line for each recorded dimension the machine
+  differs in. A font difference names each font: changed with its sizes,
+  added or removed, up to eight of each, then a count.
+
+A dimension the recording lacks is printed as "not recorded", never as a
+match (P7-14). In GitHub Actions the real differences also become one
+`::warning`, so the change is named on the pull request's checks, beside
+any golden failure it causes.
+
+`environment.json` gains two keys. Neither is a re-recording, and no golden
+or raster changed:
+
+- **`font_files`**, this machine's 369 fonts. The fingerprint of that list
+  equals the recorded `369 fonts, 9bedbc3ec25e`, so it is the recorded list,
+  barring a 48-bit collision. `test_the_recorded_font_list_is_the_recorded_fingerprint`
+  holds the two together.
+- **`chromium`**, `153.0.8010.12`. It is what Playwright 1.63.0, the
+  recorded version, drives.
+
+`os`, `leptonica` and `ghostscript` are not added, because the machine's
+values when the corpus was recorded on 2026-10-04 cannot be known now. They
+read "not recorded" until the next full recording writes them.
+
+Run on this Mac on 2026-10-17 (`check.py --case article-clean`, strict,
+passed), the check printed the run's versions: macOS 27.0 (26A428), Chromium
+153.0.8010.12, Tesseract 5.5.3 with Leptonica 1.87.0, Ghostscript 10.07.1, and
+the recorded font fingerprint. It printed `environment differs:` for `os`,
+`leptonica` and `ghostscript`, each "not recorded", and would have raised no
+warning.
+
+### P85-4 — the tests
+
+In `tests/test_golden.py`:
+
+- `test_the_recorded_font_list_is_the_recorded_fingerprint`
+- `test_the_fingerprint_is_the_digest_of_the_font_list`
+- `test_a_font_that_changed_is_named`, with P7-14's Helvetica case
+- `test_every_dimension_that_differs_is_named_and_unrecorded_is_not_a_match`
+- `test_the_named_dimensions_do_not_choose_the_profile`
+- `test_only_a_real_difference_becomes_a_ci_warning`
+- `test_the_bundled_chromium_is_read_from_the_locked_playwright`, which fails
+  if a Playwright release moves `browsers.json`, rather than the record
+  reading "unknown" from then on
+- `test_the_environment_names_the_os_release_and_each_tool`
+
 ## P20: a new user's first captures (2026-10-03)
 
 A test of the public copy as a brand-new user would meet it: install, read
@@ -8279,11 +8410,411 @@ Cookiebot and Usercentrics and not OneTrust. Both modes fail on master.
   has a fixed cookie banner of its own over its text, which faithful mode
   keeps on purpose, so the warning would change every faithful golden of that
   page. And Chromium prints a fixed box on every page, so overlap has to be
-  measured on the paginated layout, not on the screen.
+  measured on the paginated layout, not on the screen. P83 builds it, and
+  measures that the fixture's banner covers no printed text.
 - A consent manager inside a frame, other than through the container that
   holds the frame (Sourcepoint's).
 - The scroll lock a dialog leaves on `html` or `body` once it is hidden.
   None was seen to change what printed.
+
+## P83: a fixed or sticky box printed over the page's text, now named (2026-10-17)
+
+P79-4 left out the general warning: a fixed box that covers the page's text
+in the printed layout. This builds it. The branch starts from #245, which adds
+P79; master was fe97b28. Measured with Chromium 153.0.8010.12 (Playwright
+1.63.0) and pypdfium2 5.13.0 (PDFium 153.0.7999.0), at WebShot's default page
+box: Letter, 0.6in margins, scale 0.9, which lays out 779 × 1045 CSS px a page.
+
+### P83-1: how Chromium prints fixed and sticky boxes
+
+A test page of 60 short paragraphs and seven positioned boxes was printed with
+Playwright at a 1280 × 900 window and read back object by object with PDFium:
+
+| Box | What the five-page PDF held |
+|---|---|
+| fixed header, `top: 0`, 50px, `z-index: 10` | drawn on every page at the same place, after the page's own text, over the first lines of pages 2 to 5 |
+| paragraph, `position: relative; z-index: 20` | drawn after the header |
+| fixed box in a corner | drawn on every page |
+| fixed full-window layer, no background, `pointer-events: none` | only its child's text drawn |
+| fixed box, `opacity: 0` | not drawn at all |
+| fixed box, `opacity: 0.7` | drawn inside a form XObject with fill alpha 179/255 |
+| sticky, `top: 0` | drawn where it sits in the flow |
+| sticky, `bottom: 0`, last in the document | drawn on page 1, 930 to 962px down the page's layout, over the last line of a paragraph, not where it sits at the document's end |
+
+The sticky bar's place moves with the window. At WebShot's 1000px window it
+was drawn across the break between pages 1 and 2, over the first line of page
+2.
+
+Two more boxes settled how a box can be measured. Every CSS filter function,
+even one that changes nothing (`opacity(1)`, `brightness(1)`, `blur(0px)`),
+printed the box as a picture, with no text left in it. `filter:
+url(#missing)`, a reference to no filter, and `backdrop-filter` printed it as
+vectors.
+
+P79-4 also said the golden corpus's main fixture has a fixed cookie banner
+over its text. On screen it does. Printed, the bar is on all three pages of
+`article-faithful`, 43.9 to 85.7pt above each page's bottom edge, and every
+page's text ends above it, so it covers none and no golden moves (P83-6).
+
+### P83-2: what the warning measures
+
+After the render, and before the clipping check, whose narrower viewport can
+load images and move the layout, `render/covering.py` finds every outermost
+element whose computed `position` is `fixed` or `sticky` and which has a box,
+in the document and its open shadow roots. What the capture hid (P79's consent
+managers, clean mode's noise, `--exclude`) is `display: none`, has no box, and
+is not a candidate.
+
+Each box is then painted in a colour of its own: its text, backgrounds,
+borders, outlines, SVG fills and pseudo-elements, at the alpha each colour
+had, in a colour the page does not use. A picture or a background picture in
+the box paints its whole box in the colour, because its pixels carry none of
+the box's. Shadows are switched off, and a filter is swapped for
+`url(#webshot-ink-no-filter)`, which prints the box as vectors and, as any
+filter does, keeps it the containing block of its fixed descendants, where
+`filter: none` would move them. The page's own pictures are hidden, which
+paints nothing new and moves nothing.
+
+The page is printed a second time with the render's page box and backgrounds,
+untagged, and PDFium reads every page: each object in paint order, its bounds
+carried out of any form XObject and cut to its clip, its alpha times its
+groups'; and each character, with its box and the object that drew it. A
+character of the page's text is covered when one of the box's objects is
+drawn later, at least half opaque, over the character's centre. Paint order is
+z-order, so text the page raises above the box is not covered. Alpha is
+opacity. `pointer-events` is never read, because nothing about it prints.
+
+Not counted: spaces; characters drawn at under half opacity, such as the
+recognized-text layer at 1% (P16-20); and text a fixed box draws, its own or
+another fixed box's, because chrome over chrome is the same on screen as in
+print. A sticky box's text is in the page's flow and is counted.
+
+One warning per box that covers anything names it as a selector (tag, id, up
+to three classes, and its parent when it has no id), the pages where it
+covers text, the characters and the distinct lines covered, the first covered
+stretch up to 60 characters, and the `--exclude` that leaves it out:
+
+> A fixed box, div.notice-bar, prints over 50 characters of the page's text in
+> 2 lines on both pages, starting "Under the notice bar, line one". The text
+> stays in the PDF's text layer, but on the page the box is drawn over it.
+> Pass --exclude "div.notice-bar" to capture the page without the box.
+
+What would make the count wrong is a warning of its own. A box whose colours
+did not take, because a page's inline `!important` outranks any sheet, is
+named with what it kept. A marking that moved any element's layout, a
+measuring print that failed or whose page count differs from the PDF's, and
+text in it whose characters PDFium tied to no object, so that none could be
+covered, each mean no measurement, and the warning says which.
+
+### P83-3: a box on every page
+
+A box Chromium repeats on every page is named once, never per page. The
+warning names the pages where it covers text, because those are what a reader
+loses, and also the pages it prints on when there are more. A pinned header
+over the blank top of page 1 and over the first lines of every later page
+reads:
+
+> A fixed box, div > div.fixed.inset-x-0.top-0, prints on all 9 pages, and
+> over 423 characters of the page's text in 18 lines on pages 2-9, ...
+
+There is no minimum. A corner widget over the last three letters of one line
+is reported as three characters, and the count tells the reader how much it
+matters. A box over blank margin only, like the main fixture's bar, is not
+reported at all.
+
+Measured on 14 public pages in both modes, captured live with `--no-ocr`.
+Each warning marked † was checked against a rendering of the page it names.
+
+
+| # | Page | Mode | Pages | Boxes | Measured in | Warning |
+|---|---|---|---|---|---|---|
+| 1 | an international forum's article (P79's) | faithful | 6 | 2 | 0.20s | fixed navigation placeholder: 95 characters, 4 lines, pages 2-3 and 6 † |
+| | | clean | 6 | 8 | 0.24s | fixed navigation bar: 57 characters, 2 lines, pages 2-3 |
+| 2 | a web reference's article | both | 16, 15 | 0 | | none |
+| 3 | an encyclopedia article | both | 5 | 1 | 0.18s | none |
+| 4 | a language's library reference | faithful | 23 | 1 | 0.86s | none |
+| | | clean | 23 | 0 | | none |
+| 5 | a WordPress blog's index | both | 7 | 1 | 0.21s | none (P83-4) |
+| 6 | a technology news site's index | faithful | 26 | 2 | 1.44s | fixed privacy banner, printed on all 26 pages: 1,549 characters, 44 lines, on 10 of them † |
+| | | clean | 22 | 1 | 0.45s | none: clean mode left the banner out |
+| 7 | a broadcaster's technology index | faithful | 11 | 5 | 0.32s | sticky subscription bar: 224 characters, 6 lines, page 1 † |
+| | | clean | 10 | 3 | 0.27s | sticky subscription bar: 152 characters, 3 lines, page 1 |
+| 8 | a technology magazine's front page | faithful | 13 | 6 | 0.52s | fixed advertising frame: 27 characters, 2 lines, page 1 † |
+| | | clean | 12 | 5 | 0.36s | none |
+| 9 | a newspaper's technology index | faithful | 5 | 1 | 0.17s | none |
+| | | clean | 5 | 0 | | none |
+| 10 | a CSS specification | both | 44, 42 | 0 | | none |
+| 11 | a CSS framework's documentation | both | 9 | 6 | 0.41s, 0.36s | fixed header, printed on all 9 pages: 423 characters, 18 lines, pages 2-9 † |
+| 12 | a UI library's tutorial | both | 18 | 12 | 1.39s, 1.51s | none |
+| 13 | a cloud provider's documentation | both | 6 | 0 | | none |
+| 14 | a code host's documentation | both | 4 | 4 | 0.17s | none |
+
+Five of the fourteen pages printed a box over their text in at least one
+mode, and three of the five in clean mode, the default. The rendered pages
+showed what each † warning claims: the forum's logo on an off-white band over
+the heading "Have you read?" at the top of page 2; the privacy banner over a
+headline at the bottom of page 2; the subscription bar halfway down page 1
+over a lead headline; a video advertisement over all of page 1 under the
+magazine's header, which the page draws above it and the warning does not
+count; and the framework's header over the top of page 3, one of the eight
+pages it names.
+
+Sites change between loads. A second faithful capture of the news site the
+same afternoon found the banner over 1,782 characters in 50 lines, on 12 of
+25 pages.
+
+### P83-4: an inline colour moved a box on a WordPress blog
+
+The first version wrote the colours into each element's `style` attribute,
+with `!important`, which no page rule outranks. On the WordPress blog
+(page 5), clean mode then warned that a sticky box covered 48 characters, "Copilot SDK
+for Java", on page 3. The PDF published beside it shows the line in full.
+
+The box, `div#ghcc`, is empty: `position: sticky; bottom: 0; z-index: 99999`
+and 0px tall. In the measuring print it was 6px tall, drawn across the page
+over that line. The blog's block styles hold, for each side,
+`html :where([style^="border-top-color"], [style*=";border-top-color"],
+[style*="; border-top-color"]) { border-top-style: solid; }`, so that a block
+given a border colour in the editor shows its border. Setting
+`border-top-color` inline gave the box a solid `medium` border, 3px, top and
+bottom: the colours had changed the layout they were measuring.
+
+The colours now come from an adopted stylesheet whose rules match an attribute
+on each painted element, at a specificity (eight ids, through `:is()`) no page
+rule reaches, and nothing writes a `style` attribute. Elements with the same
+declarations share a rule, so a box of thousands of elements adds a handful.
+The cost is that a page's own inline `!important` colour now beats the
+marking, and that box is reported as not marked. Before printing, the layout
+of every element (`offsetLeft`, `offsetTop`, `offsetWidth`, `offsetHeight`) is
+compared with what it was before marking, after a frame in which the page's
+own scripts could react. Given one inline `border-top-color` on an empty
+sticky box under those rules, the comparison reports 4 elements moved, the
+first `html from 0,0,1280,76 to 0,0,1280,87`. The blog's warning is gone in
+both modes.
+
+### P83-5: the measuring print's cost
+
+The first measuring print printed the page's pictures too. On the
+broadcaster's page in clean mode that took 5.63s for 11 pages, the PDF
+published beside it being 37.6 MB. With the page's pictures hidden it took
+0.21s and 0.27s on two later captures of the same page, and 0.17s to 1.51s
+across the table above. A page with no fixed or sticky box pays one script
+run and no print.
+
+### P83-6: the tests
+
+`tests/fixtures/covering_boxes_page.html` lays out two pages of 30px lines
+that never wrap, so every line sits at the same place in any font. It holds a
+fixed notice bar over one line on each page and, on page 2, a line the page
+raises above the bar; a sticky masthead; a fixed badge in the gutter; a fixed
+panel at 30% opacity over text; a fixed full-window layer with
+`pointer-events: none`; and a Cookiebot dialog over text. In both modes the
+manifest's warnings, P79's aside, are exactly one: the notice bar, 50
+characters in 2 lines on both pages. With `--exclude "div.notice-bar"` there
+is none.
+
+`tests/test_covered_text.py` also holds the rule on PDFium's records directly
+(paint order, alpha, a character's centre, chrome over chrome, a box that was
+not marked, the sample, the pages), the warnings' wording, and a browser test
+that marks and restores a page holding the blog's border rules, a
+pseudo-element, an inline `!important` colour, a shadow root with a transition
+and an SVG: the colours take where they can, no element moves, the inline
+colour is reported, and the page's markup, colours and adopted sheets come
+back as they were.
+
+No golden moved: the only golden page with a fixed box is the main fixture,
+whose bar covers no text (P83-1).
+
+### P83-7: what this does not cover
+
+- A fixed box inside a frame, which prints inside the frame's box. A frame's
+  text under a box of the page's is counted.
+- A picture: one in a box counts as covering its whole box, transparent parts
+  too, and the page's pictures under a box are not counted, only its text.
+- A box's shadow, which is drawn over the text below a pinned header but
+  rarely hides it.
+- A page script that reacts to the marking without moving anything, such as
+  one that repaints a box, between the layout check and the print.
+- Text Chromium prints smaller than 0.25px, whose narrow letters PDFium does
+  not read (P20-8). The recognized-text layer is the only such text WebShot
+  prints, and it is not counted anyway.
+- Moving or hiding any of these boxes. Which is chrome and which is the page
+  is the reader's call, and `--exclude` is the remedy the warning names.
+## P84 — dependency updates that stopped without a word (2026-10-17)
+
+A review on 2026-10-17 found that dependency updates had stopped arriving for
+about a week, and nothing had said so. What webshot-ai's record showed that
+day:
+
+- Dependabot opened nine pull requests on 2026-10-13, webshot-ai#25 to #33.
+  Five were uv bumps, which is the limit of five open pull requests per
+  ecosystem. None ran CI for days, because every workflow had been turned off.
+  With five uv bumps open, Dependabot proposed no other uv update. Markdown
+  3.11, released on 2026-09-25, was never proposed, and docling-slim was eight
+  releases behind (2.132.0 against 2.140.0).
+- webshot-ai#26 and #28 passed every check and stayed open, because GitHub had
+  turned their auto-merge off (P84-3).
+- The one check that looked for stale bumps read an empty answer as "none
+  stale".
+
+No part of the pipeline failed in a way that sends an email. Dependabot has
+nothing to report when it reaches its limit, a pull request that never runs
+CI never fails, and a disabled workflow is silent.
+
+### P84-1 — judging the pipeline by its results: the dependency watch
+
+`tools/audit/staleness.py`, run daily by `.github/workflows/dependency-watch.yml`
+on a GitHub-hosted runner, asks whether updates are arriving, not whether each
+part of the pipeline is running. It judges three things:
+
+- **Direct dependencies.** Every package `pyproject.toml` names, at the
+  version `uv.lock` pins, against PyPI. A pin is stale once the *first*
+  release newer than it has been out longer than Dependabot's cooldown for
+  that kind of release (P84-2) plus 14 days. That allows one weekly run to
+  propose the release and one more week to merge it. The wait counts from the
+  first newer release, not the newest: a project that releases every week
+  always has a fresh newest release, so measuring from that would never find
+  the lock behind. Pre-releases, and releases whose files are all yanked, do
+  not count, and a pinned version that PyPI has yanked or does not list is a
+  finding of its own.
+- **Pinned actions.** Every `uses: owner/repo@<sha> # <tag>` in the workflows
+  is judged against the action's releases by the same rule. The tag in the
+  comment must also still name the pinned commit. In March 2025 every tag of
+  tj-actions/changed-files was moved to a malicious commit. A SHA pin is safe
+  from that, but the next bump, made from the tag, is not. A `uses:` with no
+  SHA, or with no tag comment, is a finding.
+- **Dependabot's pull requests.** Four cases are findings: a bump whose checks
+  failed (at once), a bump older than 6 h that no check has run on, a bump
+  older than 6 h whose auto-merge is off, and a bump open for 72 h. Each finding
+  names its remedy.
+
+Transitive pins are not judged. Dependabot proposes direct dependencies only,
+and a transitive pin moves when what depends on it allows it to. On
+2026-10-17, 64 of the 148 transitive pins were behind PyPI. The oldest was
+antlr4-python3-runtime 4.9.3, 1,650 days behind. An alarm that is always red
+is one nobody reads. tools/audit/check.py audits the transitive pins for
+vulnerabilities, and the watch prints how many pins it left unjudged.
+
+An update can be held back on purpose in `tools/audit/holds.toml`, with a
+reason and a date to look again. An expired hold is a finding, and so is a
+hold on something no longer behind, so the list cannot outlive its reasons.
+
+The watch fails loudly when it cannot judge. A lock that pins nothing, a
+direct dependency the lock does not pin, a PyPI or GitHub answer that does
+not come, a malformed hold, or a crash makes the run INCOMPLETE (exit 2),
+which fails it as surely as a stale pin does (exit 1). It keeps one issue
+open, "dependencies: updates have stalled". The body is rewritten on every
+run, and a comment is added only when a problem appears that the issue did
+not already list, so each notification means something new. The issue is
+written with the workflow's token, so it is GitHub Actions' and GitHub
+notifies the owner of it. An issue written with the owner's own token
+notifies nobody. The issue also mentions the owner. If the check dies before
+it reaches the issue, the workflow's last step opens one anyway. The issues
+are listed, never searched: a search once answered another repository's
+token with nothing.
+
+Run on 2026-10-17 against webshot-ai's master (2b10d2d) with that day's PyPI
+and pull requests, it found 3 problems in 28 direct pins, 10 pinned actions
+and 1 open Dependabot pull request:
+- markdown 3.10.3, 22 days behind 3.11 (minor; 21 days allowed);
+- webshot-ai#30 (trafilatura 2.3.1), whose golden corpus had failed;
+- the same bump, open 110 h.
+
+A scheduled run that day would have opened the issue with those three.
+
+`tests/test_dependency_staleness.py` holds each threshold at its edge, the
+first-newer rule, yanked and missing versions, holds and their expiry, the
+`uses:` parsing (commented lines are not read), a moved tag, every pull
+request case, and each input that cannot be read. It also holds the
+listing's freedom from search, the issue's open, rewrite, comment and close,
+a crash that still reaches the issue, the cooldown against `dependabot.yml`,
+and the workflow's shape.
+
+### P84-2 — a release on its first day: the cooldown
+
+A green bump merges itself, so a release proposed on its first day is
+installed on its first day. The first days are when a hijacked, broken or
+withdrawn release is still live. Compromised releases of ultralytics on PyPI
+(December 2024) and the moved tags of tj-actions/changed-files (March 2025)
+were each found and pulled within about a day. `dependabot.yml` had no
+`cooldown`, which GitHub's options reference says leaves version updates at
+a default of three days.
+
+Each ecosystem now names its own cooldown:
+
+| Ecosystem | Patch | Minor | Major | Other |
+|---|---|---|---|---|
+| uv | 3 days | 7 days | 14 days | 7 days |
+| GitHub Actions | 7 days | 7 days | 7 days | 7 days |
+
+The reasons for each:
+
+- **uv, patch.** Patch releases are fixes and should arrive soon, and three
+  days outlasts the incidents above.
+- **uv, minor.** A minor release adds features and, with them, regressions,
+  which a week usually brings out.
+- **uv, major.** A major release breaks an API on purpose. It usually needs a
+  bridge change and re-recorded goldens anyway, and its first fixes follow
+  within two weeks, so waiting for them costs nothing.
+- **GitHub Actions.** Dependabot accepts only `default-days` for actions; the
+  options reference lists GitHub Actions among the ecosystems the semver keys
+  do not support. An action runs with the job's token, and its tags are what
+  an attacker moves, so a week. An action bump is rarely urgent.
+
+Security updates are not delayed by any of this. GitHub's reference says
+cooldown is only for version updates, and Dependabot sends a security update
+as soon as its advisory exists.
+
+The watch's thresholds are these numbers plus 14 days. `COOLDOWN_DAYS` in
+staleness.py and `dependabot.yml` are held to each other by
+`test_the_alarm_and_dependabot_agree_on_the_cooldown`, so the alarm cannot
+expect a release earlier than the pipeline will propose it.
+
+### P84-3 — a bump that edits a workflow, behind a base whose workflows moved
+
+webshot-ai#26 (setup-uv 10.3.0) and #28 (upload-artifact 7.0.2) both edit
+`ci.yml` and `release.yml`. After they were opened, #27 changed
+`release.yml` on master, at 2026-10-17 16:54Z. GitHub then turned their
+auto-merge off: "Tried to create or update workflow without `workflows`
+permission". Their merge commits would have written workflow text that
+neither side held. The GITHUB_TOKEN that `dependabot-auto-merge.yml` arms
+with cannot be given that permission, so the merge was refused. #26 was
+merged by hand at 19:02Z. Dependabot then rebased #28 onto that master, its
+workflow files became its own text on top of master's, and the auto-merge
+the same GITHUB_TOKEN armed merged it at 19:21:36Z (2b10d2d, merged by
+`github-actions`). So far a bump that edits a workflow has merged itself
+whenever its workflow files were up to date with master's: #25, #27, and #28
+once rebased. It was refused only when the merge would have combined two
+versions of one workflow file.
+
+**Recommended remedy: comment `@dependabot rebase` on the affected bump.**
+The rebased bump is armed again by `dependabot-auto-merge.yml`, which runs on
+every push to the pull request. The watch names such a bump: auto-merge off
+after 6 h, and the bump edits a workflow file. The case is rare. It needs two
+workflow-editing pull requests open together, one merging under the other.
+
+**The alternative, not adopted:** arm with a fine-grained token that has
+Workflows read and write on webshot-ai. It would be stored as a *Dependabot*
+secret, because a run started by Dependabot receives only Dependabot secrets,
+not Actions secrets. That fixes the case without a person, and a merge armed
+with that token would be the owner's, so push-triggered workflows would run
+on it. Its cost is a long-lived credential able to rewrite every workflow in
+the repository, available to every Dependabot-triggered run that names it,
+to be rotated before it expires, in exchange for one comment on a rare bump.
+The decision is the owner's; nothing here creates a token or a secret.
+
+### P84-4 — a hold judged pin by pin
+
+Review of #248: `judge_behind` runs once per pin, but a hold names a package
+or an action, not a pin. One name can have two pins: a lock forked by an
+environment marker pins two versions of a package, and a bump made in one
+workflow and not another pins an action two ways. With one pin behind and
+held, and the other current, the current one reported the hold as no longer
+needed while the other still needed it. `test_a_hold_on_a_name_with_one_pin_behind_and_one_current_is_still_needed`
+and `test_a_hold_on_an_action_pinned_two_ways_is_still_needed` failed on
+#248's code (562f857) with exactly that finding. Each pin now only records
+whether it is behind, and `run_watch` decides once per name, after every pin
+is judged, that a hold is unneeded when none of its pins is behind.
 
 ## P27: what MarkItDown's Office readers pass over (2026-10-11)
 
@@ -13961,3 +14492,166 @@ size and named.
   originals are one request away at the addresses the page gave them.
 - The walkthrough appendix, whose pages are screenshots at their own size,
   and the protected path, which builds its PDF from page images.
+
+## P82: a date the page never declared, read by htmldate (2026-10-17)
+
+Dependabot's bump of trafilatura from 2.2.0 to 2.3.1 in webshot-ai (#30)
+also moves htmldate from 1.10.0 to 1.11.0, and the golden check failed on one
+line: the `text-notes` case, built from `tests/fixtures/sample_notes.txt`,
+recorded `"date": "2026-07-16"` where it had recorded `""`. The text of that
+file says "Service restored: 2026-07-16 14:32 UTC". Nothing in it declares a
+date.
+
+### P82-1: what htmldate 1.11 added
+
+adbar/htmldate#193 (commit 9d4516d) gives the fast search, `extensive=False`,
+a last resort. When nothing else matched, it returns the first `YYYY-MM-DD`
+in the page's text, scripts and styles removed. `capture/discover.py` called
+`extract_metadata(html, extensive=False)`, so this reached the manifest's
+`discovered_metadata.date`. P3-3 turned the extensive search off so that a
+date the page does not declare stays empty, and `test_an_undeclared_date_is_not_invented`
+pins that with a page holding no date at all, so it could not see this.
+
+### P82-2: what the fast search already read on master's pins
+
+The bump only added a cue. `extract_metadata(html, extensive=False)` on the
+fixtures in `tests/fixtures/declared_dates/`:
+
+| fixture | the page declares | 2.2.0 + htmldate 1.10.0 | 2.2.0 + 1.11.0 | 2.3.1 + 1.11.0 |
+|---|---|---|---|---|
+| `bare_date_in_paragraph.html` | nothing | None | 2019-03-01 | 2019-03-01 |
+| `undeclared_cues.html`, URL `/2015/04/03/audit` | nothing | 2015-04-03 | 2015-04-03 | 2015-04-03 |
+| `undeclared_cues.html`, URL `/audit` | nothing | 2017-01-01 | 2017-01-01 | 2017-01-01 |
+| `meta_date_and_body_date.html`, URL `/2015/04/03/notice` | 2024-03-05 | 2015-04-03 | 2015-04-03 | 2015-04-03 |
+| `time_behind_heading_date.html` | 2022-11-30 | 2018-12-31 | 2018-12-31 | 2018-12-31 |
+| `json_ld_date.html` | 2021-06-07 | 2021-06-09 | 2021-06-09 | 2021-06-09 |
+| `unreadable_declarations.html` | no readable date | 2024-03-05 | 2024-03-05 | 2024-03-05 |
+| `future_declared_date.html` | 2091-01-02 | None | None | None |
+| `meta_date_and_body_date.html` | 2024-03-05 | 2024-03-05 | 2024-03-05 | 2024-03-05 |
+| `time_datetime.html` | 2022-11-30 | 2022-11-30 | 2022-11-30 | 2022-11-30 |
+| `published_over_modified.html` | 2023-01-15 | 2023-01-15 | 2023-01-15 | 2023-01-15 |
+
+Each wrong answer has its own cause, read from htmldate's `find_date`:
+
+- **The URL is read first.** A date in the URL's path wins before any
+  `<meta>` is looked at, so a page that declares 2024-03-05 recorded
+  2015-04-03 from its address.
+- **A year becomes a day.** `<meta itemprop="copyrightYear" content="2017">`
+  is kept in reserve as 2017-01-01.
+- **Text is read before `<time>`.** A heading's text, and the text of an
+  element whose class or id says "date", come ahead of the `<time>` elements.
+  Taken one at a time, `<h1>Shelf Audit 2018-12-31</h1>` gave 2018-12-31 and
+  `<div class="post-date">Updated 2017-05-06</div>` gave 2017-05-06.
+- **JSON-LD is read with a regular expression.** The first
+  `"datePublished"` in the block's text wins, here a comment's, one level
+  inside the article that declares its own.
+- **Ambiguous values are resolved by guessing.** `DC.date` `05/03/2024` alone
+  gave 2024-03-05, the fifth of March; read the American way it is the third
+  of May. `March 5, 2024` alone also gave 2024-03-05.
+- **The calendar decides.** trafilatura passes `max_date` as today, so a
+  declared date later than today is dropped. The same page would record its
+  date once that day passed.
+
+So P3-3's "an undeclared one stays empty" was not true on master's own pins.
+A capture recorded a date from the URL, a heading or a copyright year, and
+which one depended on htmldate's order of cues, which 1.11 changed.
+
+### P82-3: the design, and the one not chosen
+
+Two designs keep only declared dates.
+
+The first keeps Trafilatura's date when it matches a date declared in the
+markup. It changes the least: every date master recorded that the page
+also declares stays the same. It is not correct, for three reasons. A
+declared date is lost when htmldate reaches an undeclared cue first:
+`time_behind_heading_date.html` would record nothing, though the page
+declares 2022-11-30, and so would any page whose URL holds a date other than
+the one it declares. The answer still depends on the calendar, because
+htmldate drops a future date before any check sees it. And the choice
+between declared dates, and between a declared date and a cue, stays
+htmldate's, so a later release can still move a recorded date, as 1.11 did
+here.
+
+The second reads the declarations in the bridge and ignores Trafilatura's
+date. That is the design taken. `declared_date` in `capture/discover.py`
+reads them with the standard library's `HTMLParser`, so no upstream type is
+involved and no htmldate release can change what counts. Title, author and
+sitename are still Trafilatura's. `extensive=False` stays, as the cheaper
+search to throw away. The second parse costs little: on a 0.36 MB page
+made of `professional_page.html` repeated, `declared_date` took 16 ms where
+`extract_metadata` took 95 ms and the whole `read_page` 345 ms, on a machine
+at load 136.
+
+### P82-4: what counts as a declaration
+
+- **A `<meta>`** whose `property`, `name`, `itemprop` or `http-equiv` is in
+  `_META_DATE_KEYS`: Open Graph's `article:published_time` and
+  `article:modified_time` and Facebook's `og:updated_time`; schema.org's
+  `datePublished`, `dateCreated` and `dateModified`; Dublin Core's `DC.date`,
+  `DC.date.issued`, `DC.date.created`, `DC.date.modified` and the `DCTERMS.`
+  forms, with `dc:` and `dcterms:` read as the same keys; the Highwire Press
+  `citation_publication_date`, `citation_date` and `citation_online_date`;
+  and `date`, `pubdate` and `last-modified`. A key outside the table is not
+  read. htmldate's tables name 92 keys, many of them one vendor's. A table
+  WebShot owns can be reviewed, and adding a key is a one-line change.
+- **schema.org dates in JSON-LD.** `datePublished`, `dateCreated` and
+  `dateModified`, in a `<script type="application/ld+json">` block parsed as
+  JSON. Only the outermost objects that state a date are read, the items of
+  an array or `@graph` counting at the array's level, so a comment's or a
+  review's date never counts when the article around it states one. A block
+  that is not JSON is not read.
+- **schema.org dates as microdata.** An `itemprop` of one of the three, on any
+  element, with a `content` or `datetime` value.
+- **A `<time>`.** Its `datetime`, or its text when it has none. A `<time
+  pubdate>` counts as a publication.
+
+A publication or creation outranks a modification, and both outrank a plain
+`<time>`. Among equals the first in the document wins. On the three
+fixtures master read right, the answer is unchanged.
+
+A value is read only when it starts with a date no reader can take two ways:
+a four-digit year, then month and day, as ISO 8601 writes it (`2024-03-05`,
+`20240305`) or with Highwire's slashes (`2024/03/05`), not run into more
+digits, and a real day of the calendar. What follows is ignored, so
+`2024-03-05T23:30:00-05:00` is 2024-03-05, the date the page wrote in its
+own offset. A year or a month alone is not a date. An unreadable value is
+passed over, and the next declaration is read.
+
+### P82-5: what this does not cover
+
+- **Author and sitename are still Trafilatura's**, and they are not all
+  declared either. `<div class="byline">By Jane Doe</div>` gave the author
+  "Jane Doe", and a page that names no site got the URL's host name as its
+  sitename. The manifest's docstring said an empty string means the page
+  declared nothing, for every field. It now says that of the date alone, and
+  calls the other three Trafilatura's readings.
+- **A placeholder is a declaration.** `0000-00-00` is not a calendar date and
+  is passed over, but a CMS that writes `0001-01-01` for no date gets that
+  date recorded.
+- **Microdata text.** `<span itemprop="datePublished">2024-03-05</span>`,
+  with no `content`, is not read. Only a `<time>`'s text is.
+- **Microdata scopes.** `itemscope` is not followed, so a comment's
+  `itemprop="datePublished"` counts as the page's, and it outranks the
+  article's own `dateModified`. JSON-LD has that rule and microdata does not:
+  following a scope means knowing which element each end tag closes, and
+  HTML's optional end tags make that unreliable from a stream of tags.
+- **A scan of real pages.** The fixtures are made for this entry. No set of
+  captured pages' own markup was compared between master and this change,
+  so how often a key outside the table loses a date a page declares is not
+  measured.
+
+### P82-6: the tests
+
+`tests/test_discovery.py` reads the nine fixtures, two of them at a second
+URL, and the page WebShot builds from `sample_notes.txt`. It holds the value
+rules on inline markup, and it replaces `extract_metadata` with a stand-in
+that answers 1999-09-09, which shows Trafilatura's date never reaches the
+record whatever htmldate is installed.
+
+Those twelve fixture and `text-notes` checks, run against master's
+`discover.py`, fail 7 of 12 under trafilatura 2.2.0 with htmldate 1.10.0,
+and 9 of 12 under 2.2.0 with 1.11.0 and under 2.3.1 with 1.11.0. The two
+that 1.11 adds are the bare date and `text-notes`, which gives 2026-07-16
+there, the value #30's golden check found. With this change none fails, and
+all 46 tests in the file pass under each of the three. No golden changed:
+every case already recorded `"date": ""`.

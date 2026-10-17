@@ -35,6 +35,7 @@ this locks the render engine, which is acceptable.
 |---|---|
 | **ADOPT (retained)** | **pypdf** (BSD) — structural validation; **`add_attachment` with `AFRelationship`** for associated-file embeds, plus merge, bookmarks and link rewriting on the protected path. Three things it does not do for you, all found by veraPDF: the document-level `/AF` array, `/UF` on the file specification, and leaving the MIME `/Subtype` unescaped (docs/09 S2, P1-3) |
 | **ADOPT (done, Phase 1)** | **img2pdf** (LGPL-3.0, dynamic use OK per license policy; locked at 0.6.3) — lossless page-image packing on the protected path (direct JPEG/PNG embedding, no re-encode). A custom `layout_fun` keeps WebShot's own page geometry rather than deriving it from a screenshot's meaningless DPI metadata |
+| **ADOPT (done, P83)** | **pypdfium2** (BSD-3-Clause and Apache-2.0, with PDFium's BSD-3-Clause; locked at 5.13.0, PDFium 153) — reads a PDF as a viewer draws it: every object in paint order with its bounds, clip and colour, and every character's box and the object that drew it. The covered-text check reads the PDF Chromium printed to find page text a fixed or sticky box is drawn over, which needs both. Already in the tree through OCRmyPDF, so adopting it adds nothing to the install. Behind `render/pdfium_bridge.py`. Considered: pypdf, which gives a text run's position but not its glyphs' extent, nor what is drawn after it; pdfminer.six (also in the tree), which reads character boxes and colours in stream order in pure Python, and was not measured here; measuring on the screen instead of the PDF, which cannot see pagination push each line that crosses a page break onto the next page |
 | Not used for embeds | pikepdf (MPL-2.0): a good library, and in the tree anyway as an OCRmyPDF dependency. Its attachment API does support AFRelationship (pikepdf issue #463, which an early draft of this table cited as open, is resolved); pypdf is used because it already did the embedding in this codebase ([ADR-0007](adr/0007-pdf-embedding-pypdf.md)) |
 | **OPTIONAL gate (done, Phase 1)** | **veraPDF** (GPLv3+/MPL dual — external tool, never linked): the industry PDF/A / PDF/UA validator. Run via a user-installed CLI (1.30.2 via Homebrew) or the `verapdf/cli` Docker image; JSON reports parsed into the QA report. Behind `--validate-pdf` and a non-blocking CI job. Absent validator → warning, never a silent pass |
 | Watch | **OpenDataLoader PDF** (Apache-2.0 core): auto-tagging of untagged PDFs per the Well-Tagged PDF spec, veraPDF-validated. The only candidate for making the *image-based protected-viewer* PDFs structurally tagged. Enterprise add-ons gate PDF/UA export; re-evaluate quarterly |
@@ -77,7 +78,7 @@ this locks the render engine, which is acceptable.
 
 | | |
 |---|---|
-| **ADOPT (done, Phase 3)** | **Trafilatura** (Apache-2.0, locked at 2.2.0) — runs on the *captured, post-JS* HTML to (a) power `--auto-selector` main-content identification, (b) enrich manifest metadata (title, author, date, sitename) on **every** capture, as additive fields. It reports article *text*, not a selector, so `capture/prepare.py` locates that text back in the live DOM by vocabulary coverage and isolates the tightest element holding it; the v2 static list is the fallback and `manifest.content_discovery.strategy` records which won. One default is corrected at the seam (docs/09 P3-3): `extract_metadata(extensive=True)` *infers* a publication date for pages that declare none, which a capture tool must not record — the extensive pass is off |
+| **ADOPT (done, Phase 3)** | **Trafilatura** (Apache-2.0, locked at 2.2.0) — runs on the *captured, post-JS* HTML to (a) power `--auto-selector` main-content identification, (b) enrich manifest metadata (title, author, date, sitename) on **every** capture, as additive fields. It reports article *text*, not a selector, so `capture/prepare.py` locates that text back in the live DOM by vocabulary coverage and isolates the tightest element holding it; the v2 static list is the fallback and `manifest.content_discovery.strategy` records which won. Its date is not used (docs/09 P3-3, P82): htmldate *infers* a publication date for pages that declare none, from the text with `extensive=True` and from the URL, a heading or (since htmldate 1.11) any `YYYY-MM-DD` in the text without it, which a capture tool must not record. The bridge reads the date the page declares itself |
 | Rejected | readability-lxml (stale), Defuddle (JS runtime), Jina ReaderLM (model inference for a heuristic's job) |
 
 ## 9. Local-format adapters
@@ -134,10 +135,11 @@ this locks the render engine, which is acceptable.
 
 ## License summary of the resulting tree
 
-Direct runtime deps: Playwright, pypdf, pydantic, docling-slim(+extras),
+Direct runtime deps: Playwright, pypdf, pypdfium2 (direct since P83, in the
+tree before that through OCRmyPDF), pydantic, docling-slim(+extras),
 chonkie, Trafilatura, MarkItDown, nh3, Pillow, Markdown, defusedxml,
 img2pdf (LGPL), OCRmyPDF (MPL-2.0), mcp; notable transitives via OCRmyPDF:
-pikepdf (MPL-2.0), fpdf2, pypdfium2, cryptography, lxml, pdfminer.six,
+pikepdf (MPL-2.0), fpdf2, cryptography, lxml, pdfminer.six,
 uharfbuzz, fonttools (and pi-heif until OCRmyPDF 17.12.1 dropped it); via
 MarkItDown: magika and **onnxruntime**, which is
 weight the default install did not carry before Phase 3 (docs/09 P3-2) — **all

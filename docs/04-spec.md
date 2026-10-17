@@ -491,6 +491,20 @@ there with its reason, and the run's job summary lists every skip.
     limit whose encoding cannot be rewritten exactly is left as it is and
     named in a warning, and a file that cannot be read for the pass says so.
     A file with nothing to reduce keeps its bytes (docs/09 P80).
+16. **A box printed over the page's text:** Chromium prints a `fixed` box on
+    every page and a `sticky` box where the window left it, over whatever
+    text the page has there. After the render, a capture MUST measure, on the
+    printed pages rather than the screen, the page text each such box is
+    drawn over, and record one manifest warning per box that covers any,
+    naming the box, the pages, the characters and lines it covers and the
+    first of them. A character is covered when the box paints over its
+    centre later in paint order and at least half opaque, so z-order and
+    opacity count and `pointer-events` does not. Text another fixed box draws
+    is page chrome and is not counted; the consent dialogs item 5 hides, and
+    anything else the capture hid, have no box and are not measured. A
+    measurement that could not be made, or a box that could not be marked
+    for it, is itself a warning. WebShot does not move or hide such a box;
+    `--exclude` is the remedy (docs/09 P83).
 
 ## 6. Security requirements (carried forward and new; all MUST)
 

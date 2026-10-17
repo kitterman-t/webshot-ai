@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A ledger under a notice bar</title>
+<!-- docs/09 P83. Fixed and sticky boxes, and the page text each prints over.
+     Chromium prints a fixed box on every page at the same place. At the
+     default page box (Letter, 0.6in margins, scale 0.9) a page holds 1045px
+     of layout, so the notice bar, 100px tall and fixed to the bottom of the
+     window, covers 945-1045px of every page. Each line is 30px tall and never
+     wraps, and the second page starts with a page break, so every line sits
+     at the same place whatever font draws it: one line under the bar on each
+     page, and on page two a line the page raises above the bar. All of the
+     text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/30px sans-serif; color: #111; background: #fff; }
+  .column { width: 380px; margin-left: 20px; }
+  .line { height: 30px; white-space: nowrap; overflow: hidden; }
+  .gap-1 { height: 60px; }
+  .gap-2 { height: 50px; }
+  .second { break-before: page; }
+  /* Sticky, at the top: printed where it sits, over nothing. */
+  .masthead { position: sticky; top: 0; height: 60px; background: #dde; }
+  /* Fixed to the window's bottom edge, over the text: the one warning. */
+  .notice-bar { position: fixed; left: 0; right: 0; bottom: 0; height: 100px;
+    background: #223; color: #fff; z-index: 5; }
+  /* Raised above the bar, so drawn after it: not covered. */
+  .raised { position: relative; z-index: 10; }
+  /* Fixed in the gutter beside the column: over nothing. */
+  .page-badge { position: fixed; top: 300px; right: 16px; width: 140px; height: 60px;
+    background: #fd0; }
+  /* Fixed over the text, but a tint at 30% opacity: hides nothing. */
+  .faded-panel { position: fixed; top: 500px; left: 0; width: 400px; height: 60px;
+    background: #000; color: #000; opacity: 0.3; }
+  /* Fixed over the whole window, painting nothing, clicks passing through. */
+  .click-layer { position: fixed; inset: 0; pointer-events: none; }
+  /* A consent manager's dialog, which both modes hide (P79). */
+  #CybotCookiebotDialog { position: fixed; top: 650px; left: 0; width: 400px; height: 120px;
+    background: #fff; border: 1px solid #333; z-index: 2147483000; }
+</style>
+</head>
+<body>
+<div class="masthead">Masthead of the weighing ledger</div>
+<div class="column">
+  <div class="first"></div>
+  <div class="gap-1"></div>
+  <div class="line">Under the notice bar, line one</div>
+</div>
+<div class="column second">
+  <div class="rest"></div>
+  <div class="gap-2"></div>
+  <div class="line">Under the notice bar, line two</div>
+  <div class="line raised">Raised above the notice bar</div>
+</div>
+<div class="notice-bar">Notice: the weighing office is closed on Friday.</div>
+<div class="page-badge">Badge</div>
+<div class="faded-panel">Faded panel</div>
+<div class="click-layer"></div>
+<div id="CybotCookiebotDialog" role="region" lang="en">
+  <h2>This website uses cookies</h2>
+  <button>Accept all cookies</button>
+</div>
+<script>
+  // 28 lines from 60px to 900px on page one, and 30 from 0 to 900px on page
+  // two: every band a box prints over holds text on both pages.
+  const fill = (selector, count, from) => {
+    const block = document.querySelector(selector);
+    for (let i = 0; i < count; i++) {
+      const line = document.createElement("div");
+      line.className = "line";
+      line.textContent = `Ledger line ${from + i} records a weight.`;
+      block.appendChild(line);
+    }
+  };
+  fill(".first", 28, 1);
+  fill(".rest", 30, 29);
+</script>
+</body>
+</html>

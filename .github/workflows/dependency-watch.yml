@@ -1,0 +1,86 @@
+# Fails, and keeps an issue open, when dependency updates have stopped
+# arriving: a direct dependency or a pinned action long past its cooldown, a
+# pinned action whose tag has moved, or a Dependabot pull request that no CI
+# ran on, that failed, or that has waited three days (tools/audit/staleness.py
+# says how each is judged; docs/06-quality-and-testing.md, "Dependency
+# updates", says what to do).
+#
+# Dependabot and the auto-merge workflow say nothing when they stop. In
+# October 2026 Dependabot's pull requests ran no CI for days, two green bumps
+# could not merge themselves, and the open ones held Dependabot at its limit
+# of five, so nothing newer was proposed; none of it raised an alarm.
+#
+# GitHub-hosted and on a schedule, so nothing about the project's own CI has
+# to be working for it to run. The issue is written with this workflow's
+# token, so it is GitHub Actions', and GitHub notifies the owner of it (an
+# issue written with the owner's own token notifies nobody), and it mentions
+# the owner as well.
+name: dependency watch
+
+on:
+  schedule:
+    - cron: "41 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: are the dependencies moving?
+    # Where Dependabot runs. A fork has no schedule unless its owner turns
+    # one on, and then it judges the fork.
+    if: github.repository == 'kitterman-t/webshot-ai'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      checks: read
+      statuses: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Judge the dependencies against PyPI and GitHub
+        id: watch
+        run: |
+          set -euo pipefail
+          # The check needs one package, `packaging`, at the version the lock
+          # pins rather than whatever PyPI has today; the whole locked
+          # environment would be a minute of installing for one import.
+          uv export --frozen --no-hashes --no-emit-project --all-extras \
+            --format requirements-txt --output-file "$RUNNER_TEMP/lock.txt" > /dev/null
+          grep -E '^packaging==' "$RUNNER_TEMP/lock.txt" | cut -d' ' -f1 > "$RUNNER_TEMP/packaging.txt"
+          test -s "$RUNNER_TEMP/packaging.txt"
+          uv run --no-project --python 3.12 --with-requirements "$RUNNER_TEMP/packaging.txt" \
+            python tools/audit/staleness.py --issue --mention "$GITHUB_REPOSITORY_OWNER"
+      # The check writes the issue itself, and says so in its step output. If
+      # it never got that far (uv, the export or gh broke), this still opens
+      # one, because a watch that cannot run must not look like one that
+      # found nothing.
+      - name: Say so if the check could not report
+        if: failure() && steps.watch.outputs.reported != 'true'
+        run: |
+          set -euo pipefail
+          title="dependencies: updates have stalled"
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          number=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --limit 500 \
+            --json number,title --jq "map(select(.title == \"$title\")) | .[0].number // empty")
+          body="The dependency watch could not run, so nothing was judged: $run"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$body @$GITHUB_REPOSITORY_OWNER"
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "$body @$GITHUB_REPOSITORY_OWNER"
+          fi

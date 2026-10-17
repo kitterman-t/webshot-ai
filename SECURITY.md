@@ -235,6 +235,13 @@ does not encrypt them; that is the operator's decision and its storage.
 - Every GitHub Actions step is pinned to a commit SHA, with the tag in a
   trailing comment. Dependabot keeps the pins current. A tag can be moved by
   whoever owns it; a SHA cannot.
+- Dependabot waits before it proposes a release: 3, 7 or 14 days for a
+  Python package's patch, minor or major release, and 7 days for an action.
+  A green bump merges itself, so without the wait a hijacked or withdrawn
+  release would be installed on its first day. Security updates are not
+  delayed. A daily dependency watch fails, and opens an issue, when updates
+  stop arriving or when a pinned action's tag no longer names the pinned
+  commit ([docs/06](docs/06-quality-and-testing.md#dependency-updates)).
 - CI runs on GitHub-hosted runners only. Pull requests trigger workflows
   through `pull_request`, never `pull_request_target`, so a fork's run gets a
   read-only token and no secrets; the one workflow that uses a secret, the

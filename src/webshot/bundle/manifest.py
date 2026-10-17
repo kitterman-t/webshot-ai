@@ -755,12 +755,17 @@ class WebPdfRecordV3(WebPdfRecord):
 
 
 class DiscoveredMetadata(_Contract):
-    """What Trafilatura read from the captured page (docs/05 task 3.4).
+    """What the captured page says about itself (docs/05 task 3.4).
 
     Deliberately separate from `page_metadata`, which is the DOM's own
     declarations as the snapshot recorded them: a consumer that needs to know
-    where a value came from can tell the two apart. Empty strings mean the
-    page declared nothing — WebShot does not infer (docs/09 P3-3).
+    where a value came from can tell the two apart. `title`, `author` and
+    `sitename` are Trafilatura's readings. `date` is the date the page
+    declares in its markup — a date `<meta>`, a schema.org date in JSON-LD or
+    microdata, or a `<time>` — as `YYYY-MM-DD`, or empty when it declares
+    none WebShot reads. It is never a date found in the text, the URL or a
+    heading, which is where Trafilatura's own date can come from (docs/09
+    P3-3, P82).
     """
 
     title: str

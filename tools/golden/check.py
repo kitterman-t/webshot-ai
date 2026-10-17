@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -30,6 +32,8 @@ from tools.golden.harness import (
     compare,
     default_entrypoint,
     environment,
+    environment_drift,
+    environment_summary,
     manifest_digest_failures,
     profile_for,
     read_snapshot,
@@ -39,6 +43,37 @@ from tools.golden.harness import (
     snapshot,
     structure_failures,
 )
+
+
+def drift_annotation(drift: list[str]) -> str | None:
+    """A GitHub Actions warning naming what differs from the recording.
+
+    Only real differences: a dimension the recording never wrote is printed
+    but not annotated, or every run would warn until the next recording.
+    """
+    real = [line for line in drift if ": not recorded;" not in line]
+    if not real:
+        return None
+    message = " | ".join(real).replace("%", "%25").replace("\r", "").replace("\n", " ")
+    return f"::warning title=Golden corpus environment::{message}"
+
+
+def report_environment(recorded: dict[str, Any], current: dict[str, Any]) -> None:
+    """Print what this run used and every way it differs from the recording.
+
+    A golden failure that arrives with the fonts, the OS or a tool changed
+    names that change in its first lines (docs/09 P85); P7-14's twelve
+    failures read as a mystery for want of exactly this.
+    """
+    print(f"environment: {environment_summary(current)}")
+    drift = environment_drift(recorded, current)
+    for line in drift:
+        print(f"environment differs: {line}")
+    if not drift:
+        print("environment differs: in no recorded dimension")
+    annotation = drift_annotation(drift)
+    if annotation and os.environ.get("GITHUB_ACTIONS") == "true":
+        print(annotation)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -65,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.profile != "auto":
         profile, reason = arguments.profile, "requested on the command line"
     print(f"golden profile: {profile} ({reason})")
+    report_environment(recorded_environment, current)
 
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="webshot-golden-check-") as directory:

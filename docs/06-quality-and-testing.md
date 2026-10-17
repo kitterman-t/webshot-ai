@@ -54,6 +54,15 @@ and per-format office fixtures (docx/pptx/xlsx/epub/zip) for the
   environment matches `tests/golden/environment.json`, and **portable** (OCR
   text, OCR-derived counts, and the browser build masked) when Tesseract,
   Playwright, or the platform differ. CI runs portable by construction.
+- **What the run used, named against the recording (docs/09 P85):** the
+  record also holds the OS release, the Chromium build Playwright drives,
+  Leptonica, Ghostscript and the list of fonts the fingerprint digests.
+  `check.py` prints every version the run used and an `environment differs:`
+  line for each dimension that differs from the recording. A font difference
+  names each font, changed, added or removed. In CI the differences also
+  become one warning on the pull request. None of these choose the profile;
+  a dimension the recording lacks is printed as "not recorded", never as a
+  match.
 - **Sentinels:** each corpus case names strings that exist *only* inside a
   raster (a canvas chart, a scanned page). They must appear in the recognized
   text on both profiles — that is what keeps OCR proven when its exact words
@@ -174,6 +183,46 @@ secret, so a gate job in front of it skips forks — and bots, drafts, and any
 run the secret did not reach — and writes the reason to the run summary, so the
 review shows as `skipped` with its cause beside it rather than as a bare skip
 or a green that reviewed nothing.
+
+## Dependency updates
+
+Dependabot proposes updates weekly (`.github/dependabot.yml`), and
+`dependabot-auto-merge.yml` arms auto-merge on each of its pull requests, so a
+green bump merges itself once the required checks pass. A bump that fails CI,
+or that moves the goldens, waits for a person. It is fixed on its own branch;
+a golden it moves is re-recorded there with the reason written down.
+
+**Cooldown.** A release is not proposed until it is old enough: for uv, 3 days
+for a patch, 7 for a minor release and 14 for a major one; 7 days for any
+GitHub Actions release, since Dependabot cannot tell an action's major from
+its patch. The first days are when a hijacked or broken release is still
+live, and a green bump would install it the day it was proposed. Cooldown
+applies to version updates only. A security update arrives as soon as its
+advisory exists (docs/09 P84-2).
+
+**The dependency watch.** `.github/workflows/dependency-watch.yml` runs
+`tools/audit/staleness.py` daily on a GitHub-hosted runner, and keeps one
+issue open, "dependencies: updates have stalled", while it finds anything
+(docs/09 P84-1). It fails when:
+
+| Finding | What it means | What to do |
+|---|---|---|
+| a direct dependency or pinned action *n* days behind | a release newer than the pin has been out longer than its cooldown plus 14 days, and has not arrived | look for the Dependabot pull request; if there is none, Dependabot may be at its limit of open pull requests or unable to resolve the update. Update it by hand, or hold it (below) |
+| a tag that no longer names its pin | the commit a `# vX` comment names is not the commit the tag points at now | check the action's repository before any bump: a moved tag is how a hijacked action arrives |
+| a Dependabot pull request whose checks failed | an upstream change broke a check | fix it on the bump's branch; a red bump usually means an upstream fact changed |
+| a Dependabot pull request no check has run on | its CI never started, as when workflows were off | close and reopen it, or comment `@dependabot recreate` |
+| a Dependabot pull request whose auto-merge is off | GitHub turned it off; for a bump that edits a workflow file, because master's workflow files moved under it (docs/09 P84-3) | comment `@dependabot rebase`; the rebased bump is armed again |
+| a Dependabot pull request open 72 h | it needs a person | read its checks |
+| INCOMPLETE | an input could not be read: PyPI, GitHub, the lock, a hold | read the run's log; the run is a failure, not a pass |
+
+Direct dependencies only: transitive pins move when what depends on them
+allows, and their vulnerabilities are the vulnerability scan's job. Every
+run prints how many pins it left unjudged.
+
+**Holding an update back.** When something is behind on purpose, add a hold to
+`tools/audit/holds.toml`: the package or action, a reason that will still make
+sense in a month, and a date to look again. An expired hold fails the watch,
+and so does a hold on something that is no longer behind.
 
 ## Review checklist additions (PR template)
 
