@@ -118,7 +118,7 @@ pdfa = []
 # called `FastMCP` (docs/09 P4-1). An extra rather than a core dependency
 # because it drags a whole HTTP server stack (starlette/uvicorn/httpx2) in for
 # transports v3.0 does not ship — `webshot mcp` uses stdio.
-mcp = ["mcp>=2.2.0,<3"]
+mcp = ["mcp>=2.3.0,<3"]
 # The documentation site (docs/05 task 4.2). Build-time only: nothing in
 # `src/webshot` imports it, and CI builds the site with `--strict`.
 docs = [
