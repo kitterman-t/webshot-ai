@@ -38,6 +38,7 @@ CASES = (
     ("sample_deck.pptx", "pptx", "SENTINEL PPTX SLIDE PANGOLIN", "pptx"),
     ("sample_workbook.xlsx", "xlsx", "SENTINEL XLSX CELL AXOLOTL", "openpyxl"),
     ("sample_book.epub", "epub", "SENTINEL EPUB CHAPTER NARWHAL", None),
+    ("numbered_book.epub", "epub", "SENTINEL EPUB NUMBERED KINKAJOU", None),
     ("sample_archive.zip", "zip", "SENTINEL ZIP MEMBER OKAPI", None),
     ("equation_deck.pptx", "pptx", "SENTINEL PPTX EQUATION QUOKKA", "pptx"),
     ("equation_report.docx", "docx", "SENTINEL DOCX EQUATION WOMBAT", "mammoth"),
@@ -51,6 +52,9 @@ CASES = (
     # named without it: the two are different warnings.
     ("left_out_archive.zip", "zip", "SENTINEL ZIP KEPT KINKAJOU", "mammoth"),
     ("adjacent_lists_book.epub", "epub", "SENTINEL EPUB LISTS TAMARIN", None),
+    ("picture_deck.pptx", "pptx", "SENTINEL PPTX PICTURE KOALA", "pptx"),
+    ("picture_report.docx", "docx", "SENTINEL DOCX PICTURE LEMUR", "mammoth"),
+    ("picture_book.epub", "epub", "SENTINEL EPUB PICTURE MANATEE", None),
 )
 
 #: The warnings each fixture's manifest must carry: what the converter could
@@ -81,16 +85,42 @@ EXPECTED_WARNINGS["equation_archive.zip"] = [
     for warning in EXPECTED_WARNINGS[name]
 ]
 
+# A picture the page cannot draw, or that its file names but does not hold,
+# is a line of text and one of these (docs/09 P36).
+EXPECTED_WARNINGS["picture_deck.pptx"] = [
+    "Slide 2: a picture (\u201cA red rectangle, stored as a metafile\u201d) is not "
+    "in the page: a Windows Metafile (WMF), which a browser cannot draw.",
+    "Slide 2: a picture (\u201cA picture the deck only links to\u201d) is not in "
+    "the page: the deck links to it rather than holding it.",
+]
+EXPECTED_WARNINGS["picture_report.docx"] = [
+    "The document: a picture (\u201cA red rectangle, stored as a metafile\u201d) is "
+    "not in the page: an Enhanced Metafile (EMF), which a browser cannot draw.",
+]
+EXPECTED_WARNINGS["picture_book.epub"] = [
+    "OEBPS/text/chapter.xhtml: a picture (\u201cA picture the book names but does "
+    "not hold\u201d) is not in the page: it names ../images/missing.png, which the "
+    "book does not hold.",
+]
+
 #: How many warnings name the members a zip fixture's reader left out
 #: (docs/09 P33): the encrypted one, the Word file that is not one, the two
 #: nothing reads, and the two AppleDouble members.
 LEFT_OUT = {"left_out_archive.zip": 4}
 
-#: A warning that says what a deck's or a Word file's reader could not carry,
-#: whether the file was captured on its own or as a member of a zip.
+#: A warning that says what a deck's, a Word file's or a book's reader could
+#: not carry, whether the file was captured on its own or as a member of a zip.
 CONVERSION_WARNING = re.compile(
-    r"^(?:[^:]+\.(?:pptx|docx): )?(?:Slide |The notes of slide |The document body)"
+    r"^(?:[^:]+\.(?:pptx|docx): )?"
+    r"(?:Slide |The notes of slide |The document(?: body)?: |[^:\s]+\.x?html: )"
 )
+
+#: The pictures each `picture_*` fixture's page draws, by alt text, in order.
+DRAWN_PICTURES = {
+    "picture_deck.pptx": ["A blue rectangle", "A green rectangle, stored as TIFF"],
+    "picture_report.docx": ["A blue rectangle", "A green rectangle, stored as TIFF"],
+    "picture_book.epub": ["A blue rectangle", "A green rectangle, stored as TIFF"],
+}
 
 
 def _capture(fixture: Path, workdir: Path) -> tuple[Path, Path]:
@@ -168,6 +198,22 @@ def test_office_fixture_round_trips(
     # resolves makes every such attempt a failed request (docs/09 P28).
     if name.startswith("markup_"):
         assert json.loads(report.read_text("utf-8"))["failed_requests"] == []
+
+    # ...and a picture is the file's own, drawn from its bytes, never a file of
+    # the same name beside it: no request goes out, and `assets.json` records
+    # the picture's `data:` URL by its type and length, since the bytes are in
+    # `source/` (docs/09 P36).
+    if name.startswith("picture_"):
+        assert json.loads(report.read_text("utf-8"))["failed_requests"] == []
+        visuals = json.loads((bundle / "assets.json").read_text("utf-8"))[
+            "visual_assets"
+        ]
+        assert [asset["alt"] for asset in visuals] == DRAWN_PICTURES[name]
+        for asset in visuals:
+            assert asset["source_url"].startswith("data:image/png;base64,\u2026 (")
+            assert asset["source_url"].endswith(
+                " characters; the picture is in source/)"
+            )
 
     # ...and a member the zip's reader left out is named, as the bridge names
     # it here (`tests/test_archive_members.py` holds the words), while an

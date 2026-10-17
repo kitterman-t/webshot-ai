@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from functools import cache
 from html.parser import HTMLParser
 from pathlib import Path
@@ -25,6 +26,7 @@ from typing import Any
 import pytest
 from markdown_it import MarkdownIt
 
+from webshot.errors import BundleBuildError
 from webshot.extract import docling_bridge
 from webshot.extract.docling_bridge import ExtractionResult, extract
 
@@ -356,9 +358,19 @@ def test_a_page_with_no_code_in_an_item_is_written_as_docling_writes_it(
     source = path.read_text("utf-8", errors="replace")
     if _items_hold_code(source):
         pytest.skip("the page holds code in a list item")
-    assert _surfaces(extract(source, [])) == _surfaces(
-        _as_docling_writes_it(monkeypatch, source)
+    assert _outcome(lambda: extract(source, [])) == _outcome(
+        lambda: _as_docling_writes_it(monkeypatch, source)
     )
+
+
+def _outcome(run: Callable[[], ExtractionResult]) -> dict[str, Any]:
+    """The surfaces, or the error. Some fixtures are raw pages docling cannot
+    parse until the capture's snapshot has cleaned them (list_numbering.html,
+    docs/09 P30); there "nothing changes" means the same refusal."""
+    try:
+        return _surfaces(run())
+    except BundleBuildError as exc:
+        return {"error": str(exc)}
 
 
 def _section(source: str, title: str) -> str:

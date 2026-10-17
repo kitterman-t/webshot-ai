@@ -254,16 +254,52 @@ async def _capture_portrait_viewer(
     raw.mkdir()
 
     async def set_scroll(value: float) -> None:
+        # `scrollTop =` obeys the viewer's `scroll-behavior`: on a smooth one
+        # it starts an animation and returns. The first scroll comes from
+        # wherever the viewer was left, so it can cross the whole document,
+        # and from the last page of a three-page one it was still moving when
+        # the first segment was shot (docs/09 P42). `instant` puts the viewer
+        # there now, and the synthetic `scroll` event follows the move rather
+        # than preceding it. The function hands back nothing, because
+        # Chromium 153's `scrollTo` returns a promise `evaluate` would wait on
+        # (docs/09 P34-5).
         await page.evaluate(
             """([selector, value]) => {
                 const viewer = [...document.querySelectorAll(selector)]
                     .find(element => element.scrollHeight > element.clientHeight);
-                viewer.scrollTop = value;
+                viewer.scrollTo({top: value, behavior: 'instant'});
                 viewer.dispatchEvent(new Event('scroll'));
             }""",
             [VIEWER_CONTAINER, value],
         )
         await page.wait_for_timeout(500)
+
+    async def scroll_to_segment(value: float) -> None:
+        """Scroll to a segment, and refuse to shoot it from anywhere else.
+
+        Every clip below assumes the viewer is at `value`, and nothing checked
+        that it was. The position is read after the wait, as the screenshot
+        will find it, so a viewer that clamps the scroll or snaps it to a
+        point inside a page is caught, and so would be one that moves itself
+        during the wait. Chromium keeps this offset in whole CSS pixels,
+        rounding a fractional target to the nearest (1104.5 reads back 1105),
+        hence half a pixel of slack (docs/09 P42-3).
+        """
+        await set_scroll(value)
+        position = float(
+            await page.evaluate(
+                """(selector) => [...document.querySelectorAll(selector)]
+                    .find(element => element.scrollHeight > element.clientHeight)
+                    .scrollTop""",
+                VIEWER_CONTAINER,
+            )
+        )
+        if abs(position - value) > 0.5:
+            raise RuntimeError(
+                f"The viewer was scrolled to {value:g}px for a page segment but "
+                f"is at {position:g}px, so the segment would not show the part "
+                "of the page its clip assumes"
+            )
 
     # A page that already fits inside the viewer needs one shot, not two
     # overlapping ones — and `stitch_segmented_pages` refuses to stitch what
@@ -280,7 +316,7 @@ async def _capture_portrait_viewer(
             "width": float(page_rect["width"]),
             "height": float(viewer["height"] if segmented else page_rect["height"]),
         }
-        await set_scroll(top)
+        await scroll_to_segment(top)
         await page.screenshot(
             path=(
                 raw / f"page-{page_number:03d}-top.png"
@@ -293,7 +329,7 @@ async def _capture_portrait_viewer(
         )
         if not segmented:
             continue
-        await set_scroll(top + page_rect["height"] - viewer["height"])
+        await scroll_to_segment(top + page_rect["height"] - viewer["height"])
         await page.screenshot(
             path=raw / f"page-{page_number:03d}-bottom.png",
             clip=clip,

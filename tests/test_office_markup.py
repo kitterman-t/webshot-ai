@@ -230,10 +230,11 @@ def test_a_word_files_text_alt_text_and_link_target_are_text() -> None:
     text = _text(body)
     for line in [SENTINELS["markup_report.docx"], *markup_lines("word")]:
         assert line in text, line
-    # The picture's alt text stays its attribute; mammoth's data URI is the
-    # only image there is.
+    # The picture's alt text stays its attribute; mammoth's data URI, kept
+    # whole since docs/09 P36, is the only image there is.
     images = re.findall(r"<img\b[^>]*>", body)
-    assert len(images) == 1 and 'src="data:image/png;base64..."' in images[0]
+    assert len(images) == 1
+    assert re.search(r'src="data:image/png;base64,[A-Za-z0-9+/]+=*"', images[0])
     assert 'alt="a chart](https://tracker.invalid/alt.png) ![x"' in images[0]
     # The hyperlink is one link, to its own target, `(` and `)` encoded.
     links = re.findall(r'<a\b[^>]*href="([^"]*)"[^>]*>(.*?)</a>', body)
@@ -271,10 +272,12 @@ def test_an_epubs_chapters_metadata_and_code_are_text() -> None:
     blocks = re.findall(r"<pre><code>(.*?)</code></pre>", body, re.DOTALL)
     assert [html.unescape(block).strip() for block in blocks] == [BREAKOUT_PRE]
     images = re.findall(r"<img\b[^>]*>", body)
-    assert images == [
+    assert len(images) == 1
+    assert images[0].startswith(
         '<img alt="a chart](https://tracker.invalid/alt.png) ![x"'
-        ' src="data:image/png;base64...">'
-    ]
+        ' src="data:image/png;base64,'
+    )
+    assert re.search(r'src="data:image/png;base64,[A-Za-z0-9+/]+=*"', images[0])
 
 
 def test_an_epubs_title_is_given_back_as_the_book_has_it() -> None:
@@ -364,7 +367,10 @@ def test_a_deck_the_rewrite_refuses_is_not_read_raw_instead(tmp_path: Path) -> N
         "<h1>Report</h1><p>Plain words, then <em>emphasis</em> and <strong>strength"
         "</strong>.</p><ul><li>one</li><li>two</li></ul><ol><li>first</li></ol>",
         '<p>See <a href="https://example.invalid/page" title="Page">the page</a> and'
-        ' <img src="figure.png" alt="A figure"> with <code>inline code</code>.</p>',
+        # Remote: a path is a placeholder here and a picture upstream, which
+        # tests/test_office_pictures.py holds (docs/09 P36).
+        ' <img src="https://example.invalid/figure.png" alt="A figure"> with'
+        " <code>inline code</code>.</p>",
         "<table><tr><th>Region</th><th>Revenue</th></tr><tr><td>North</td>"
         "<td>1250000</td></tr></table><blockquote><p>Quoted words</p></blockquote>",
         "<pre>def run():\n    return 1\n</pre><h2>Next</h2><p>After the code</p>",

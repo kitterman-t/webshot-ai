@@ -170,6 +170,10 @@ MARKDOWN_ATTRIBUTES = {
     "*": {"id", "class"},
     "a": {"href", "title"},
     "img": {"src", "alt", "title", "width", "height"},
+    # Python-Markdown writes a list that begins `3.` as `<ol start="3">`, and
+    # markdownify writes `<ol start="5">` as one that begins `5.`; without it
+    # the page numbered both from 1. Kept as a number only (sanitize.py).
+    "ol": {"start"},
     "th": {"colspan", "rowspan", "scope"},
     "td": {"colspan", "rowspan"},
 }
@@ -237,6 +241,7 @@ def _document_template(
     th, td {{ padding: 8px 10px; border: 1px solid #cbd5e1; text-align: left; vertical-align: top; overflow-wrap: anywhere; }}
     th {{ background: #e8f1fb; }}
     figure {{ margin: 24px 0; text-align: center; }}
+    img {{ max-width: 100%; height: auto; }}
     figure img {{ max-width: 100%; height: auto; }}
     figcaption {{ margin-top: 10px; color: #64748b; }}
     dl {{ display: grid; grid-template-columns: minmax(140px, 0.35fr) 1fr; gap: 8px 18px; }}

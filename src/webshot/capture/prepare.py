@@ -361,12 +361,28 @@ REMOVED_GROWTH_SECONDS = 2.0
 FRAME_TIMEOUT_S = 30.0
 
 #: Resolves true at the page's next rendering update, which handles every
-#: scroll made before it, or false after `timeout` ms without one. A timer,
-#: because a page that is not rendering still runs them.
+#: scroll made before it. After `timeout` ms without one it resolves to what
+#: the page could see of why: a timer, because a page that is not rendering
+#: still runs them. A wait that ran out used to say only "the page did not
+#: render", which blames the page; the same result came from stopping the
+#: browser's GPU process, which draws every frame, while the page ran on
+#: (docs/09 P76).
 NEXT_FRAME_JS = """timeout => new Promise(resolve => {
-    const timer = setTimeout(() => resolve(false), timeout);
+    const start = performance.now();
+    const timer = setTimeout(() => resolve({
+        visibility: document.visibilityState,
+        painted: performance.getEntriesByType('paint').length > 0,
+        lateMs: performance.now() - start - timeout,
+    }), timeout);
     requestAnimationFrame(() => { clearTimeout(timer); resolve(true); });
 })"""
+
+#: How late the page's own timer must fire before the warning stops saying
+#: the page was running. Under every load docs/09 P76 measured, up to 39
+#: runnable threads a core and a swap storm, no frame wait, which needs a task
+#: on the page's main thread, was longer than 0.19 s; a second is not a busy
+#: machine's ordinary jitter.
+LATE_TIMER_S = 1.0
 
 #: One step down, and back to the top when the pass ends. Chromium 153's
 #: scroll methods return a promise that settles when the scroll has finished,
@@ -456,6 +472,25 @@ LAZY_LOAD_STATE_JS = """({noise, excluded}) => {
 
 
 @dataclass(frozen=True, slots=True)
+class FrameStall:
+    """What the page could see when no frame came within `FRAME_TIMEOUT_S` of a scroll.
+
+    The page cannot see why the browser drew nothing, but it can rule out
+    itself: whether it was hidden, whether it had been running, and whether
+    it had been drawn before (docs/09 P76).
+    """
+
+    #: `document.visibilityState`. A browser does not render a hidden page.
+    visibility: str
+    #: Whether the page had a first paint on record: whether a frame of it
+    #: had ever been drawn.
+    painted: bool
+    #: How much later than asked the page's own timer fired, in seconds. A
+    #: page whose main thread was busy, or not run at all, fires it late.
+    late_s: float
+
+
+@dataclass(frozen=True, slots=True)
 class LazyLoadPass:
     """What the lazy-load pass did, for the log, the manifest and a crash report."""
 
@@ -472,6 +507,8 @@ class LazyLoadPass:
     growing: tuple[tuple[str, str], ...] = ()
     #: For `removed-growth`: the steps the kept content held still for.
     steady_steps: int = 0
+    #: For `unrendered`: what the page could see when the wait ran out.
+    stall: FrameStall | None = None
 
 
 @dataclass(slots=True)
@@ -505,6 +542,7 @@ async def scroll_to_load(
     growing: tuple[tuple[str, str], ...] = ()
     steady: _Steady | None = None
     steady_steps = 0
+    stall: FrameStall | None = None
     steps = 0
     height = 0
     selectors = {"noise": list(noise), "excluded": list(excluded)}
@@ -550,8 +588,14 @@ async def scroll_to_load(
         await page.evaluate(SCROLL_STEP_JS)
         # The delay starts once the page has seen the scroll, not when it was
         # asked for: until it renders, the page has not seen it (docs/09 P34).
-        if not await page.evaluate(NEXT_FRAME_JS, FRAME_TIMEOUT_S * 1000):
+        seen = await page.evaluate(NEXT_FRAME_JS, FRAME_TIMEOUT_S * 1000)
+        if seen is not True:
             ended = "unrendered"
+            stall = FrameStall(
+                visibility=seen["visibility"],
+                painted=seen["painted"],
+                late_s=max(0.0, seen["lateMs"] / 1000),
+            )
             break
         await asyncio.sleep(delay_s)
 
@@ -563,6 +607,7 @@ async def scroll_to_load(
         height=height,
         growing=growing,
         steady_steps=steady_steps,
+        stall=stall,
     )
 
 
@@ -573,12 +618,15 @@ def lazy_load_warning(result: LazyLoadPass, max_scrolls: int) -> str | None:
     if result.ended == "bottom":
         return None
     if result.ended == "unrendered":
-        return (
+        message = (
             f"The lazy-load pass stopped after {result.steps} step(s): the page "
             f"did not render within {FRAME_TIMEOUT_S:g} seconds of a scroll, and "
             "a page sees a scroll only when it renders, so content it loads as "
             "it is scrolled may not have been loaded."
         )
+        if result.stall is not None:
+            message += " " + _stall_seen(result.stall)
+        return message
     chrome = [name for name, by in result.growing if by == "clean"]
     cut = [name for name, by in result.growing if by == "exclude"]
     where = []
@@ -599,6 +647,37 @@ def lazy_load_warning(result: LazyLoadPass, max_scrolls: int) -> str | None:
             "--max-scrolls."
         )
     return message
+
+
+def _stall_seen(stall: FrameStall) -> str:
+    """What the page saw while no frame came, and so which side stopped (docs/09 P76).
+
+    The first that holds is the one said: a hidden page explains the rest, and
+    a page that was not running cannot say what the browser was doing.
+    """
+    if stall.visibility != "visible":
+        return (
+            f'The page was hidden (its visibilityState was "{stall.visibility}"), '
+            "and a browser does not render a hidden page."
+        )
+    if stall.late_s >= LATE_TIMER_S:
+        return (
+            f"The page's own timer fired {stall.late_s:.1f} seconds late, so for "
+            "part of the wait the page could not run anything: its main thread "
+            "was busy, or the machine did not run it."
+        )
+    if stall.painted:
+        return (
+            "The page had been drawn before, was visible, and its own timers ran "
+            "on time: the page was running, and the browser drew no frame for "
+            "it. Capturing again may get further."
+        )
+    return (
+        "The page was visible and its own timers ran on time, but it had never "
+        "been drawn: something held back its first frame, such as a "
+        "render-blocking resource that had not arrived, or a browser that had "
+        "not yet drawn one."
+    )
 
 
 def _listed(names: Sequence[str], shown: int = 3) -> str:

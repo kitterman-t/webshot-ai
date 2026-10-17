@@ -29,8 +29,12 @@ uv run python tools/verify.py          # the CI gauntlet, in CI's order
 uv run python tools/verify.py --fast   # the same minus the browser-driven checks
 ```
 
-`--fast` skips the checks that notice a change to captured output. The full run
-is what "ready to push" means.
+`--fast` skips the golden corpus and parity, the checks that notice a change to
+captured output; CI runs both on every pull request. A change that cannot move
+captured output — documentation, workflow files, a tool that neither the
+capture pipeline nor the golden and parity harnesses import — is ready to push
+after `--fast`. Anything else is ready after the full run: a moved golden
+costs a few minutes here and a round-trip on CI.
 
 ## Rules that are absolute
 

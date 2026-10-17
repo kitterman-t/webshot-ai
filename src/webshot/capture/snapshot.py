@@ -85,11 +85,12 @@ SNAPSHOT_GENERIC_ATTRIBUTES = {
 
 #: Per-tag attributes the bundle contract depends on. Some entries overlap
 #: nh3's defaults on purpose: this dict is the allowlist of record for asset
-#: refs, form state, and media tracks, so an upstream default shrinking must
-#: not silently shrink the snapshot.
+#: refs, form state, media tracks, and the number a list starts at, so an
+#: upstream default shrinking must not silently shrink the snapshot.
 SNAPSHOT_EXTRA_ATTRIBUTES = {
     "img": {"src", "alt", "width", "height"},
     "a": {"href", "hreflang", "name"},
+    "ol": {"start"},
     "time": {"datetime"},
     "td": {"colspan", "rowspan"},
     "th": {"colspan", "rowspan", "scope"},
@@ -904,6 +905,7 @@ def unread_text_warnings(
     assets: Sequence[VisualAsset],
     *,
     pictured: Collection[str],
+    chrome_pictured: Collection[str],
 ) -> list[str]:
     """What the page shows that the snapshot could not read, said by name.
 
@@ -912,11 +914,13 @@ def unread_text_warnings(
     Each frame is named with what the bundle does hold of it, if anything: its
     screenshot, and the text OCR found there (docs/04-spec.md §5.6).
 
-    `pictured` is the asset ids the extraction attached to a picture. A frame
-    captured as an asset stands in the snapshot as its screenshot, so the text
-    OCR found there reaches every text surface, unless the attachment was
-    skipped. Then the extraction's own warning says why, and this one must not
-    say the text arrived (docs/09 P16-7).
+    `pictured` is the asset ids the extraction attached to a picture in the
+    document's body. A frame captured as an asset stands in the snapshot as
+    its screenshot, so the text OCR found there reaches every text surface,
+    unless the attachment was skipped. Then the extraction's own warning says
+    why, and this one must not say the text arrived (docs/09 P16-7).
+    `chrome_pictured` is those attached to a picture kept as page chrome, whose
+    text reached content.json and chunks.jsonl only (docs/09 P57).
     """
     warnings: list[str] = []
     by_id = {asset.id: asset for asset in assets}
@@ -943,6 +947,14 @@ def unread_text_warnings(
                 f"{asset.id}, in its place, and the content.md, content.txt and "
                 "chunks.jsonl built from it hold the text OCR recognized there, "
                 "not the frame's own."
+            )
+        elif asset.id in chrome_pictured:
+            held = (
+                f"Its text is in the PDF. content.html holds its screenshot, "
+                f"{asset.id}, in its place, inside page chrome (header, nav, "
+                "footer or aside). The text OCR recognized there, not the "
+                "frame's own, is in content.json and chunks.jsonl, and not in "
+                "content.md or content.txt."
             )
         else:
             held = (

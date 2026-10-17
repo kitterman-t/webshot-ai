@@ -8,16 +8,20 @@ back-links, and the associated-file requirements of PDF/A-3 are checked.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PIL import Image
+from playwright.async_api import async_playwright
 from pypdf import PdfReader
 from pypdf.generic import ArrayObject, NumberObject
 
 import webshot.protected.viewer as viewer_module
 from webshot.bundle.publish import EmbeddedPayload
+from webshot.config import DEFAULT_VIEWPORT
 from webshot.errors import WebShotError
 from webshot.ocr.tesseract import (
     OCRPage,
@@ -31,7 +35,13 @@ from webshot.protected.appendix import (
     back_link_target,
 )
 from webshot.protected.assemble import build_searchable_pdf, page_dimensions
-from webshot.protected.viewer import stitch_segmented_pages
+from webshot.protected.viewer import (
+    PAGE_ELEMENT,
+    PAGE_LABEL_PATTERN,
+    VIEWER_CONTAINER,
+    capture_sharepoint_pdf_viewer,
+    stitch_segmented_pages,
+)
 
 PAYLOADS = {
     "webshot-ai-content.json": EmbeddedPayload(
@@ -342,6 +352,169 @@ def test_the_scroll_target_is_an_absolute_offset() -> None:
     straight to `scrollTop`, which is a document coordinate (docs/09 P8-45)."""
     source = inspect.getsource(viewer_module._capture_portrait_viewer)
     assert 'page_top = viewer["scrollTop"] + (page_rect["y"] - viewer["y"])' in source
+
+
+# --------------------------------------------------------------------------- #
+# The segmented capture, driven in a browser
+# --------------------------------------------------------------------------- #
+
+VIEWER_DOM = Path(__file__).resolve().parent / "fixtures" / "viewer" / "dom"
+
+#: Every band the fixture draws, page by page: its offset from its page's top
+#: and its height in CSS pixels, and its colour. Read from the page rather than
+#: retyped, so the fixture stays the one description of what each page shows.
+BANDS_JS = """(contract) => {
+    const labelPattern = new RegExp(contract.pageLabel);
+    const colour = element => getComputedStyle(element).backgroundColor
+        .match(/\\d+/g).slice(0, 3).map(Number);
+    const viewer = document.querySelector(contract.container);
+    const pages = [...document.querySelectorAll(contract.page)]
+        .filter(element => labelPattern.test(element.getAttribute('aria-label') || ''))
+        .map(element => {
+            const top = element.getBoundingClientRect().top;
+            return [...element.querySelectorAll('.canvas-stand-in > div')].map(band => {
+                const rect = band.getBoundingClientRect();
+                return {offset: rect.top - top, height: rect.height, colour: colour(band)};
+            });
+        });
+    return {pages, viewer: colour(viewer)};
+}"""
+
+
+async def _capture_from_the_last_page(
+    fixture: Path, directory: Path, *, style: str | None = None
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Run the protected capture on a fixture a reader left at its last page.
+
+    That is P8-45's case: the viewer is wherever the person signing in left
+    it, so the capture's first scroll crosses the document rather than one
+    page.
+    """
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True)
+        try:
+            # The geometry `launch_context` gives a real capture.
+            context = await browser.new_context(
+                viewport=DEFAULT_VIEWPORT, device_scale_factor=2
+            )
+            page = await context.new_page()
+            await page.goto(fixture.as_uri())
+            if style:
+                await page.add_style_tag(content=style)
+            drawn: dict[str, Any] = await page.evaluate(
+                BANDS_JS,
+                {
+                    "container": VIEWER_CONTAINER,
+                    "page": PAGE_ELEMENT,
+                    "pageLabel": PAGE_LABEL_PATTERN,
+                },
+            )
+            await page.evaluate(
+                """(selector) => {
+                    const viewer = document.querySelector(selector);
+                    viewer.scrollTo({top: viewer.scrollHeight, behavior: 'instant'});
+                }""",
+                VIEWER_CONTAINER,
+            )
+            result = await capture_sharepoint_pdf_viewer(page, directory)
+        finally:
+            await browser.close()
+    return result, drawn
+
+
+def _band_runs(
+    image: Image.Image, colours: dict[str, tuple[int, ...]]
+) -> list[tuple[str, int, int]]:
+    """Name each row of the image's middle column by the band it shows.
+
+    Neighbouring rows of one band merge into `(name, first row, row after)`.
+    A colour that is no band's is named by its value, so a failure prints
+    what the stitched page holds rather than only that it is wrong.
+    """
+    rgb = image.convert("RGB")
+    middle = rgb.width // 2
+    runs: list[tuple[str, int, int]] = []
+    for row in range(rgb.height):
+        pixel = rgb.getpixel((middle, row))
+        assert isinstance(pixel, tuple)
+        name = next(
+            (
+                label
+                for label, colour in colours.items()
+                if all(abs(a - b) <= 2 for a, b in zip(pixel, colour, strict=True))
+            ),
+            f"rgb{pixel}",
+        )
+        if runs and runs[-1][0] == name and runs[-1][2] == row:
+            runs[-1] = (name, runs[-1][1], row + 1)
+        else:
+            runs.append((name, row, row + 1))
+    return runs
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize(
+    "fixture", ["sharepoint-portrait.html", "sharepoint-portrait-smooth.html"]
+)
+def test_each_stitched_page_is_its_own_page_band_for_band(
+    fixture: str, tmp_path: Path
+) -> None:
+    """No two of the fixture's bands share a colour, so a segment shot from
+    anywhere but where its clip assumes puts a band out of place, or out of
+    length, in the stitched page. On the smooth fixture page 1's top segment
+    was shot 89 to 159px short, with the viewer still on its way up from the
+    last page (docs/09 P42)."""
+    pages = tmp_path / "pages"
+    result, drawn = asyncio.run(
+        _capture_from_the_last_page(VIEWER_DOM / fixture, pages)
+    )
+
+    assert result["segmented"], "the fixture's pages must be taller than its viewer"
+    assert result["page_count"] == len(drawn["pages"]) == 3
+    ratio = result["device_pixel_ratio"]
+    colours = {
+        f"page {number} band {index}": tuple(band["colour"])
+        for number, bands in enumerate(drawn["pages"], start=1)
+        for index, band in enumerate(bands)
+    }
+    colours["viewer"] = tuple(drawn["viewer"])
+    for number, bands in enumerate(drawn["pages"], start=1):
+        expected = [
+            (
+                f"page {number} band {index}",
+                round(band["offset"] * ratio),
+                round((band["offset"] + band["height"]) * ratio),
+            )
+            for index, band in enumerate(bands)
+        ]
+        with Image.open(pages / f"page-{number:03d}.png") as image:
+            found = _band_runs(image, colours)
+        assert found == expected, f"page {number}: found {found}, expected {expected}"
+
+
+@pytest.mark.browser
+def test_a_segment_the_viewer_would_not_scroll_to_is_refused(tmp_path: Path) -> None:
+    """A viewer that snaps its scroll to points inside its pages keeps a
+    segment's scroll from taking. Asked for page 1's bottom segment at 260px,
+    this one goes to the band that starts at 216px. Nothing read the position
+    back, so every bottom segment was shot 44px high: each stitched page
+    carried 44px of itself twice at the seam and lost its last 44px, and the
+    capture reported nothing (docs/09 P42).
+
+    The snap points are the bands, not the pages: a snap area taller than the
+    viewer lets any position inside it stand, so snapping to whole pages would
+    hold every segment where it was put."""
+    with pytest.raises(RuntimeError, match=r"scrolled to 260px .* is at 216px"):
+        asyncio.run(
+            _capture_from_the_last_page(
+                VIEWER_DOM / "sharepoint-portrait.html",
+                tmp_path / "pages",
+                style=(
+                    ".viewer { scroll-snap-type: y mandatory; } "
+                    ".canvas-stand-in > div { scroll-snap-align: start; }"
+                ),
+            )
+        )
 
 
 @pytest.mark.browser

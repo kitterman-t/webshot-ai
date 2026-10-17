@@ -31,6 +31,10 @@ versions rather than assumed (docs/09 S3 and the Phase 2 corrections):
   item's child, so an item's code reached content.md as one line. The bridge
   extends the backend to read it as a block of code under the item, and the
   serializers to write each of its lines inside the item (docs/09 P50).
+- The backend files a `<footer>`'s content on the furniture layer, then puts
+  a heading inside one, and the rest of that footer, on the body layer. The
+  conversion runs through a subclass that files everything the backend made
+  inside a footer on the furniture layer (docs/09 P65).
 """
 
 from __future__ import annotations
@@ -38,7 +42,8 @@ from __future__ import annotations
 import json
 import re
 import warnings
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import cache
 from html.parser import HTMLParser
@@ -80,14 +85,33 @@ class ExtractionResult:
     chunk_seeds: list[ChunkSeed] = field(default_factory=list)
     item_count: int = 0
     picture_count: int = 0
-    #: The harvested assets attached to a picture, whose OCR text therefore
-    #: reached content.md, content.txt and chunks.jsonl. Empty when the count
-    #: check skipped attachment, which `warnings` then says.
+    #: The harvested assets attached to a picture in the document's body, whose
+    #: OCR text therefore reached content.md, content.txt and chunks.jsonl.
+    #: Empty when the count check skipped attachment, which `warnings` then
+    #: says.
     pictured_asset_ids: list[str] = field(default_factory=list)
+    #: The harvested assets attached to a picture kept as page chrome (a logo
+    #: in <header>), which no serializer writes: their OCR text reached
+    #: content.json and their figure chunk in chunks.jsonl, and neither
+    #: content.md nor content.txt (docs/09 P57).
+    chrome_pictured_asset_ids: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
 _CHROME_TAGS = frozenset({"header", "nav", "footer", "aside"})
+_HEADING_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
+
+
+@dataclass(frozen=True, slots=True)
+class _Position:
+    """Where one `<img>` or `<table>` stands in the snapshot."""
+
+    #: Inside header/nav/footer/aside.
+    chrome: bool
+    #: Where the backend files content as furniture: above the page's first
+    #: heading outside a table, or inside a <footer>.
+    furniture: bool
+
 
 #: The provenance of the picture annotation that carries an asset's
 #: recognized text in `content.json` (docs/04-spec.md §5.6, §5.13).
@@ -129,14 +153,18 @@ def ocr_reading(
 
 class _SnapshotFacts(HTMLParser):
     """Document-order facts the backend does not preserve: which `<img>` is
-    which harvested asset, what each `<table>`'s caption said, and which text
-    belongs to page chrome (header/nav/footer/aside) — the one kind of content
-    that legitimately lands on the furniture layer."""
+    which harvested asset, what each `<table>`'s caption said, and which text,
+    images and tables belong to page chrome (header/nav/footer/aside) — the
+    one kind of content that legitimately lands on the furniture layer."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.image_asset_ids: list[str | None] = []
+        #: Where each `<img>` stands, in the same order.
+        self.image_positions: list[_Position] = []
         self.table_captions: list[str] = []
+        #: Where each `<table>` stands, in the same order.
+        self.table_positions: list[_Position] = []
         #: One entry per top-level chrome region: its whole-space-normalized
         #: text, in reading order.
         self.chrome_regions: list[str] = []
@@ -144,21 +172,42 @@ class _SnapshotFacts(HTMLParser):
         self._caption_parts: list[str] = []
         self._chrome_depth = 0
         self._chrome_parts: list[str] = []
+        self._footer_depth = 0
+        self._table_depth = 0
+        #: Past the backend's first heading, the one it starts the body at.
+        self._headed = False
+
+    def _position(self) -> _Position:
+        return _Position(
+            chrome=bool(self._chrome_depth),
+            furniture=not self._headed or bool(self._footer_depth),
+        )
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag == "img":
             self.image_asset_ids.append(dict(attrs).get("data-webshot-asset-id"))
+            self.image_positions.append(self._position())
         elif tag == "table":
             self.table_captions.append("")
+            self.table_positions.append(self._position())
+            self._table_depth += 1
         elif tag == "caption" and self.table_captions:
             self._caption_depth += 1
             self._caption_parts = []
+        elif tag in _HEADING_TAGS and not self._table_depth:
+            self._headed = True
+        elif tag == "footer":
+            self._footer_depth += 1
         if tag in _CHROME_TAGS:
             if not self._chrome_depth:
                 self._chrome_parts = []
             self._chrome_depth += 1
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "table" and self._table_depth:
+            self._table_depth -= 1
+        elif tag == "footer" and self._footer_depth:
+            self._footer_depth -= 1
         if tag == "caption" and self._caption_depth:
             self._caption_depth -= 1
             self.table_captions[-1] = " ".join(" ".join(self._caption_parts).split())
@@ -194,9 +243,20 @@ class _SnapshotFacts(HTMLParser):
 JOINED_BEFORE = "\ufdd0"
 JOINED_AFTER = "\ufdd1"
 _JOIN_MARKS = (JOINED_BEFORE, JOINED_AFTER)
+#: A marker as a character reference, which the backend's parser reads as the
+#: character and `html.unescape` drops, as it drops every noncharacter.
+_JOIN_MARK_REF_RE = re.compile(
+    r"&#[xX]0*[fF][dD][dD][01](?![0-9a-fA-F])|&#0*6497[67](?![0-9])"
+)
 #: A marker with the space the backend put beside it, which the source never
 #: had: a marker is written only where no whitespace separated the two.
 _JOIN_MARK_RE = re.compile(f" ?{JOINED_BEFORE}|{JOINED_AFTER} ?")
+
+#: The backend method `extract` overrides to keep a footer's content in the
+#: footer. It is private to docling, so `extract` checks it is still there.
+_FOOTER_HOOK = "_use_footer"
+#: A `<footer>` start tag, to say whether a page has one.
+_FOOTER_TAG_RE = re.compile(r"<footer[\s>]", re.IGNORECASE)
 
 #: Stands in for a part's text, to read what a serializer wraps text in.
 _WRAPPER_PROBE = "\x00"
@@ -405,6 +465,28 @@ def _aligned(
     return list(zip(items, facts, strict=True))
 
 
+def _outside_chrome(
+    items: Sequence[_Item], positions: Sequence[_Position]
+) -> list[_Item] | None:
+    """The items whose snapshot element stands outside page chrome.
+
+    Paired by document order, as `_aligned` pairs them. When the counts
+    disagree, every furniture item still came from an element where the
+    backend files furniture (it only skips or merges), so if those elements
+    are all chrome no furniture item is content, and if none is chrome every
+    one is. Elements of both kinds there leave no answer, and None says so.
+    """
+    aligned = _aligned(items, positions)
+    if aligned is not None:
+        return [item for item, position in aligned if not position.chrome]
+    filed = [position.chrome for position in positions if position.furniture]
+    if filed and all(filed):
+        return []
+    if filed and not any(filed):
+        return list(items)
+    return None
+
+
 def _captions_missing(snapshot: Sequence[str], carried: Sequence[str]) -> list[str]:
     """The snapshot's table captions that no table in the document carries.
 
@@ -423,6 +505,63 @@ def _captions_missing(snapshot: Sequence[str], carried: Sequence[str]) -> list[s
         else:
             missing.append(caption)
     return missing
+
+
+@cache
+def _grid_built_once() -> Any:
+    """docling-core's `TableData`, with `grid` the one built up front.
+
+    Defined on first use, so importing the bridge still imports no docling.
+    """
+    from docling_core.types.doc.document import TableData
+
+    class GridBuiltOnce(TableData):
+        # pydantic makes an underscore attribute private: never a field, so
+        # never validated or dumped. Set as each copy is made.
+        _grid: list[Any]
+
+        @property
+        def grid(self) -> list[Any]:
+            return self._grid
+
+    return GridBuiltOnce
+
+
+@contextmanager
+def _grids_built_once(tables: Sequence[Any]) -> Iterator[None]:
+    """Each table's grid built once, not once per cell, inside the block.
+
+    `TableData.grid` is a computed property that builds the whole grid on
+    every read, and docling-core's `TableItem.export_to_otsl`, which writes
+    each table into `export_to_doctags()`, reads `self.data.grid[i][j]` for
+    every cell. A table of n cells therefore built n grids and n² cells: a
+    1,000-row, 2-column CSV built four million, and the time a capture took
+    grew with the square of its rows (docs/09 P41). The grid is a function of
+    the cells and the table's size, which an export does not change, so each
+    table's `data` is swapped for a copy that shares its cells and answers
+    every read with one grid, and put back on the way out. A `data` of any
+    other type than `TableData` is left as it is, since the copy would drop
+    whatever it adds.
+    """
+    from docling_core.types.doc.document import TableData
+
+    built_once = _grid_built_once()
+    swapped: list[tuple[Any, Any]] = []
+    try:
+        for table in tables:
+            data = table.data
+            if type(data) is not TableData:
+                continue
+            copy = built_once.model_construct(
+                _fields_set=data.model_fields_set, **dict(data)
+            )
+            copy._grid = data.grid
+            table.data = copy
+            swapped.append((table, data))
+        yield
+    finally:
+        for table, data in swapped:
+            table.data = data
 
 
 #: The elements the backend makes a list item of and then walks for nested
@@ -822,6 +961,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         Formatting,
         InlineGroup,
         ListItem,
+        NodeItem,
         PictureDescriptionData,
         PictureMiscData,
         Script,
@@ -831,6 +971,14 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
 
     extraction_warnings: list[str] = []
 
+    def _item_lists(doc: DoclingDocument) -> list[tuple[str, list[Any]]]:
+        """Each of the document's lists of items (texts, tables, groups, ...)."""
+        return [
+            (name, value)
+            for name, value in vars(doc).items()
+            if isinstance(value, list)
+        ]
+
     # The <title> tag would become a second, metadata-derived title item; the
     # page's own headings are the record. The element's shape is owned by
     # standalone_document, which defines the regex next to itself (the tag is
@@ -839,7 +987,11 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     docling_html = TITLE_ELEMENT_RE.sub("", sanitized_html, count=1)
     # A page that carries the markers itself would have its own characters
     # read as joins and removed, so it keeps the backend's spacing instead.
-    markable = not any(mark in docling_html for mark in _JOIN_MARKS)
+    # It carries one written as a reference too: the backend reads `&#xFDD0;`
+    # as the character (docs/09 P54).
+    markable = not any(
+        mark in docling_html for mark in _JOIN_MARKS
+    ) and not _JOIN_MARK_REF_RE.search(docling_html)
     if not markable:
         extraction_warnings.append(
             "the page contains U+FDD0 or U+FDD1, the characters WebShot uses to "
@@ -852,13 +1004,54 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     # Without one, the page is read by docling's own backend, an item's code
     # into the item's line, and the record says so.
     hooked = _backend_hooked()
-    backend = _code_block_backend() if hooked else HTMLDocumentBackend
+    base = _code_block_backend() if hooked else HTMLDocumentBackend
     if not hooked:
         extraction_warnings.append(
             "docling's HTML backend no longer has the methods WebShot extends to "
             "read a list item's <pre> as a block of code, so content.md, "
             "content.txt and chunks.jsonl hold each such block on one line, in "
             "its item's text (docs/09 P50)."
+        )
+    # Every item the backend made inside a <footer>, which stays on the
+    # furniture layer whatever its text.
+    in_footer: set[str] = set()
+
+    # Built on whichever backend reads the page, which mypy cannot follow.
+    class _FooterBackend(base):  # type: ignore[misc,valid-type]
+        """docling's HTML backend, with everything inside a <footer> kept there.
+
+        The backend files a footer's content on the furniture layer, but its
+        heading handler sets the body layer at every heading, inside a footer
+        as anywhere, until the footer ends: a site footer's column headings
+        and all that followed them reached content.md, content.txt and
+        chunks.jsonl (docs/09 P65). The tree cannot say where a footer ends:
+        a heading in a footer's table cell or <details> parents nothing after
+        it, and content after a footer can hang from a heading group made
+        inside it. The backend never deletes an item while it walks the page,
+        so what it made inside a footer is what its lists gained meanwhile.
+        """
+
+        @contextmanager
+        def _use_footer(self, tag: Any, doc: DoclingDocument) -> Iterator[None]:
+            made = {name: len(items) for name, items in _item_lists(doc)}
+            with super()._use_footer(tag, doc):
+                yield
+            for name, items in _item_lists(doc):
+                for item in items[made.get(name, 0) :]:
+                    if isinstance(item, NodeItem):
+                        item.content_layer = ContentLayer.FURNITURE
+                        in_footer.add(item.self_ref)
+
+    # `_use_footer` is private to docling too. Without it the override never
+    # runs, so a page with a footer says what that costs.
+    footer_hooked = hasattr(HTMLDocumentBackend, _FOOTER_HOOK)
+    backend = _FooterBackend if footer_hooked else base
+    if not footer_hooked and _FOOTER_TAG_RE.search(docling_html):
+        extraction_warnings.append(
+            "docling's HTML backend no longer has the method WebShot extends to "
+            "keep a <footer> out of the text, so a heading inside one sends the "
+            "rest of that footer to content.md, content.txt and chunks.jsonl "
+            "(docs/09 P65)."
         )
     docling_input = docling_html.encode("utf-8")
     try:
@@ -903,10 +1096,13 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     # chrome and wrong for document content (an adapter page's descriptor, a
     # lede before the h1) — v2 recorded such text and parity holds v3 to it.
     # Content that did not come from header/nav/footer/aside moves back to
-    # the body layer.
+    # the body layer. What the backend made inside a footer is known to have
+    # come from one, so it stays without a text test.
     for item in document.texts:
-        if item.content_layer == ContentLayer.FURNITURE and not facts.is_chrome_text(
-            item.text
+        if (
+            item.content_layer == ContentLayer.FURNITURE
+            and item.self_ref not in in_footer
+            and not facts.is_chrome_text(item.text)
         ):
             item.content_layer = ContentLayer.BODY
     # An item with no text that holds its code has no text to tell chrome by,
@@ -917,6 +1113,37 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             code = item.children[0].resolve(document)
             if isinstance(code, CodeItem):
                 item.content_layer = code.content_layer
+
+    # A table or picture has no text to tell chrome by, so where its element
+    # stands in the snapshot decides it: one inside header/nav/footer/aside
+    # stays furniture, any other goes back to the body. Left on furniture, a
+    # table or picture above the first heading reached content.json and
+    # content.doctags and none of content.md, content.txt or chunks.jsonl, and
+    # a picture took the OCR text attached to it along (docs/09 P57).
+    for kind, items, positions in (
+        ("table", document.tables, facts.table_positions),
+        ("picture", document.pictures, facts.image_positions),
+    ):
+        furniture = [
+            item for item in items if item.content_layer == ContentLayer.FURNITURE
+        ]
+        if not furniture:
+            continue
+        outside = _outside_chrome(items, positions)
+        if outside is None:
+            extraction_warnings.append(
+                f"{len(furniture)} {kind}(s) above the page's first heading or in "
+                "a footer may be missing from content.md, content.txt and "
+                f"chunks.jsonl: docling produced {len(items)} {kind}(s) for "
+                f"{len(positions)} in the snapshot, and some of those docling files "
+                "there sit in page chrome (header, nav, footer, aside) and some "
+                "do not, so which of them is chrome could not be told by "
+                "position, and all were left out as chrome. content.json and "
+                "content.doctags hold them (docs/09 P57)."
+            )
+            continue
+        for item in outside:
+            item.content_layer = ContentLayer.BODY
 
     # Attach <table><caption> text the backend did not keep.
     aligned_tables = _aligned(document.tables, facts.table_captions)
@@ -1285,7 +1512,8 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         (CodeLanguageLabel.JSON exists; `<_JSON_>` is not a valid token), and
         the serializer raises on them.  Those items are downgraded to
         `unknown` for this export only — content.json keeps the detected
-        language.
+        language.  Each table's grid is built once for it, not once per
+        cell (`_grids_built_once`, docs/09 P41).
         """
         from docling_core.types.doc.labels import CodeLanguageLabel
         from docling_core.types.doc.tokens import DocumentToken
@@ -1301,7 +1529,8 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 downgraded.append((item, language))
                 item.code_language = CodeLanguageLabel.UNKNOWN
         try:
-            exported: str = document.export_to_doctags()
+            with _grids_built_once(document.tables):
+                exported: str = document.export_to_doctags()
             return exported
         finally:
             for item, language in downgraded:
@@ -1390,7 +1619,16 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         chunk_seeds=seeds,
         item_count=len(document.texts) + len(document.tables) + len(document.pictures),
         picture_count=len(document.pictures),
-        pictured_asset_ids=[asset.id for _, asset in matched],
+        pictured_asset_ids=[
+            asset.id
+            for picture, asset in matched
+            if picture.content_layer == ContentLayer.BODY
+        ],
+        chrome_pictured_asset_ids=[
+            asset.id
+            for picture, asset in matched
+            if picture.content_layer != ContentLayer.BODY
+        ],
         warnings=extraction_warnings,
     )
 

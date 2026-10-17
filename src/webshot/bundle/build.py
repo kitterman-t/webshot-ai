@@ -202,6 +202,23 @@ def ocr_word_count(assets: Sequence[VisualAsset]) -> int:
     return sum(len(asset.ocr.text.split()) for asset in assets)
 
 
+def _recorded_source(url: str, *, kept: bool) -> str:
+    """A visual asset's source as `assets.json` records it.
+
+    A converted Office file's pictures reach the page as `data:` URLs
+    (docs/09 P36), so recording each verbatim wrote the picture's bytes into
+    `assets.json` as base64: 5 MB for one 26-picture deck.  When the capture
+    keeps the source file under `source/`, those bytes are already in the
+    bundle, so the URL is recorded as its media type and length.  A web page's
+    `data:` URL holds the only copy of its picture as the page had it, and is
+    kept.
+    """
+    if not kept or url[:5].lower() != "data:":
+        return url
+    header, _, payload = url.partition(",")
+    return f"{header},\u2026 ({len(payload):,} characters; the picture is in source/)"
+
+
 def _fidelity_records(
     blocks: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -298,7 +315,12 @@ async def create_ai_bundle(
     # Built after the extraction, which decides whether an unread frame's OCR
     # text reached the text surfaces, and placed where it stood before it.
     warnings.extend(
-        unread_text_warnings(extracted, assets, pictured=extraction.pictured_asset_ids)
+        unread_text_warnings(
+            extracted,
+            assets,
+            pictured=extraction.pictured_asset_ids,
+            chrome_pictured=extraction.chrome_pictured_asset_ids,
+        )
     )
     if accessibility_warning:
         warnings.append(accessibility_warning)
@@ -316,7 +338,13 @@ async def create_ai_bundle(
     # Copies, so the records are written as the bundle records them while the
     # captured objects keep the URLs the later stages resolve against.
     recorded_assets = [
-        replace(asset, source_url=recorder.record(asset.source_url)) for asset in assets
+        replace(
+            asset,
+            source_url=recorder.record(
+                _recorded_source(asset.source_url, kept=original_local_path is not None)
+            ),
+        )
+        for asset in assets
     ]
     recorded_links = recorder.record_links(extracted["links"])
     write_json(

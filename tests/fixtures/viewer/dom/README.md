@@ -27,6 +27,11 @@ expression, or a toolbar name in `viewer.py`, `tests/test_viewer_dom.py` fails.
 That is the regression these files exist to prevent, and it is the one that used
 to be undetectable.
 
+The portrait pages also draw colour bands, no two alike, so
+`tests/test_protected_viewer.py` can run the segmented capture on them and
+check every stitched page band for band. A segment shot from anywhere but
+where its clip assumes puts a band out of place (docs/09 P42).
+
 They cannot catch **drift on Microsoft's side**. If the viewer's accessibility
 tree changes, these fixtures keep passing while real captures break. Only a run
 against a live tenant tells you that, and it stays a maintainer task —
@@ -46,5 +51,6 @@ it is not empty so the note cannot quietly disappear. As of Phase 1:
 
 | File | Shape | Exercises |
 |---|---|---|
-| `sharepoint-portrait.html` | 3 tall pages in a scrolling container | page geometry, inter-page step, page count, segmented capture |
+| `sharepoint-portrait.html` | 3 tall pages in a scrolling container, each drawn as eleven 96px colour bands | page geometry, inter-page step, page count, segmented capture and stitching |
+| `sharepoint-portrait-smooth.html` | the same, with `scroll-behavior: smooth` on the container | every segment shot where the viewer is, not where a scroll animation has got to (docs/09 P42) |
 | `sharepoint-landscape.html` | 2 wide slides plus the toolbar | the landscape branch's zoom, paging, and page-number controls |

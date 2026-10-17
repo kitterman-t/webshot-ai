@@ -15,7 +15,11 @@ being polite about what it skipped.
     uv run python tools/verify.py --fast     # skip the browser-driven checks
     uv run python tools/verify.py --list     # show the steps and exit
 
-`--fast` is for the edit loop; the full run is what "ready to push" means.
+`--fast` is for the edit loop, and is enough before pushing a change that
+cannot move captured output (documentation, workflow files, a tool that
+neither the capture pipeline nor the golden and parity harnesses import): CI
+runs the golden corpus and parity on every pull request. For anything else the
+full run is what "ready to push" means.
 
 Two rules this script exists to obey, both learned from it breaking them:
 
@@ -205,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.fast:
         print("--fast: skipping the browser-driven checks. They are the ones")
         print("that notice a change to captured output — run the full pass")
-        print("before pushing.\n")
+        print("before pushing anything that could move it.\n")
 
     live = sys.stdout.isatty()
     failures: list[tuple[str, str]] = []
