@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Code as the page lays it out</title></head>
+<body>
+<!--
+docs/09 P55. Each section holds a block of code as a highlighter writes it,
+made with the highlighter itself on made-up code (sample.py, sample.js and a
+Markdown snippet): GitHub's renderer (its /markdown API, 2026-10-11), Pygments
+2.21.0 (Sphinx's wrapper; linenos="inline"; linenos="table"), highlight.js
+11.11.1, Prism 1.30.0, Shiki 3.13.0, Chroma 2.20.0 and Rouge 3.30.0 (their
+line-number tables). "One element a line" is the shape Docusaurus 3 writes:
+a <div> a line, each ending in a <br>, and no line ending between them. The
+sections after it are shapes a page has. Every word in it is made up.
+-->
+<main>
+<h1>Code as the page lays it out</h1>
+<h2>GitHub</h2>
+<div class="highlight highlight-source-python"><pre class="notranslate">    <span class="pl-s1">lead</span> <span class="pl-c1">=</span> <span class="pl-s">"an indented first line"</span>
+<span class="pl-k">def</span> <span class="pl-en">gorvane</span>(<span class="pl-s1">plinth</span>):
+    <span class="pl-s">"""Wend the `plinth`."""</span>
+	<span class="pl-s1">tabbed</span> <span class="pl-c1">=</span> <span class="pl-s">"two  spaces"</span>   
+    <span class="pl-k">if</span> <span class="pl-s1">plinth</span>:
+        <span class="pl-k">return</span> <span class="pl-s">f"orvash <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">plinth</span><span class="pl-kos">}</span></span>"</span>
+
+    <span class="pl-k">return</span> <span class="pl-s">"```"</span></pre></div>
+<h2>Pygments</h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>    <span class="n">lead</span> <span class="o">=</span> <span class="s2">"an indented first line"</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">gorvane</span><span class="p">(</span><span class="n">plinth</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Wend the `plinth`."""</span>
+	<span class="n">tabbed</span> <span class="o">=</span> <span class="s2">"two  spaces"</span>   
+    <span class="k">if</span> <span class="n">plinth</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"orvash </span><span class="si">{</span><span class="n">plinth</span><span class="si">}</span><span class="s2">"</span>
+
+    <span class="k">return</span> <span class="s2">"```"</span>
+</pre></div>
+</div>
+<h2>Pygments with line numbers inline</h2>
+<div class="highlight"><pre><span></span><span class="linenos">1</span>    <span class="n">lead</span> <span class="o">=</span> <span class="s2">"an indented first line"</span>
+<span class="linenos">2</span><span class="k">def</span><span class="w"> </span><span class="nf">gorvane</span><span class="p">(</span><span class="n">plinth</span><span class="p">):</span>
+<span class="linenos">3</span><span class="w">    </span><span class="sd">"""Wend the `plinth`."""</span>
+<span class="linenos">4</span>	<span class="n">tabbed</span> <span class="o">=</span> <span class="s2">"two  spaces"</span>   
+<span class="linenos">5</span>    <span class="k">if</span> <span class="n">plinth</span><span class="p">:</span>
+<span class="linenos">6</span>        <span class="k">return</span> <span class="sa">f</span><span class="s2">"orvash </span><span class="si">{</span><span class="n">plinth</span><span class="si">}</span><span class="s2">"</span>
+<span class="linenos">7</span>
+<span class="linenos">8</span>    <span class="k">return</span> <span class="s2">"```"</span>
+</pre></div>
+<h2>Pygments with a line-number table</h2>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
+<span class="normal">2</span>
+<span class="normal">3</span>
+<span class="normal">4</span>
+<span class="normal">5</span>
+<span class="normal">6</span></pre></div></td><td class="code"><div><pre><span></span><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">wend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sb">`orvash </span><span class="si">${</span><span class="nx">plinth</span><span class="si">}</span><span class="sb">`</span><span class="p">;</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">gorvane</span><span class="p">(</span><span class="nx">a</span><span class="p">,</span><span class="w">  </span><span class="nx">b</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">	</span><span class="k">return</span><span class="w"> </span><span class="nx">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">b</span><span class="p">;</span><span class="w"> </span><span class="c1">// jessop</span>
+<span class="p">}</span>
+
+<span class="c1">// ``` varnel</span>
+</pre></div></td></tr></table></div>
+<h2>highlight.js</h2>
+<pre><code class="hljs language-javascript">  <span class="hljs-keyword">const</span> wend = <span class="hljs-string">`orvash <span class="hljs-subst">${plinth}</span>`</span>;
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">gorvane</span>(<span class="hljs-params">a,  b</span>) {
+	<span class="hljs-keyword">return</span> a + b; <span class="hljs-comment">// jessop</span>
+}
+
+<span class="hljs-comment">// ``` varnel</span>
+</code></pre>
+<h2>Prism, a fence in the code</h2>
+<pre class="language-markdown"><code class="language-markdown">Some <span class="token italic"><span class="token punctuation">*</span><span class="token content">orvash</span><span class="token punctuation">*</span></span> text:
+
+<span class="token code"><span class="token punctuation">```</span><span class="token code-language">js</span>
+<span class="token code-block language-js"><span class="token function">wend</span><span class="token punctuation">(</span>plinth<span class="token punctuation">)</span></span>
+<span class="token punctuation">```</span></span>
+</code></pre>
+<h2>Shiki</h2>
+<pre class="shiki github-light" style="background-color:#fff;color:#24292e" tabindex="0"><code><span class="line"><span style="color:#24292E">    lead </span><span style="color:#D73A49">=</span><span style="color:#032F62"> "an indented first line"</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> gorvane</span><span style="color:#24292E">(plinth):</span></span>
+<span class="line"><span style="color:#032F62">    """Wend the `plinth`."""</span></span>
+<span class="line"><span style="color:#24292E">	tabbed </span><span style="color:#D73A49">=</span><span style="color:#032F62"> "two  spaces"</span><span style="color:#24292E">   </span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> plinth:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#D73A49"> f</span><span style="color:#032F62">"orvash </span><span style="color:#005CC5">{</span><span style="color:#24292E">plinth</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#032F62"> "```"</span></span>
+<span class="line"></span></code></pre>
+<h2>Chroma with a line-number table</h2>
+<div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></pre></td>
+<td class="lntd">
+<pre class="chroma"><code><span class="line"><span class="cl">    <span class="n">lead</span> <span class="o">=</span> <span class="sa"></span><span class="s2">&#34;</span><span class="s2">an indented first line</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">gorvane</span><span class="p">(</span><span class="n">plinth</span><span class="p">)</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="sa"></span><span class="s2">&#34;&#34;&#34;</span><span class="s2">Wend the `plinth`.</span><span class="s2">&#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="n">tabbed</span> <span class="o">=</span> <span class="sa"></span><span class="s2">&#34;</span><span class="s2">two  spaces</span><span class="s2">&#34;</span>   
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">plinth</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="sa">f</span><span class="s2">&#34;</span><span class="s2">orvash </span><span class="si">{</span><span class="n">plinth</span><span class="si">}</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="sa"></span><span class="s2">&#34;</span><span class="s2">```</span><span class="s2">&#34;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+<h2>Rouge with a line-number table</h2>
+<table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="rouge-code"><pre>    <span class="n">lead</span> <span class="o">=</span> <span class="s">"an indented first line"</span>
+<span class="k">def</span> <span class="nf">gorvane</span><span class="p">(</span><span class="n">plinth</span><span class="p">):</span>
+    <span class="s">"""Wend the `plinth`."""</span>
+	<span class="n">tabbed</span> <span class="o">=</span> <span class="s">"two  spaces"</span>   
+    <span class="k">if</span> <span class="n">plinth</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s">"orvash </span><span class="si">{</span><span class="n">plinth</span><span class="si">}</span><span class="s">"</span>
+
+    <span class="k">return</span> <span class="s">"```"</span>
+</pre></td></tr></tbody></table>
+<h2>One element a line</h2>
+<pre tabindex="0" class="prism-code language-js codeBlock_Gebt thin-scrollbar"><code class="codeBlockLines_FJaf"><div class="token-line" style="color:#393A34"><span class="token keyword" style="color:#00009f">const</span><span class="token plain"> wend </span><span class="token operator" style="color:#393A34">=</span><span class="token plain"> </span><span class="token function" style="color:#d73a49">gorvane</span><span class="token punctuation" style="color:#393A34">(</span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">;</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  </span><span class="token function" style="color:#d73a49">jessop</span><span class="token punctuation" style="color:#393A34">(</span><span class="token plain">wend</span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">;</span><br></div></code></pre>
+<h2>An indented first line and fence lines</h2>
+<pre>   lead
+```
+fence
+```
+after</pre>
+<h2>Blank lines at either end</h2>
+<pre>
+  
+    first
+  second   
+
+ 
+</pre>
+<h2>A run of four backticks</h2>
+<pre><code>````
+nested ``` fence
+````</code></pre>
+<h2>Links in the code</h2>
+<pre>func <a href="#Gorvane">Gorvane</a>(wend []<a href="#Plinth">Plinth</a>, sep <a href="#Plinth">Plinth</a>) <a href="#Plinth">Plinth</a>
+func <a href="#Jessop">Jessop</a>(wend <a href="#Plinth">Plinth</a>) []<a href="#Plinth">Plinth</a></pre>
+<h2>Code in a link</h2>
+<a href="#orvash"><pre>linked = 1
+    deeper = 2</pre></a>
+<h2>Emphasis in the code</h2>
+<pre><b>gorvane</b> [<i>OPTION</i>...] <i>PLINTH</i> [<i>FILE</i>...]
+<b>gorvane</b> [<i>OPTION</i>...] <b>-e</b> <i>PLINTH</i> ... [<i>FILE</i>...]</pre>
+<h2>A subscript in the code</h2>
+<pre>x<sub>1</sub> = wend
+  x<sub>2</sub> = varnel</pre>
+<h2>A comment in the code</h2>
+<pre>orv<!-- a note -->ash = 1
+  jessop = 2</pre>
+<h2>Highlighted code in a list item</h2>
+<ul><li>Varnel
+<div class="highlight highlight-source-python"><pre class="notranslate">    <span class="pl-s1">lead</span> <span class="pl-c1">=</span> <span class="pl-s">"an indented first line"</span>
+<span class="pl-k">def</span> <span class="pl-en">gorvane</span>(<span class="pl-s1">plinth</span>):
+    <span class="pl-s">"""Wend the `plinth`."""</span>
+	<span class="pl-s1">tabbed</span> <span class="pl-c1">=</span> <span class="pl-s">"two  spaces"</span>   
+    <span class="pl-k">if</span> <span class="pl-s1">plinth</span>:
+        <span class="pl-k">return</span> <span class="pl-s">f"orvash <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">plinth</span><span class="pl-kos">}</span></span>"</span>
+
+    <span class="pl-k">return</span> <span class="pl-s">"```"</span></pre></div></li></ul>
+<h2>A line-number table in a list item</h2>
+<ol><li>Orvash
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
+<span class="normal">2</span>
+<span class="normal">3</span>
+<span class="normal">4</span>
+<span class="normal">5</span>
+<span class="normal">6</span></pre></div></td><td class="code"><div><pre><span></span><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">wend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sb">`orvash </span><span class="si">${</span><span class="nx">plinth</span><span class="si">}</span><span class="sb">`</span><span class="p">;</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">gorvane</span><span class="p">(</span><span class="nx">a</span><span class="p">,</span><span class="w">  </span><span class="nx">b</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">	</span><span class="k">return</span><span class="w"> </span><span class="nx">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">b</span><span class="p">;</span><span class="w"> </span><span class="c1">// jessop</span>
+<span class="p">}</span>
+
+<span class="c1">// ``` varnel</span>
+</pre></div></td></tr></table></div></li></ol>
+<h2>A table of two cells that is not a line-number table</h2>
+<table><tr><td><pre>1
+2
+three</pre></td><td><pre>wend
+varnel
+jessop</pre></td></tr></table>
+</main>
+<footer>
+<pre><span>foot</span>er<span>code</span> = 1
+  <span>tail</span> = 2</pre>
+</footer>
+</body>
+</html>

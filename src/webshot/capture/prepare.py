@@ -4,9 +4,10 @@ Everything here is deliberately done by *hiding* elements and adding print CSS
 rather than rebuilding the DOM, so linked assets, inherited styles, and the
 page's own structure survive into the PDF.
 
-`clean` mode hides page chrome and large fixed overlays; `faithful` mode hides
-nothing.  Capture is an act of record, so the number of hidden elements is
-reported and ends up in the manifest (docs/04-spec.md §5.5).
+Both modes hide the consent managers' dialogs, and the manifest names each one
+that was on screen; `clean` mode also hides page chrome and large fixed
+overlays, and `faithful` mode nothing else (docs/04-spec.md §5.5, docs/09
+P79). Capture is an act of record, so what was hidden is reported.
 """
 
 from __future__ import annotations
@@ -81,6 +82,27 @@ NOISE_SELECTORS = [
     "[id^='div-gpt-ad']",  # a Google Publisher Tag slot, by its default id
     "[id^='google_ads_iframe']",  # the frame that slot fills
 ]
+
+#: Consent managers' dialogs, by vendor, as each vendor's script writes them.
+#: Hidden in both modes (docs/04-spec.md §5 item 5): the dialog is the
+#: browser's session asking a question, not the page, and it is fixed to the
+#: viewport, so Chromium prints it on every page over the text beneath it, and
+#: its words are read into the bundle between the article's. Cookiebot's was
+#: measured, printed on five of six pages of one article in clean mode as well
+#: as faithful (docs/09 P79); the others follow their vendors' documented
+#: markup and were not met in a capture. Each selector is a name the vendor
+#: gave its own element, so none matches a page's own box the way the noise
+#: list's `[class*='cookie-consent' i]` can, which is why that list stays
+#: clean mode's alone.
+CONSENT_MANAGERS: dict[str, tuple[str, ...]] = {
+    "Cookiebot": ("#CybotCookiebotDialog", "#CybotCookiebotDialogBodyUnderlay"),
+    "OneTrust": ("#onetrust-consent-sdk",),
+    "Didomi": ("#didomi-host",),
+    "Quantcast Choice": (".qc-cmp2-container",),
+    "TrustArc": ("#truste-consent-track",),
+    "Usercentrics": ("#usercentrics-root", "#usercentrics-cmp-ui"),
+    "Sourcepoint": ("[id^='sp_message_container']",),
+}
 
 #: The rules that act on `release_clamped_text`'s marks. Part of the page's
 #: print CSS, and on their own the whole of what a frame is given: a frame
@@ -1374,6 +1396,88 @@ async def release_wide_tables(page: Page, width: int) -> int:
     finally:
         await page.set_viewport_size(viewport)
     return released
+
+
+@dataclass(frozen=True, slots=True)
+class ConsentDialogs:
+    """What `hide_consent_dialogs` hid."""
+
+    #: Every element hidden, shown or not.
+    hidden: int
+    #: The vendors whose dialog was on screen, each with the selector that
+    #: found it, in `CONSENT_MANAGERS` order. A manager whose container is on
+    #: every page and whose dialog was already closed is hidden and not listed:
+    #: hiding it changed nothing a reader would see.
+    shown: tuple[tuple[str, str], ...]
+
+
+#: Hides every match of each vendor's selectors, and answers which vendors had
+#: something on screen. A container is "on screen" when it or anything inside
+#: it, in its light tree or its open shadow root (Usercentrics draws its banner
+#: in one), has a box and is visible: a manager's root is often a zero-sized
+#: host for a fixed banner.
+HIDE_CONSENT_DIALOGS_JS = """managers => {
+    const shown = element => {
+        const inside = [element, ...element.querySelectorAll('*')];
+        if (element.shadowRoot) inside.push(...element.shadowRoot.querySelectorAll('*'));
+        return inside.some(node => {
+            const box = node.getBoundingClientRect();
+            return box.width > 0 && box.height > 0 && node.checkVisibility({
+                checkOpacity: true, checkVisibilityCSS: true,
+                opacityProperty: true, visibilityProperty: true,
+            });
+        });
+    };
+    let hidden = 0;
+    const seen = [];
+    for (const [vendor, selectors] of managers) {
+        let found = null;
+        for (const selector of selectors) {
+            for (const element of document.querySelectorAll(selector)) {
+                if (element.hasAttribute('data-webshot-hidden')) continue;
+                if (found === null && shown(element)) found = selector;
+                element.setAttribute('data-webshot-hidden', 'true');
+                hidden++;
+            }
+        }
+        if (found !== null) seen.push([vendor, found]);
+    }
+    return {hidden, seen};
+}"""
+
+
+async def hide_consent_dialogs(page: Page) -> ConsentDialogs:
+    """Hide the consent managers' dialogs, and say which were on screen."""
+    answer: dict[str, Any] = await page.evaluate(
+        HIDE_CONSENT_DIALOGS_JS,
+        [[vendor, list(selectors)] for vendor, selectors in CONSENT_MANAGERS.items()],
+    )
+    return ConsentDialogs(
+        hidden=int(answer["hidden"]),
+        shown=tuple(
+            (str(vendor), str(selector)) for vendor, selector in answer["seen"]
+        ),
+    )
+
+
+def _possessive(name: str) -> str:
+    return f"{name}'" if name.endswith("s") else f"{name}'s"
+
+
+def consent_dialogs_message(shown: Sequence[tuple[str, str]]) -> str:
+    """The manifest's record of the consent dialogs a capture hid."""
+    named = ", ".join(
+        f"{_possessive(vendor)} ({selector})" for vendor, selector in shown
+    )
+    dialogs = "dialog" if len(shown) == 1 else "dialogs"
+    return (
+        f"Hid the consent manager {dialogs} on screen: {named}. A consent dialog "
+        "is fixed to the window, so it would have printed over the page's text "
+        "on every page, and its words would have been read into the bundle "
+        "between the page's. It is the browser's session asking, not the page, "
+        "so both modes hide it. Pass --exclude for any other box that covers the "
+        "page."
+    )
 
 
 async def hide_obstructive_overlays(page: Page) -> int:

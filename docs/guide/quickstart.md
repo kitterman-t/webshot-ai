@@ -99,8 +99,10 @@ webshot https://example.com/article --selector "main.article" --exclude ".newsle
 ## Faithful vs clean
 
 `--mode clean` (the default) hides cookie banners, common page chrome and the
-ad units it recognizes, and records how many elements it hid. `--mode faithful` hides nothing, which suits
-dashboards and pages whose layout is the point:
+ad units it recognizes, and logs how many elements it hid. `--mode faithful`
+hides nothing but the dialog of a consent manager it knows (Cookiebot,
+OneTrust and the like), which both modes hide and the manifest names, so it
+suits dashboards and pages whose layout is the point:
 
 ```bash
 webshot "https://example.com/dashboard" \

@@ -34,7 +34,10 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 FIXTURE = FIXTURES / "item_code_blocks.html"
 
 #: The sections written as before, each for its own reason (docs/09 P50-3).
-AS_BEFORE = ("In a table cell", "Code with emphasis in it", "Code in a term")
+#: Code with emphasis in it was a third until the bridge read a `<pre>`'s text
+#: as the page lays it out, one code item however its runs are formatted
+#: (docs/09 P55).
+AS_BEFORE = ("In a table cell", "Code in a term")
 
 #: A list as ("list", start or None, items); an item as [its own text, its
 #: children], a child a list or ("code", the `<pre>`'s HTML).
@@ -346,7 +349,13 @@ def _items_hold_code(source: str) -> bool:
     return any(pre.find_parent(["li", "dd"]) is not None for pre in soup("pre"))
 
 
-HTML_FIXTURES = sorted(path for path in FIXTURES.rglob("*.html") if path != FIXTURE)
+#: `pre_code_text.html` holds code docling reads differently from the page,
+#: outside a list too (docs/09 P55).
+HTML_FIXTURES = sorted(
+    path
+    for path in FIXTURES.rglob("*.html")
+    if path not in {FIXTURE, FIXTURES / "pre_code_text.html"}
+)
 
 
 @pytest.mark.parametrize("path", HTML_FIXTURES, ids=lambda path: path.name)
@@ -354,7 +363,9 @@ def test_a_page_with_no_code_in_an_item_is_written_as_docling_writes_it(
     path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Without a `<pre>` in an item nothing changes: every surface, the
-    chunks and the warnings are docling's own, byte for byte."""
+    chunks and the warnings are docling's own, byte for byte. No other
+    fixture holds a `<pre>` whose text docling reads differently from the
+    page, which the bridge reads as the page has it (docs/09 P55)."""
     source = path.read_text("utf-8", errors="replace")
     if _items_hold_code(source):
         pytest.skip("the page holds code in a list item")
@@ -379,15 +390,10 @@ def _section(source: str, title: str) -> str:
     return source[start : end if end != -1 else source.index("</main>")]
 
 
-@pytest.mark.parametrize("title", ["Code with emphasis in it", "Code in a term"])
-def test_code_docling_does_not_read_as_a_block_in_its_item_is_written_as_before(
-    title: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Code with emphasis in it the backend reads as several runs, which it
-    writes inline with their lines joined outside a list too; a term's code
-    is the term's text, as the backend walks nothing a term holds. Both are
-    written as docling writes them."""
-    source = _page(_section(FIXTURE.read_text("utf-8"), title))
+def test_a_terms_code_is_written_as_before(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A term's code is the term's text, as the backend walks nothing a term
+    holds, and is written as docling writes it."""
+    source = _page(_section(FIXTURE.read_text("utf-8"), "Code in a term"))
     assert _surfaces(extract(source, [])) == _surfaces(
         _as_docling_writes_it(monkeypatch, source)
     )
@@ -436,17 +442,20 @@ def test_code_outside_a_list_is_written_as_before(result: ExtractionResult) -> N
 
 def test_the_backend_still_has_what_the_bridge_extends() -> None:
     """The methods the bridge's backend overrides or calls are docling's
-    private ones, with `AnnotatedTextList.simplify_text_elements`. A docling
-    that renames one fails here, not in a capture."""
+    private ones, and so are the module's names it reads (docs/09 P55). A
+    docling that renames one fails here, not in a capture."""
     from docling.backend import html_backend
 
     missing = [
         hook
         for hook in docling_bridge._BACKEND_HOOKS
         if not hasattr(html_backend.HTMLDocumentBackend, hook)
+    ] + [
+        hook
+        for hook in docling_bridge._BACKEND_MODULE_HOOKS
+        if not hasattr(html_backend, hook)
     ]
     assert not missing
-    assert hasattr(html_backend.AnnotatedTextList, "simplify_text_elements")
     assert docling_bridge._backend_hooked()
 
 

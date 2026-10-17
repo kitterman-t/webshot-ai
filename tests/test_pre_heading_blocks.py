@@ -328,7 +328,8 @@ def test_counts_that_disagree_over_chrome_and_content_say_so() -> None:
 
 def test_a_heading_inside_a_table_does_not_end_the_lead() -> None:
     """The backend starts the body at the first heading outside a table."""
-    facts = _SnapshotFacts()
+    # Positions compare no text, so the cleaner P58 requires is left as given.
+    facts = _SnapshotFacts(clean=lambda text: text)
     facts.feed(
         _page(
             "<table><tr><td><h2>In a cell</h2></td></tr></table>"

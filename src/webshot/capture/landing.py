@@ -1,7 +1,7 @@
 """Whether the browser landed on the page that was asked for.
 
-Two ways a capture can run to the end and still not be of the page, and both
-used to exit 0 with no warning (docs/09 P14-1, P22):
+Three ways a capture can run to the end and still not be of the page, and
+each used to exit 0 with no warning (docs/09 P14-1, P22, P78):
 
 - **a sign-in wall.** The site sent the browser to a sign-in page on another
   origin, because it had no session. docs/04-spec.md §5 item 4 makes this
@@ -10,6 +10,9 @@ used to exit 0 with no warning (docs/09 P14-1, P22):
   shell whose script never filled it, a document served to a browser with no
   session, a `--selector` that matched an empty element. §5 item 14 makes this
   a manifest warning, and `--require-content` a failure.
+- **a bot check's page.** The site answered 200 and a bot check drew its own
+  page in place of the page asked for, which §5 item 4 makes exit 4, as it
+  does a 403 that names its bot check.
 
 Detection only. Nothing here signs in, retries, waits longer or changes what
 the page is sent; a wall is reported to the person who can sign in, which is
@@ -206,6 +209,125 @@ def sign_in_wall_message(source: str, landed: str, *, interactive: bool) -> str:
     )
 
 
+#: What a person is told to do about a bot check: the one path that works,
+#: because the check refuses this browser and not the person (docs/09 P23-3).
+SAVE_IT_YOURSELF = (
+    "To capture the page, open it in your own browser, save it there, and "
+    "capture the saved file."
+)
+
+#: A bot check's own page, shown in place of the page with HTTP 200, in the
+#: top document or any open shadow root. Each signature is the vendor naming
+#: itself, never a phrase a page could quote (docs/09 P22, P78-1):
+#:
+#: - DataDome draws its captcha and its block page in a frame from its own
+#:   host, `geo.captcha-delivery.com`, over the page it refuses. Only a frame
+#:   that is shown counts; one the page laid out invisibly blocks nothing.
+#: - HUMAN (PerimeterX) writes its press-and-hold challenge into an element
+#:   with the id `px-captcha`. Its height is that of a frame its script loads,
+#:   so a rendered box of any size counts.
+#: - Akamai's refusal is titled "Access Denied" and carries a reference in its
+#:   own dotted format. Both are required: the title alone is an ordinary
+#:   phrase, and an article about Akamai could quote a reference.
+#:
+#: The answer is `[vendor, detail]`, or null when no signature is present.
+_BOT_CHECK_PAGE = r"""() => {
+    const roots = [document];
+    for (let index = 0; index < roots.length; index++) {
+        for (const element of roots[index].querySelectorAll('*')) {
+            if (element.shadowRoot) roots.push(element.shadowRoot);
+        }
+    }
+    const shown = element => element.checkVisibility({
+        checkOpacity: true, checkVisibilityCSS: true,
+        opacityProperty: true, visibilityProperty: true,
+    });
+    for (const root of roots) {
+        for (const frame of root.querySelectorAll('iframe[src]')) {
+            let host;
+            try { host = new URL(frame.getAttribute('src'), document.baseURI).hostname; }
+            catch (error) { continue; }
+            const dataDome = host === 'captcha-delivery.com' || host.endsWith('.captcha-delivery.com');
+            const box = frame.getBoundingClientRect();
+            if (dataDome && box.width > 0 && box.height > 0 && shown(frame)) {
+                return ['datadome', host];
+            }
+        }
+        const challenge = root.querySelector('#px-captcha');
+        if (challenge && shown(challenge)) return ['perimeterx', '#px-captcha'];
+    }
+    if (document.title.trim().toLowerCase() === 'access denied' && document.body) {
+        const reference = /Reference\s*#\s*(\d+\.[0-9a-f]+\.\d+\.[0-9a-f]+)/i.exec(
+            document.body.innerText
+        );
+        if (reference) return ['akamai', reference[1]];
+    }
+    return null;
+}"""
+
+
+@dataclass(frozen=True, slots=True)
+class BotCheckPage:
+    """What the bot-check test found. Neither field set means no bot check.
+
+    Two fields for the reason `WallCheck` has two: a page that could not be
+    read has not been shown to be the page.
+    """
+
+    #: Which bot check's page the browser was shown, in words.
+    check: str | None = None
+    #: Why the page could not be read, when it could not.
+    unread: str | None = None
+
+
+def _bot_check_name(vendor: str, detail: str) -> str:
+    if vendor == "datadome":
+        return f"DataDome's bot protection (its challenge frame from {detail})"
+    if vendor == "perimeterx":
+        return f"HUMAN's bot protection, formerly PerimeterX ({detail})"
+    return f'Akamai\'s "Access Denied" page (Reference #{detail})'
+
+
+async def bot_check_page(page: Any) -> BotCheckPage:
+    """Whether the page on screen is a bot check's page rather than the page.
+
+    A site behind DataDome answered with 200 and the article, and the check's
+    frame was drawn over it; the capture printed the frame's "We detected
+    unusual activity" over the article's title and exited 0 (docs/09 P78-1).
+    The response says nothing, so the page is read. A read that fails is tried
+    once more after the document loads, as `sign_in_wall` does, and a second
+    failure is `unread`, never "no bot check".
+    """
+    problem = ""
+    for _ in range(2):
+        try:
+            found = await page.evaluate(_BOT_CHECK_PAGE)
+        except PlaywrightError as exc:
+            problem = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+            with contextlib.suppress(PlaywrightError):
+                await page.wait_for_load_state("domcontentloaded")
+            continue
+        if found is None:
+            return BotCheckPage()
+        vendor, detail = found
+        return BotCheckPage(check=_bot_check_name(str(vendor), str(detail)))
+    return BotCheckPage(
+        unread=(
+            f"The bot-check test could not read the page ({page.url}): "
+            f"{problem}. Whether a bot check was shown in place of the page was "
+            "not established, so check the PDF before relying on it."
+        )
+    )
+
+
+def bot_check_page_message(source: str, check: str) -> str:
+    """What exit 4 says when a bot check's page was shown in place of the page."""
+    return (
+        f"{source} showed {check} in place of the page: a bot check refused "
+        f"an automated browser. This is not a sign-in page. {SAVE_IT_YOURSELF}"
+    )
+
+
 def automation_refusal(headers: Mapping[str, str]) -> str | None:
     """Which bot check answered instead of the site, read off the response.
 
@@ -236,9 +358,8 @@ def refused_status_message(source: str, status: int, headers: Mapping[str, str])
     if check:
         return (
             f"{refused} The response came from {check}, which refused an "
-            "automated browser: this is a bot check, not a sign-in page. To "
-            "capture the page, open it in your own browser, save it there, and "
-            "capture the saved file."
+            "automated browser: this is a bot check, not a sign-in page. "
+            f"{SAVE_IT_YOURSELF}"
         )
     hint = "Use --allow-http-errors only if that page is intentional."
     if status == 401:

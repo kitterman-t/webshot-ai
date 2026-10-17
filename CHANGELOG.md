@@ -171,6 +171,32 @@ which records the measurements behind each change.
   and a CSV inside a zip is escaped as a top-level one is. The spreadsheet fix
   of P8-9 is corrected too: `=SUM(A1)` printed as `\=SUM(A1)`, and a trailing
   `{x}` was dropped. See docs/09 P28.
+- **A code block in a list item can no longer fetch a URL.** A blank line in
+  a `<pre>` inside a list item, or a line opening a heading or a quotation,
+  ended the paragraph its fence was read in, and the lines after it were read
+  as Markdown with raw HTML: an
+  `<img src="https://…">` there became an image the capture fetched. That
+  code is now a code block, whose text is text. Code in a quotation is
+  docs/09 P47's, and code in a link or emphasis docs/09 P59's. See docs/09
+  P44.
+- **Code written into a line of text can no longer fetch a URL.** A `<pre>`
+  inside a link, emphasis, struck text, a subscript or superscript, a
+  quotation mark or inline code, in a Word file (through its style map), an
+  EPUB or an HTML page, on its own or in a zip, had its fence written
+  mid-line, where Python-Markdown does not read one. A blank line in the
+  code, or a line opening a heading, a rule, a quotation, a link reference, a
+  definition or a `<div>`, let the lines after it be read as Markdown with raw
+  HTML, so an `<img src="https://…">` there became an image the capture
+  fetched. Inline code whose own text ran over lines did the same with no
+  `<pre>` at all. Such a `<pre>` is now inline code whose text is text, its
+  lines kept apart on the page where they ran together, and inline code is
+  written on one line, which the browser showed it as. See docs/09 P59.
+- **Code in a quotation or a definition can no longer fetch a URL.** A blank
+  line in a `<pre>` inside a `<blockquote>` or a `<dd>`, or a line opening a
+  heading or a quotation, ended the paragraph its fence was read in, and the
+  lines after it were read as Markdown with raw HTML: an
+  `<img src="https://…">` there became an image the capture fetched. That
+  code is now a code block, whose text is text. See docs/09 P47.
 
 - **NAT64, IPv4-translated and site-local IPv6 addresses are internal.** The
   private-network check classified `64:ff9b::a9fe:a9fe`, the NAT64 spelling of
@@ -223,6 +249,17 @@ which records the measurements behind each change.
   pip-audit's default is PyPI. See docs/09 P10-16.
 
 ### Changed
+
+- **A picture printed far finer than paper can show is reduced.** Chromium
+  embeds a picture at its natural size whatever size it prints at, and a
+  think tank's 4-page topic page was 86 MB: its card thumbnails were the
+  photographers' originals, up to 6720×4480 pixels, printed at up to 2,300
+  pixels per inch. After the render, each picture drawn at more than 600 ppi
+  (at the largest size it is drawn) is reduced to 300 ppi at that size, in the
+  codec Chromium chose for it, with its soft mask. A manifest warning names
+  each one with its original and reduced size, and a picture the pass cannot
+  rewrite exactly is named instead. The topic page is now 8.3 MB. A file with
+  nothing to reduce keeps its bytes. See docs/09 P80.
 
 - **`webshot --help` lists the subcommands** (`doctor`, `schema`, `mcp`,
   `journey`), every option has help text, no option prints "(default: None)",
@@ -282,6 +319,18 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **A bot check's page served with HTTP 200 fails the capture.** A site behind
+  DataDome answered 200, the check drew its block page over the article, and
+  the capture printed "We detected unusual activity…" under the article's
+  title and exited 0. The page is now read after the lazy-load pass for a
+  signature that names the vendor: DataDome's frame from
+  `captcha-delivery.com`, HUMAN's `#px-captcha`, or Akamai's "Access Denied"
+  page with its reference. Each exits 4 with the check named and the advice to
+  save the page from your own browser, as a 403 from a bot check already did.
+  A phrase a page could quote is never matched. And a navigation that fails
+  with `net::ERR_HTTP2_PROTOCOL_ERROR`, which a news page did and then opened
+  in Chrome, now says that some bot checks refuse an automated browser that
+  way; it is still exit 3. See docs/09 P78.
 - **A list keeps the number it starts at.** A Markdown list that began `3.`,
   and an EPUB list that began at 5, were numbered from 1 on the page, because
   the local-document allowlist dropped `ol[start]`. The snapshot kept the
@@ -320,6 +369,15 @@ which records the measurements behind each change.
   A video still loading keeps its spinner, and its warning now says that its
   image shows the browser's loading indicator rather than a frame of the
   video, instead of saying its frame was preserved. See docs/09 P67.
+- **Page chrome marked with an ARIA landmark role stays out of `content.md`.**
+  Above a page's first heading WebShot keeps a page's header, nav, footer and
+  aside out of `content.md`, `content.txt` and `chunks.jsonl`, but it knew
+  them only by those four elements. A page that marks the same chrome with a
+  role instead, such as `<div role="banner">` or `<ul role="navigation">`, had
+  its logo, menu or disclaimer read as content. An element with the role
+  `banner`, `navigation`, `contentinfo` or `complementary` now counts as
+  chrome as its element does; `content.json` and `content.doctags` still hold
+  it. A landmark below the first heading is unchanged. See docs/09 P71.
 - **A table or picture before a page's first heading reaches `content.md`,
   `content.txt` and `chunks.jsonl`.** docling files everything above the
   first heading as page furniture, which those three skip, and WebShot moved
@@ -332,6 +390,49 @@ which records the measurements behind each change.
   frame shown as its screenshot above the first heading was reported as having
   its recognized text in `content.md` and `content.txt`, which held none of
   it; the warning now says where that text is. See docs/09 P57.
+- **A line break in a list item, heading, caption or code block no longer
+  leaves an invisible character in the text.** docling writes each `<br>` as
+  the private-use character U+E000 while it reads a page, and turns it back
+  into a line break only in a paragraph or a table cell. A `<br>` that reached
+  extraction in a list item such as `Jask<br>ov` therefore left U+E000
+  between the two words in `content.json`, `content.md`, `content.txt`, the
+  DocTags and every chunk, and so did one in a term or description, a task
+  item, a heading, a table or figure caption and a `<pre>`. Captured web
+  pages did not show it yet: their snapshot drops every `<br>` before
+  extraction, which is a fix of its own, and this one keeps the line breaks
+  that fix lets through clean. docling reads all of those but a `<pre>` onto one line, so a
+  `<br>` there is now the space any other whitespace becomes, and in a `<pre>`
+  it is a line break. An item or caption that held nothing but a `<br>` is
+  now what docling makes of the same element empty, not an item holding only
+  that character. A navigation item with a `<br>` stays in the page chrome
+  instead of moving into the body, and a table caption with one is no longer
+  reported lost. A page carrying U+E000 itself says so in the manifest's
+  warnings, as docling deletes it from the page's text. See docs/09 P56.
+- **Page chrome spelled with a curly quote, a dash or an ellipsis stays out
+  of `content.md`.** A menu item, footer line or banner holding a typographic
+  quote, a dash, an ellipsis, a soft hyphen or a zero-width character reached
+  `content.md`, `content.txt`, `chunks.jsonl` and the body layer of
+  `content.json`, while the plain items beside it stayed out. docling makes
+  that punctuation plain as it reads the page; WebShot then looked for the
+  plain text in the chrome as the page spelled it, did not find it, and took
+  the item for content. A list item holding a line break leaked the same
+  way, since docling writes the break into the item's text. Chrome is now
+  compared as docling writes text, and what docling files under a `<footer>`
+  counts as chrome by where it sits. A table caption with such punctuation
+  no longer draws a warning that it was lost. Text before the first heading
+  that is not chrome still reaches every surface. See docs/09 P58.
+- **Two quotations, or two definition lists, side by side in a converted
+  document stay two.** In a Word file, an EPUB, an HTML file or an HTML file
+  in a zip, a `<blockquote>` straight after another reached the page as one
+  quotation holding both, and a `<dl>` straight after another as one
+  definition list. This held when only markup that writes no text stood
+  between them, when each sat in its own `<div>`, inside a quotation or a
+  definition, and across two EPUB chapters. Python-Markdown makes a
+  quotation that follows a quotation part of it, and adds a term to the
+  definition list before it; the comment that now keeps them apart, as it
+  keeps two lists apart, is removed from the page. A document with no such
+  pair is written as before, and so is a pair inside a list item. See
+  docs/09 P63.
 - **Two lists side by side in a converted document stay two lists.** Where an
   EPUB chapter or an HTML file in a zip had one list straight after another of
   the same kind, the page showed one list: numbered on from the first, so a
@@ -403,6 +504,25 @@ which records the measurements behind each change.
   now has each table's grid built once for that export. Every file it writes
   is the same, byte for byte. A 2,000-row HTML table took 174 s to capture
   before and 28 s after. See docs/09 P41.
+- **A list item that holds only a list keeps its line in `content.md`.** An
+  item with no text of its own, the shape a Word document's second-level
+  bullets take when no first-level bullet is above them, had no line at all:
+  its list hung off the outer one. A Markdown reader then showed the list as
+  code after a paragraph, ran it into the parent item's text under an item
+  with text, and moved it under the item before in a numbered list. With a
+  start number, the items after it were numbered one short, in `content.json`
+  too. The item is now in `content.json`, empty and numbered, holding its
+  list, and `content.md`, `content.txt` and `chunks.jsonl` write it as
+  CommonMark does, on its list's first line (`-   - First sub-item`). Every
+  other list is written as before. See docs/09 P45.
+- **Words a no-break space keeps apart at the edge of bold text stay apart.**
+  markdownify strips the edges of bold, italic, a link, code and the rest,
+  and puts back an ASCII space only, so in a Word file, an EPUB or an HTML
+  page in a zip `called<strong>&nbsp;SALT.&nbsp;</strong>We'll` reached the
+  page as `calledSALT.We'll`. Any Unicode space at such an edge is now written
+  as the document has it, outside the formatting: the page keeps the no-break
+  space, and content.md reads it as a plain one. Output where the edges are
+  ASCII spaces, or none, is unchanged. See docs/09 P43.
 - **A word with a bold, italic, code or linked part is one word in the
   bundle.** docling spaced every formatted run from the text beside it, so
   `un<b>break</b>able` read `un **break** able` in `content.md` and "un break
@@ -415,6 +535,88 @@ which records the measurements behind each change.
   as `data-webshot-display` in `content.html`. The snapshot also keeps a
   `<br>` now: it dropped every one, so `t-test<br>Regression test` read
   "t-testRegression test" on every surface. See docs/09 P48.
+- **A list or paragraph above a page's first heading keeps its shape.**
+  docling files everything above the first heading as page furniture, and
+  WebShot moved each line of text back on its own, leaving the list or
+  paragraph around it behind. `content.md`, `content.txt` and `chunks.jsonl`
+  then wrote a nested list flat, a blank line between its items and each
+  item its own chunk, and a paragraph as one line per bold, italic or linked
+  run. A run the site's menu also held, such as "Terms", was dropped from its
+  sentence, and a table inside a list item was dropped. A list, paragraph or
+  section above the first heading now moves back whole and reads as it does
+  on a page with no heading. A menu, header, sidebar or footer there stays
+  out whole, including the items with a curly quote, a dash or a line break
+  that used to get through. Word, EPUB and Markdown documents that open with
+  a list or a formatted paragraph before any heading had the same defect.
+  Nothing below the first heading changes. See docs/09 P53.
+- **A UTF-8 file whose first letter outside ASCII is past its first 64 KB is
+  read.** MarkItDown guesses a text file's encoding from its first 64 KB, so
+  it took such a file for ASCII, and the read failed wherever Magika had
+  recognized the file as text: a CSV, TSV, JSON, JSON Lines, XML or YAML file
+  on its own ended the capture with exit 2, and in a zip a Python file, a
+  notebook and the rest were left out of the page. A YAML file with such a
+  letter that Magika could not name, as a short one behind a byte order mark,
+  was refused as a format nothing reads. A guess inside the 64 KB could be
+  wrong too: a UTF-8 file of box-drawing characters in a zipped Python
+  project was read as a Kazakh code page. WebShot now tells MarkItDown the
+  encoding of the CSV it writes, and that a file which is UTF-8 to its last
+  byte is UTF-8. A UTF-8 byte order mark is no longer put at the start of a
+  text file's page as an invisible U+FEFF. A CSV or TSV file that is not
+  UTF-8 is still read as UTF-8, but the manifest now says so: its accented
+  letters had become U+FFFD, or other characters entirely, without a word.
+  See docs/09 P35.
+- **A list nested in a converted document stays nested.** markdownify
+  indented a sub-list by the width of its parent's marker, two or three
+  spaces, and Python-Markdown nests at four. So in a Word file, an EPUB or an
+  HTML page, on its own or in a zip, sub-items became items of their parent's
+  list or text in the parent item (`Alpha * sub a`), and an item's second
+  paragraph left the list and took the next item with it. Nested lists are now
+  indented by four at every depth, more of an item after its nested list stays
+  in the item, and two lists in one item stay two. A list of one-line items is
+  written as before, and a `.md` file is not touched. See docs/09 P40.
+- **Code in a list item keeps its lines.** A `<pre>` in a list item of a Word
+  file, an EPUB or an HTML page, on its own or in a zip, was printed as one
+  line of inline code in the item's text, its line breaks and indentation
+  gone, because Python-Markdown reads a code fence only at the start of a
+  line and the item indents it. It is now a code block in its item at any
+  depth, line for line as a `<pre>` outside a list reads, and a run of
+  backticks in it is text. Code outside a list is written as before; code
+  in a quotation within an item is docs/09 P47's, and code in a link or
+  emphasis docs/09 P59's. See docs/09 P44.
+- **A definition list inside a list item keeps all its definitions hold.** In
+  an EPUB or an HTML page, on its own or in a zip, a definition list in a list
+  item kept only each definition's first paragraph: the second became a code
+  block in the item, and a list or a definition list nested in the definition
+  became one line of its text (`d + x`) or a code block. Python-Markdown hands
+  a block indented under a list to the processor that reads list items, which
+  stopped at the definition list. The page renderer now reads such a block
+  into the definition it is indented under, and a list in a definition is
+  written after a blank line, as Python-Markdown needs, at any depth of items.
+  An item that opens with a definition list whose definition opens with a list
+  keeps that list's items in the definition. Every other document renders
+  byte for byte as before. A `.md` file renders through the same reader, so a
+  definition list in one of its items reads the same way. A `<pre>` in such a
+  definition stays in it, but as inline code, which docs/09 P47 leaves as it
+  was (P47-4). See docs/09 P62.
+- **Code in a quotation or a definition keeps its lines.** A `<pre>` in a
+  `<blockquote>` or a `<dd>` of a Word file, an EPUB or an HTML page, on its
+  own or in a zip, was printed as one line of inline code, because
+  Python-Markdown reads a code fence only at the start of a line and `> ` or
+  `:   ` stood before it. It is now a code block in its quotation or
+  definition at any depth, a quotation in a list item included, line for line
+  as at the top level, and two blocks side by side stay two. Code outside
+  them is written as before; code in a definition inside a list item still
+  is (docs/09 P47-4). See docs/09 P47.
+- **Words kept apart only by whitespace in bold text stay apart.** A Word
+  file's `This<strong> </strong>course` reached the page as `Thiscourse`:
+  markdownify writes nothing for bold, italic, a link or code that holds only
+  whitespace, and drops a newline or a line break at such an element's edge.
+  A link
+  whose text is its address, or that has no target, dropped even a plain
+  space at its edge, so `Retrieved from<a …> https://…</a>` ran together.
+  Each run of whitespace there is now one space outside the formatting, in a
+  Word file, an EPUB and an HTML page in a zip. An edge of plain spaces is
+  written as before, and text in code keeps its own spacing. See docs/09 P49.
 - **Clean mode hides the ad units an ad network writes into the article.** On
   a statistics site's calculator page, an in-article video player ("My Latest
   Videos") sat inside the main content, so selecting the region kept it. The
@@ -444,6 +646,20 @@ which records the measurements behind each change.
   and the alt text, empty list items and rewritten dashes that got through
   even without a heading. A picture in a footer keeps its figure chunk. See
   docs/09 P65.
+- **Code keeps its lines, its indentation and its fence.** A block of code a
+  highlighter wrote (GitHub, Pygments, highlight.js, Prism, Shiki,
+  Docusaurus), with an element for each token, reached `content.md`,
+  `content.txt`, `chunks.jsonl` and `content.json` with most of its line
+  breaks and all its indentation gone and a space between tokens
+  (`def f ( x ): return x`). Code with a link or emphasis in it was written as
+  a run of inline code on one line, the first line of any block lost its
+  indentation, and a line of three backticks in the code ended the block. A
+  line-number table (Pygments, Rouge, Chroma) was a table row with the code on
+  one line, and the snapshot dropped every blank line of Chroma's code. Each
+  `<pre>` is now one code item holding the text a reader selecting it gets,
+  less the blank lines at its edges, written in a fence longer than any run of
+  backticks in it; a line-number table is its code. Code no highlighter split
+  and that does not start indented is written as before. See docs/09 P55.
 - **A page that enforces Trusted Types is captured.** A site that sends
   `require-trusted-types-for 'script'` made the bundle stage throw on its
   first `DOMParser` call, and the capture exited 5. Large video sites' watch
@@ -641,6 +857,17 @@ which records the measurements behind each change.
   the media element is recorded without a title rather than under a corrupt
   one, and the refusal is a manifest warning so absence does not read as an
   element the author never named.
+
+- **A consent manager's dialog no longer prints over the page, in either
+  mode.** A news article's Cookiebot dialog was printed on five of its six
+  pages, over the text, and its words were read into `content.md` in the
+  middle of the article's sentences, in faithful and clean mode alike: the
+  dialog was narrower than clean mode's overlay rule and named nothing its
+  cookie selectors look for. Both modes now hide the dialogs of seven consent
+  managers by the ids their vendors give them (Cookiebot, OneTrust, Didomi,
+  Quantcast Choice, TrustArc, Usercentrics, Sourcepoint), and a manifest
+  warning names each one that was on screen. This is the one thing faithful
+  mode now hides. See docs/09 P79.
 
 ## [3.0.0] — 2026-08-21
 

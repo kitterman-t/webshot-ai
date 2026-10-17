@@ -47,6 +47,8 @@ from .bundle.videos import VideoEnrichment, enrich_with_videos
 from .capture.discover import read_page
 from .capture.landing import (
     WallCheck,
+    bot_check_page,
+    bot_check_page_message,
     empty_capture_message,
     home_page_message,
     landed_on_home_page,
@@ -62,7 +64,9 @@ from .capture.prepare import (
     NOISE_SELECTORS,
     LazyLoadPass,
     _wait_for_fonts_and_images,
+    consent_dialogs_message,
     has_scrolling_tables,
+    hide_consent_dialogs,
     hide_elements,
     hide_obstructive_overlays,
     isolate_content,
@@ -84,6 +88,7 @@ from .errors import (
     PdfValidationError,
     UsageError,
     certificate_hint,
+    http2_refusal_hint,
     is_unreachable,
 )
 from .ocr.engine import OcrEngine, resolve_engine
@@ -93,6 +98,7 @@ from .protected.viewer import capture_sharepoint_pdf_viewer
 from .render.clipping import clipping_warnings, find_clipped_text, printed_width
 from .render.embed import collect_payloads, embed_bundle
 from .render.frames import fit_frames
+from .render.images import image_reduction_warnings, reduce_oversized_images
 from .render.ligatures import (
     ligature_forms,
     ligature_warning,
@@ -545,6 +551,23 @@ async def capture_open_page(
             if lazy_message:
                 warnings.append(lazy_message)
 
+        # After the lazy-load pass, because a check that watches for rapid
+        # scrolling can draw its page over the article during it; before
+        # anything is extracted, because nothing of a bot check's page is the
+        # page (docs/09 P78-1). A local file is what the person saved, so it is
+        # not tested.
+        if source_kind == "web":
+            crash.step = "testing for a bot check's page"
+            refusal = await bot_check_page(page)
+            if refusal.check:
+                raise AuthenticationError(
+                    bot_check_page_message(options.source, refusal.check),
+                    http_status=http_status,
+                    final_url=page.url,
+                )
+            if refusal.unread:
+                warnings.append(refusal.unread)
+
         crash.step = "preparing the page for print"
         warnings.extend(await _wait_for_fonts_and_images(page))
         title = (
@@ -587,6 +610,13 @@ async def capture_open_page(
             await isolate_content(page, selector)
 
         hidden = 0
+        # In both modes: a consent dialog is the session asking, not the page,
+        # and it prints over the page's text (docs/04-spec.md §5 item 5,
+        # docs/09 P79).
+        consent = await hide_consent_dialogs(page)
+        hidden += consent.hidden
+        if consent.shown:
+            warnings.append(consent_dialogs_message(consent.shown))
         if options.mode == "clean":
             hidden += await hide_elements(page, NOISE_SELECTORS)
             hidden += await hide_obstructive_overlays(page)
@@ -760,6 +790,20 @@ async def capture_open_page(
             # total would be naming a different document (docs/09 P8-68).
             appendix_expected=bool(enrichment.walkthroughs),
         )
+        # The file as Chromium printed it, before anything is appended to it
+        # or embedded in it, and before the checks that read it: a picture's
+        # printed size is known only here (docs/09 P80). In a thread, because
+        # it decodes and re-encodes pictures that can be tens of megabytes.
+        crash.step = "reducing pictures printed finer than paper shows"
+        reduction = await asyncio.to_thread(reduce_oversized_images, temporary_output)
+        if reduction.reduced:
+            LOGGER.info(
+                "Reduced %d oversized picture(s) for print.", len(reduction.reduced)
+            )
+        for message in image_reduction_warnings(reduction):
+            warnings.append(message)
+            if ai_result:
+                ai_result.warnings.append(message)
         # Before embedding, which copies the warnings into `capture.json`, and
         # before the clipping check, whose narrower viewport can fetch images
         # the printed page never asked for.
@@ -1100,7 +1144,7 @@ async def _capture(
                     raise
                 raise NavigationError(
                     f"{options.source} could not be reached: {exc}"
-                    f"{certificate_hint(str(exc))}"
+                    f"{certificate_hint(str(exc))}{http2_refusal_hint(str(exc))}"
                 ) from exc
             # Chromium's spelling of what was asked for, which `page.url` is
             # compared with to tell a redirect to another origin (spec §5.4).
