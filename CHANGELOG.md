@@ -351,6 +351,20 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **A Claude review that skipped its checks no longer passes as one.** The
+  review plugin ends a clean review with a fixed sentence, "No issues found.
+  Checked for bugs and CLAUDE.md compliance.", whatever ran. Of 23 reviews
+  that posted it between 2026-10-11 and 10-18, 20 started no bug or
+  CLAUDE.md compliance agent, and none read every changed line with both. The
+  review job now measures, from the session's own record, which of those
+  agents finished and which changed lines of the diff reached each one. It
+  rewrites the summary to say exactly that, "not checked" where a pass did
+  not run, and records the measurement on the job. `claude review verdict`
+  fails a review that skipped either check, or left no such record. A check
+  that ran but read part of the diff passes, with a warning such as
+  "CLAUDE.md compliance: 230 of 769 changed lines read". Re-running the
+  review is the remedy, and a re-run is no longer stopped by Claude's earlier
+  comment. See docs/09 P89-9.
 - **The PDF/A check reads veraPDF's report as UTF-8, whatever the locale.**
   It read veraPDF's output in the locale's encoding, cp1252 on an English
   Windows. veraPDF writes UTF-8, and its report names the file it checked:

@@ -18668,6 +18668,197 @@ against a fake `gh`. Among those cases are a read that fails, which fails the
 verdict, and a reply whose thread is resolved only on the third look.
 
 
+### P89-9 — "Checked for bugs and CLAUDE.md compliance", whatever ran
+
+P89-1 reads a summary that says "No issues found" as a clean review. The
+code-review plugin writes that summary as one fixed sentence, "No issues
+found. Checked for bugs and CLAUDE.md compliance." Its step 7 posts it when no
+issue survived validation. Nothing in the plugin ties the sentence to the
+agents its step 4 is meant to start: two for CLAUDE.md compliance and two for
+bugs. A review that started no agent and read a third of the diff posted the
+same words as one that did everything, and the verdict passed both.
+
+It was first seen on #208 (run 38186641876). That session's last message says
+the comment's "Checked for … CLAUDE.md compliance" overstates what it did. On
+2026-10-18 it was most reviews. Each review job's log from 2026-10-11 to
+2026-10-18 was rebuilt into the session's record and measured as described
+below: 27 sessions.
+
+| What the review posted | Reviews | With a bug agent | With a compliance agent | Both passes read every changed line |
+|---|---|---|---|---|
+| "No issues found. Checked for bugs and CLAUDE.md compliance." | 23 | 3 | 2 | 0 |
+| One inline finding (#249) | 1 | 1 | 1 | 0 |
+| A stop notice in its old words (#198, #214) | 2 | 0 | 0 | 0 |
+| A log that ends before the session's result (#248) | 1 | not measurable | not measurable | not measurable |
+
+20 of the 23 started no agent for either pass, and each session's final
+message says it reviewed the diff itself. In 7 of those 20 the session did
+read every changed line (#207, #211, #262, #266, #267, #269, #273). The other
+three started agents that did not cover the diff:
+
+- #208 started one bug agent and no compliance agent. The agent read 368 of
+  the 1,057 changed lines.
+- #254 started two of each. Its bug agents read 758 of 3,194 changed lines,
+  and its compliance agents 2,142.
+- #255 started two of each. Its bug agents read 648 of 4,491, and its
+  compliance agents 1,059.
+
+The two cases named when this was reported:
+
+- **#275** (run 39107190888) started no agent. It read the diff with `gh pr
+  diff | head -400` and then `sed -n 400,700p | head -120`. The second `head`
+  cut that at line 519, so it read diff lines 1 to 519 of 761, which is 330 of
+  its 572 changed lines. It was reported as lines 1 to 700. The measurement
+  says 519, and the commands agree.
+- **#277** (run 39111285165) started no agent. It read the patches of the
+  files under `src` and `tools` through the API and nothing else, which is 229
+  of 769 changed lines. It did not open the 13 test and document files.
+
+#### The measurement
+
+`review_verdict.py coverage` runs in the review job after P10-18's guard and
+reads the same execution file.
+
+- **Who read.** The readers are the session and each agent it started, with
+  the agents those started. All 27 sessions ran Claude Code 2.1.295 or
+  2.1.300 and started agents with the `Agent` tool; the measurement also
+  accepts `Task`, the older name the workflow's `--allowedTools` still lists.
+  A reader read what reached its model: each tool result's `content`, and an
+  agent's prompt. It did not read the record's `tool_use_result.stdout`. When
+  an output is long, Claude Code saves it to a file and shows the model a
+  2 KB preview, while `stdout` keeps all of it. #208's `gh pr diff | head
+  -600` put 33 lines of the diff in front of its session.
+- **Which pass.** An agent counts for the bug pass or the compliance pass by
+  its description, the label the model gave it, or by its prompt when the
+  label names neither. An agent labelled as one of the plugin's other steps
+  counts for neither: eligibility, finding the CLAUDE.md files, the summary,
+  or validating an issue. Only an agent whose result came back completed
+  counts, and the reads of the agents it started count with it.
+- **Which lines.** The reference is the pull request's diff from the API, the
+  text `gh pr diff` returns, read when the review has ended, with its head
+  recorded. #208's review sat queued for an hour while the pull request moved,
+  and its session read the later head, not the event's. A changed line counts
+  as read when it reached a reader inside a run of three consecutive lines,
+  either of the diff or of the file around it. A file read at the head shows
+  the added lines, and one read at the base shows the removed ones. The Read
+  tool's line numbers are removed first. A run of lines that say nothing,
+  such as `+    )`, `+`, `+`, counts only when it joins a run that says
+  something. Without that rule, #277's session was credited with three lines
+  of a test file it never opened, matched in another file's diff.
+
+#### What the summary says now
+
+A job of its own, after the review, rewrites each "No issues found" summary
+the review posted. The new text names each pass's finished agents, with how
+many changed lines they read out of how many, how many files in full, and
+which files they did not read. It does the same for the session as a whole.
+
+- If a pass had no finished agent, the comment opens with "Claude review
+  incomplete:", says "not checked" for that pass, and does not say "No issues
+  found" at all.
+- If both passes ran but did not read every changed line, it opens "No issues
+  found in what was read" and says that a line no agent read was not checked.
+- Only when both passes read every changed line does it say "No issues
+  found." on its own.
+
+The job has write access to comments and runs no model. The review job, which
+runs a model with a shell, gets none, and the action's own token is revoked
+when the action ends.
+
+A review that posted findings inline has no summary to rewrite. Its
+measurement is in the job's run summary and on the record below.
+
+#### The verdict
+
+The coverage step leaves a short record on the review job as an annotation
+titled `Claude review coverage`. The verdict reads that record on every head.
+It takes the latest review that read the pull request, passing over one that
+stopped at the plugin's first step on purpose. It fails when:
+
+- a pass, bugs or CLAUDE.md compliance, has no finished agent. The review
+  skipped a check it reports;
+- the review left no record, because it ran before this change or its
+  measurement failed. Unknown is not covered;
+- every review on the pull request stopped at its first step.
+
+Reading part of the diff does not fail it. The owner chose that rule on
+2026-10-18: block on a skipped check, and show partial reading. A pass that
+ran but read fewer than all the changed lines passes, with one warning per
+pass, in the verdict's log and run summary, such as "CLAUDE.md compliance: 230
+of 769 changed lines read; a line no agent read was not checked." The record
+keeps the counts, so a stricter rule needs no new measurement.
+
+Under this rule, 21 of the 23 "No issues found" reviews above fail: the 20
+that started no agent, and #208, which started no compliance agent. #254 and
+#255 ran both passes and would pass, each with two warnings. #249's two passes
+ran, and its inline finding held the merge on its own.
+
+The coverage step fails the review job in the same cases, so a review that
+skipped a check is a failed review, and the verdict's message for it names
+the check. A pass that read part of the diff is a warning in that step too.
+The remedy for a skipped check is to review again: the verdict prints `gh run
+rerun <run id> --job <job id>`. The plugin stops when Claude has already
+commented, so the workflow tells a re-run (run attempt 2 or later) that
+Claude's earlier comment does not stop it. The workflow decides that from the
+attempt number; it is not left to the model.
+
+The reviewer's appended instructions now also tell it to run every step and
+agent of the review however small the pull request, and to read a long
+output's saved file to its end. They say what the workflow measures, and they
+drop "does not need review" as a reason to stop at the first step. A stop runs
+no check, and the verdict passes only a review that ran both.
+
+### P89-10 — what was measured, what was not, and the tests
+
+Measured: the 27 sessions above, and three of them kept as fixtures. Not
+measured, because a pull request that edits `claude-review.yml` is never
+reviewed by it:
+
+- **Whether the reviewer now runs both checks.** The first pull request after
+  this merges is the measurement. Until reviews start their agents, every
+  pull request's verdict fails, and each needs a re-run that does. A review
+  that runs its agents also costs more of the shared quota than the reviews
+  measured above (P89-4).
+- **Whether the workflow token can edit Claude's comment.** GitHub's
+  documentation says write access to a repository edits anyone's comment. The
+  rewrite job prints the API's answer and fails if the comment does not read
+  back as written. The verdict does not depend on the rewrite.
+
+What the record does not say:
+
+- **That an agent understood a line.** It says the line reached the agent.
+- **That a label is honest.** An agent labelled "bug scan" that did something
+  else counts as a bug pass. The plugin gives the workflow no other handle on
+  what an agent was for.
+- **Anything about a diff GitHub will not serve.** The API refuses a diff over
+  its size limits, and then the coverage step fails with GitHub's answer.
+
+`tests/test_review_verdict.py` builds sessions in the record's shape. It
+covers:
+
+- agents that read the whole diff through a saved output and the Read tool;
+- a session that read the diff alone;
+- a `head`-cut read;
+- a preview counted where its full output would have been;
+- an agent that did not finish;
+- a nested agent, and a diff passed in a prompt;
+- a file read at the head;
+- lines that say nothing;
+- the classification of the agent labels seen on 2026-10-17 and 18;
+- the record's gaps (a skipped pass, a record it cannot read) and shortfalls
+  (partial reading), and the summary for each;
+- the verdict: a skipped pass fails, partial reading passes with the warning,
+  and complete reading passes clean; and the record lookup that passes over a
+  stop;
+- both commands, against a fake `gh`, including a coverage step that warns on
+  partial reading and exits 0;
+- the workflow's steps, jobs, permissions and appended instructions.
+
+Four of the new tests were also run against a deliberately broken rule, and
+each one failed. The breaks were: credit lines that say nothing, count
+`stdout` instead of what reached the model, ignore the gaps, and ignore
+nested agents.
+
 ## P90 — one image the OCR engine could not read ended the capture (2026-10-18)
 
 P10-33 left one thing open. An error RapidOCR raises during recognition,
