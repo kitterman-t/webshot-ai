@@ -34,6 +34,7 @@ import logging
 import os
 import shutil
 import tempfile
+from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -71,6 +72,7 @@ __all__ = [
     "build_protected_viewer_artifacts",
     "build_searchable_pdf",
     "compose",
+    "document_page_dimensions",
     "page_dimensions",
 ]
 
@@ -104,7 +106,8 @@ def page_dimensions(pixel_width: int, pixel_height: int) -> tuple[float, float]:
 
     Portrait pages get Letter width; wider-than-tall pages (slides) get a
     presentation width.  Either way the aspect ratio of the capture is kept, so
-    nothing is stretched.
+    nothing is stretched.  A document's pages are packed at the scale this
+    gives its commonest page (`document_page_dimensions`).
     """
     aspect = pixel_width / pixel_height
     if aspect <= 1:
@@ -114,16 +117,47 @@ def page_dimensions(pixel_width: int, pixel_height: int) -> tuple[float, float]:
     return width, width / aspect
 
 
-def _layout(
-    pixel_width: int, pixel_height: int, dpi: object
-) -> tuple[float, float, float, float]:
-    """img2pdf layout hook: fill a page of WebShot's own size with the image.
+def _reference_size(sizes: Sequence[tuple[int, int]]) -> tuple[int, int]:
+    """The page size a document's scale is taken from: its commonest, and of
+    sizes equally common, the earliest (`max` keeps the first it meets)."""
+    counts = Counter(sizes)
+    return max(sizes, key=lambda size: counts[size])
 
-    Without this, img2pdf would size the page from the image's DPI metadata,
-    which a screenshot does not meaningfully carry.
+
+def _scaled(
+    reference: tuple[int, int], pixel_width: int, pixel_height: int
+) -> tuple[float, float]:
+    """A page's size in points at the scale `page_dimensions` gives `reference`.
+
+    Each side is the reference page's side times this page's share of it, so a
+    page of the reference size gets exactly what `page_dimensions` gives it.
     """
-    width, height = page_dimensions(pixel_width, pixel_height)
-    return width, height, width, height
+    width, height = page_dimensions(*reference)
+    return (
+        width * (pixel_width / reference[0]),
+        height * (pixel_height / reference[1]),
+    )
+
+
+def document_page_dimensions(
+    sizes: Sequence[tuple[int, int]],
+) -> list[tuple[float, float]]:
+    """Every captured page's PDF size, in points, all at one scale.
+
+    `page_dimensions` sizes an image by itself: Letter width if it is
+    portrait, 960pt if it is wider than tall. Each page was packed that way,
+    so a document whose pages differ came out with each at its own scale: a
+    landscape Letter page among portrait ones at 13.33 x 10.30in where its
+    neighbours are 8.5 x 11, and a page half as wide as the rest at Letter
+    width (docs/09 P46). The viewer draws a document's pages at one zoom, as
+    the DOM fixtures do, so one scale serves them all: the one
+    `page_dimensions` gives the commonest page size. A document of one page
+    size is packed exactly as it was.
+    """
+    if not sizes:
+        return []
+    reference = _reference_size(sizes)
+    return [_scaled(reference, width, height) for width, height in sizes]
 
 
 def pack_page_images(pages: Sequence[Path], destination: Path) -> None:
@@ -132,10 +166,28 @@ def pack_page_images(pages: Sequence[Path], destination: Path) -> None:
     Streamed rather than returned: without `outputstream`, img2pdf builds the
     whole packed PDF in a BytesIO and copies it out again, so a large capture
     would hold two extra copies of it in memory while the browser is still up.
+
+    The layout hook fills a page of WebShot's own size with each image;
+    without it img2pdf would size the page from the image's DPI metadata,
+    which a screenshot does not meaningfully carry. Every page is sized at
+    the document's one scale (`document_page_dimensions`).
     """
+    sizes: list[tuple[int, int]] = []
+    for page in pages:
+        with Image.open(page) as image:
+            sizes.append(image.size)
+    # img2pdf refuses an empty list itself, and then nothing reads this.
+    reference = _reference_size(sizes) if sizes else (1, 1)
+
+    def layout(
+        pixel_width: int, pixel_height: int, dpi: object
+    ) -> tuple[float, float, float, float]:
+        width, height = _scaled(reference, pixel_width, pixel_height)
+        return width, height, width, height
+
     with destination.open("wb") as handle:
         img2pdf.convert(
-            [str(page) for page in pages], layout_fun=_layout, outputstream=handle
+            [str(page) for page in pages], layout_fun=layout, outputstream=handle
         )
 
 

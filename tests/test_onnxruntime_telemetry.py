@@ -252,7 +252,7 @@ _FIXTURES = Path(__file__).resolve().parent / "fixtures"
 #: The same two routes as PATHS, taken far enough to build a session: the
 #: order being tested is "switched off, then used", so each route has to
 #: reach the use.  magika disables the events itself right before building
-#: its session (0.6.2); RapidOCR does not (3.9.2).
+#: its session (0.6.2); RapidOCR does not (3.9.2, 3.10.0).
 EVENT_PATHS = {
     "markitdown": (
         "from pathlib import Path\n"

@@ -246,7 +246,7 @@ def test_a_page_with_no_such_item_is_parsed_as_given() -> None:
     plain = (
         '<html><head><meta charset="utf-8"></head><body><h1>T</h1>'
         "<ul><li>Hollin<ul><li>Ibbet</li></ul></li><li></li><li>Jorran</li></ul>"
-        "<ol start='3'><li>Kelby</li><li><img src='a.png' alt='x'><ol><li>Lorn</li>"
+        "<ol start='3'><li>Kelby</li><li><input type='checkbox'><ol><li>Lorn</li>"
         "</ol></li></ol><ul><li>Moss</li><ul><li>Nell</li></ul></ul></body></html>"
     )
     assert mark_empty_items(plain) is plain
@@ -275,7 +275,6 @@ def test_an_item_with_no_text_of_its_own_is_marked(item: str) -> None:
     [
         pytest.param("<li>a<ul><li>b</li></ul></li>", id="text-before"),
         pytest.param("<li><ul><li>b</li></ul>a</li>", id="text-after"),
-        pytest.param("<li><img src='a.png'><ul><li>b</li></ul></li>", id="image"),
         pytest.param("<li><input type='checkbox'><ul><li>b</li></ul></li>", id="box"),
         pytest.param("<li><pre>a</pre><ul><li>b</li></ul></li>", id="code"),
         pytest.param("<li><br><ul><li>b</li></ul></li>", id="line-break"),
@@ -283,8 +282,8 @@ def test_an_item_with_no_text_of_its_own_is_marked(item: str) -> None:
     ],
 )
 def test_an_item_with_anything_else_is_left_to_docling(item: str) -> None:
-    """docling's own reading of these is kept: an item with text, an image, a
-    checkbox, a code block, and an item with nothing in it at all. A `<br>` is
+    """docling's own reading of these is kept: an item with text, a checkbox, a
+    code block, and an item with nothing in it at all (an image is P52's). A `<br>` is
     text to docling, which makes an item of it (its U+E000 line-break character
     as the text), so marking it left the stand-in beside that character.
     `extract` takes out the `<br>`s of an item with no text first (P56), so
@@ -319,10 +318,10 @@ def test_a_stray_stand_in_is_removed_and_reported(monkeypatch: Any) -> None:
     assert EMPTY_ITEM not in stray.markdown + stray.text
     assert all(EMPTY_ITEM not in seed.text for seed in stray.chunk_seeds)
     assert stray.warnings == [
-        "the stand-in for the text of a list item that holds only a list reached "
-        "a field it does not belong in (content.md, content.txt, chunks.jsonl); it "
+        "the stand-in for the text of a list item with none of its own reached a "
+        "field it does not belong in (content.md, content.txt, chunks.jsonl); it "
         "was removed there, and the item may have no line of its own there "
-        "(docs/09 P45)."
+        "(docs/09 P45, P52)."
     ]
 
 

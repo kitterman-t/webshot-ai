@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Line breaks</title>
+</head>
+<body>
+<h1>Line breaks</h1>
+<!-- Each pair of words is split by a <br> the page lays out. -->
+<p>alpha<br>beta</p>
+<p><code>gamma<br>delta</code></p>
+<p>eta<span><br></span>theta</p>
+<table>
+  <tr><th>head<br>cell</th><th>kappa</th></tr>
+  <tr><td>cell one<br>cell two</td><td>lambda</td></tr>
+</table>
+<ul><li>one<br>two</li><li>three</li></ul>
+<dl><dt>term<br>line</dt><dd>desc<br>line</dd></dl>
+<!-- A <br> the page does not lay out, and one inside text it hides. -->
+<p>omicron<br style="display: none">pi</p>
+<p>rho<span style="visibility: hidden">unseen<br></span>sigma</p>
+<div style="display: none">undrawn<br>words</div>
+<!-- A break opportunity, not a break: one word. -->
+<p>long<wbr>word</p>
+</body>
+</html>

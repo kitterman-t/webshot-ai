@@ -5,7 +5,7 @@ which formats it accepts, how big they may be, how the resulting page is
 titled and styled — is decided in `adapters.py`; this file's whole job is to
 hand MarkItDown a stream with an explicit type hint and hand back a string.
 
-Eight behaviors of MarkItDown are corrected here rather than inherited, because
+Eleven behaviors of MarkItDown are corrected here rather than inherited, because
 each damages content WebShot promises to preserve (docs/09 P3-1):
 
 1. **TSV is not a format MarkItDown knows.**  Its CSV converter is
@@ -40,6 +40,13 @@ each damages content WebShot promises to preserve (docs/09 P3-1):
    several lines, were Markdown after a blank line or a line opening a
    heading, so they are written on one line, the `<pre>` as inline code
    (docs/09 P59).
+   A link whose text is its target is the one string markdownify writes as
+   markup on purpose, `<target>`, which Python-Markdown links only for http,
+   https and ftp: `<a href="report.pdf">report.pdf</a>` became the tag
+   `<report.pdf>`, which nh3 drops, and one reading `script` took the rest of
+   the document with it.  The writer writes every link `[text](target)`, as
+   markdownify writes one whose text differs, and a link in code as its text,
+   since a code span holds no link (docs/09 P75).
 5. **It writes two lists side by side as one.**  markdownify puts a blank line
    between two lists, and Python-Markdown reads a list of the same kind after a
    blank line as the first one going on: two EPUB `<ol>`s became one list,
@@ -59,11 +66,13 @@ each damages content WebShot promises to preserve (docs/09 P3-1):
    spaces under `* ` and three under `1. `, and Python-Markdown nests at four:
    a document's sub-items became items of their parent's list, or text inside
    it.  The writer indents by four, and leaves a blank line after a nested
-   list that more of the item follows (docs/09 P40).  A `<pre>` in an item is
-   an indented code block there, because Python-Markdown reads a fence only at
-   the start of a line, and an item's fence printed its code as one line of
-   text (docs/09 P44); so is one in a quotation or a definition, whose `> `
-   or `:   ` did the same (docs/09 P47).
+   list that more of the item follows (docs/09 P40).  A list in a quotation
+   in an item is the quotation's, and is written as one in no item is
+   (docs/09 P74).  A `<pre>` in an item is an indented code block there,
+   because Python-Markdown reads a fence only at the start of a line, and an
+   item's fence printed its code as one line of text (docs/09 P44); so is one
+   in a quotation or a definition, whose `> ` or `:   ` did the same (docs/09
+   P47).
 8. **It drops the whitespace at the edge of bold, italic, a link or code.**
    markdownify strips each inline element's text and gives back one ASCII
    space where the text began or ended with one, and nothing for anything
@@ -73,6 +82,26 @@ each damages content WebShot promises to preserve (docs/09 P3-1):
    and `This<strong> </strong>course` read `Thiscourse`.  The writer takes
    the edges off before markdownify sees them and writes them outside the
    markup (docs/09 P43, P49).
+9. **It numbers every Word list from 1.**  mammoth reads a list item's level
+   and whether it is ordered, never its number, so a list Word starts at 3,
+   restarts at 4 or counts on past a paragraph was numbered 1, 2, 3 from the
+   top of each `<ol>`, and two of Word's lists that met were one.  `ooxml`
+   works out the number Word shows on each item and marks the paragraph with
+   it; the HTML step here sets each `<ol>`'s start from the marks, splits it
+   where the numbers stop running on, and takes the marks out (docs/09 P31).
+10. **It writes a definition list that Python-Markdown reads as less of one.**
+    markdownify puts a blank line before every term, and Python-Markdown takes
+    only the lines straight above a definition as its terms: of two terms in a
+    row the first became a paragraph.  It puts none before a definition, and
+    one after a definition of two blocks was read into that definition's last
+    block.  The writer puts terms in a row on adjacent lines, and a blank line
+    after a definition of more than one block that another follows (docs/09
+    P64).
+11. **It writes a `<br>` as a space.**  markdownify writes Markdown's hard
+    break, two spaces and a newline, and MarkItDown strips the end of every
+    line, so `one<br/>two` and a Word file's manual line breaks reached the page
+    as one line.  The writer writes `<br>` itself where text flows (docs/09
+    P77).
 
 MarkItDown itself parses XML through `defusedxml` (its RSS and EPUB
 converters), which is *not* what spec §6.6 rests on: the adapter defuses every
@@ -105,7 +134,7 @@ from typing import Any, BinaryIO
 from urllib.parse import quote, unquote, urlsplit
 from xml.etree.ElementTree import Element
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment, Doctype, NavigableString, Tag
 from markitdown import (
     DocumentConverterResult,
     FileConversionException,
@@ -585,7 +614,8 @@ class _ListSeams:
     writes at the top of a block is marked where it begins and ends, and the
     marks are resolved once the document is whole: `LIST_SEPARATOR` where one
     list's end meets the next one's start, nothing anywhere else.  A list
-    nested in an item, a table cell, a heading or a `<pre>` is not marked.
+    nested in an item, a table cell, a heading or a `<pre>` is not marked; one
+    in a quotation in an item is (docs/09 P74).
 
     Quotations and definition lists are marked too, because Python-Markdown
     makes a quotation that follows a quotation part of it, and adds a term
@@ -593,7 +623,7 @@ class _ListSeams:
     resolved in a pass of their own, before the lists', and their marks taken
     away then, so that the lists' pass reads what it read before they were
     marked: a document with no two of them side by side is written as before.
-    As with lists, one in an item is not marked.
+    As with a list nested in an item, one in an item is not marked.
 
     A mark holds a token drawn for this instance, so no document's text, a
     `<pre>`'s included, can hold one.  `resolve` must see every string these
@@ -610,10 +640,12 @@ class _ListSeams:
             # What markdownify writes between the two: blank lines, which in a
             # blockquote are `>`, and on the second one's line the indentation
             # that keeps it in its blockquote (`> `) or definition (four
-            # spaces).
+            # spaces).  A blockquote in an item's first block is fewer than
+            # four spaces in, at the width of the item's marker (docs/09 P40,
+            # P74).
             return re.compile(
                 f"{self._end}(?P<kind>{kinds})\ue001"
-                r"(?P<gap>[ \t>]*\n(?:[ \t>]*\n)*)(?P<indent>(?:> ?| {4})*)"
+                r"(?P<gap>[ \t>]*\n(?:[ \t>]*\n)*)(?P<indent>(?: {0,3}> ?| {4})*)"
                 f"{self._begin}(?P=kind)\ue001"
             )
 
@@ -692,8 +724,9 @@ class _NestedItems:
     be kept apart from it, and so that nothing between it and the item strips
     its first line's indentation.  A quotation or a definition takes its own
     code blocks' marks away (`code_blocks`), so an item finds only its own.  A
-    mark that does not begin a line is in a blockquote or a table cell, and is
-    only taken away.
+    mark that does not begin a line is in a table cell or a heading, and is
+    only taken away.  A list in a definition or a quotation in an item is that
+    block's, and its items are not marked (docs/09 P62, P74).
 
     A mark holds a token drawn for this instance, so no document's text, a
     `<pre>`'s included, can hold one.
@@ -826,11 +859,27 @@ def _item_lines(parts: list[_ItemPart]) -> tuple[list[str], int]:
     return lines, first_block
 
 
-def _in_a_definition(el: Any) -> bool:
-    """Whether `el` is in a `<dd>` that is nearer to it than any `<li>`."""
+def _in_a_definition_or_quotation(el: Any, parent_tags: set[str]) -> bool:
+    """Whether `el` is in a `<dd>` or `<blockquote>` nearer to it than any `<li>`.
+
+    markdownify asks only whether an item is anywhere above a list, and writes
+    one that is as the item's own: on the line after the item's text, with no
+    blank line after it.  A list in a definition or a quotation is that
+    block's, wherever the block is: written as the item's, it was read as the
+    definition's text (docs/09 P62), and in a quotation the quotation's next
+    line ran into its last item, so the text after it read `xtail` and a list
+    after it was that item's text or more of its items (docs/09 P74).
+
+    Not in a table cell or heading, nor in a `<pre>`, where a list is text
+    and is written as before: there, a list taken for the block's left its
+    items unmarked, and the cell ran the list's last word into the word after
+    it (docs/09 P74).
+    """
+    if {"_inline", "_noformat"} & parent_tags:
+        return False
     for ancestor in el.parents:
-        if ancestor.name in ("dd", "li"):
-            return bool(ancestor.name == "dd")
+        if ancestor.name in ("dd", "blockquote", "li"):
+            return bool(ancestor.name != "li")
     return False
 
 
@@ -858,18 +907,77 @@ _ASCII_WHITESPACE_RUN = re.compile(
     "[" + re.escape("".join(c for c in map(chr, range(128)) if c.isspace())) + "]+"
 )
 
+#: What `_TextMarkdownify` writes for a `<br>`: HTML's line break, which
+#: Markdown passes through and nh3 keeps (docs/09 P77).
+LINE_BREAK = "<br>"
+#: Where markdownify adds `_noformat` for the children: their text is written
+#: as it stands, so a `<br>` in it is the document's text, not this writer's.
+_NOFORMAT_TAGS = frozenset({"pre", "code", "kbd", "samp"})
+#: What markdownify writes as a heading, `h` and any number.
+_HEADING_TAG_RE = re.compile(r"h\d+")
+#: Elements whose children are blocks, not a line of text: a `<br>` directly in
+#: one is written as markdownify writes it, because the space after
+#: `LINE_BREAK` would join the next item, row or definition to its line.
+_BLOCK_CONTAINERS = frozenset(
+    {"ul", "ol", "dl", "table", "thead", "tbody", "tfoot", "tr"}
+)
+#: What may stand around a run of `<br>`s that markdownify's blank line
+#: divides into two paragraphs and does nothing worse to: paragraphs and the
+#: blocks that hold them, not an item, a definition, a cell or formatted text.
+_PARAGRAPH_FLOW = frozenset(
+    {
+        "[document]",
+        "html",
+        "body",
+        "main",
+        "article",
+        "section",
+        "div",
+        "blockquote",
+        "p",
+    }
+)
+
+
+def _beside_a_break(el: Any) -> bool:
+    """Whether another `<br>` stands next to `el`, with only whitespace between."""
+    for step in ("previous_sibling", "next_sibling"):
+        sibling = getattr(el, step)
+        while isinstance(sibling, NavigableString) and not sibling.strip():
+            sibling = getattr(sibling, step)
+        if isinstance(sibling, Tag) and sibling.name == "br":
+            return True
+    return False
+
+
+def _edges(text: str, *, breaks: bool) -> tuple[str, str, str]:
+    """`text` as its leading edge, what is between, and its trailing edge.
+
+    An edge is whitespace and, where `breaks`, the line breaks `convert_br`
+    wrote there.  Text that is all edge is returned as the leading edge.
+    """
+    rest = text.lstrip()
+    while breaks and rest.startswith(LINE_BREAK):
+        rest = rest[len(LINE_BREAK) :].lstrip()
+    lead = len(text) - len(rest)
+    rest = rest.rstrip()
+    while breaks and rest.endswith(LINE_BREAK):
+        rest = rest[: -len(LINE_BREAK)].rstrip()
+    return text[:lead], rest, text[lead + len(rest) :]
+
 
 def _outside_markup(edge: str, *, literal: bool) -> str:
     """The whitespace at one edge of an inline element, as written outside it.
 
     Each run of ASCII whitespace is one space, which is what `chomp` writes
     for an edge of spaces, so output that was right does not move; a newline
-    or the line break markdownify writes for a `<br>` is one too, so an edge
-    never begins a line, which beside the newline of the next text could make
-    a blank one and end the paragraph or list item (docs/09 P49).  A space
-    outside ASCII is written as the document has it (docs/09 P43).  Inside
-    `pre`, `code`, `kbd` and `samp` (`literal`) markdownify writes text as it
-    stands, so every edge is written so too.
+    is one too, so an edge never begins a line, which beside the newline of
+    the next text could make a blank one and end the paragraph or list item
+    (docs/09 P49).  A `<br>` stays the line break `convert_br` wrote, which
+    holds no newline (docs/09 P77).  A space outside ASCII is written as the
+    document has it (docs/09 P43).  Inside `pre`, `code`, `kbd` and `samp`
+    (`literal`) markdownify writes text as it stands, so every edge is written
+    so too.
     """
     if literal:
         return edge
@@ -887,14 +995,18 @@ def _keeping_edge_spaces(
     edge of bold text was lost, and an element holding whitespace alone wrote
     nothing at all: the words either side of it ran together on the page
     (docs/09 P43, P49).  MarkItDown's `<a>` dropped even a plain space where it
-    returns before its markup: with no target, inside `pre`, and where the
-    text is the address.
+    returns before its markup: with no target, inside `pre`, and, while the
+    writer still wrote `<address>` (docs/09 P75), where the text is the address.
 
     So `convert` is never shown an edge.  It converts the text between them,
     and each edge is written outside the markup (`_outside_markup`); whitespace
     alone is written as one edge.  The page shows each as it shows the same
     whitespace between two words, and content.md and content.txt read it as a
-    space, as they already read one between two words.
+    space, as they already read one between two words.  A line break at an
+    edge, or alone, is an edge as whitespace is (docs/09 P77): formatting that
+    holds nothing else writes no markup, where `<del><br/></del>` had printed
+    `~~` against the words either side, and a link holding only a `<br>` was
+    one with nothing to click.
 
     `one_line` is for inline code, whose text is put on one line first
     (`_code_on_one_line`), so that its edges are the ones of the line it is
@@ -909,17 +1021,123 @@ def _keeping_edge_spaces(
         literal = "_noformat" in parent_tags
         if one_line:
             text = _code_on_one_line(text, parent_tags)
-        inner = text.strip()
+        lead, inner, trail = _edges(
+            text, breaks=not literal and el.name not in _NOFORMAT_TAGS
+        )
         if not inner:
             return _outside_markup(text, literal=literal)
-        lead = text[: len(text) - len(text.lstrip())]
-        trail = text[len(text.rstrip()) :]
         converted: str = convert(self, el, inner, *args, **kwargs)
         return (
             _outside_markup(lead, literal=literal)
             + converted
             + _outside_markup(trail, literal=literal)
         )
+
+    return implementation
+
+
+class _DefinitionSeams:
+    """Where a definition list's terms and definitions meet, as Python-Markdown
+    reads them.
+
+    Python-Markdown takes as a definition's terms only the lines straight
+    above its `:` line, and reads a `:` line straight after an indented one as
+    part of that indented block.  markdownify writes a blank line before every
+    term, so of two terms in a row only the second was a term; and it writes
+    a definition's `:` line straight after the one before it, so after a
+    definition of more than one block the next was read into that block's
+    paragraph (docs/09 P64).  Whether a definition follows is only known once
+    the list is written — a `<dd>` can write nothing — so each term, and the
+    end of each definition of more than one block, is marked as it is
+    written, and `resolve` settles them once the list is whole: terms that
+    follow one another in the document and in the Markdown, and that a
+    definition follows, are put on adjacent lines; a blank line goes between
+    a definition of more than one block and the next; and every other mark is
+    taken away.
+
+    A mark holds a token drawn for this instance, so no document's text, a
+    `<pre>`'s included, can hold one.
+    """
+
+    def __init__(self) -> None:
+        # Private-use characters around the token, so that a mark cannot run
+        # into the text either side of it.
+        token = f"\ue004{secrets.token_hex(8)}"
+        #: Before a term that does not follow a term, and before one that does.
+        self.term = f"{token}term\ue005"
+        self.next_term = f"{token}next\ue005"
+        #: After a definition of more than one block.
+        self.blocks = f"{token}blocks\ue005"
+        term, next_term = re.escape(self.term), re.escape(self.next_term)
+        # A term is one line, and only a definition begins one with `:`.  A
+        # term that writes nothing writes no mark, so the lines either side of
+        # it meet: a run is only lines that are marked terms.
+        self._term_runs = re.compile(
+            f"(?:{term}|{next_term})[^\n]*(?:\n+{next_term}[^\n]*)+(?=\n:)"
+        )
+        self._term_breaks = re.compile(f"\n+{next_term}")
+        self._blocks_then_definition = re.compile(f"{re.escape(self.blocks)}(?=\n:)")
+
+    def resolve(self, markdown: str) -> str:
+        """`markdown`, one definition list's, with its marks settled."""
+        markdown = self._term_runs.sub(
+            lambda run: self._term_breaks.sub("\n", run[0]), markdown
+        )
+        markdown = self._blocks_then_definition.sub("\n", markdown)
+        for mark in (self.term, self.next_term, self.blocks):
+            markdown = markdown.replace(mark, "")
+        return markdown
+
+
+def _in_a_definition_list(el: Any, parent_tags: Iterable[str]) -> bool:
+    """Whether `el`, a term or a definition, is written as one of a list's.
+
+    Its list's `convert_dl` settles its marks, so it must be the list's own:
+    a child of the `<dl>`, or of a `<div>` grouping a term with its
+    definitions, as HTML allows.  In a heading or a table cell markdownify
+    writes it on the cell's line, and in a `<pre>` it is code.
+    """
+    if {"_inline", "_noformat"} & set(parent_tags):
+        return False
+    parent = el.parent
+    if parent is not None and parent.name == "div":
+        parent = parent.parent
+    return parent is not None and parent.name == "dl"
+
+
+def _follows_a_term(el: Any) -> bool:
+    """Whether the sibling before `el` is a term, as markdownify sees siblings:
+    blank text and comments, which it writes nothing for, are passed over.
+
+    A term after a definition, after text, or opening a `<div>` group starts
+    a run of its own, as the document has it.
+    """
+    sibling = el.previous_sibling
+    while sibling is not None:
+        if isinstance(sibling, Tag):
+            return bool(sibling.name == "dt")
+        if not isinstance(sibling, Comment | Doctype) and sibling.strip():
+            return False
+        sibling = sibling.previous_sibling
+    return False
+
+
+def _in_code_as_text(convert: Callable[..., str]) -> Callable[..., str]:
+    """`convert`, a link's converter, writing a link in code as its text.
+
+    Markdown has no link inside a code span, so markdownify writes a link in
+    `pre`, `code`, `kbd` or `samp` as its text.  MarkItDown's `<a>` replaced
+    markdownify's and kept that for `pre` alone, so a link in code showed its
+    Markdown, `[text](target)`, on the page (docs/09 P75).
+    """
+
+    @functools.wraps(convert)
+    def implementation(self: Any, el: Any, text: str, *args: Any, **kwargs: Any) -> str:
+        parent_tags = kwargs.get("parent_tags", args[0] if args else ())
+        if "_noformat" in parent_tags:
+            return text
+        converted: str = convert(self, el, text, *args, **kwargs)
+        return converted
 
     return implementation
 
@@ -939,9 +1157,17 @@ class _TextMarkdownify(_CustomMarkdownify):
     Every converter that `chomp`s its text keeps the whitespace at its edges
     (`_keeping_edge_spaces`); `strike` is `s`'s, through `self`.  Inline code's
     converters write it on one line there too (`_code_on_one_line`).
+
+    Every link is written `[text](target)`, and in code as its text
+    (`_in_code_as_text`).  markdownify's `autolinks` writes one whose text is
+    its target as `<target>`, which Python-Markdown links only for http, https
+    and ftp and reads otherwise as an HTML tag: nh3 drops `<report.pdf>`,
+    makes the rest of a paragraph italic after `<em>`, and the rest of the
+    document disappears after `<script>`.  An http or https link renders the
+    same page either way (docs/09 P75).
     """
 
-    convert_a = _keeping_edge_spaces(_CustomMarkdownify.convert_a)
+    convert_a = _keeping_edge_spaces(_in_code_as_text(_CustomMarkdownify.convert_a))
     convert_b = _keeping_edge_spaces(_CustomMarkdownify.convert_b)
     convert_code = _keeping_edge_spaces(_CustomMarkdownify.convert_code, one_line=True)
     convert_del = _keeping_edge_spaces(_CustomMarkdownify.convert_del)
@@ -956,7 +1182,9 @@ class _TextMarkdownify(_CustomMarkdownify):
     convert_u = _keeping_edge_spaces(_CustomMarkdownify.convert_u)
 
     def __init__(self, *, list_seams: _ListSeams, **options: Any) -> None:
-        super().__init__(**options)
+        # Overridden, not defaulted: an option a converter passes through
+        # must not bring `<target>` back.
+        super().__init__(**{**options, "autolinks": False})
         self._list_seams = list_seams
 
     def escape(self, text: str, parent_tags: Iterable[str]) -> str:
@@ -1018,11 +1246,59 @@ class _TextMarkdownify(_CustomMarkdownify):
             "li" in tags
             and parent is not None
             and parent.name in ("ol", "ul")
-            and not _in_a_definition(parent)
+            and not _in_a_definition_or_quotation(parent, tags)
         ):
             # Nested: the item this list sits in takes the marks away.
             item = self._nested_items.mark(parent.name, id(parent), item)
         return _with_its_gap(item)
+
+    def convert_br(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
+        """A `<br>` as HTML's line break, followed by a space.
+
+        markdownify writes Markdown's hard break, two spaces and a newline,
+        and MarkItDown strips the end of every line before WebShot sees the
+        Markdown, so Python-Markdown read a soft break and every `<br>` reached
+        the page as a space (docs/09 P77).  `<br>` itself survives that, and
+        Python-Markdown and nh3 pass it through, in a table cell too, where
+        markdownify wrote a space because a Markdown row cannot hold a newline.
+
+        A space follows it, not a newline.  A space cannot begin a line or
+        make a blank one: markdownify's newline beside a document's own made
+        one (docs/09 P49), and two `<br>`s wrote a blank line that ended a list
+        item or split bold text in two.  The browser draws no space at the
+        start of a line, and whatever reads the text without its `<br>`s, as
+        `textContent` does, still finds the words apart.
+
+        Where it is markdownify's still:
+
+        - **In `pre` and code** (`_noformat`), which hold no HTML: a newline,
+          which Markdown keeps in a code block and the capture's print CSS
+          (`white-space: pre-wrap`) draws.  Inline code is then written on
+          one line (`_code_on_one_line`, docs/09 P59), so there the newline
+          is a space, as any line break in inline code is.
+        - **In a heading**, a space.  Chromium names the PDF's bookmark for a
+          heading from its text with the `<br>` and the hidden space both
+          gone, so `one<br> two` was bookmarked `onetwo`.
+        - **Directly in a list, a definition list or a table**, where the
+          space would join the next item or row to its line.
+        - **Two or more in a row in a paragraph or a quotation**: a
+          paragraph break, which shows much as the empty line between them
+          does.  docling reads a run of `<br>`s as a paragraph break too, but
+          drops one that touches bold, italic text or a link, so a contact
+          block of bold labels, each after two `<br>`s, ran into one
+          paragraph in content.md.  In an item, a definition, a cell or
+          formatted text, where the blank line did the damage above, a run is
+          `<br>`s.
+        """
+        if (
+            "_noformat" in parent_tags
+            or any(_HEADING_TAG_RE.fullmatch(tag) for tag in parent_tags)
+            or el.parent.name in _BLOCK_CONTAINERS
+            or (_PARAGRAPH_FLOW.issuperset(parent_tags) and _beside_a_break(el))
+        ):
+            written: str = super().convert_br(el, text, parent_tags)
+            return written
+        return f"{LINE_BREAK} {text}"
 
     def convert_pre(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
         """A code block, fenced so that none of its own lines can close it.
@@ -1176,15 +1452,23 @@ class _TextMarkdownify(_CustomMarkdownify):
             return block
         return self._list_seams.mark("blockquote", block)
 
-    def convert_dd(self, el: object, text: str, parent_tags: Iterable[str]) -> str:
-        """A definition, its code blocks unmarked (`_NestedItems.code_blocks`).
+    def convert_dd(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
+        """A definition, its code blocks unmarked (`_NestedItems.code_blocks`),
+        and marked at its end where it is more than one block
+        (`_DefinitionSeams`, docs/09 P64).
 
         markdownify indents what it holds by four, after `:   `, and an
-        indented code block is four further in, as in an item.
+        indented code block is four further in, as in an item.  The code
+        blocks are unmarked first: each follows `LIST_SEPARATOR` and a blank
+        line, so a definition holding one is more than one block.  One method
+        does both, as a second would take the first's place in the class.
         """
         definition: str = super().convert_dd(
             el, self._nested_items.code_blocks(text or ""), parent_tags
         )
+        body = definition.strip("\n")
+        if "\n\n" in body and _in_a_definition_list(el, parent_tags):
+            return f"{body}{self._definition_seams.blocks}\n"
         return definition
 
     def convert_list(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
@@ -1193,13 +1477,14 @@ class _TextMarkdownify(_CustomMarkdownify):
         One nested in an item is written without a blank line before it, and
         one in a table cell or heading on the cell's line, so neither is a
         list Markdown starts after a blank line; one in a `<pre>` is code.
-        One in a definition is a block of the definition's, even where the
-        definition is in an item: markdownify wrote it on the line after the
+        One in a definition or a quotation is a block of that one's, even
+        where it is in an item: markdownify wrote it on the line after the
         definition's text, and Python-Markdown read it as that text (docs/09
-        P62).  So it is written as one in no item is.
+        P62), and the line after it in a quotation ran into its last item
+        (docs/09 P74).  So it is written as one in no item is.
         """
         tags = set(parent_tags)
-        if not {"_inline", "_noformat"} & tags and _in_a_definition(el):
+        if _in_a_definition_or_quotation(el, tags):
             tags.discard("li")
         block: str = super().convert_list(el, text, tags)
         if {"li", "_inline", "_noformat"} & tags:
@@ -1210,9 +1495,28 @@ class _TextMarkdownify(_CustomMarkdownify):
     convert_ol = convert_list
     convert_ul = convert_list
 
+    @functools.cached_property
+    def _definition_seams(self) -> _DefinitionSeams:
+        return _DefinitionSeams()
+
+    def convert_dt(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
+        """A term, marked where it begins (`_DefinitionSeams`)."""
+        term: str = super().convert_dt(el, text, parent_tags)
+        if term.strip() and _in_a_definition_list(el, parent_tags):
+            seams = self._definition_seams
+            mark = seams.next_term if _follows_a_term(el) else seams.term
+            return f"\n\n{mark}{term.lstrip(chr(10))}"
+        return term
+
     def convert_dl(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
-        """A definition list, marked as a quotation is (docs/09 P63)."""
-        block: str = super().convert_dl(el, text, parent_tags)
+        """A definition list, its terms' and definitions' marks settled
+        (`_DefinitionSeams`, docs/09 P64), and marked as a quotation is
+        (docs/09 P63).  One method does both, as a second would take the
+        first's place in the class.
+        """
+        block: str = super().convert_dl(
+            el, self._definition_seams.resolve(text), parent_tags
+        )
         if {"li", "_inline", "_noformat"} & set(parent_tags):
             return block
         return self._list_seams.mark("dl", block)
@@ -1237,18 +1541,119 @@ def _attributes_as_text(soup: BeautifulSoup) -> None:
                 tag[name] = _as_text(value).replace('"', "&#34;")
 
 
+#: The `id` mammoth gives each item of the lists it writes for a document's
+#: notes, which it numbers itself, in order, from 1.
+NOTE_ITEM_RE = re.compile(r"(?:foot|end)note-")
+
+
+def _number_word_lists(soup: BeautifulSoup, numbers: ooxml.WordListNumbers) -> None:
+    """Number mammoth's lists as Word does, and take the marks out.
+
+    `ooxml.number_word_lists` put a mark at the head of each paragraph Word
+    numbers.  An item's own mark is the first one inside it and outside any
+    list nested in it.  Each `<ol>` then starts at its first item's number, and
+    is split where its numbers stop running on: mammoth puts paragraphs of two
+    lists that meet into one `<ol>`, and Word counts a list on past the
+    paragraphs between its items, which mammoth starts afresh.
+
+    An `<ol>` with an item that holds no mark, or one Word shows no number on,
+    is left as mammoth wrote it, and counted for the manifest; so is a mark
+    that no list item owns, a paragraph Word numbers that the page does not.
+    A mark that was all its paragraph held stands in for one mammoth would
+    have dropped as empty, so it goes, and its item with it.
+    """
+    marks = re.compile(
+        f"{re.escape(numbers.mark)}(\\d+){re.escape(ooxml.LIST_MARK_CLOSE)}"
+    )
+    # By identity: a Tag hashes and compares by its markup, which this edits.
+    owned: dict[int, int] = {}
+    empty: set[int] = set()
+    for text in soup.find_all(string=marks):
+        holder = text.parent
+        item = text.find_parent("li")
+        found = [int(match.group(1)) for match in marks.finditer(text)]
+        if (
+            item is not None
+            and id(item) not in owned
+            and isinstance(item.parent, Tag)
+            and item.parent.name == "ol"
+        ):
+            owned[id(item)] = found.pop(0)
+        # mammoth writes every paragraph in an element of its own; the
+        # document itself is never one to take out.
+        alone = (
+            holder is not None
+            and holder.parent is not None
+            and marks.fullmatch(text)
+            and len(holder.contents) == 1
+        )
+        stripped = marks.sub("", text)
+        if stripped:
+            text.replace_with(stripped)
+        else:
+            text.extract()
+        if alone and holder is not None:
+            if id(holder) in owned:
+                empty.add(id(holder))
+            else:
+                holder.decompose()
+                continue
+        numbers.unlisted += sum(numbers.values[index] is not None for index in found)
+    for ordered in soup.find_all("ol"):
+        items = [child for child in ordered.children if isinstance(child, Tag)]
+        if not items or all(
+            NOTE_ITEM_RE.match(str(item.get("id", ""))) for item in items
+        ):
+            continue
+        if any(item.name != "li" or id(item) not in owned for item in items):
+            numbers.unmatched += sum(id(item) not in owned for item in items)
+            continue
+        shown = [numbers.values[owned[id(item)]] for item in items]
+        values = [value for value in shown if value is not None]
+        if len(values) < len(shown):
+            numbers.unnumbered += len(shown) - len(values)
+            continue
+        # An empty paragraph keeps its number in Word and is not on the page,
+        # so the items either side of it are two runs.
+        runs: list[list[tuple[Tag, int]]] = []
+        expected: int | None = None
+        for item, value in zip(items, values, strict=True):
+            if id(item) in empty:
+                item.decompose()
+                continue
+            if value != expected:
+                runs.append([])
+            runs[-1].append((item, value))
+            expected = value + 1
+        if not runs:
+            ordered.decompose()
+            continue
+        current = ordered
+        for number, run in enumerate(runs):
+            if number:
+                following = soup.new_tag("ol")
+                current.insert_after(following)
+                current = following
+                for item, _ in run:
+                    following.append(item.extract())
+            if run[0][1] != 1:
+                current["start"] = str(run[0][1])
+    numbers.applied = True
+
+
 class _TextHtmlConverter(HtmlConverter):
     """MarkItDown's HTML reader, writing through `_TextMarkdownify`.
 
     `convert` is MarkItDown 0.1.8's `HtmlConverter.convert`, because upstream
     names its writer inside that method rather than taking it as a parameter;
     `test_the_text_html_converter_is_upstreams_on_plain_text` holds the copy to
-    the original.  It differs in five places: pictures are drawn from their own
-    bytes or said to be missing (docs/09 P36), the attributes markdownify
-    writes are made safe, the writer is `_TextMarkdownify`, the text the
-    too-deeply-nested fallback returns is encoded, where upstream writes it
-    into Markdown raw, and two lists, quotations or definition lists that meet
-    are kept apart.
+    the original.  It differs in six places: a Word file's lists are numbered
+    as Word numbers them, when the Word reader hands over their numbers as
+    `word_lists` (docs/09 P31); pictures are drawn from their own bytes or said
+    to be missing (docs/09 P36), the attributes markdownify writes are made
+    safe, the writer is `_TextMarkdownify`, the text the too-deeply-nested
+    fallback returns is encoded, where upstream writes it into Markdown raw,
+    and two lists, quotations or definition lists that meet are kept apart.
 
     `list_seams` is for a reader that joins several documents' Markdown, as
     EPUB joins its chapters: their lists are left marked, and it resolves them
@@ -1267,10 +1672,15 @@ class _TextHtmlConverter(HtmlConverter):
         self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
     ) -> DocumentConverterResult:
         strict: bool = kwargs.pop("strict", False)
+        word_lists: ooxml.WordListNumbers | None = kwargs.pop("word_lists", None)
         encoding = "utf-8" if stream_info.charset is None else stream_info.charset
         soup = BeautifulSoup(file_stream, "html.parser", from_encoding=encoding)
         for script in soup(["script", "style"]):
             script.extract()
+        # First, while the lists are as mammoth wrote them and every mark is
+        # still in its paragraph; it takes the marks out.
+        if word_lists is not None:
+            _number_word_lists(soup, word_lists)
         # Before the attributes are encoded: a placeholder quotes the alt text
         # as text, which markdownify then encodes once.
         chapter = getattr(file_stream, "name", None) if self.book else None
@@ -1888,21 +2298,49 @@ def _joined(items: list[str]) -> str:
     return " and ".join(filter(None, (", ".join(items[:-1]), items[-1])))
 
 
+def _counted(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def _list_warnings(lists: ooxml.WordListNumbers) -> list[str]:
+    """Where the page's numbering of a Word file's lists is not Word's."""
+    warnings: list[str] = []
+    if lists.unmatched:
+        warnings.append(
+            "The number Word shows could not be worked out for "
+            f"{_counted(lists.unmatched, 'list item')}, so the page numbers the "
+            "list each is in from 1 (docs/09 P31)."
+        )
+    if lists.unnumbered:
+        warnings.append(
+            f"Word shows {_counted(lists.unnumbered, 'list item')} without a "
+            "number, which the page numbers (docs/09 P31)."
+        )
+    if lists.unlisted:
+        warnings.append(
+            f"Word numbers {_counted(lists.unlisted, 'paragraph')} that the page "
+            "shows without a number, such as a numbered heading (docs/09 P31)."
+        )
+    return warnings
+
+
 def _convert_bytes(
     markitdown: MarkItDown, data: bytes, *, suffix: str, name: str
 ) -> ConvertedMarkdown:
     """One file's bytes as Markdown, read as the format `suffix` names.
 
     What a file on its own and a member of a zip share: the CSV escape, the
-    encoding MarkItDown is told, the `ooxml` rewrite and its fallback, and the
-    warnings each leaves.  Kept in one place so a member cannot be read by a
-    path the file was not, which is how a zipped deck came to skip the
-    rewrite (docs/09 P29).  `name` is the file's own, for the reader and for
-    an error.  A failed read raises, and the caller decides what that costs.
+    encoding MarkItDown is told, the `ooxml` rewrite and its fallback, Word's
+    list numbers, and the warnings each leaves.  Kept in one place so a member
+    cannot be read by a path the file was not, which is how a zipped deck came
+    to skip the rewrite (docs/09 P29).  `name` is the file's own, for the
+    reader and for an error.  A failed read raises, and the caller decides
+    what that costs.
     """
     original = data
     conversion_warnings: list[str] = []
     charset: str | None = None
+    lists: ooxml.WordListNumbers | None = None
     if suffix in (".csv", ".tsv"):
         data, conversion_warnings = _as_escaped_csv(
             data, "\t" if suffix == ".tsv" else ",", name
@@ -1916,11 +2354,17 @@ def _convert_bytes(
         data, conversion_warnings = ooxml.prepare_docx(data, _equation_latex)
     else:
         charset = _declared_charset(data)
+    prepared = data is not original
+    if suffix == ".docx":
+        data, lists = ooxml.number_word_lists(data)
 
     stream_info = StreamInfo(extension=suffix, filename=name, charset=charset)
     try:
         result = markitdown.convert_stream(
-            io.BytesIO(data), stream_info=stream_info, keep_data_uris=True
+            io.BytesIO(data),
+            stream_info=stream_info,
+            keep_data_uris=True,
+            **({} if lists is None else {"word_lists": lists}),
         )
     except MarkItDownException as exc:
         rewritten = suffix in (".pptx", ".docx") and data is not original
@@ -1933,12 +2377,32 @@ def _convert_bytes(
         result = markitdown.convert_stream(
             io.BytesIO(original), stream_info=stream_info, keep_data_uris=True
         )
-        conversion_warnings = [
-            "The file could not be read once its equations, AlternateContent "
-            f"and SmartArt were made readable ({' '.join(str(exc).split())}), so "
-            "it was read as it is: "
-            "the text in those is not in the page (docs/09 P27)."
-        ]
+        reason = " ".join(str(exc).split())
+        conversion_warnings = []
+        if prepared:
+            conversion_warnings.append(
+                "The file could not be read once its equations, AlternateContent "
+                f"and SmartArt were made readable ({reason}), so it was read as "
+                "it is: the text in those is not in the page (docs/09 P27)."
+            )
+        if lists is not None:
+            conversion_warnings.append(
+                "The file could not be read once its list items were marked with "
+                f"Word's numbers ({reason}), so it was read as it is: its lists "
+                "are numbered from 1, whatever Word numbers them (docs/09 P31)."
+            )
+        lists = None
+    if lists is not None:
+        if not lists.applied:
+            # The numbers travel to the HTML step as a converter option. A
+            # release that stopped passing it on would leave every mark in
+            # the text, and number nothing.
+            raise RuntimeError(
+                "MarkItDown's Word reader no longer hands its options to its "
+                "HTML step, so WebShot cannot number a Word file's lists as "
+                "Word does (docs/09 P31)."
+            )
+        conversion_warnings += _list_warnings(lists)
     if isinstance(result, _WarnedResult):
         conversion_warnings = [*conversion_warnings, *result.warnings]
     return ConvertedMarkdown(

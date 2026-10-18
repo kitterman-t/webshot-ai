@@ -33,6 +33,13 @@ named; both come back as warnings for the manifest.
 bridge uses it to write the text MarkItDown copies into Markdown as text
 (docs/09 P28).
 
+`number_word_lists` carries what mammoth reads of a list item, its level and
+whether it is ordered, the rest of the way: the number Word shows on it.
+mammoth wrote every `<ol>` from 1.  The number is worked out here from
+`numbering.xml`, by the rules Word was measured to count by, and written into
+the paragraph as a mark the bridge's HTML step turns into each list's start
+(docs/09 P31).
+
 Every part is parsed through defusedxml (spec §6.6). Nothing upstream is
 imported here: the equation converter is MarkItDown's, so the bridge hands it in.
 """
@@ -40,11 +47,13 @@ imported here: the equation converter is MarkItDown's, so the bridge hands it in
 from __future__ import annotations
 
 import copy
+import hashlib
 import io
 import posixpath
 import zipfile
 import zlib
 from collections.abc import Callable
+from dataclasses import dataclass
 from urllib.parse import unquote
 from xml.etree.ElementTree import Element, ParseError, SubElement, tostring
 
@@ -537,8 +546,11 @@ def _rebuild(data: bytes, replacements: dict[str, bytes]) -> bytes:
                 payload = _member(source, info) or b""
             # A fresh entry rather than the source's: its extra field and flags
             # describe the bytes as they were stored there, not as written here.
+            # Stored, not compressed: the archive is read once, in memory, and
+            # deflating a document's pictures again made one Word file with a
+            # list 15 times slower to read (docs/09 P31).
             entry = zipfile.ZipInfo(info.filename, date_time=info.date_time)
-            entry.compress_type = info.compress_type
+            entry.compress_type = zipfile.ZIP_STORED
             entry.external_attr = info.external_attr
             entry.create_system = info.create_system
             target.writestr(entry, payload)
@@ -707,3 +719,365 @@ def _under(parents: dict[Element, Element], element: Element, tag: str) -> bool:
             return True
         node = parents.get(node)
     return False
+
+
+# --------------------------------------------------------------------------- #
+# Word list numbers (docs/09 P31)
+# --------------------------------------------------------------------------- #
+
+#: What opens and closes the mark a numbered paragraph carries through mammoth.
+#: Private-use characters, which mammoth copies as text; between them, the
+#: document's digest and the paragraph's index in `WordListNumbers.values`.
+LIST_MARK_OPEN = "\ue000"
+LIST_MARK_CLOSE = "\ue001"
+#: How deep a style's `w:basedOn` chain, or a list's `w:numStyleLink`, is
+#: followed before it is taken for the cycle it most likely is.
+_STYLE_DEPTH = 32
+
+
+@dataclass(slots=True)
+class WordListNumbers:
+    """The numbers Word shows on a document's list items, and how they fared.
+
+    `values` holds one entry per marked paragraph, in document order: the
+    number Word shows on it, or None where Word shows none.  The counts are
+    filled in by whatever writes the page from mammoth's HTML, which is also
+    what sets `applied`.
+    """
+
+    mark: str
+    values: list[int | None]
+    applied: bool = False
+    #: Ordered list items carrying no mark: Word's number for them is unknown.
+    unmatched: int = 0
+    #: Items Word shows without a number, which the page numbers all the same.
+    unnumbered: int = 0
+    #: Paragraphs Word numbers that the page does not show as list items.
+    unlisted: int = 0
+
+    def item_mark(self, index: int) -> str:
+        return f"{self.mark}{index}{LIST_MARK_CLOSE}"
+
+
+@dataclass(frozen=True, slots=True)
+class _ListLevel:
+    start: int | None  # None when `w:start` is there but no number
+    ordered: bool  # mammoth's test: any `w:numFmt` but `bullet`
+    shown: bool  # `w:numFmt="none"` counts but shows nothing
+    restart: int | None  # `w:lvlRestart`, absent as None
+
+
+@dataclass(frozen=True, slots=True)
+class _ListInstance:
+    abstract: str
+    #: `w:startOverride` by level; None where it holds no number.
+    overrides: dict[int, int | None]
+
+
+def _value(element: Element | None) -> str | None:
+    return None if element is None else element.get(_q("w:val"))
+
+
+def _number(element: Element | None, attribute: str = "w:val") -> int | None:
+    """An ST_DecimalNumber attribute, or None when it holds no number."""
+    if element is None:
+        return None
+    try:
+        return int(element.get(_q(attribute)) or "")
+    except ValueError:
+        return None
+
+
+def _list_levels(abstract: Element) -> dict[int, _ListLevel]:
+    levels: dict[int, _ListLevel] = {}
+    for level in abstract.findall(_q("w:lvl")):
+        # mammoth reads a level without `w:ilvl` as level 0, as Word does.
+        index = _number(level, "w:ilvl") if level.get(_q("w:ilvl")) else 0
+        if index is None:
+            continue
+        fmt_element = level.find(_q("w:numFmt"))
+        fmt = None if fmt_element is None else fmt_element.get(_q("w:val"))
+        start_element = level.find(_q("w:start"))
+        restart_element = level.find(_q("w:lvlRestart"))
+        # Absent, the start is 0 (ISO/IEC 29500-1 §17.9.26), and Word counts from 0.
+        start = 0 if start_element is None else _number(start_element)
+        levels.setdefault(
+            index,
+            _ListLevel(
+                start=start,
+                ordered=fmt != "bullet",
+                # Word shows no number on any item of a level that starts
+                # below 0, though it counts them (docs/09 P31).
+                shown=fmt != "none" and (start is None or start >= 0),
+                restart=None if restart_element is None else _number(restart_element),
+            ),
+        )
+    return levels
+
+
+def _style_numbering(
+    styles: Element | None,
+) -> tuple[dict[str, tuple[str | None, int | None]], str | None]:
+    """Each style's `w:numPr`, through `w:basedOn`, and the default paragraph style."""
+    own: dict[str, tuple[str | None, int | None]] = {}
+    based_on: dict[str, str] = {}
+    default: str | None = None
+    for style in [] if styles is None else styles.findall(_q("w:style")):
+        style_id = style.get(_q("w:styleId")) or ""
+        numbering = style.find(f"{_q('w:pPr')}/{_q('w:numPr')}")
+        if numbering is not None:
+            num_id = numbering.find(_q("w:numId"))
+            own[style_id] = (
+                None if num_id is None else num_id.get(_q("w:val")),
+                _number(numbering.find(_q("w:ilvl"))),
+            )
+        parent = style.find(_q("w:basedOn"))
+        if parent is not None:
+            based_on[style_id] = parent.get(_q("w:val")) or ""
+        if style.get(_q("w:type")) == "paragraph" and style.get(_q("w:default")) in (
+            "1",
+            "true",
+            "on",
+        ):
+            default = style_id
+    resolved: dict[str, tuple[str | None, int | None]] = {}
+    for style_id in set(own) | set(based_on):
+        current: str | None = style_id
+        for _ in range(_STYLE_DEPTH):
+            if current is None or current in own:
+                break
+            current = based_on.get(current)
+        if current in own:
+            resolved[style_id] = own[current]
+    return resolved, default
+
+
+def _list_instances(
+    numbering: Element, style_lists: dict[str, tuple[str | None, int | None]]
+) -> tuple[dict[str, _ListInstance], dict[str, dict[int, _ListLevel]]]:
+    """Each `w:num` and the abstract definition it counts with.
+
+    An abstract definition that only names a numbering style
+    (`w:numStyleLink`) counts with the definition that style's list uses, as
+    mammoth reads its levels from it.
+    """
+    abstracts = {
+        abstract.get(_q("w:abstractNumId")) or "": abstract
+        for abstract in numbering.findall(_q("w:abstractNum"))
+    }
+    # By the identifiers as written, as mammoth matches them.
+    referenced = {
+        num.get(_q("w:numId")) or "": (
+            _value(num.find(_q("w:abstractNumId"))),
+            num,
+        )
+        for num in numbering.findall(_q("w:num"))
+    }
+
+    def definition(abstract_id: str) -> str | None:
+        for _ in range(_STYLE_DEPTH):
+            abstract = abstracts.get(abstract_id)
+            if abstract is None:
+                return None
+            link = abstract.find(_q("w:numStyleLink"))
+            if link is None:
+                return abstract_id
+            num_id, _ = style_lists.get(link.get(_q("w:val")) or "", (None, None))
+            linked = referenced.get(num_id or "")
+            if linked is None or linked[0] is None:
+                return None
+            abstract_id = linked[0]
+        return None
+
+    instances: dict[str, _ListInstance] = {}
+    for num_id, (abstract_number, num) in referenced.items():
+        resolved = None if abstract_number is None else definition(abstract_number)
+        if resolved is None:
+            continue
+        overrides: dict[int, int | None] = {}
+        for override in num.findall(_q("w:lvlOverride")):
+            level = _number(override, "w:ilvl")
+            start = override.find(_q("w:startOverride"))
+            # An override's own `w:lvl` restates the level; Word counts from
+            # the abstract definition's start all the same (docs/09 P31).
+            if level is not None and start is not None:
+                overrides[level] = _number(start)
+        instances[num_id] = _ListInstance(abstract=resolved, overrides=overrides)
+    levels = {
+        abstract_id: _list_levels(abstracts[abstract_id])
+        for abstract_id in {instance.abstract for instance in instances.values()}
+    }
+    return instances, levels
+
+
+def _paragraph_list(
+    paragraph: Element,
+    style_lists: dict[str, tuple[str | None, int | None]],
+    default_style: str | None,
+) -> tuple[str, int] | None:
+    """The `(numId, level)` a paragraph is numbered with, if any.
+
+    Its own `w:numPr` first, then its style's; `w:numId` 0 removes the
+    numbering a style would give.
+    """
+    properties = paragraph.find(_q("w:pPr"))
+    own = None if properties is None else properties.find(_q("w:numPr"))
+    style = None if properties is None else properties.find(_q("w:pStyle"))
+    style_id = default_style if style is None else style.get(_q("w:val"))
+    style_num, style_level = style_lists.get(style_id or "", (None, None))
+    own_num = None if own is None else own.find(_q("w:numId"))
+    num_id = style_num if own_num is None else own_num.get(_q("w:val"))
+    if not num_id or num_id == "0":
+        return None
+    own_level = None if own is None else _number(own.find(_q("w:ilvl")))
+    level = own_level if own_level is not None else style_level
+    return num_id, 0 if level is None else level
+
+
+def _read_paragraphs(root: Element) -> list[Element]:
+    """The body's paragraphs as mammoth reads them, in document order.
+
+    mammoth reads an `mc:AlternateContent`'s Fallback, and a paragraph whose
+    mark is a tracked deletion as part of the paragraph after it, as Word's
+    final view joins them.
+    """
+    paragraphs: list[Element] = []
+    stack = [root]
+    while stack:
+        element = stack.pop()
+        if element.tag == _q("mc:Choice"):
+            continue
+        if element.tag == _q("w:p"):
+            mark = element.find(f"{_q('w:pPr')}/{_q('w:rPr')}/{_q('w:del')}")
+            if mark is None:
+                paragraphs.append(element)
+        stack.extend(reversed(element))
+    return paragraphs
+
+
+class _ListCounter:
+    """Word's counters, one set per abstract definition (docs/09 P31).
+
+    Every `w:num` that uses a definition counts on the same set; a
+    `w:startOverride` sets its level's count when that `w:num` first reaches
+    the level, and is the level's start for that `w:num` from then on.  Using
+    a level restarts every deeper level its `w:lvlRestart` allows, and gives
+    each shallower level that has not been used its start, so the next item
+    there is counted past it.
+    """
+
+    def __init__(
+        self,
+        instances: dict[str, _ListInstance],
+        levels: dict[str, dict[int, _ListLevel]],
+    ) -> None:
+        self._instances = instances
+        self._levels = levels
+        self._counts: dict[str, dict[int, int | None]] = {}
+        self._reached: set[tuple[str, int]] = set()
+
+    def _start(self, instance: _ListInstance, level: int) -> int | None:
+        if level in instance.overrides:
+            return instance.overrides[level]
+        definition = self._levels[instance.abstract].get(level)
+        return 0 if definition is None else definition.start
+
+    def count(self, num_id: str, level: int) -> tuple[_ListLevel | None, int | None]:
+        """The level a paragraph is numbered at, and the number Word gives it.
+
+        The level is None where Word knows no such list or level (mammoth
+        then reads no list item), and the number None where it is unknown.
+        """
+        instance = self._instances.get(num_id)
+        if instance is None:
+            return None, None
+        definitions = self._levels[instance.abstract]
+        counts = self._counts.setdefault(instance.abstract, {})
+        previous = counts.get(level)
+        if level in instance.overrides and (num_id, level) not in self._reached:
+            value = instance.overrides[level]
+        elif level not in counts:
+            value = self._start(instance, level)
+        else:
+            value = None if previous is None else previous + 1
+        self._reached.add((num_id, level))
+        counts[level] = value
+        for shallower in range(level):
+            if shallower not in counts:
+                counts[shallower] = self._start(instance, shallower)
+        for deeper in [index for index in counts if index > level]:
+            definition = definitions.get(deeper)
+            restart = None if definition is None else definition.restart
+            if restart is None or (restart != 0 and level < restart):
+                del counts[deeper]
+        return definitions.get(level), value
+
+
+def number_word_lists(data: bytes) -> tuple[bytes, WordListNumbers | None]:
+    """A Word file whose numbered paragraphs carry the number Word shows.
+
+    mammoth reads a list item's level and whether it is ordered, never its
+    number, so every list it writes counts from 1.  Each paragraph Word
+    numbers with an ordered format gets a text run of its mark, ahead of its
+    own text, and the numbers go back in `WordListNumbers` for the step that
+    writes the page from mammoth's HTML to set and strip.  A paragraph whose
+    number cannot be worked out gets no mark, so that step finds an item it
+    cannot number and says so.  None comes back, and the bytes as they came,
+    when there is no paragraph to mark.
+    """
+    archive = _open(data)
+    if archive is None:
+        return data, None
+    with archive:
+        document = _main_part(archive)
+        if document is None:
+            return data, None
+        related = {
+            kind: target for _, kind, target in _relationships(archive, document)
+        }
+        numbering = (
+            _read(archive, related["numbering"]) if "numbering" in related else None
+        )
+        if numbering is None:
+            return data, None
+        styles = _read(archive, related["styles"]) if "styles" in related else None
+        root = _read(archive, document)
+        if root is None:
+            return data, None
+    style_lists, default_style = _style_numbering(styles)
+    instances, levels = _list_instances(numbering, style_lists)
+    unreadable = {
+        abstract_id
+        for abstract_id, definitions in levels.items()
+        if any(definition.start is None for definition in definitions.values())
+    } | {
+        instance.abstract
+        for instance in instances.values()
+        if None in instance.overrides.values()
+    }
+    counter = _ListCounter(instances, levels)
+    numbers = WordListNumbers(
+        mark=LIST_MARK_OPEN + hashlib.sha256(data).hexdigest()[:16], values=[]
+    )
+    for paragraph in _read_paragraphs(root):
+        numbered = _paragraph_list(paragraph, style_lists, default_style)
+        if numbered is None:
+            continue
+        level, value = counter.count(*numbered)
+        if level is None or not level.ordered:
+            continue
+        if instances[numbered[0]].abstract in unreadable or value is None:
+            continue
+        # A count below 0 comes from a negative start or override, and Word
+        # shows no number on one.
+        shown = level.shown and value >= 0
+        run = Element(_q("w:r"))
+        SubElement(run, _q("w:t")).text = numbers.item_mark(len(numbers.values))
+        properties = paragraph.find(_q("w:pPr"))
+        paragraph.insert(
+            0 if properties is None else list(paragraph).index(properties) + 1, run
+        )
+        numbers.values.append(value if shown else None)
+    if not numbers.values:
+        return data, None
+    return _rebuild(data, {document: _serialize(root)}), numbers

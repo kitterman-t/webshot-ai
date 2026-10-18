@@ -83,7 +83,7 @@ the PDF and the directory separately.
 **A bundle an agent can read.** Beside `report.pdf`, WebShot writes
 `report.ai/` containing:
 
-- `manifest.json` (`bundle_format: 3`): source provenance, auth mode, timestamps, counts, warnings, checksums, PDF details, the exact upstream tool versions used, what the page declared about itself (`page_metadata`) alongside what Trafilatura read from it (`discovered_metadata`), and which strategy chose the captured content region (`content_discovery`)
+- `manifest.json` (`bundle_format: 3`): source provenance, auth mode, timestamps, counts, warnings, checksums, PDF details, the exact upstream tool versions used, what the page declared about itself (`page_metadata`) alongside the date, author and site name it declares and the title Trafilatura read (`discovered_metadata`), and which strategy chose the captured content region (`content_discovery`)
 - `content.json`: a lossless [DoclingDocument](https://github.com/docling-project/docling-core), the open document model of the docling project, with WebShot's OCR attached to pictures as annotations
 - `content.md`: clean Markdown with headings, lists, tables, figures and OCR
 - `content.txt`: plain text for full-text search

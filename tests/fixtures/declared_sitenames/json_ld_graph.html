@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Visiting Hours</title>
+  <!-- A graph as SEO plugins write it: the article's publisher is only a
+       reference, and the WebSite node names the site. The organization's
+       own name is not the site's. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {"@type": "Article", "headline": "Visiting Hours",
+       "publisher": {"@id": "https://harbor-lane.example/#org"},
+       "isPartOf": {"@id": "https://harbor-lane.example/#website"}},
+      {"@type": "WebSite", "@id": "https://harbor-lane.example/#website",
+       "name": "Harbor Lane Archive",
+       "publisher": {"@id": "https://harbor-lane.example/#org"}},
+      {"@type": "Organization", "@id": "https://harbor-lane.example/#org",
+       "name": "Harbor Lane Archive Trust"}
+    ]
+  }
+  </script>
+</head>
+<body>
+  <article>
+    <h1>Visiting Hours</h1>
+    <p>The archive is open to visitors on weekdays from ten until four. Bring
+    a card or a letter of introduction, and allow time to register.</p>
+  </article>
+</body>
+</html>

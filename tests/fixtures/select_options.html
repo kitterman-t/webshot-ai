@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Select options</title>
+</head>
+<body>
+<h1>Select options</h1>
+<form>
+<!-- Dropdowns: each draws its chosen option, and nothing else from its list. -->
+<select name="plain"><option>alpha</option><option selected>beta</option><option>gamma</option></select>
+<!-- Changed by the script below, so the live choice is not the markup's. -->
+<select id="scripted" name="scripted"><option value="d" selected>delta</option><option value="e">epsilon</option></select>
+<!-- No option marked: the first is the choice. -->
+<select name="first"><option>zeta</option><option>eta</option></select>
+<select name="grouped"><optgroup label="theta group"><option>theta</option></optgroup><optgroup label="iota group"><option selected>iota</option></optgroup></select>
+<!-- A placeholder: hidden from the list, drawn as the choice. -->
+<select name="placeholder"><option value="" disabled selected hidden>kappa</option><option>lambda</option></select>
+<!-- The dropdown draws the label, not the text. -->
+<select name="labelled"><option label="mu" selected>never drawn</option><option>xi</option></select>
+<!-- An empty label is no label: the text is drawn. -->
+<select name="empty-label"><option label="" selected>digamma</option><option>koppa</option></select>
+<!-- No choice at all (selectedIndex -1, set below): the dropdown is empty. -->
+<select id="unchosen" name="unchosen"><option>omicron</option></select>
+<!-- List boxes draw every option they lay out, chosen or not. The hidden one
+     is not drawn, and it shifts every later option's index. -->
+<select name="listbox" multiple><option hidden>sigma</option><option>pi</option><option selected>rho</option><option selected>tau</option></select>
+<select name="sized" size="3"><option>upsilon</option><option selected>phi</option><option>chi</option></select>
+<!-- Selects the page does not show, and suggestions it never draws. -->
+<select name="undrawn-menu" style="display: none"><option selected>psi</option></select>
+<div style="visibility: hidden"><select name="unseen-menu"><option selected>omega</option></select></div>
+<select name="undrawn-list" multiple style="display: none"><option selected>vau</option></select>
+<input list="suggestions"><datalist id="suggestions"><option value="v">sampi</option></datalist>
+</form>
+<script>
+document.getElementById('scripted').value = 'e';
+document.getElementById('unchosen').selectedIndex = -1;
+</script>
+</body>
+</html>

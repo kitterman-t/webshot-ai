@@ -100,6 +100,17 @@ CASES = (
     ("adjacent_blocks_report.docx", "docx", "SENTINEL DOCX BLOCKS MARGAY", "mammoth"),
     # `mammoth`, because the report inside it is read with the office extra.
     ("adjacent_blocks_archive.zip", "zip", "SENTINEL ZIP BLOCKS NUMBAT", "mammoth"),
+    ("numbered_report.docx", "docx", "SENTINEL DOCX NUMBERED TARSIER", "mammoth"),
+    ("definitions_book.epub", "epub", "SENTINEL EPUB TERMS SERVAL", None),
+    ("definitions_archive.zip", "zip", "SENTINEL ZIP TERMS TARSIER", None),
+    ("quoted_lists_book.epub", "epub", "SENTINEL EPUB QUOTED ARMADILLO", None),
+    ("quoted_lists_archive.zip", "zip", "SENTINEL ZIP QUOTED TAPIR", None),
+    ("line_break_report.docx", "docx", "SENTINEL DOCX LINE BREAK WALLABY", "mammoth"),
+    ("line_break_book.epub", "epub", "SENTINEL EPUB LINE BREAK XERUS", None),
+    ("line_break_archive.zip", "zip", "SENTINEL ZIP LINE BREAK ZORILLA", None),
+    ("bare_link_report.docx", "docx", "SENTINEL DOCX BARE LINK WALLABY", "mammoth"),
+    ("bare_link_book.epub", "epub", "SENTINEL EPUB BARE LINK XERUS", None),
+    ("bare_link_archive.zip", "zip", "SENTINEL ZIP BARE LINK YAPOK", None),
 )
 
 #: The warnings each fixture's manifest must carry: what the converter could
@@ -290,6 +301,40 @@ def test_office_fixture_round_trips(
     if name.startswith("whitespace_run_"):
         _assert_whitespace_runs_kept(name, bundle, pdf)
 
+    # ...and a line break is one in the PDF, and keeps its words apart in
+    # content.md (docs/09 P77).
+    if name.startswith("line_break_"):
+        _assert_line_breaks_kept(name, bundle, pdf)
+
+    # ...and a link whose text is its target keeps its text, wherever the
+    # target is not an http or https address (docs/09 P75).
+    if name.startswith("bare_link_"):
+        _assert_bare_links_kept(name, bundle, pdf)
+
+
+def _assert_bare_links_kept(name: str, bundle: Path, pdf: Path) -> None:
+    """Each block of a `bare_link_*` fixture, in content.md and the PDF.
+
+    Python-Markdown read the old `<target>` as a tag, so the text was gone
+    from the page and from everything captured from it.  Each block must read
+    as its three words in content.md, once its Markdown is taken out, and in
+    the PDF's text; a link content.md can write must be written as one there,
+    its target as the document has it.
+    """
+    from pypdf import PdfReader
+    from tools.fixtures.office import bare_link_lines
+
+    content = (bundle / "content.md").read_text("utf-8")
+    markdown = re.sub(r"\s+", " ", re.sub(r"[#*`|\[]|\]\([^)]*\)", "", content))
+    pdf_text = "\n".join(page.extract_text() for page in PdfReader(pdf).pages)
+    lines = bare_link_lines(name)
+    assert lines
+    for line in lines:
+        assert line.text in markdown, line.words
+        assert re.search(r"\s+".join(map(re.escape, line.words)), pdf_text), line.words
+        if line.where == "para" and not line.target.startswith("file:"):
+            assert f"[{line.target}]({line.target})" in content, line.words
+
 
 def _assert_edge_spaces_kept(name: str, bundle: Path, pdf: Path) -> None:
     """Each line of an `edge_space_*` fixture, in content.md and in the PDF.
@@ -327,13 +372,17 @@ def _assert_whitespace_runs_kept(name: str, bundle: Path, pdf: Path) -> None:
     PDF's text.  The PDF is read for every line: a run that dropped its
     whitespace left no part boundary for docling to pad, but an edge it
     dropped did, and only the PDF, like the page, ran those words together.
+    A `<br>` is a line break (docs/09 P77), which content.md writes as a hard
+    break, two spaces ending a line; it is read as the space it is between
+    two words.
     """
     from pypdf import PdfReader
     from tools.fixtures.office import whitespace_run_lines
 
+    content = re.sub(r" {2,}\n", " ", (bundle / "content.md").read_text("utf-8"))
     markdown_lines = {
         re.sub(r"[*~`\[<>]", "", re.sub(r"\]\([^)]*\)", "", line)).strip()
-        for line in (bundle / "content.md").read_text("utf-8").splitlines()
+        for line in content.splitlines()
     }
     pdf_text = "\n".join(page.extract_text() for page in PdfReader(pdf).pages)
     pdf_text = pdf_text.replace("~~", "")
@@ -343,6 +392,73 @@ def _assert_whitespace_runs_kept(name: str, bundle: Path, pdf: Path) -> None:
         assert line.text in markdown_lines, line.words
         pattern = r"\s+".join(map(re.escape, line.words))
         assert re.search(pattern, pdf_text), line.words
+
+
+def _assert_line_breaks_kept(name: str, bundle: Path, pdf: Path) -> None:
+    """Each case of a `line_break_*` fixture, in content.md and the PDF.
+
+    In the PDF's text, the words of one of the page's lines share a line, and
+    each of its lines is below the last: a line break the page drew is one
+    there.  In content.md the words are in order, with whitespace in what
+    stands between each two, whichever whitespace it is: a `<br>` reaches the
+    snapshot docling reads as the space after it today, and docling writes a
+    `<br>` it is given as a line break.  The words are letters alone, so a
+    letter between two is another word.  A heading's bookmark reads its words
+    a space apart.  No text surface holds U+E000, the character docling's
+    HTML reader writes for a `<br>` and turns back into a line break only in
+    a paragraph or a table cell (docs/09 P56).
+    """
+    from pypdf import PdfReader
+    from tools.fixtures.office import line_break_cases
+
+    markdown_text = re.sub(
+        r"\]\([^)]*\)", "", (bundle / "content.md").read_text("utf-8")
+    )
+    reader = PdfReader(pdf)
+    pdf_lines = "\n".join(page.extract_text() for page in reader.pages).splitlines()
+    line_of = {
+        word: index for index, line in enumerate(pdf_lines) for word in line.split()
+    }
+
+    def titles(outline: list[Any]) -> list[str]:
+        return [
+            title
+            for item in outline
+            for title in (titles(item) if isinstance(item, list) else [item.title])
+        ]
+
+    bookmarks = titles(reader.outline)
+    for artifact in (
+        "content.md",
+        "content.txt",
+        "chunks.jsonl",
+        "content.doctags",
+        "content.json",
+    ):
+        text = (bundle / artifact).read_text("utf-8")
+        assert "\ue000" not in text and "\\ue000" not in text, artifact
+    cases = line_break_cases(name)
+    assert cases
+    for case in cases:
+        pattern = r"[^A-Za-z]*\s[^A-Za-z]*".join(map(re.escape, case.words))
+        assert re.search(pattern, markdown_text), (case.label, case.words)
+        rows = [
+            {line_of.get(word) for word in line if word in case.words}
+            for line in case.lines
+        ]
+        assert all(len(row) == 1 and None not in row for row in rows), (
+            case.label,
+            rows,
+        )
+        starts = [row.pop() for row in rows]
+        assert starts == sorted(set(starts)), (case.label, starts)
+        if case.label == "heading":
+            assert " ".join(case.words) in bookmarks, bookmarks
+        if case.label == "runbold":
+            # A paragraph break, which docling drops between `<br>`s that
+            # touch bold text and keeps between two paragraphs.
+            first, second, *_ = case.words
+            assert re.search(rf"{first}\s*\n\s*\n\W*{second}", markdown_text), case
 
 
 def _list_blocks(content: str) -> list[tuple[str, list[str], list[int]]]:
@@ -832,6 +948,130 @@ def test_adjacent_quotations_reach_the_record_apart(
     for artifact in ("content.md", "content.html", "content.txt"):
         text = (bundle / artifact).read_text("utf-8")
         assert "<!--" not in text and "\ue000" not in text, artifact
+
+
+@pytest.mark.browser
+def test_word_lists_reach_content_md_numbered_as_word_numbers_them(
+    tmp_path: Path,
+) -> None:
+    """Each list in a Word file is listed under the numbers Word shows on it
+    (docs/09 P31): before, content.md numbered every one from 1."""
+    if importlib.util.find_spec("mammoth") is None:
+        pytest.skip("mammoth is absent — install webshot[office] to run this")
+    from tools.fixtures.office import NUMBERED_PAGE
+
+    pdf, _ = _capture(FIXTURE_ROOT / "numbered_report.docx", tmp_path)
+    bundle = pdf.with_suffix(".ai")
+    content = (bundle / "content.md").read_text("utf-8")
+    listed = [
+        [f"{number}. {item}" for item, number in zip(items, numbers, strict=True)]
+        for kind, items, numbers in _list_blocks(content)
+    ]
+    assert listed == NUMBERED_PAGE, content
+    manifest = json.loads((bundle / "manifest.json").read_text("utf-8"))
+    assert [w for w in manifest["warnings"] if "docs/09 P31" in w] == [
+        "Word shows 2 list items without a number, which the page numbers "
+        "(docs/09 P31).",
+        "Word numbers 1 paragraph that the page shows without a number, such "
+        "as a numbered heading (docs/09 P31).",
+    ]
+
+
+def _page_definition_lists(page: str) -> list[list[tuple[str, str]]]:
+    """Every definition list on a page, an outer one before those in it: each
+    term and definition by tag and text, a nested list's text with its own."""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(page, "html.parser")
+    return [
+        [
+            (child.name, " ".join(child.get_text(" ").split()))
+            for child in dl.find_all(["dt", "dd"])
+            if child.find_parent("dl") is dl
+        ]
+        for dl in soup.find_all("dl")
+    ]
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("definitions_book.epub", "DEFINITIONS_BOOK_PAGE"),
+        ("definitions_archive.zip", "DEFINITIONS_ARCHIVE_PAGE"),
+    ],
+)
+def test_terms_in_a_row_reach_the_page_and_content_md_as_terms(
+    tmp_path: Path, name: str, expected: str
+) -> None:
+    """Terms in a row, and a definition after one of more than one block, are
+    a definition list's on the page and in the record (docs/09 P64).  Before,
+    all but the last of the terms in a row were paragraphs, and a definition
+    after one of two paragraphs was a list nested in it: content.md left out
+    `Jorvane` and `Morvish`, and made `Pelvane` a term."""
+    from bs4 import BeautifulSoup
+    from tools.fixtures import office
+
+    lists: list[list[tuple[str, str]]] = getattr(office, expected)
+    pdf, _ = _capture(FIXTURE_ROOT / name, tmp_path)
+    bundle = pdf.with_suffix(".ai")
+
+    page = (bundle / "content.html").read_text("utf-8")
+    assert _page_definition_lists(page) == lists
+    # docling writes a definition list as a list: each term a bold item, and
+    # its definitions items nested under the last.
+    content = (bundle / "content.md").read_text("utf-8")
+    soup = BeautifulSoup(page, "html.parser")
+    terms = [" ".join(term.get_text(" ").split()) for term in soup.find_all("dt")]
+    assert re.findall(r"(?m)^ *- \*\*(.+)\*\*$", content) == terms, content
+    # A definition that holds a list is written as an item with that list
+    # nested in it, and is not one line; docling also leaves out the text of
+    # one that holds a definition list, which is its own finding (P64-5).
+    items = iter(re.findall(r"(?m)^ *- (.*)$", content))
+    for definition in soup.find_all("dd"):
+        if definition.find(["dl", "ol", "ul"]) is None:
+            text = " ".join(definition.get_text(" ").split())
+            assert text in items, (text, content)
+    for artifact in ("content.md", "content.html", "content.txt"):
+        assert not re.search("[\ue000-\uf8ff]", (bundle / artifact).read_text("utf-8"))
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("name", ["quoted_lists_book.epub", "quoted_lists_archive.zip"])
+def test_lists_in_quotations_in_items_reach_the_page_as_the_quotations(
+    tmp_path: Path, name: str
+) -> None:
+    """A list in a quotation in a converted document's item is the
+    quotation's (docs/09 P74).  Before, markdownify wrote it as the item's
+    own: the text after it ran into its last item, `Brimmockand Caddrel after
+    it`, and a list after it was that item's text or more of its items, so
+    only the section with no item around its quotation reached the page."""
+    from bs4 import BeautifulSoup
+    from tools.fixtures import office
+
+    def outermost(html: str) -> list[Any]:
+        soup = BeautifulSoup(html, "html.parser")
+        return [
+            (element.name, _blocks(element))
+            for element in soup.find_all(["ol", "ul", "blockquote"])
+            if element.find_parent(["li", "blockquote"]) is None
+        ]
+
+    sources = "".join(office.QUOTED_LISTS_SECTIONS.values())
+    pdf, _ = _capture(FIXTURE_ROOT / name, tmp_path)
+    bundle = pdf.with_suffix(".ai")
+
+    page = (bundle / "content.html").read_text("utf-8")
+    assert outermost(page) == outermost(sources)
+    # docling's record has no quotations, but each item at its depth, with
+    # the quotation's own text on the item's line.
+    content = (bundle / "content.md").read_text("utf-8")
+    assert _content_md_depths(content) == _depths(_page_lists(sources)), content
+    for artifact in ("content.md", "content.html", "content.txt"):
+        text = (bundle / artifact).read_text("utf-8")
+        # The comments that keep lists apart, and the bridge's own marks.
+        assert "<!--" not in text, artifact
+        assert not re.search("[\ue000-\uf8ff]", text), artifact
 
 
 def test_every_fixture_has_a_generator_entry() -> None:

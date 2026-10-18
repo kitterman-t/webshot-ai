@@ -320,7 +320,11 @@ def _settings_from_env(environ: Mapping[str, str]) -> dict[str, dict[str, Any]]:
     collected: dict[str, dict[str, Any]] = {}
     for section, model in WebshotConfig.model_fields.items():
         annotation = model.annotation
-        assert annotation is not None and issubclass(annotation, _Section)
+        # pydantic 2.14 types a field's annotation as a `TypeForm` (PEP 747),
+        # because `int | None` is as valid an annotation as a class. Every
+        # field of WebshotConfig is a section model; `isinstance` is the check
+        # that says so, and `issubclass` alone would raise on anything else.
+        assert isinstance(annotation, type) and issubclass(annotation, _Section)
         for key in annotation.model_fields:
             raw = environ.get(env_key(section, key))
             if raw is None:

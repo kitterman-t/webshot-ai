@@ -51,13 +51,44 @@ class _ModelChatter(logging.Filter):
         )
 
 
+#: The three models a `RapidOCR()` runs: the attribute that holds each once it
+#: is built, and the method RapidOCR 3.10 builds it with.
+_MODELS = (
+    ("text_det", "_load_det_model"),
+    ("text_cls", "_load_cls_model"),
+    ("text_rec", "_load_rec_model"),
+)
+
+
 @cache
 def _recognizer() -> Any:
-    """Build the recognizer once: loading three ONNX models is not free."""
+    """Build the recognizer once, with its models loaded.
+
+    Loading three ONNX models is not free, so it happens once. It happens here,
+    before the first image, because `unavailable_reason` asks this function
+    whether the engine can run, and a model that will not load has to be found
+    by that question rather than by the first asset (docs/09 P10-33). Up to
+    3.9 the constructor loaded all three. From 3.10 each loads on first use, so
+    a recognizer that constructs proves only that a config file parsed; the
+    loaders are called here to put the question back where it was.
+    """
     from rapidocr import RapidOCR
 
     logging.getLogger(_RAPIDOCR_LOGGER).addFilter(_ModelChatter())
-    return RapidOCR()
+    recognizer = RapidOCR()
+    for attribute, loader in _MODELS:
+        if getattr(recognizer, attribute, None) is None and hasattr(recognizer, loader):
+            getattr(recognizer, loader)()
+    unbuilt = [name for name, _ in _MODELS if getattr(recognizer, name, None) is None]
+    if unbuilt:
+        # Neither the constructor nor a loader this bridge knows built them:
+        # an upstream rename, which would otherwise read as an engine ready to
+        # run with models nobody has tried to load.
+        raise RuntimeError(
+            f"the recognizer has no {', '.join(unbuilt)} after loading, so "
+            "whether its models load is unknown"
+        )
+    return recognizer
 
 
 def _recognize_sync(image: Path) -> OCRResult:

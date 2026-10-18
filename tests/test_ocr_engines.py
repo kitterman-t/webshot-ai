@@ -14,6 +14,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -241,6 +242,78 @@ def test_rapid_accepts_a_language_and_has_no_packs_to_miss() -> None:
 
     engine = RapidOcrEngine()
     assert engine.unavailable_reason(language="spa") == engine.unavailable_reason()
+
+
+@pytest.fixture
+def fresh_rapid_recognizer() -> Iterator[None]:
+    """Drop the recognizer another test cached, and the one this test built,
+    so a test that breaks RapidOCR neither reads a good one nor leaves its own."""
+    from webshot.ocr import rapid
+
+    rapid._recognizer.cache_clear()
+    yield
+    rapid._recognizer.cache_clear()
+
+
+@needs_rapid
+@pytest.mark.usefixtures("fresh_rapid_recognizer")
+@pytest.mark.parametrize("model", ("TextDetector", "TextClassifier", "TextRecognizer"))
+def test_a_rapidocr_model_that_will_not_load_is_found_by_the_preflight(
+    model: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Not by the first asset (docs/09 P10-33).
+
+    RapidOCR 3.10 builds its models on first use instead of in its
+    constructor, so a preflight that only constructed it reported every
+    engine ready.  onnxruntime's error for a model it cannot load is not a
+    `RuntimeError`, so the first recognition then ended the capture, where
+    the preflight would have made it one warning, or under `--require-ocr`
+    the early exit 6 (docs/09 P8-44).
+    """
+    import onnxruntime
+    import rapidocr.main
+
+    from webshot.ocr import rapid
+
+    truncated = tmp_path / "truncated.onnx"
+    truncated.write_bytes(b"\x08\x07\x12\x04not-a-model")
+
+    def will_not_load(*args: object, **kwargs: object) -> None:
+        onnxruntime.InferenceSession(str(truncated), providers=["CPUExecutionProvider"])
+
+    # Each model is built by name from RapidOCR's own module, in the
+    # constructor up to 3.9 and in its loader from 3.10, so this replaces the
+    # one being tested on either.
+    monkeypatch.setattr(rapidocr.main, model, will_not_load)
+    reason = rapid.RapidOcrEngine().unavailable_reason()
+    assert reason is not None, (
+        f"the preflight reported RapidOCR ready with {model} unloadable"
+    )
+    assert reason.startswith("RapidOCR could not start:"), reason
+    assert "INVALID_PROTOBUF" in reason, reason
+
+
+@needs_rapid
+@pytest.mark.usefixtures("fresh_rapid_recognizer")
+def test_a_rapidocr_whose_loaders_the_bridge_does_not_know_is_not_reported_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An upstream rename must not read as an engine ready to run (docs/09
+    P10-33): models nobody tried to load have not been shown to load."""
+    import rapidocr
+
+    from webshot.ocr import rapid
+
+    class Unbuilt:
+        # What 3.10 constructs, with its loaders under names the bridge
+        # does not call.
+        text_det = text_cls = text_rec = None
+
+    monkeypatch.setattr(rapidocr, "RapidOCR", Unbuilt)
+    assert rapid.RapidOcrEngine().unavailable_reason() == (
+        "RapidOCR could not start: the recognizer has no text_det, text_cls, "
+        "text_rec after loading, so whether its models load is unknown"
+    )
 
 
 def test_every_tesseract_run_is_limited_to_one_openmp_thread(

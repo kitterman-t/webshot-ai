@@ -14,6 +14,8 @@ live@example.com
 
 Display mode
 
+Dense
+
 - [x] Email me about sign-ins
 
 Email me about sign-ins
