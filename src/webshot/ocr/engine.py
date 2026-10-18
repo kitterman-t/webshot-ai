@@ -25,6 +25,21 @@ from typing import Protocol
 from ..errors import UsageError
 
 
+class OcrRecognitionError(RuntimeError):
+    """An engine that could run did not read one image.
+
+    Each bridge raises this in place of whatever its engine raised for that
+    image, which stops at the bridge with the engine's other types
+    (CONTRIBUTING rule 1). The visual-asset stage cannot name an engine's own
+    exceptions without importing it, and RapidOCR's, and the onnxruntime
+    errors they wrap, derive from `Exception` alone: before this, one image
+    RapidOCR failed on ended the capture (docs/09 P10-33, P90). The stage
+    records it as that asset's warning and goes on to the next asset, or
+    under `--require-ocr` stops with exit 6. The message is one line saying
+    what failed, because it becomes the warning.
+    """
+
+
 @dataclass(slots=True)
 class OCRResult:
     """One recognized visual asset.
@@ -74,7 +89,12 @@ class OcrEngine(Protocol):
         (docs/09 P8-44).
         """
 
-    async def recognize(self, image: Path, *, language: str, psm: int) -> OCRResult: ...
+    async def recognize(self, image: Path, *, language: str, psm: int) -> OCRResult:
+        """The text in *image*.
+
+        Raises `OcrRecognitionError` when the engine ran and could not read
+        this image, so that one image is one warning (docs/09 P90).
+        """
 
 
 def resolve_engine(name: str) -> OcrEngine:

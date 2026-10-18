@@ -34,7 +34,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 from ..errors import EnvironmentFailure
-from .engine import OCRResult
+from .engine import OcrRecognitionError, OCRResult
 
 ASSET_TIMEOUT_S = 45
 PAGE_TIMEOUT_S = 90
@@ -52,7 +52,21 @@ def _run_tesseract_sync(image_path: Path, language: str, psm: int) -> OCRResult:
     """
     if tesseract_executable() is None:
         return OCRResult()
-    page = recognize_page(1, image_path, language, psm, timeout=ASSET_TIMEOUT_S)
+    try:
+        page = recognize_page(1, image_path, language, psm, timeout=ASSET_TIMEOUT_S)
+    except UnicodeDecodeError as exc:
+        # subprocess decodes Tesseract's output with the locale's encoding
+        # unless Python runs in UTF-8 mode, and Tesseract writes UTF-8. Under
+        # LC_ALL=C with PYTHONUTF8=0 and PYTHONCOERCECLOCALE=0 that encoding
+        # is ASCII, and a recognized "Café" raised this, a ValueError no
+        # per-asset handler caught (docs/09 P90-2).
+        raise OcrRecognitionError(
+            f"Tesseract's output could not be decoded: {exc}"
+        ) from exc
+    except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+        # A non-zero exit, a binary that would not start, a timeout. The stage
+        # caught these before, by their own types; they keep their message.
+        raise OcrRecognitionError(str(exc)) from exc
     return OCRResult(
         text=page.text,
         confidence=page.confidence,

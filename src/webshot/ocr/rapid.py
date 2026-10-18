@@ -25,7 +25,7 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
-from .engine import OCRResult
+from .engine import OcrRecognitionError, OCRResult
 
 LOGGER = logging.getLogger("webshot")
 
@@ -91,8 +91,35 @@ def _recognizer() -> Any:
     return recognizer
 
 
+def _engine_error(exc: BaseException) -> str:
+    """What RapidOCR raised, on one line, and what it was raised from.
+
+    RapidOCR wraps onnxruntime's error in its own `ONNXRuntimeError`, whose
+    message is `traceback.format_exc()`: seven lines, with the paths of this
+    machine's site-packages. The message becomes a manifest warning, so it
+    names the wrapper and takes the one line the original error says.
+    """
+    root, seen = exc, {id(exc)}
+    while root.__cause__ is not None and id(root.__cause__) not in seen:
+        root = root.__cause__
+        seen.add(id(root))
+    lines = [line.strip() for line in str(root).splitlines() if line.strip()]
+    said = f"{type(root).__name__}: {lines[-1]}" if lines else type(root).__name__
+    return said if root is exc else f"{type(exc).__name__}, from {said}"
+
+
 def _recognize_sync(image: Path) -> OCRResult:
-    output = _recognizer()(str(image))
+    recognizer = _recognizer()
+    try:
+        output = recognizer(str(image))
+    except Exception as exc:
+        # Everything this call raises is the engine's: onnxruntime's errors,
+        # RapidOCR's wrapper of them, OpenCV's and its image loader's. None is
+        # a RuntimeError or an OSError, so the visual stage's per-asset
+        # handler let one image end the capture (docs/09 P10-33, P90).
+        raise OcrRecognitionError(
+            f"RapidOCR could not read the image: {_engine_error(exc)}"
+        ) from exc
     lines: tuple[str, ...] = tuple(getattr(output, "txts", None) or ())
     scores: tuple[float, ...] = tuple(getattr(output, "scores", None) or ())
     if not lines:

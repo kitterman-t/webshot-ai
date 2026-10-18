@@ -23,7 +23,7 @@ from playwright.async_api import FrameLocator, Locator, Page
 
 from ..bundle.publish import sha256_file
 from ..errors import OcrUnavailableError
-from ..ocr.engine import OcrEngine, OCRResult
+from ..ocr.engine import OcrEngine, OcrRecognitionError, OCRResult
 from .media_controls import SETTLE_INSIDE_SCRIPT
 from .prepare import OCR_TEXT_DECLARATIONS
 from .session import renderer_crashed
@@ -381,13 +381,22 @@ async def capture_visual_assets(
                     ocr_result = await engine.recognize(
                         image_path, language=ocr_language, psm=ocr_psm
                     )
-                except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+                except (
+                    OcrRecognitionError,
+                    RuntimeError,
+                    OSError,
+                    subprocess.TimeoutExpired,
+                ) as exc:
                     # Same rule one level down. The preflight asks whether the
                     # engine *can* run; this is what happens when it could and
                     # then did not, and under `--require-ocr` swallowing it
                     # produced a successful capture with no recognized text —
                     # which is the outcome the flag exists to prevent
-                    # (docs/09 P8-44).
+                    # (docs/09 P8-44). Each bridge raises its engine's failure
+                    # as `OcrRecognitionError`: RapidOCR's own errors are none
+                    # of the other three, and one unreadable image ended the
+                    # capture (P90). It is a RuntimeError too, named here so
+                    # the contract is read where it is kept.
                     if require_ocr:
                         raise OcrUnavailableError(
                             f"OCR failed for {asset_id}: {exc} --require-ocr "
