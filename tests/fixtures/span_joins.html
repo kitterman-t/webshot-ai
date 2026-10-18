@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Span joins</title>
+<!-- docs/09 P70. Every word here is made up, so each can be searched for
+     whole. A word with a part in an element docling does not format (span,
+     mark, small and the rest of INLINE_TAGS) reads as one word on the page; a
+     space the page has, a line break, or a box the CSS makes keeps two apart.
+     `font` and `big` are not in the sanitizer's allowlist, which keeps their
+     text and drops the tags, so they read whole without the bridge. In the
+     narrow paragraphs each line ends at a space in a span of its own, which
+     hangs past the line's end and so has no width. The spans after them touch
+     in the markup and are drawn apart, as real pages draw them: a bullet
+     between margins, a separator or a line break in generated content, a
+     padded label, quotation marks, and a span that names its own edges as
+     touching. In the wrapped paragraphs the line breaks after a dash at the
+     edge: a range with nothing drawn there is one range, and one with a
+     margin there is two parts. -->
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 2rem; max-width: 40rem; }
+  q { quotes: none; }
+  .chips span { display: inline-block; margin-right: .6em; padding: 0 .3em; border: 1px solid #889; }
+  .row { display: flex; gap: 1rem; }
+  .stacked small { display: block; }
+  .narrow { width: 4ch; font-family: monospace; }
+  .meta .dot { margin: 0 .35em; }
+  .crumbs span + span::before { content: "\203A"; padding: 0 .3em; }
+  .lines span + span::before { content: "\A"; white-space: pre; }
+  .labels span { padding: 0 .4em; background: #eef; }
+  .quoted { quotes: "\201C" "\201D"; }
+  .wrapped { width: 5ch; font-family: monospace; }
+  .pushed { margin-left: .5em; }
+  .claimed { margin: 0 .5em; }
+</style>
+</head>
+<body>
+<nav><span>Gor</span><span>vane</span> and <span>Mod</span><span>ule 3</span></nav>
+<h1>Field notes on the Ves<span>trel</span>ian</h1>
+<p>A ka<span>lin</span>dric spur, a mo<mark>rasp</mark>ent ridge and a tal<small>wen</small>ish slope.</p>
+<p>Read bri<abbr title="made up">dov</abbr>al, cite <cite>Plo</cite>venna, call it fra<q>mel</q>t and cross out dre<strike>sk</strike>ow.</p>
+<p>Set gul<font color="#336">vor</font>ine, type hes<tt>pin</tt>dle, sign <label>Or</label>mithe, meet at <time datetime="2026-10-12">zel</time>quist.</p>
+<p>Count pre<data value="7">nov</data>ish, define <dfn>yel</dfn>dorn, and write ma<bdi>sk</bdi>elt, tre<bdo dir="ltr">vin</bdo>ow and <big>bo</big>roth.</p>
+<p>Parts in parts: kel<span><span>mo</span>ra</span>vine, one sto<span>r<b>un</b>d</span>el and one <b>quel</b><span>dros</span> word.</p>
+<p>Punctuated: the <span>Varlin</span>, the <span>Tosmer</span>; then (<span>prenik</span>) and "<span>galdor</span>".</p>
+<p><a href="#later">Lin<span>ker</span>osh</a> and <a href="#later">brem</a><span>dale</span>, both linked.</p>
+<p>Kept apart: before <span>spaced</span> after, trel&nbsp;<span>wisp</span>&nbsp;mor, quil&#8201;<mark>nesh</mark>&#8201;dor.</p>
+<p>Broken lines: quor<span><br>daz</span> and <span>skel</span><br><span>vona</span>.</p>
+<h2>Pal<span>dren</span>ica</h2>
+<ul><li>gram<span>pel</span>osh and stra<mark>vin</mark>e</li></ul>
+<dl><dt>Mor<span>vel</span>an</dt><dd>a ter<span>mek</span>ish term</dd></dl>
+<dl><div><dt>Hal<span>dor</span>vik</dt><dd>a brel<span>mo</span>sk group</dd></div></dl>
+<table>
+<caption>Tab<span>rel</span>wick</caption>
+<tr><th>Ter<span>ma</span>sh</th><th>Use</th></tr>
+<tr><td>sko<span>val</span>der</td><td>a test</td></tr>
+</table>
+<p class="narrow">kelvar<span> </span>dostrel</p>
+<p class="narrow"><span>morvish</span><span> </span><span>plendor</span></p>
+<p class="chips"><span>zorbel</span><span>quintar</span></p>
+<div class="row"><span>krev</span><span>moltan</span></div>
+<p class="stacked"><span>Hessel</span><small>Wiki page</small></p>
+<p>A <span data-webshot-display="block">yar</span><span>bistle</span> the page marked itself.</p>
+<p class="meta"><span>Ploskar</span><span class="dot">•</span><span>Vendrel</span></p>
+<p class="crumbs"><span>Halvenk</span><span>Ostrim</span></p>
+<p class="lines"><span>Quendril</span><span>Moskav</span></p>
+<p class="labels"><span>Tarvish</span><span>Elgrove</span></p>
+<p>Quoted: sel<q class="quoted">var</q>ont.</p>
+<p class="wrapped"><span>gorm–</span>tavel</p>
+<p class="wrapped"><span>vorn–</span><span class="pushed">elsik</span></p>
+<p>So plin<span class="claimed" data-webshot-touches="before after">dor</span>vesk claimed.</p>
+<h2 id="later">Later</h2>
+<p>End of the notes.</p>
+</body>
+</html>

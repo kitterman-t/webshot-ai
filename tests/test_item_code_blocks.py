@@ -349,12 +349,13 @@ def _items_hold_code(source: str) -> bool:
     return any(pre.find_parent(["li", "dd"]) is not None for pre in soup("pre"))
 
 
-#: `pre_code_text.html` holds code docling reads differently from the page,
-#: outside a list too (docs/09 P55).
+#: `pre_code_text.html` and `line_numbers.html` hold code docling reads
+#: differently from the page, outside a list too (docs/09 P55, P68).
 HTML_FIXTURES = sorted(
     path
     for path in FIXTURES.rglob("*.html")
-    if path not in {FIXTURE, FIXTURES / "pre_code_text.html"}
+    if path
+    not in {FIXTURE, FIXTURES / "pre_code_text.html", FIXTURES / "line_numbers.html"}
 )
 
 

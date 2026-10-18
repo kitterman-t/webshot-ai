@@ -4,7 +4,7 @@
   "name": "content",
   "origin": {
     "mimetype": "text/html",
-    "binary_hash": 14225796740044705708,
+    "binary_hash": 4288139282806083865,
     "filename": "content.html"
   },
   "furniture": {
@@ -40,7 +40,7 @@
           "$ref": "#/texts/2"
         },
         {
-          "$ref": "#/texts/18"
+          "$ref": "#/texts/19"
         }
       ],
       "content_layer": "body",
@@ -111,6 +111,9 @@
         },
         {
           "$ref": "#/texts/17"
+        },
+        {
+          "$ref": "#/texts/18"
         }
       ],
       "content_layer": "body",
@@ -285,11 +288,23 @@
       "content_layer": "body",
       "label": "text",
       "prov": [],
+      "orig": "UTC+01:00 Berlin",
+      "text": "UTC+01:00 Berlin"
+    },
+    {
+      "self_ref": "#/texts/17",
+      "parent": {
+        "$ref": "#/texts/2"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "text",
+      "prov": [],
       "orig": "Signature note",
       "text": "Signature note"
     },
     {
-      "self_ref": "#/texts/17",
+      "self_ref": "#/texts/18",
       "parent": {
         "$ref": "#/texts/2"
       },
@@ -301,13 +316,13 @@
       "text": "Sent from the quarterly review workstation."
     },
     {
-      "self_ref": "#/texts/18",
+      "self_ref": "#/texts/19",
       "parent": {
         "$ref": "#/texts/0"
       },
       "children": [
         {
-          "$ref": "#/texts/19"
+          "$ref": "#/texts/20"
         }
       ],
       "content_layer": "body",
@@ -318,9 +333,9 @@
       "level": 1
     },
     {
-      "self_ref": "#/texts/19",
+      "self_ref": "#/texts/20",
       "parent": {
-        "$ref": "#/texts/18"
+        "$ref": "#/texts/19"
       },
       "children": [],
       "content_layer": "body",

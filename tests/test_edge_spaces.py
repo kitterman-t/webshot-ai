@@ -34,6 +34,7 @@ from webshot.acquire.adapters import (
     sanitize_markdown_html,
 )
 from webshot.acquire.markitdown_bridge import (
+    _keeping_edge_spaces,
     _ListSeams,
     _TextHtmlConverter,
     _TextMarkdownify,
@@ -145,9 +146,12 @@ def _line(tag: str, space: str, where: str) -> tuple[str, str]:
 def test_every_converter_that_chomps_keeps_its_edge_spaces() -> None:
     # An empty list would hold nothing: `chomp` must still be found where it is.
     assert {"convert_a", "convert_b", "convert_code", "convert_u"} <= set(CHOMPING)
+    # Outermost, so no wrapper beneath it is shown an edge: `<a>` has one
+    # (docs/09 P75), and each wraps MarkItDown's converter in the end.
+    keeping = _keeping_edge_spaces(_CustomMarkdownify.convert_b).__code__
     for name in CHOMPING:
         converter = getattr(_TextMarkdownify, name)
-        assert getattr(converter, "__wrapped__", None) is getattr(
+        assert converter.__code__ is keeping and inspect.unwrap(converter) is getattr(
             _CustomMarkdownify, name
         ), f"{name} chomps its text and does not keep a Unicode space at its edge"
 

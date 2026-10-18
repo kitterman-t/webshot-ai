@@ -454,6 +454,33 @@ which records the measurements behind each change.
   keeps two lists apart, is removed from the page. A document with no such
   pair is written as before, and so is a pair inside a list item. See
   docs/09 P63.
+- **A Word file's lists keep the numbers Word shows on them.** mammoth reads
+  a list item's level and whether it is ordered, never its number, so every
+  Word list reached the page numbered from 1: one Word starts at 3 or
+  restarts at 4, one it counts on past a paragraph, two instances of one list
+  definition (which Word counts as one list), and two lists that meet, which
+  were also joined into one. WebShot now works out each item's number from
+  the file's numbering definitions, by rules measured in Word, and sets each
+  list's start from it, splitting a list where Word's numbers stop running
+  on; `content.md` records the same numbers. A Word file inside a zip is
+  numbered too. Where the page still cannot show Word's numbering — a
+  numbered heading, a list Word shows no numbers on, an item whose number
+  cannot be worked out — the manifest says so. A lettered list shows its
+  ordinal in digits. See docs/09 P31.
+- **A dropdown's choice reaches the text surfaces.** A `<select>` dropdown
+  reached `content.html` with none of its options, so the choice the page
+  showed was missing there and from `content.md`, `content.txt` and
+  `chunks.jsonl`; only the `form_fields` record in `assets.json` had it. A
+  dropdown draws its choice and lays out none of its options, and the capture
+  keeps what a reader can see by whether an element has a box. The chosen
+  option now counts as shown whenever its dropdown is, a placeholder the page
+  hid from the list included, and reaches every text surface as one paragraph,
+  reading as the option's `label` where the page gave it a non-empty one. The
+  other options stay out: the page never drew them, and the document reader
+  would write each as a line of the page. A list box keeps every option it
+  lays out and its `size`, and the choice is now marked on the right options
+  when one before them is hidden. A hidden select's options stay out. See
+  docs/09 P69, which corrects P8-75's account of the cause.
 - **Two lists side by side in a converted document stay two lists.** Where an
   EPUB chapter or an HTML file in a zip had one list straight after another of
   the same kind, the page showed one list: numbered on from the first, so a
@@ -544,6 +571,42 @@ which records the measurements behind each change.
   as the document has it, outside the formatting: the page keeps the no-break
   space, and content.md reads it as a plain one. Output where the edges are
   ASCII spaces, or none, is unchanged. See docs/09 P43.
+- **A list item whose only content is a picture or a table keeps it.** An
+  item holding an image or a table and no text of its own was dropped from
+  `content.json`, `content.md`, `content.txt` and `chunks.jsonl`, image or
+  table and all, with no warning, and in a numbered list the items after it
+  were numbered one short. A dropped image also left the page one picture
+  short of its images, so the OCR text of every image on the page was left out
+  of the text surfaces: a Word homework solution whose answer 2 was an image
+  lost all 13 images' recognized text, the questions included. The item is now
+  in `content.json`, empty and numbered, holding its picture or table, and the
+  text surfaces write what it holds inside it, as CommonMark nests a block in
+  an item (`-   Chart caption`, then `    <!-- image -->`). Every other list is
+  written as before. See docs/09 P52.
+- **A list item with text keeps its picture or table inside it in
+  `content.md`.** `content.json` held them in the item, but `content.md`,
+  `content.txt` and `chunks.jsonl` wrote the picture's caption and OCR text, or
+  the table's rows, at the left margin under the item's line. A Markdown reader
+  then read the caption as more of the item's text, ended the list at the
+  `<!-- image -->` and started a second one with the next item, and read a
+  table as a paragraph of pipes in the item; a Word homework solution whose
+  answers sit beside their images read back as 21 lists rather than 5. A
+  picture or table is now written after a blank line, indented to where the
+  item's text begins (`- Answer`, blank, `  <!-- image -->`), so it reads as
+  the item's. Only lists whose items hold a picture or a table change. See
+  docs/09 P61.
+- **A description-list term keeps the picture, table or list it holds.**
+  docling read a term (`<dt>`) for its text alone and never looked inside it,
+  so an image, a table or a list in a term was dropped from `content.json`,
+  `content.md`, `content.txt` and `chunks.jsonl`, with no warning. A term with
+  nothing else in it vanished entirely, its descriptions hung off the list as
+  terms of their own, and a description holding a description list was
+  dropped with it. A dropped image also left the OCR text of every image on
+  the page out of the text surfaces. What a term holds is now inside the term
+  in `content.json`, and a term with no text of its own is written as a list
+  item with none is (`-   Chart caption`, then `    <!-- image -->`, with its
+  descriptions under it). Every other list is written as before. See docs/09
+  P60.
 - **A word with a bold, italic, code or linked part is one word in the
   bundle.** docling spaced every formatted run from the text beside it, so
   `un<b>break</b>able` read `un **break** able` in `content.md` and "un break
@@ -638,6 +701,125 @@ which records the measurements behind each change.
   Each run of whitespace there is now one space outside the formatting, in a
   Word file, an EPUB and an HTML page in a zip. An edge of plain spaces is
   written as before, and text in code keeps its own spacing. See docs/09 P49.
+- **Terms in a row, and every definition, stay in a converted document's
+  definition list.** In an EPUB, or an HTML page in a zip, a definition list
+  with two terms for one definition showed the first as a paragraph before
+  the list. A definition after one of two paragraphs became a definition list
+  nested in that one, with its last paragraph for the term, and `content.md`
+  left out the paragraphs either side of the nested list. markdownify writes
+  a blank line before every term and none before a definition, and
+  Python-Markdown reads both as less of a list. Terms in a row are now written
+  on adjacent lines, and a definition of more than one block has a blank line
+  after it when another follows. A list that already rendered right is
+  written as before. See docs/09 P64.
+- **A list in a quotation inside a list item stays the quotation's.** In an
+  EPUB, on its own or in a zip, and in an HTML page in a zip, a list in a
+  quotation in a list item was written as the item's own list, with no blank
+  line after it.
+  So text after it in the quotation ran into its last item (`xtail`), and a
+  second list after it became that item's text, or more of its items when it
+  was of the same kind. Such a list is now written as one in a quotation in no
+  item is, at any depth of items and quotations. In a table cell, where a list
+  is text, the change stops at the cell, and words that docs/09 P62's change
+  had run together in some cells are kept apart again. Every other document is
+  written byte for byte as before. See docs/09 P74.
+- **A line break in a converted document is a line break on the page.**
+  markdownify writes a `<br>` as Markdown's hard break, two spaces and a
+  newline, and MarkItDown strips the end of every line, so in a Word file, an
+  EPUB or an HTML page in a zip `one<br/>two` reached the page and the PDF as
+  `one two`: a Word file's manual line breaks ran on as one line. Two `<br>`s
+  in a list item ended the list and printed the rest of it as text, and two in
+  bold text printed its `**`. The bridge now writes `<br>` itself wherever text
+  flows: a paragraph, a list item, a quotation, a table cell, a definition, a
+  link or formatted text. In a heading it is still a space, because the PDF's
+  bookmark for the heading would run its words together; in a code block it
+  is still a newline, and in inline code a space, as any line break in inline
+  code is; and two or more in a row in a paragraph are still a paragraph
+  break, which content.md keeps where docling would drop the `<br>`s beside
+  bold text. content.md writes a line break as docling writes any page's
+  `<br>`: a hard break in a paragraph, and a space in a list item. See docs/09
+  P77.
+- **A link whose text is its target keeps its text.** In a Word file, an EPUB
+  or an HTML page in a zip, `See <a href="report.pdf">report.pdf</a> now`
+  reached the page, `content.md` and the PDF as `See  now`. markdownify writes
+  such a link as `<report.pdf>`, which Python-Markdown makes a link only for
+  an http, https or ftp address and otherwise reads as an HTML tag. nh3 then
+  dropped the tag and the text with it. A target that named a tag did worse:
+  `em` made the rest of the paragraph italic, `br` became a line break, and
+  `script` or `style` took everything after it in the document. Every link is
+  now written `[text](target)`, as one whose text differs already was, and an
+  http or https link renders the same page as before. A link in code, `kbd`
+  or `samp` now reads as its text, where the page showed its Markdown,
+  `[text](target)`, or the tag. See docs/09 P75.
+- **A protected document's pages are each captured at their own size.** The
+  SharePoint capture shot every page where page 1's position and size, and
+  the step from page 1 to page 2, put it. In a document whose pages differ, a
+  landscape page among portrait ones, a Legal page, an appended form or a
+  short last page, every page after the first that differed came out page
+  1's size, holding parts of its neighbours, with no warning. Each page is
+  now found by its own `Page N.` element, scrolled to if the viewer has not
+  drawn it, measured in view, and shot in one piece or two as its own height
+  needs. A page the viewer cannot show whole stops the capture. The packed
+  PDF gives every page the scale of the document's commonest page, where a
+  landscape Letter page among portrait ones had come out 13.33 × 10.30 in.
+  `capture.json` reports `page_width` and `page_height` only when every page
+  shares them, and lists each page in a new `page_images`. See docs/09 P46.
+- **A protected deck's slides are each captured at their own size.** The
+  SharePoint capture pages a deck through the viewer's toolbar at 75% zoom,
+  and clipped every slide at page 1's rectangle. A slide of another size, or
+  a portrait page in the deck, came out page 1's size: a smaller one with the
+  viewer's background beside and below it, a taller one cut off, with no
+  warning. Each slide is now measured by its own `Page N.` element after the
+  toolbar has gone to it and shot as itself, and one the viewer does not show
+  whole stops the capture. Whether a document is captured as a deck or by
+  scrolling is now read from page 1, scrolling the viewer to its top if page
+  1 is not drawn, rather than from the first page the viewer had drawn,
+  which in a viewer that keeps only the pages in view is the one the reader
+  left it on. For a deck, `capture.json`'s `page_width` and `page_height` are
+  now device pixels read from the images, and null when the slides differ,
+  as for a scrolled document, with each slide in `page_images`. See docs/09
+  P51.
+- **A word with a part in a `<span>` is one word in the bundle where the page
+  draws it as one.** docling merged the text of a `span`, `mark`, `small`,
+  `abbr`, `cite` and every other inline element it does not format with the
+  text beside it, with a space, so `un<span>break</span>able` read "un break
+  able" in `content.md`, `content.txt`, `chunks.jsonl` and `content.json`; a
+  citation's `<span>[</span>2<span>]</span>` read "[ 2 ]", and highlighted
+  code, a span per token, read `def f ( x ):`. The snapshot now measures each
+  place such an element touches the text beside it, and records in
+  `content.html`, as `data-webshot-touches`, where the page draws the two with
+  no gap between them; they join there and only there. A margin, a padding, a
+  border or generated content keeps them apart, so a date line's `Article • 12
+  Oct 2026`, drawn with margins around the bullet, is not run together into
+  "Article•12 Oct 2026". A page range that wraps after its dash is still one
+  range. A `content.html` captured before this change records no such
+  evidence, and its spans read as before. Two things that had leaned on that
+  space are fixed with it: page chrome whose text a span joins stays out of
+  the body, and the snapshot keeps a space that ends a line in a span of its
+  own, which it dropped as having no width, so `kelvar<span> </span>dostrel`
+  read "kelvardostrel" wherever the line wrapped there. See docs/09 P70.
+- **A description list whose terms are grouped in `<div>`s keeps them.** HTML
+  lets a `<div>` group a term with its descriptions
+  (`<dl><div><dt>Brisk</dt><dd>Callow</dd></div></dl>`), the shape GOV.UK's
+  summary list and many design systems use. docling read only a description
+  list's own `<dt>` and `<dd>` children, so every group was dropped from
+  `content.json`, `content.md`, `content.txt` and `chunks.jsonl`, the terms'
+  and descriptions' text included, with no warning; an image in one also left
+  the OCR text of every image on the page out of the text surfaces. A grouped
+  list now reads exactly as the same list without its groups, on every
+  surface. A group marked `aria-hidden` stays out, as a hidden term does. See
+  docs/09 P72.
+- **A description holding text and a description list keeps its text.** A
+  description (`<dd>`) whose own child is a description list lost its text,
+  before the list, after it or in a paragraph, from `content.json`,
+  `content.md`, `content.txt` and `chunks.jsonl`, with no warning: docling
+  hung the inner list off the term and read nothing else of the description.
+  With no term above it, the inner list went too. The description is now an
+  item with its text under its term, its list nested under it (`- **Term**`,
+  `    - Description`, `        - **Inner term**`), as a description is
+  written when its list sits in a `<div>`; a picture or a table beside the
+  text is the description's too. A description holding only the list, under
+  a term, is written as before, and so is every other list. See docs/09 P73.
 - **Clean mode hides the ad units an ad network writes into the article.** On
   a statistics site's calculator page, an in-article video player ("My Latest
   Videos") sat inside the main content, so selecting the region kept it. The
@@ -681,6 +863,16 @@ which records the measurements behind each change.
   less the blank lines at its edges, written in a fence longer than any run of
   backticks in it; a line-number table is its code. Code no highlighter split
   and that does not start indented is written as before. See docs/09 P55.
+- **A code block's inline line numbers stay out of its code.** Sphinx's
+  numbered blocks (Pygments) and Hugo's `linenos=inline` (Chroma) write each
+  line's number at the start of the line, set apart with padding and marked
+  unselectable, and `content.md`, `content.txt`, `chunks.jsonl` and
+  `content.json` read it as the line's first characters: `1package main`, `2`,
+  `3import "fmt"`. The snapshot now leaves out such a number, only digits at
+  the start of a line in a `<pre>` that holds code besides, and the manifest's
+  warnings name each block and the numbers it showed. Prompts the page marks
+  unselectable the same way (`>>> `, `$ `) stay, numbers a reader can select
+  stay, and a line-number table is read as before. See docs/09 P68.
 - **A page that enforces Trusted Types is captured.** A site that sends
   `require-trusted-types-for 'script'` made the bundle stage throw on its
   first `DOMParser` call, and the capture exited 5. Large video sites' watch

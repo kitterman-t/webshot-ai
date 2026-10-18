@@ -30,6 +30,8 @@ Daily digest
 
 Time zone
 
+UTC+01:00 Berlin
+
 Signature note
 
 Sent from the quarterly review workstation.

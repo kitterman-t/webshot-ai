@@ -14,6 +14,7 @@ page height, because a viewer only ever paints the visible slice.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -121,6 +122,107 @@ async def _viewer_metrics(page: Page) -> dict[str, Any]:
     return metrics
 
 
+async def _page_box(page: Page, number: int) -> dict[str, Any] | None:
+    """Page `number`'s rectangle as the viewer has it now, or None.
+
+    The page is found by its own `Page N.` label, not by its place among the
+    page elements: whether the viewer keeps every page in the DOM or only the
+    ones near what it shows is not recorded (`tests/fixtures/viewer/dom/` holds
+    its accessibility tree, not its behaviour), and in a viewer that drops
+    the far ones the first element present need not be page 1.
+
+    `top` is the page's offset in the viewer's scrolled content, the
+    coordinate `scrollTop` takes. Everything else is in viewport coordinates,
+    which a screenshot clip takes. `viewer` is the container's client box,
+    the part of it that shows content.
+    """
+    box: dict[str, Any] | None = await page.evaluate(
+        """(contract) => {
+            const viewer = [...document.querySelectorAll(contract.container)]
+                .find(element => element.scrollHeight > element.clientHeight);
+            if (!viewer) throw new Error('The viewer container is no longer scrollable');
+            const labelPattern = new RegExp(contract.pageLabel);
+            const element = [...document.querySelectorAll(contract.page)]
+                .find(candidate => {
+                    const label = candidate.getAttribute('aria-label') || '';
+                    return labelPattern.test(label)
+                        && Number(label.match(/\\d+/)[0]) === contract.number;
+                });
+            if (!element) return null;
+            const rect = element.getBoundingClientRect();
+            const outer = viewer.getBoundingClientRect();
+            const visible = {
+                x: outer.x + viewer.clientLeft, y: outer.y + viewer.clientTop,
+                width: viewer.clientWidth, height: viewer.clientHeight
+            };
+            return {
+                x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+                top: viewer.scrollTop + rect.y - visible.y,
+                scrollTop: viewer.scrollTop,
+                viewer: visible
+            };
+        }""",
+        {
+            "container": VIEWER_CONTAINER,
+            "page": PAGE_ELEMENT,
+            "pageLabel": PAGE_LABEL_PATTERN,
+            "number": number,
+        },
+    )
+    return box
+
+
+async def _scroll_viewer(page: Page, value: float) -> None:
+    """Put the viewer at `value` now, and give it half a second to draw there."""
+    # `scrollTop =` obeys the viewer's `scroll-behavior`: on a smooth one it
+    # starts an animation and returns. The first scroll comes from wherever
+    # the viewer was left, so it can cross the whole document, and from the
+    # last page of a three-page one it was still moving when the first
+    # segment was shot (docs/09 P42). `instant` puts the viewer there now,
+    # and the synthetic `scroll` event follows the move rather than preceding
+    # it. The function hands back nothing, because Chromium 153's `scrollTo`
+    # returns a promise `evaluate` would wait on (docs/09 P34-5).
+    await page.evaluate(
+        """([selector, value]) => {
+            const viewer = [...document.querySelectorAll(selector)]
+                .find(element => element.scrollHeight > element.clientHeight);
+            viewer.scrollTo({top: value, behavior: 'instant'});
+            viewer.dispatchEvent(new Event('scroll'));
+        }""",
+        [VIEWER_CONTAINER, value],
+    )
+    await page.wait_for_timeout(500)
+
+
+async def _first_page_box(page: Page) -> dict[str, Any]:
+    """Page 1's rectangle, scrolling the viewer to its top if page 1 is not drawn.
+
+    The capture took the orientation from the first `Page N.` element
+    present. In a viewer that keeps only the pages near the view, that is
+    whichever page the reader left it on, and a deck left on a portrait page
+    took the scroll path at the viewer's own zoom (docs/09 P51).
+    """
+    box = await _page_box(page, 1)
+    if box is None:
+        await _scroll_viewer(page, 0)
+        box = await _page_box(page, 1)
+    if box is None:
+        raise RuntimeError(
+            "The viewer has no `Page 1.` element, even scrolled to its top"
+        )
+    return box
+
+
+def _shared(values: list[Any]) -> Any:
+    """The one value every page has, or None.
+
+    One number for a document whose pages differ would describe some pages
+    and not others, so it is null, and `page_images` says what each page is
+    (docs/09 P46).
+    """
+    return values[0] if len(set(values)) == 1 else None
+
+
 async def _hide_viewer_toolbar(page: Page) -> None:
     viewport = page.viewport_size or {"width": 1440, "height": 1000}
     await page.mouse.move(viewport["width"] - 4, 8)
@@ -140,6 +242,20 @@ async def _open_pdf_toolbar(page: Page, metrics: dict[str, Any]) -> None:
 async def _capture_landscape_viewer(
     page: Page, directory: Path, metrics: dict[str, Any]
 ) -> dict[str, Any]:
+    """Page through a deck at 75% zoom, shooting each slide where it is.
+
+    Every slide was clipped at page 1's rectangle, measured once after the
+    zoom, at the top of the viewer, and only page 1's height was checked
+    against the viewer's. A slide of another size came out page 1's size: a
+    narrower, shorter one with the viewer's background beside and below it,
+    a taller one cut off at page 1's height, and the capture reported page
+    1's size for the deck (docs/09 P51). Each slide is now found by its own
+    `Page N.` element once the toolbar has gone to it and hidden itself,
+    measured there, and shot as itself. One the viewer does not show whole
+    stops the capture, with half a pixel of slack, as the portrait path
+    allows.
+    """
+    ratio = float(await page.evaluate("() => window.devicePixelRatio")) or 1.0
     await _open_pdf_toolbar(page, metrics)
     zoom = page.get_by_role("menuitem", name=ZOOM_MENU_NAME, exact=True)
     await zoom.click()
@@ -156,27 +272,45 @@ async def _capture_landscape_viewer(
         await page.wait_for_timeout(220)
         current = int(await page_box.input_value())
 
-    fit_metrics = await _viewer_metrics(page)
-    page_rect = fit_metrics["pages"][0]
-    if page_rect["height"] > fit_metrics["viewer"]["height"] + 1:
-        raise RuntimeError("75% zoom did not fit the slide inside the viewer")
-
     for page_number in range(1, metrics["pageCount"] + 1):
         await _hide_viewer_toolbar(page)
+        # Measured after the toolbar's wait, as the screenshot will find it.
+        slide = await _page_box(page, page_number)
+        if slide is None:
+            raise RuntimeError(
+                f"The viewer's toolbar is at page {page_number}, and the "
+                f"viewer has no `Page {page_number}.` element"
+            )
+        visible = slide["viewer"]
+        if (
+            slide["x"] < visible["x"] - 0.5
+            or slide["y"] < visible["y"] - 0.5
+            or slide["x"] + slide["width"] > visible["x"] + visible["width"] + 0.5
+            or slide["y"] + slide["height"] > visible["y"] + visible["height"] + 0.5
+        ):
+            raise RuntimeError(
+                f"Page {page_number} measures {slide['width']:g} x "
+                f"{slide['height']:g}px at {ZOOM_FIT_SLIDE} zoom, at "
+                f"({slide['x']:g}, {slide['y']:g}), and the viewer shows "
+                f"{visible['width']:g} x {visible['height']:g}px at "
+                f"({visible['x']:g}, {visible['y']:g}), so the page cannot be "
+                "shot whole"
+            )
+        clip: FloatRect = {
+            "x": float(slide["x"]),
+            "y": float(slide["y"]),
+            "width": float(slide["width"]),
+            "height": float(slide["height"]),
+        }
         await page.screenshot(
             path=directory / f"page-{page_number:03d}.png",
-            clip={
-                "x": page_rect["x"],
-                "y": fit_metrics["viewer"]["y"],
-                "width": page_rect["width"],
-                "height": page_rect["height"],
-            },
+            clip=clip,
             animations="disabled",
             caret="hide",
         )
         if page_number == metrics["pageCount"]:
             break
-        await _open_pdf_toolbar(page, fit_metrics)
+        await _open_pdf_toolbar(page, metrics)
         next_page = page.get_by_role("menuitem", name=NEXT_PAGE_NAME, exact=True)
         await next_page.click()
         await page.wait_for_timeout(350)
@@ -187,37 +321,64 @@ async def _capture_landscape_viewer(
                 f"observed {observed}"
             )
 
-    await _open_pdf_toolbar(page, fit_metrics)
+    await _open_pdf_toolbar(page, metrics)
     await zoom.click()
     await page.get_by_role(
         "menuitemcheckbox", name=ZOOM_WINDOW_SIZE, exact=True
     ).click()
     await _hide_viewer_toolbar(page)
+
+    # Device pixels, read from the images written, as the portrait path
+    # reports them (docs/09 P8-46, P46-4).
+    images: list[dict[str, Any]] = []
+    for number in range(1, metrics["pageCount"] + 1):
+        with Image.open(directory / f"page-{number:03d}.png") as image:
+            width, height = image.size
+        images.append(
+            {
+                "page": number,
+                "width": width,
+                "height": height,
+                "segments": 1,
+                "segment_overlap": 0,
+            }
+        )
     return {
         "page_count": metrics["pageCount"],
-        "page_width": round(page_rect["width"]),
-        "page_height": round(page_rect["height"]),
+        "page_width": _shared([image["width"] for image in images]),
+        "page_height": _shared([image["height"] for image in images]),
         "segmented": False,
-        "viewer_zoom_for_capture": "75%",
+        "page_images": images,
+        "device_pixel_ratio": ratio,
+        "viewer_zoom_for_capture": ZOOM_FIT_SLIDE,
     }
 
 
 async def _capture_portrait_viewer(
     page: Page, directory: Path, metrics: dict[str, Any]
 ) -> dict[str, Any]:
-    """Capture every portrait page, stitching each from two overlapping shots.
+    """Capture every portrait page, stitching a tall one from two overlapping shots.
 
-    Three things here are measured rather than assumed, and each was assumed:
+    Four things here are measured rather than assumed, and each was assumed:
 
-    * **The page's absolute offset inside the scroller.** `pages[0].y` and
-      `viewer.y` are both viewport-relative, so their difference is the page's
-      offset *in the current scroll state*. It was then written straight to
-      `scrollTop`, which is a document coordinate — correct only when the
+    * **Each page's own rectangle.** Every page was shot where page 1's
+      position and height, and the step from page 1 to page 2, said it was,
+      at page 1's width. In a document whose pages differ in size (a
+      landscape page among portrait ones, a Legal page, an appended form, a
+      shorter last page) every page after the first that differed came out
+      as a slice of the document page 1's size, holding parts of its
+      neighbours, and the scroll to it still took, so nothing noticed
+      (docs/09 P46). Each page is now found by its own `Page N.` element,
+      measured once it is in view, and shot and sized as itself.
+
+    * **The page's absolute offset inside the scroller.** A rectangle's `y`
+      is viewport-relative, so its difference from the viewer's is the page's
+      offset *in the current scroll state*. It was written straight to
+      `scrollTop`, a document coordinate, which is correct only when the
       viewer happened to be at the top. A viewer restored to a nonzero
       `scrollTop`, or scrolled by the user during interactive authentication,
-      shifted every page by that amount: each stitched page silently carried
-      its neighbour's whitespace and lost part of itself (docs/09 P8-45).
-      `_viewer_metrics` already reports `scrollTop`; it is now added.
+      shifted every page by that amount (docs/09 P8-45). `_page_box` adds
+      `scrollTop` back.
 
     * **The device pixel ratio.** The context is created with
       `device_scale_factor=2` and `page.screenshot` defaults to device-scale
@@ -229,129 +390,172 @@ async def _capture_portrait_viewer(
       at the scale factor this code sets itself (docs/09 P8-46). The stitch
       is a pixel operation, so it is given pixels.
 
-    * **That there are at least two pages.** A single-page letter, form or
-      report exposes one rectangle, so the spacing sample does not exist —
-      and the check for it aborted the capture rather than noticing that a
-      document with one page needs no inter-page spacing (docs/09 P8-47).
+    * **Where the viewer actually is.** Each shot is clipped from where the
+      page is measured after the scroll, not from where the scroll was asked
+      to put it (docs/09 P42), and a shot whose part of the page is not in
+      view stops the capture.
     """
-    page_rect = metrics["pages"][0]
-    viewer = metrics["viewer"]
     ratio = float(await page.evaluate("() => window.devicePixelRatio")) or 1.0
-    if metrics["pageCount"] > 1 and len(metrics["pages"]) < 2:
-        raise RuntimeError("The viewer did not expose enough pages to measure spacing")
-    # One page needs no spacing sample: nothing is ever placed at `step`.
-    step = (
-        metrics["pages"][1]["y"] - metrics["pages"][0]["y"]
-        if len(metrics["pages"]) > 1
-        else 0.0
-    )
-    # The page's own offset from the top of the scrolled content, not from the
-    # top of the viewport.
-    page_top = viewer["scrollTop"] + (page_rect["y"] - viewer["y"])
-    page_height = round(page_rect["height"] * ratio)
-    segment_height = round(viewer["height"] * ratio)
     raw = directory / "segments"
-    raw.mkdir()
+    raw.mkdir(parents=True)
 
-    async def set_scroll(value: float) -> None:
-        # `scrollTop =` obeys the viewer's `scroll-behavior`: on a smooth one
-        # it starts an animation and returns. The first scroll comes from
-        # wherever the viewer was left, so it can cross the whole document,
-        # and from the last page of a three-page one it was still moving when
-        # the first segment was shot (docs/09 P42). `instant` puts the viewer
-        # there now, and the synthetic `scroll` event follows the move rather
-        # than preceding it. The function hands back nothing, because
-        # Chromium 153's `scrollTo` returns a promise `evaluate` would wait on
-        # (docs/09 P34-5).
-        await page.evaluate(
-            """([selector, value]) => {
-                const viewer = [...document.querySelectorAll(selector)]
-                    .find(element => element.scrollHeight > element.clientHeight);
-                viewer.scrollTo({top: value, behavior: 'instant'});
-                viewer.dispatchEvent(new Event('scroll'));
-            }""",
-            [VIEWER_CONTAINER, value],
-        )
-        await page.wait_for_timeout(500)
-
-    async def scroll_to_segment(value: float) -> None:
-        """Scroll to a segment, and refuse to shoot it from anywhere else.
-
-        Every clip below assumes the viewer is at `value`, and nothing checked
-        that it was. The position is read after the wait, as the screenshot
-        will find it, so a viewer that clamps the scroll or snaps it to a
-        point inside a page is caught, and so would be one that moves itself
-        during the wait. Chromium keeps this offset in whole CSS pixels,
-        rounding a fractional target to the nearest (1104.5 reads back 1105),
-        hence half a pixel of slack (docs/09 P42-3).
-        """
-        await set_scroll(value)
-        position = float(
-            await page.evaluate(
-                """(selector) => [...document.querySelectorAll(selector)]
-                    .find(element => element.scrollHeight > element.clientHeight)
-                    .scrollTop""",
-                VIEWER_CONTAINER,
-            )
-        )
-        if abs(position - value) > 0.5:
+    async def settle(number: int, target: float) -> dict[str, Any]:
+        """Scroll to `target` and measure page `number` where the viewer is."""
+        await _scroll_viewer(page, target)
+        box = await _page_box(page, number)
+        if box is None:
             raise RuntimeError(
-                f"The viewer was scrolled to {value:g}px for a page segment but "
-                f"is at {position:g}px, so the segment would not show the part "
-                "of the page its clip assumes"
+                f"The viewer dropped page {number}'s element when it was "
+                f"scrolled to {target:g}px, inside that page"
             )
+        return box
 
-    # A page that already fits inside the viewer needs one shot, not two
-    # overlapping ones — and `stitch_segmented_pages` refuses to stitch what
-    # does not overlap, so segmenting it would fail rather than degrade. The
-    # commonest case is a single-page letter or form, which is exactly what
-    # could not be captured at all before (docs/09 P8-47).
-    segmented = page_height > segment_height
-    directory.mkdir(parents=True, exist_ok=True)
-    for page_number in range(1, metrics["pageCount"] + 1):
-        top = page_top + (page_number - 1) * step
+    async def locate(number: int, begins_after: float) -> dict[str, Any]:
+        """Find page `number`, scrolling to where it begins if it is not drawn.
+
+        `begins_after` is the bottom of the page before it, so a page the
+        viewer only draws near the view is in view from there whatever the
+        gap between pages.
+        """
+        box = await _page_box(page, number)
+        if box is None:
+            await _scroll_viewer(page, begins_after)
+            box = await _page_box(page, number)
+        if box is None:
+            raise RuntimeError(
+                f"The viewer has no `Page {number}.` element, even scrolled to "
+                f"{begins_after:g}px, where page {number} begins"
+            )
+        return box
+
+    async def shoot(
+        number: int,
+        now: dict[str, Any],
+        target: float,
+        offset: float,
+        length: float,
+        path: Path,
+    ) -> None:
+        """Shoot rows `offset` to `offset + length` of page `number`.
+
+        The clip is where `now` measured the page after the scroll to
+        `target`, not where that scroll was asked to put it, so a short last
+        page the viewer cannot scroll to its top is shot lower in the view.
+        Rows the viewer does not show cannot be shot from anywhere, and a
+        viewer that clamps the scroll, snaps it, or moves the page while it
+        draws leaves some out: that stops the capture. Chromium keeps the
+        scroll offset in whole CSS pixels while a page's offset need not be
+        one (1104.5 reads back 1105, docs/09 P42-3), hence half a pixel of
+        slack, and the clip is kept inside the viewer.
+        """
+        visible = now["viewer"]
+        y = now["y"] + offset
+        if (
+            y < visible["y"] - 0.5
+            or y + length > visible["y"] + visible["height"] + 0.5
+        ):
+            raise RuntimeError(
+                f"The viewer was scrolled to {target:g}px for a segment of page "
+                f"{number} but is at {now['scrollTop']:g}px, so the segment "
+                "would not show the part of the page its clip assumes"
+            )
+        if (
+            now["x"] < visible["x"] - 0.5
+            or now["x"] + now["width"] > visible["x"] + visible["width"] + 0.5
+        ):
+            raise RuntimeError(
+                f"Page {number} is {now['width']:g}px wide and the viewer shows "
+                f"{visible['width']:g}px, so the page cannot be shot whole"
+            )
         clip: FloatRect = {
-            "x": float(page_rect["x"]),
-            "y": float(viewer["y"]),
-            "width": float(page_rect["width"]),
-            "height": float(viewer["height"] if segmented else page_rect["height"]),
-        }
-        await scroll_to_segment(top)
-        await page.screenshot(
-            path=(
-                raw / f"page-{page_number:03d}-top.png"
-                if segmented
-                else directory / f"page-{page_number:03d}.png"
+            "x": float(now["x"]),
+            "y": float(
+                min(max(y, visible["y"]), visible["y"] + visible["height"] - length)
             ),
-            clip=clip,
-            animations="disabled",
-            caret="hide",
-        )
-        if not segmented:
+            "width": float(now["width"]),
+            "height": float(length),
+        }
+        await page.screenshot(path=path, clip=clip, animations="disabled", caret="hide")
+
+    directory.mkdir(parents=True, exist_ok=True)
+    stitch: dict[int, int] = {}
+    segment_heights: dict[int, int] = {}
+    begins_after = 0.0
+    for number in range(1, metrics["pageCount"] + 1):
+        found = await locate(number, begins_after)
+        # Measured again in view, after the wait, so a viewer that sizes a
+        # page it has not drawn yet from another page is read once it has.
+        now = await settle(number, found["top"])
+        top, height = now["top"], now["height"]
+        visible = now["viewer"]["height"]
+        page_height = round(height * ratio)
+        segment_height = round(visible * ratio)
+        segment_heights[number] = segment_height
+        begins_after = top + height
+        # A page that fits inside the viewer needs one shot, not two
+        # overlapping ones — and `stitch_segmented_pages` refuses to stitch
+        # what does not overlap, so segmenting it would fail rather than
+        # degrade. The commonest case is a single-page letter or form, which
+        # could not be captured at all once (docs/09 P8-47), and now any page
+        # of a document that fits: a landscape page among portrait ones.
+        if page_height <= segment_height:
+            await shoot(
+                number,
+                now,
+                found["top"],
+                0,
+                height,
+                directory / f"page-{number:03d}.png",
+            )
             continue
-        await scroll_to_segment(top + page_rect["height"] - viewer["height"])
-        await page.screenshot(
-            path=raw / f"page-{page_number:03d}-bottom.png",
-            clip=clip,
-            animations="disabled",
-            caret="hide",
+        await shoot(
+            number, now, found["top"], 0, visible, raw / f"page-{number:03d}-top.png"
         )
-    await set_scroll(0)
-    if segmented:
-        stitch_segmented_pages(
-            raw, directory, page_count=metrics["pageCount"], page_height=page_height
+        target = top + height - visible
+        bottom = await settle(number, target)
+        if (bottom["width"], bottom["height"]) != (now["width"], now["height"]):
+            raise RuntimeError(
+                f"Page {number} measured {now['width']:g} x {height:g}px for its "
+                f"top segment and {bottom['width']:g} x {bottom['height']:g}px "
+                "for its bottom one, so the two would not join"
+            )
+        await shoot(
+            number,
+            bottom,
+            target,
+            height - visible,
+            visible,
+            raw / f"page-{number:03d}-bottom.png",
         )
+        stitch[number] = page_height
+    await _scroll_viewer(page, 0)
+    stitch_segmented_pages(raw, directory, page_heights=stitch)
+
+    # Device pixels, read from the images written, so each number describes a
+    # file that exists.
+    images: list[dict[str, Any]] = []
+    for number in range(1, metrics["pageCount"] + 1):
+        with Image.open(directory / f"page-{number:03d}.png") as image:
+            width, height = image.size
+        overlap = segment_heights[number] * 2 - height if number in stitch else 0
+        images.append(
+            {
+                "page": number,
+                "width": width,
+                "height": height,
+                "segments": 2 if number in stitch else 1,
+                "segment_overlap": overlap,
+            }
+        )
+
     return {
         "page_count": metrics["pageCount"],
-        # Device pixels, matching the images actually written. `page_height`
-        # is the stitched output's height and `page_width` describes the same
-        # images, so reporting one in CSS pixels and one in device pixels
-        # would make the pair describe no file that exists.
-        "page_width": round(page_rect["width"] * ratio),
-        "page_height": page_height,
-        "segment_height": segment_height,
-        "segmented": segmented,
-        "segment_overlap": (segment_height * 2 - page_height) if segmented else 0,
+        "page_width": _shared([image["width"] for image in images]),
+        "page_height": _shared([image["height"] for image in images]),
+        "segment_height": _shared(list(segment_heights.values())),
+        "segmented": bool(stitch),
+        "segment_overlap": _shared([image["segment_overlap"] for image in images]),
+        "page_images": images,
         "device_pixel_ratio": ratio,
     }
 
@@ -365,8 +569,14 @@ async def capture_sharepoint_pdf_viewer(
         state="visible", timeout=120_000
     )
     metrics = await _viewer_metrics(page)
-    page_rect = metrics["pages"][0]
-    if page_rect["width"] > page_rect["height"]:
+    # Page 1 decides how the whole document is captured: the toolbar at 75%
+    # for a wide one, the scroll at the viewer's own zoom for any other. One
+    # path draws every page at one zoom, which the packed PDF's scale
+    # assumes (docs/09 P46-5), and the choice does not depend on where the
+    # reader left the viewer. Each path shoots each page as itself, and one
+    # it cannot shoot whole stops the capture (docs/09 P51).
+    first = await _first_page_box(page)
+    if first["width"] > first["height"]:
         result = await _capture_landscape_viewer(page, destination_directory, metrics)
     else:
         result = await _capture_portrait_viewer(page, destination_directory, metrics)
@@ -377,13 +587,17 @@ def stitch_segmented_pages(
     raw_directory: Path,
     destination_directory: Path,
     *,
-    page_count: int,
-    page_height: int,
+    page_heights: Mapping[int, int],
 ) -> list[Path]:
-    """Stitch overlapping top/bottom viewer screenshots without a visible seam."""
+    """Stitch overlapping top/bottom viewer screenshots without a visible seam.
+
+    `page_heights` names each page to stitch and its own height in the
+    segments' pixels. A document's pages need not share a size, so no page's
+    height or width is taken from another's (docs/09 P46).
+    """
     destination_directory.mkdir(parents=True, exist_ok=True)
     pages: list[Path] = []
-    for page_number in range(1, page_count + 1):
+    for page_number, page_height in sorted(page_heights.items()):
         label = f"{page_number:03d}"
         top_path = raw_directory / f"page-{label}-top.png"
         bottom_path = raw_directory / f"page-{label}-bottom.png"

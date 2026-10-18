@@ -22,13 +22,13 @@
   "ai_bundle": "<OUT>/form-fields.ai",
   "counts": {
     "pages": 1,
-    "items": 20,
+    "items": 21,
     "tables": 0,
     "links": 0,
-    "chunks": 17,
+    "chunks": 18,
     "visual_assets": 0,
     "ocr_words": 0,
-    "text_characters": 856,
+    "text_characters": 874,
     "failed_requests": 0
   },
   "options": {

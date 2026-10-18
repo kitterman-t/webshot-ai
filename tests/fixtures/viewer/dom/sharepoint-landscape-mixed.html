@@ -1,0 +1,154 @@
+<!doctype html>
+<!--
+  Structure-only reproduction of an authenticated SharePoint PDF viewer showing
+  a landscape deck whose slides are not all one size, with a toolbar that
+  works. Authored from the contract in webshot/protected/viewer.py — see
+  README.md in this directory. No tenant data.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Protected viewer fixture — slides of differing sizes</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px system-ui, sans-serif; background: #f3f2f1; }
+  .viewer { position: relative; height: 620px; overflow: auto; background: #605e5c; }
+  /* Each slide sets its own size at "Window size", and centres itself with a
+     margin of half its width. */
+  .page { position: absolute; left: 50%; background: #ffffff;
+          box-shadow: 0 2px 6px rgba(0,0,0,.4); transform-origin: top center; }
+  /* 75% draws every slide at three quarters of that, about its top centre.
+     The layout is left alone, so a slide stays where a script that recorded
+     its place put it (VIRTUALIZE_JS in tests/test_protected_viewer.py); a
+     viewer that laid the deck out again would move them, and the capture
+     measures each slide where it is either way. */
+  .viewer[data-zoom="75%"] .page { transform: scale(0.75); }
+  /* Bands, no two alike in the deck, as in sharepoint-portrait-mixed.html: a
+     slide shot from anywhere but its own rectangle shows in the image as a
+     band out of place, out of length, or from another slide. Each band's
+     height at 75% is a whole number of pixels. */
+  .canvas-stand-in { width: 100%; height: 100%; }
+  .pdf-toolbar { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+                 background: #201f1e; color: #ffffff; border-radius: 4px;
+                 display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+  .pdf-toolbar [role="menuitem"], .pdf-toolbar [role="menuitemcheckbox"] {
+      background: transparent; color: inherit; border: 0; padding: 4px 8px; }
+  .zoom-menu { position: fixed; bottom: 60px; left: 50%; background: #ffffff;
+               color: #201f1e; border: 1px solid #e1dfdd; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <div class="viewer" aria-label="fixture-mixed-deck.pdf" tabindex="0" data-zoom="Window size">
+    <!-- 16:9: 1408 x 792, 1056 x 594 at 75% -->
+    <div class="page" aria-label="Page 1." style="top: 24px; width: 1408px; height: 792px; margin-left: -704px">
+      <div class="canvas-stand-in">
+        <div style="height: 88px; background: rgb(250, 10, 10)"></div>
+        <div style="height: 88px; background: rgb(250, 34, 10)"></div>
+        <div style="height: 88px; background: rgb(250, 58, 10)"></div>
+        <div style="height: 88px; background: rgb(250, 82, 10)"></div>
+        <div style="height: 88px; background: rgb(250, 106, 10)"></div>
+        <div style="height: 88px; background: rgb(250, 130, 10)"></div>
+        <div style="height: 88px; background: rgb(250, 154, 10)"></div>
+        <div style="height: 88px; background: rgb(250, 178, 10)"></div>
+        <div style="height: 88px; background: rgb(250, 202, 10)"></div>
+      </div>
+    </div>
+    <!-- 4:3, narrower and shorter than slide 1: 1024 x 768, 768 x 576 at 75% -->
+    <div class="page" aria-label="Page 2." style="top: 840px; width: 1024px; height: 768px; margin-left: -512px">
+      <div class="canvas-stand-in">
+        <div style="height: 96px; background: rgb(10, 250, 10)"></div>
+        <div style="height: 96px; background: rgb(10, 250, 40)"></div>
+        <div style="height: 96px; background: rgb(10, 250, 70)"></div>
+        <div style="height: 96px; background: rgb(10, 250, 100)"></div>
+        <div style="height: 96px; background: rgb(10, 250, 130)"></div>
+        <div style="height: 96px; background: rgb(10, 250, 160)"></div>
+        <div style="height: 96px; background: rgb(10, 250, 190)"></div>
+        <div style="height: 96px; background: rgb(10, 250, 220)"></div>
+      </div>
+    </div>
+    <!-- a portrait page in the deck, taller than slide 1: 608 x 816, 456 x 612 at 75% -->
+    <div class="page" aria-label="Page 3." style="top: 1632px; width: 608px; height: 816px; margin-left: -304px">
+      <div class="canvas-stand-in">
+        <div style="height: 68px; background: rgb(10, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(28, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(46, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(64, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(82, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(100, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(118, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(136, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(154, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(172, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(190, 10, 250)"></div>
+        <div style="height: 68px; background: rgb(208, 10, 250)"></div>
+      </div>
+    </div>
+    <div style="position:absolute; top: 2448px; height: 24px; width: 1px"></div>
+  </div>
+
+  <!-- Every control below is reached by role + exact accessible name, so the
+       names are the contract; the markup around them is not. -->
+  <div class="pdf-toolbar" role="menubar" aria-label="PDF toolbar">
+    <button type="button" role="menuitem" aria-label="Go to the previous page.">&#8593;</button>
+    <input type="text" role="textbox" value="1"
+           aria-label="Enter a value between 1 and 3. Press enter to jump to that page. Press escape to exit the input control.">
+    <span aria-label="Page 1 of 3">/ 3</span>
+    <button type="button" role="menuitem" aria-label="Go to the next page.">&#8595;</button>
+    <button type="button" role="menuitem"
+            aria-label="Change the current zoom level. Press enter to open the option menu and esc to close it.">Window size</button>
+  </div>
+
+  <div class="zoom-menu" role="menu" aria-label="Zoom level">
+    <button type="button" role="menuitemcheckbox" aria-checked="false" aria-label="75%">75%</button>
+    <button type="button" role="menuitemcheckbox" aria-checked="true" aria-label="Window size">Window size</button>
+  </div>
+
+  <script>
+    // How this viewer behaves is authored, not observed (README.md): the
+    // current page is the last one to begin above the middle of the view;
+    // previous and next put that page's top at the top of the view, as far
+    // as the viewer scrolls; the zoom menu switches between the two sizes.
+    // Where each page begins is read once, here, so navigation works for a
+    // page a script has taken out of the DOM.
+    (() => {
+      const viewer = document.querySelector('.viewer');
+      const tops = [...viewer.querySelectorAll('.page')]
+        .map(page => Number.parseFloat(page.style.top));
+      const box = document.querySelector('[role="textbox"]');
+      const counter = document.querySelector('[aria-label^="Page "][aria-label*=" of "]');
+      const current = () => {
+        const middle = viewer.scrollTop + viewer.clientHeight / 2;
+        return Math.max(1, tops.filter(top => top <= middle).length);
+      };
+      const show = () => {
+        const number = current();
+        box.value = String(number);
+        counter.setAttribute('aria-label', `Page ${number} of ${tops.length}`);
+        counter.textContent = `${number} / ${tops.length}`;
+      };
+      const go = number => {
+        const target = Math.min(Math.max(number, 1), tops.length);
+        viewer.scrollTo({top: tops[target - 1], behavior: 'instant'});
+        show();
+      };
+      viewer.addEventListener('scroll', show);
+      document.querySelector('[aria-label="Go to the previous page."]')
+        .addEventListener('click', () => go(current() - 1));
+      document.querySelector('[aria-label="Go to the next page."]')
+        .addEventListener('click', () => go(current() + 1));
+      const zoomButton = document.querySelector('[aria-label^="Change the current zoom level."]');
+      for (const item of document.querySelectorAll('[role="menuitemcheckbox"]')) {
+        item.addEventListener('click', () => {
+          const level = item.getAttribute('aria-label');
+          viewer.dataset.zoom = level;
+          zoomButton.textContent = level;
+          for (const other of document.querySelectorAll('[role="menuitemcheckbox"]')) {
+            other.setAttribute('aria-checked', String(other === item));
+          }
+        });
+      }
+      show();
+    })();
+  </script>
+</body>
+</html>

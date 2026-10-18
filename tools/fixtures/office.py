@@ -81,6 +81,30 @@ The three `adjacent_blocks_*` fixtures hold quotations and definition lists
 side by side, which Python-Markdown read as one (docs/09 P63): an EPUB of two
 chapters, a Word file whose embedded mammoth style map writes them, and a zip
 of an HTML page and that Word file.
+
+`numbered_report.docx` holds Word lists numbered other than 1, 2, 3 from the
+top of each, which mammoth wrote as lists that did (docs/09 P31).
+
+`definitions_book.epub` holds definition lists with terms in a row and a
+definition after one of more than one block, which Python-Markdown read as
+paragraphs and as text inside the definition before (docs/09 P64);
+`definitions_archive.zip` holds an HTML page of the same and the book.
+
+The two `quoted_lists_*` fixtures hold lists in a quotation in a list item,
+with text or another list after them, which markdownify wrote as the item's
+own: the text ran into the list's last item, and the second list was that
+item's text or more of its items (docs/09 P74).  `quoted_lists_archive.zip`
+holds the book's chapter as an HTML page.
+
+The three `line_break_*` fixtures hold a line break (`<br>`, or Word's `w:br`)
+in each place text flows: a paragraph, bold and italic text and a link, a list
+item, a quotation, a table cell, and before text that reads as Markdown where
+a line begins; and in the places it stays what it was: a heading, and code
+(docs/09 P77).
+
+The three `bare_link_*` fixtures hold links whose text is their target — a
+file name, a path, a host, an HTML tag's name, an https address — in a
+paragraph, a heading, a list item, a table cell and code (docs/09 P75).
 """
 
 from __future__ import annotations
@@ -155,6 +179,17 @@ SENTINELS = {
     "adjacent_blocks_book.epub": "SENTINEL EPUB BLOCKS LORIS",
     "adjacent_blocks_report.docx": "SENTINEL DOCX BLOCKS MARGAY",
     "adjacent_blocks_archive.zip": "SENTINEL ZIP BLOCKS NUMBAT",
+    "numbered_report.docx": "SENTINEL DOCX NUMBERED TARSIER",
+    "definitions_book.epub": "SENTINEL EPUB TERMS SERVAL",
+    "definitions_archive.zip": "SENTINEL ZIP TERMS TARSIER",
+    "quoted_lists_book.epub": "SENTINEL EPUB QUOTED ARMADILLO",
+    "quoted_lists_archive.zip": "SENTINEL ZIP QUOTED TAPIR",
+    "line_break_report.docx": "SENTINEL DOCX LINE BREAK WALLABY",
+    "line_break_book.epub": "SENTINEL EPUB LINE BREAK XERUS",
+    "line_break_archive.zip": "SENTINEL ZIP LINE BREAK ZORILLA",
+    "bare_link_report.docx": "SENTINEL DOCX BARE LINK WALLABY",
+    "bare_link_book.epub": "SENTINEL EPUB BARE LINK XERUS",
+    "bare_link_archive.zip": "SENTINEL ZIP BARE LINK YAPOK",
 }
 
 #: Deterministic timestamp for every archive member, so regenerating a fixture
@@ -2729,7 +2764,8 @@ _WORD_WHITESPACE_CASES = {
     "leadspace": ('<w:t xml:space="preserve"> {inside}</w:t>', False, True),
     "trailspace": ('<w:t xml:space="preserve">{inside} </w:t>', True, False),
 }
-#: A link whose text is its address, which MarkItDown writes as `<address>`.
+#: A link whose text is its address, which MarkItDown wrote as `<address>`
+#: until the bridge turned that form off (docs/09 P75).
 WHITESPACE_RUN_HREF = "https://example.invalid/whitespace"
 
 
@@ -3153,6 +3189,891 @@ def write_adjacent_blocks_archive(path: Path) -> None:
         )
 
 
+# --------------------------------------------------------------------------- #
+# Word list numbers (docs/09 P31)
+# --------------------------------------------------------------------------- #
+
+
+def _numbering_level(level: int, fmt: str = "decimal", start: int | None = 1) -> str:
+    start_xml = "" if start is None else f'<w:start w:val="{start}"/>'
+    return (
+        f'<w:lvl w:ilvl="{level}">{start_xml}<w:numFmt w:val="{fmt}"/>'
+        f'<w:lvlText w:val="%{level + 1}."/><w:lvlJc w:val="left"/></w:lvl>'
+    )
+
+
+#: Each abstract list definition: its first level's format and start.  `None`
+#: is a level with no `w:start`, which Word counts from 0.
+_NUMBERED_DEFINITIONS = {
+    1: ("decimal", 3),
+    2: ("decimal", 1),
+    3: ("decimal", 1),
+    4: ("decimal", 1),
+    5: ("decimal", 1),
+    6: ("decimal", 1),
+    7: ("decimal", None),
+    8: ("decimal", 1),
+    9: ("lowerLetter", 2),
+    10: ("decimal", 5),
+    11: ("decimal", 1),
+    12: ("none", 1),
+}
+#: Each list instance (`w:num`): its definition and, where it has one, the
+#: `w:startOverride` of its first level.
+_NUMBERED_INSTANCES = {
+    1: (1, None),
+    2: (2, 4),
+    3: (3, None),
+    4: (4, None),
+    5: (4, None),
+    6: (5, None),
+    7: (6, None),
+    8: (7, None),
+    9: (8, None),
+    10: (9, None),
+    11: (10, None),
+    12: (11, None),
+    13: (12, None),
+}
+#: The document, a section a heading: each paragraph's text and the list
+#: instance numbering it, if any.  Word's numbers for each are in
+#: `NUMBERED_PAGE`, measured with Word 16.113 (docs/09 P31).
+NUMBERED_SECTIONS: list[tuple[str, list[tuple[str, int | None]]]] = [
+    ("A list that starts at three", [("Brindle", 1), ("Carrow", 1)]),
+    ("A list restarted at four", [("Dorvent", 2), ("Elkish", 2)]),
+    (
+        "A list that goes on past a paragraph",
+        [("Fennow", 3), ("Gaskel", 3), ("EQUATION", None), ("Hollin", 3)],
+    ),
+    (
+        "Two lists of one definition",
+        [("Istrel", 4), ("Jorvik", 4), ("Between them, a note.", None), ("Kelmar", 5)],
+    ),
+    ("Two lists that meet", [("Lunt", 6), ("Morrow", 6), ("Nebbit", 7), ("Orlen", 7)]),
+    ("A list counted from zero", [("Pellam", 8), ("Quist", 8)]),
+    ("A list with an empty item", [("Rusk", 9), ("", 9), ("Sorrel", 9)]),
+    ("A lettered list", [("Tamsin", 10), ("Ulbrey", 10)]),
+    ("A list its style numbers", [("Vellum", -1), ("Wexford", -1)]),
+    ("A list Word shows no numbers on", [("Yarrow", 13), ("Zennor", 13)]),
+]
+#: The heading numbered as a list, which the page shows without its number.
+NUMBERED_HEADING = ("Brackwater", 12)
+#: content.md's lists, each item as `N. text`, with Word's numbers: a lettered
+#: item by its ordinal, and the list Word shows no numbers on as the page
+#: numbers it, which the manifest says.
+NUMBERED_PAGE = [
+    ["3. Brindle", "4. Carrow"],
+    ["4. Dorvent", "5. Elkish"],
+    ["1. Fennow", "2. Gaskel"],
+    ["3. Hollin"],
+    ["1. Istrel", "2. Jorvik"],
+    ["3. Kelmar"],
+    ["1. Lunt", "2. Morrow"],
+    ["1. Nebbit", "2. Orlen"],
+    ["0. Pellam", "1. Quist"],
+    ["1. Rusk"],
+    ["3. Sorrel"],
+    ["2. Tamsin", "3. Ulbrey"],
+    ["5. Vellum", "6. Wexford"],
+    ["1. Yarrow", "2. Zennor"],
+]
+
+
+def write_numbered_report(path: Path) -> None:
+    """Word lists whose numbers mammoth does not carry.
+
+    A list starting past 1, by its definition and by an override; one going on
+    past a paragraph, one of whose paragraphs holds an equation so that the
+    document is rewritten before it is numbered (docs/09 P27); two instances
+    of one definition, which Word counts as one list; two lists that meet; a
+    definition with no start; an empty item; a lettered list; a list numbered
+    by its paragraph style; a heading numbered as a list; and a list whose
+    format is `none`.  Every word is made up.
+    """
+    abstracts = "".join(
+        f'<w:abstractNum w:abstractNumId="{number}">'
+        + (
+            '<w:lvl w:ilvl="0"><w:start w:val="5"/><w:numFmt w:val="decimal"/>'
+            '<w:pStyle w:val="ListNumber"/><w:lvlText w:val="%1."/></w:lvl>'
+            if number == 10
+            else _numbering_level(0, fmt, start)
+        )
+        + "</w:abstractNum>"
+        for number, (fmt, start) in _NUMBERED_DEFINITIONS.items()
+    )
+    instances = "".join(
+        f'<w:num w:numId="{number}"><w:abstractNumId w:val="{definition}"/>'
+        + (
+            ""
+            if override is None
+            else f'<w:lvlOverride w:ilvl="0"><w:startOverride w:val="{override}"/></w:lvlOverride>'
+        )
+        + "</w:num>"
+        for number, (definition, override) in _NUMBERED_INSTANCES.items()
+    )
+    numbering = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f'<w:numbering xmlns:w="{_OOXML["w"]}">{abstracts}{instances}</w:numbering>\n'
+    )
+    styles = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f'<w:styles xmlns:w="{_OOXML["w"]}">'
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">'
+        '<w:name w:val="Normal"/></w:style>'
+        '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>'
+        '<w:basedOn w:val="Normal"/></w:style>'
+        '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/>'
+        '<w:basedOn w:val="Normal"/></w:style>'
+        '<w:style w:type="paragraph" w:styleId="ListNumber"><w:name w:val="List Number"/>'
+        '<w:basedOn w:val="Normal"/><w:pPr><w:numPr><w:numId w:val="11"/></w:numPr>'
+        "</w:pPr></w:style></w:styles>\n"
+    )
+
+    def paragraph(text: str, instance: int | None, style: str | None = None) -> str:
+        properties = f'<w:pStyle w:val="{style}"/>' if style else ""
+        if instance is not None and instance > 0:
+            properties += (
+                f'<w:numPr><w:ilvl w:val="0"/><w:numId w:val="{instance}"/></w:numPr>'
+            )
+        if instance == -1:
+            properties += '<w:pStyle w:val="ListNumber"/>'
+        if text == "EQUATION":
+            content = (
+                _word_run("Between the steps, ")
+                + _math(_word_math_run("x") + _word_math_run("≠") + _word_math_run("y"))
+                + _word_run(".")
+            )
+        else:
+            content = _word_run(text) if text else ""
+        return f"<w:p><w:pPr>{properties}</w:pPr>{content}</w:p>"
+
+    heading, instance = NUMBERED_HEADING
+    body = (
+        paragraph("Numbered Steps", None, "Heading1")
+        + paragraph(SENTINELS["numbered_report.docx"], None)
+        + paragraph(heading, instance, "Heading1")
+        + "".join(
+            paragraph(title, None, "Heading2")
+            + "".join(paragraph(text, item) for text, item in items)
+            for title, items in NUMBERED_SECTIONS
+        )
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering"'
+        ' Target="numbering.xml"/>'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"'
+        ' Target="styles.xml"/></Relationships>\n'
+    )
+    content_types = _DOCX_CONTENT_TYPES.replace(
+        "</Types>",
+        '  <Override PartName="/word/numbering.xml" ContentType="application/'
+        'vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>\n'
+        '  <Override PartName="/word/styles.xml" ContentType="application/'
+        'vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>\n'
+        "</Types>",
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+            ("word/numbering.xml", numbering),
+            ("word/styles.xml", styles),
+        ],
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Terms in a row, and definitions after one of more than one block (docs/09 P64)
+# --------------------------------------------------------------------------- #
+
+#: A definition list as the page should hold it: each term and definition in
+#: order, by its tag and its text, a nested list's text with the definition
+#: it sits in.  Lists in the order a page has them, an outer before its inner.
+DefinitionList = list[tuple[str, str]]
+
+#: The book's definition lists, by what each section shows.  markdownify
+#: writes a blank line before every term and none before a definition, so in
+#: each of these but the last a term became a paragraph, or a definition text
+#: inside the one before it.  The words are made up.
+DEFINITIONS_BOOK_SECTIONS = {
+    "Two terms for one definition": (
+        "<dl><dt>Arvesh</dt><dt>Bolwick</dt><dd>Cendral</dd></dl>"
+    ),
+    "Three terms for a definition of two paragraphs": (
+        "<dl><dt>Dovrane</dt><dt>Elmsark</dt><dt>Fenwold</dt>"
+        "<dd><p>Garnick</p><p>Holvane</p></dd></dl>"
+    ),
+    "Two definitions of two paragraphs": (
+        "<dl><dt>Istrel</dt><dd><p>Jorvane</p><p>Kelmond</p></dd>"
+        "<dd><p>Lindrow</p><p>Morvish</p></dd></dl>"
+    ),
+    "A definition after one holding a list": (
+        "<dl><dt>Norbel</dt><dd><p>Ostrin</p><ul><li>Pelvane</li></ul></dd>"
+        "<dd>Quinlow</dd></dl>"
+    ),
+    "Two terms after a definition of two paragraphs": (
+        "<dl><dt>Rastel</dt><dd><p>Sorvin</p><p>Telmark</p></dd>"
+        "<dt>Ulvane</dt><dt>Varnow</dt><dd>Wendrel</dd></dl>"
+    ),
+    "Terms in a quotation": (
+        "<blockquote><dl><dt>Yarrel</dt><dt>Zelkin</dt><dd>Ambrel</dd></dl>"
+        "</blockquote>"
+    ),
+    "A definition list in a definition": (
+        "<dl><dt>Brisvel</dt><dd><p>Corvane</p><dl><dt>Dellow</dt>"
+        "<dt>Emberwick</dt><dd>Falstan</dd></dl></dd><dd>Gorwin</dd></dl>"
+    ),
+    "Terms in a list item": (
+        "<ul><li>Harnel<dl><dt>Ivorne</dt><dt>Jessep</dt><dd>Kettrel</dd></dl>"
+        "</li></ul>"
+    ),
+    "A term on its own, as before": (
+        "<dl><dt>Lumbrel</dt><dd>Mavish</dd><dt>Nolwen</dt><dd>Orvane</dd></dl>"
+    ),
+}
+
+#: `DEFINITIONS_BOOK_SECTIONS`' definition lists as the page holds them.
+DEFINITIONS_BOOK_PAGE: list[DefinitionList] = [
+    [("dt", "Arvesh"), ("dt", "Bolwick"), ("dd", "Cendral")],
+    [
+        ("dt", "Dovrane"),
+        ("dt", "Elmsark"),
+        ("dt", "Fenwold"),
+        ("dd", "Garnick Holvane"),
+    ],
+    [("dt", "Istrel"), ("dd", "Jorvane Kelmond"), ("dd", "Lindrow Morvish")],
+    [("dt", "Norbel"), ("dd", "Ostrin Pelvane"), ("dd", "Quinlow")],
+    [
+        ("dt", "Rastel"),
+        ("dd", "Sorvin Telmark"),
+        ("dt", "Ulvane"),
+        ("dt", "Varnow"),
+        ("dd", "Wendrel"),
+    ],
+    [("dt", "Yarrel"), ("dt", "Zelkin"), ("dd", "Ambrel")],
+    [
+        ("dt", "Brisvel"),
+        ("dd", "Corvane Dellow Emberwick Falstan"),
+        ("dd", "Gorwin"),
+    ],
+    [("dt", "Dellow"), ("dt", "Emberwick"), ("dd", "Falstan")],
+    [("dt", "Ivorne"), ("dt", "Jessep"), ("dd", "Kettrel")],
+    [("dt", "Lumbrel"), ("dd", "Mavish"), ("dt", "Nolwen"), ("dd", "Orvane")],
+]
+
+
+def write_definitions_book(path: Path) -> None:
+    sections = "".join(
+        f"<h2>{heading}</h2>{lists}"
+        for heading, lists in DEFINITIONS_BOOK_SECTIONS.items()
+    )
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Terms</title></head>
+<body>
+  <h1>Terms and Their Definitions</h1>
+  <p>{SENTINELS["definitions_book.epub"]}</p>
+  {sections}
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", _EPUB_OPF),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+#: An HTML page in the archive: a zip member is read by the same writer.
+_DEFINITIONS_MEMBER_PAGE = f"""<!DOCTYPE html>
+<html><head><title>Glossary</title></head>
+<body>
+  <p>{SENTINELS["definitions_archive.zip"]}</p>
+  <dl>
+    <dt>Pardrel</dt>
+    <dt>Quessick</dt>
+    <dd><p>Rombert</p><p>Sallow</p></dd>
+    <dd><p>Tamwick</p><p>Undrel</p></dd>
+  </dl>
+</body></html>
+"""
+
+#: What the archive's page holds: its own page's list, then the book's.
+DEFINITIONS_ARCHIVE_PAGE: list[DefinitionList] = [
+    [
+        ("dt", "Pardrel"),
+        ("dt", "Quessick"),
+        ("dd", "Rombert Sallow"),
+        ("dd", "Tamwick Undrel"),
+    ],
+    *DEFINITIONS_BOOK_PAGE,
+]
+
+
+def write_definitions_archive(path: Path) -> None:
+    """An HTML page with a definition list, and the definitions book as it is."""
+    with tempfile.TemporaryDirectory() as scratch:
+        book = Path(scratch) / "definitions_book.epub"
+        write_definitions_book(book)
+        _write_archive(
+            path,
+            [
+                ("notes/glossary.html", _DEFINITIONS_MEMBER_PAGE),
+                ("books/definitions_book.epub", book.read_bytes()),
+            ],
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Lists in a quotation in a list item (docs/09 P74)
+# --------------------------------------------------------------------------- #
+
+#: The book's lists, by what each section shows.  markdownify wrote a list in a
+#: quotation in an item as the item's own, with no blank line after it, so
+#: every section but the last lost its shape on the page.  The last, with no
+#: item around its quotation, was always right.  The words are made up.
+QUOTED_LISTS_SECTIONS = {
+    "Text after the list": (
+        "<ul><li>Astrel<blockquote><ul><li>Brimmock</li></ul>"
+        "and Caddrel after it</blockquote></li><li>Dovrel</li></ul>"
+    ),
+    "A bulleted list, then a numbered one": (
+        "<ul><li>Ellwick<blockquote><ul><li>Fennow</li></ul>"
+        "<ol><li>Gorrin</li></ol></blockquote></li></ul>"
+    ),
+    "Two numbered lists": (
+        "<ol><li>Hastrin<blockquote><ol><li>Ilvane</li></ol>"
+        "<ol><li>Jessock</li></ol></blockquote></li><li>Kendrow</li></ol>"
+    ),
+    "Two bulleted lists": (
+        "<ul><li>Ludrel<blockquote><ul><li>Mosket</li></ul>"
+        "<ul><li>Nestrow</li></ul></blockquote></li></ul>"
+    ),
+    "Under a number of two digits": (
+        '<ol start="10"><li>Fendrel<blockquote><ol><li>Garvish</li></ol>'
+        "<ol><li>Holdrin</li></ol></blockquote></li></ol>"
+    ),
+    "In an item two lists deep": (
+        "<ul><li>Orvel<ol><li>Pandrish<blockquote><ol><li>Quessel</li></ol>"
+        "and Rostwick after it</blockquote></li></ol></li></ul>"
+    ),
+    "In an item three lists deep": (
+        "<ol><li>Sarvel<ul><li>Tobrin<ol><li>Ulvesk<blockquote>"
+        "<ul><li>Vandrel</li></ul><ol><li>Wessock</li></ol>"
+        "</blockquote></li></ol></li></ul></li></ol>"
+    ),
+    "A quotation in a quotation": (
+        "<ul><li>Yarrel<blockquote><blockquote><ul><li>Zendish</li></ul>"
+        "and Abrovel after it</blockquote></blockquote></li></ul>"
+    ),
+    "A list nested in the quotation's list": (
+        "<ul><li>Bellock<blockquote><ul><li>Corvash<ol><li>Delvish</li></ol>"
+        "</li></ul>and Erdwick after it</blockquote></li></ul>"
+    ),
+    "No item around the quotation": (
+        "<blockquote><ul><li>Istow</li></ul>and Jarvel after it</blockquote>"
+    ),
+}
+
+
+def _quoted_lists_body(sentinel: str) -> str:
+    sections = "".join(
+        f"<h2>{heading}</h2>{lists}" for heading, lists in QUOTED_LISTS_SECTIONS.items()
+    )
+    return f"<h1>Lists Within Quotations</h1><p>{sentinel}</p>{sections}"
+
+
+def write_quoted_lists_book(path: Path) -> None:
+    body = _quoted_lists_body(SENTINELS["quoted_lists_book.epub"])
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Quoted</title></head>
+<body>{body}</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", _EPUB_OPF),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+def write_quoted_lists_archive(path: Path) -> None:
+    """The book's chapter as an HTML page: a zip member is read by the same
+    writer, without the book's reader around it."""
+    body = _quoted_lists_body(SENTINELS["quoted_lists_archive.zip"])
+    page = (
+        "<!DOCTYPE html>\n<html><head><title>Quoted</title></head>"
+        f"<body>{body}</body></html>\n"
+    )
+    _write_archive(path, [("notes/quoted.html", page)])
+
+
+# --------------------------------------------------------------------------- #
+# Line breaks — a `<br>`, or Word's `w:br`, in each place text flows (P77)
+# --------------------------------------------------------------------------- #
+
+#: The made-up endings of a case's words: its label, then one of these.
+_LINE_BREAK_ENDINGS = ("brom", "drel", "fisk", "gorv", "hult")
+#: Where the Word fixture's link points; `.invalid` never resolves.
+LINE_BREAK_HREF = "https://example.invalid/break"
+
+#: Each case as HTML, for a book or a page: its markup, with `{0}` and on for
+#: its words, and the lines the page shows, top to bottom.  A line the
+#: document leaves empty is not listed: what is checked is which words share
+#: a line and which a line break parts.  Two `<br>`s in a paragraph are the
+#: paragraph break they were; `runbold`'s is one docling drops otherwise.
+_LINE_BREAK_HTML = {
+    "para": ("<p>{0}<br/>{1}</p>", ("{0}", "{1}")),
+    "pretty": ("<p>{0}<br/>\n    {1}</p>", ("{0}", "{1}")),
+    "double": ("<p>{0}<br/><br/>{1}</p>", ("{0}", "{1}")),
+    "runbold": ("<p>{0}<br/><br/><strong>{1}</strong> {2}</p>", ("{0}", "{1} {2}")),
+    "lead": ("<p><br/>{0} {1}</p>", ("{0} {1}",)),
+    "trail": ("<p>{0} {1}<br/></p>", ("{0} {1}",)),
+    "only": ("<p>{0}</p><p><br/></p><p>{1}</p>", ("{0}", "{1}")),
+    "bold": ("<p>{0} <strong>{1}<br/>{2}</strong> {3}</p>", ("{0} {1}", "{2} {3}")),
+    "boldrun": (
+        "<p>{0} <strong>{1}<br/><br/>{2}</strong> {3}</p>",
+        ("{0} {1}", "{2} {3}"),
+    ),
+    "boldtrail": ("<p>{0} <strong>{1}<br/></strong>{2}</p>", ("{0} {1}", "{2}")),
+    "boldlead": ("<p>{0}<strong><br/>{1}</strong> {2}</p>", ("{0}", "{1} {2}")),
+    "boldalone": ("<p>{0}<strong><br/></strong>{1}</p>", ("{0}", "{1}")),
+    "italic": ("<p>{0} <em>{1}<br/>{2}</em> {3}</p>", ("{0} {1}", "{2} {3}")),
+    "link": (
+        f'<p>{{0}} <a href="{LINE_BREAK_HREF}">{{1}}<br/>{{2}}</a> {{3}}</p>',
+        ("{0} {1}", "{2} {3}"),
+    ),
+    "item": (
+        "<ul><li>{0}<br/>{1}</li><li>{2}<br/><br/>{3}</li><li>{4}</li></ul>",
+        ("{0}", "{1}", "{2}", "{3}", "{4}"),
+    ),
+    "numbered": ("<ol><li>{0}<br/>{1}</li><li>{2}</li></ol>", ("{0}", "{1}", "{2}")),
+    "quote": ("<blockquote><p>{0}<br/>{1}</p></blockquote>", ("{0}", "{1}")),
+    "cell": (
+        "<table><tr><th>{0}<br/>{1}</th></tr><tr><td>{2}<br/>{3}</td></tr></table>",
+        ("{0}", "{1}", "{2}", "{3}"),
+    ),
+    "openers": (
+        "<p>{0}<br/>- {1}<br/>3. {2}<br/># {3}</p>",
+        ("{0}", "- {1}", "3. {2}", "# {3}"),
+    ),
+    # A heading's stays a space, which the PDF's bookmarks would read run
+    # together; a `<pre>`'s a newline, which the capture's print CSS draws;
+    # and inline code's a space, as every line break in inline code is, which
+    # is written on one line so that none of its lines can open a block
+    # (docs/09 P59).
+    "heading": ("<h2>{0}<br/>{1}</h2>", ("{0} {1}",)),
+    "code": ("<p>{0} <code>{1}<br/>{2}</code> {3}</p>", ("{0} {1} {2} {3}",)),
+    "block": ("<pre>{0}<br/>{1}</pre>", ("{0}", "{1}")),
+}
+
+
+def _word_text(text: str) -> str:
+    return f'<w:t xml:space="preserve">{text}</w:t>'
+
+
+def _word_formatted(properties: str, content: str) -> str:
+    return f"<w:r><w:rPr>{properties}</w:rPr>{content}</w:r>"
+
+
+_WORD_BREAK = "<w:br/>"
+
+#: The same, as Word holds them: `w:br` in a run, which mammoth writes as
+#: `<br />`.  Word has no list without a numbering part, and no quotation.
+_LINE_BREAK_WORD = {
+    "para": (
+        f"<w:p>{_word_run('{0}')}<w:r>{_WORD_BREAK}</w:r>{_word_run('{1}')}</w:p>",
+        ("{0}", "{1}"),
+    ),
+    "inrun": (
+        f"<w:p><w:r>{_word_text('{0}')}{_WORD_BREAK}{_word_text('{1}')}</w:r></w:p>",
+        ("{0}", "{1}"),
+    ),
+    "double": (
+        f"<w:p><w:r>{_word_text('{0}')}{_WORD_BREAK * 2}{_word_text('{1}')}</w:r></w:p>",
+        ("{0}", "{1}"),
+    ),
+    "runbold": (
+        f"<w:p><w:r>{_word_text('{0}')}{_WORD_BREAK * 2}</w:r>"
+        + _word_formatted("<w:b/>", _word_text("{1}"))
+        + f"{_word_run(' {2}')}</w:p>",
+        ("{0}", "{1} {2}"),
+    ),
+    "lead": (
+        f"<w:p><w:r>{_WORD_BREAK}{_word_text('{0} {1}')}</w:r></w:p>",
+        ("{0} {1}",),
+    ),
+    "trail": (
+        f"<w:p><w:r>{_word_text('{0} {1}')}{_WORD_BREAK}</w:r></w:p>",
+        ("{0} {1}",),
+    ),
+    "only": (
+        f"<w:p>{_word_run('{0}')}</w:p><w:p><w:r>{_WORD_BREAK}</w:r></w:p>"
+        f"<w:p>{_word_run('{1}')}</w:p>",
+        ("{0}", "{1}"),
+    ),
+    "bold": (
+        f"<w:p>{_word_run('{0} ')}"
+        + _word_formatted("<w:b/>", _word_text("{1}") + _WORD_BREAK + _word_text("{2}"))
+        + f"{_word_run(' {3}')}</w:p>",
+        ("{0} {1}", "{2} {3}"),
+    ),
+    "boldrun": (
+        f"<w:p>{_word_run('{0} ')}"
+        + _word_formatted(
+            "<w:b/>", _word_text("{1}") + _WORD_BREAK * 2 + _word_text("{2}")
+        )
+        + f"{_word_run(' {3}')}</w:p>",
+        ("{0} {1}", "{2} {3}"),
+    ),
+    "boldtrail": (
+        f"<w:p>{_word_run('{0} ')}"
+        + _word_formatted("<w:b/>", _word_text("{1}") + _WORD_BREAK)
+        + f"{_word_run('{2}')}</w:p>",
+        ("{0} {1}", "{2}"),
+    ),
+    "boldlead": (
+        f"<w:p>{_word_run('{0}')}"
+        + _word_formatted("<w:b/>", _WORD_BREAK + _word_text("{1}"))
+        + f"{_word_run(' {2}')}</w:p>",
+        ("{0}", "{1} {2}"),
+    ),
+    "boldalone": (
+        f"<w:p>{_word_run('{0}')}"
+        + _word_formatted("<w:b/>", _WORD_BREAK)
+        + f"{_word_run('{1}')}</w:p>",
+        ("{0}", "{1}"),
+    ),
+    "italic": (
+        f"<w:p>{_word_run('{0} ')}"
+        + _word_formatted("<w:i/>", _word_text("{1}") + _WORD_BREAK + _word_text("{2}"))
+        + f"{_word_run(' {3}')}</w:p>",
+        ("{0} {1}", "{2} {3}"),
+    ),
+    "link": (
+        f"<w:p>{_word_run('{0} ')}"
+        '<w:hyperlink r:id="rId2"><w:r>'
+        + _word_text("{1}")
+        + _WORD_BREAK
+        + _word_text("{2}")
+        + f"</w:r></w:hyperlink>{_word_run(' {3}')}</w:p>",
+        ("{0} {1}", "{2} {3}"),
+    ),
+    "cell": (
+        "<w:tbl><w:tblPr/>"
+        + "".join(
+            f"<w:tr><w:tc><w:tcPr/><w:p><w:r>{_word_text(first)}{_WORD_BREAK}"
+            f"{_word_text(second)}</w:r></w:p></w:tc></w:tr>"
+            for first, second in (("{0}", "{1}"), ("{2}", "{3}"))
+        )
+        + "</w:tbl>",
+        ("{0}", "{1}", "{2}", "{3}"),
+    ),
+    "openers": (
+        "<w:p><w:r>"
+        + _WORD_BREAK.join(
+            _word_text(text) for text in ("{0}", "- {1}", "3. {2}", "# {3}")
+        )
+        + "</w:r></w:p>",
+        ("{0}", "- {1}", "3. {2}", "# {3}"),
+    ),
+    "heading": (
+        '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r>'
+        f"{_word_text('{0}')}{_WORD_BREAK}{_word_text('{1}')}</w:r></w:p>",
+        ("{0} {1}",),
+    ),
+}
+
+
+@dataclass(frozen=True)
+class LineBreakCase:
+    """One case of a `line_break_*` fixture: markup with line breaks in it,
+    and the lines the page shows, each as its words."""
+
+    label: str
+    markup: str
+    lines: tuple[tuple[str, ...], ...]
+
+    @property
+    def words(self) -> tuple[str, ...]:
+        """The case's made-up words, in order: what content.md must keep apart."""
+        return tuple(
+            word for line in self.lines for word in line if word.startswith(self.label)
+        )
+
+
+def line_break_cases(name: str) -> list[LineBreakCase]:
+    """The cases of the `line_break_*` fixture called `name`."""
+    table = _LINE_BREAK_WORD if name.endswith(".docx") else _LINE_BREAK_HTML
+    cases = []
+    for label, (markup, lines) in table.items():
+        words = [f"{label}{ending}" for ending in _LINE_BREAK_ENDINGS]
+        cases.append(
+            LineBreakCase(
+                label,
+                markup.format(*words),
+                tuple(tuple(line.format(*words).split()) for line in lines),
+            )
+        )
+    return cases
+
+
+def write_line_break_report(path: Path) -> None:
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"'
+        f' Target="{LINE_BREAK_HREF}" TargetMode="External"/></Relationships>\n'
+    )
+    body = _docx_paragraph(SENTINELS["line_break_report.docx"]) + "".join(
+        case.markup for case in line_break_cases("line_break_report.docx")
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", _DOCX_CONTENT_TYPES),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+        ],
+    )
+
+
+def _line_break_html(name: str) -> str:
+    return "\n".join(f"  {case.markup}" for case in line_break_cases(name))
+
+
+def write_line_break_book(path: Path) -> None:
+    opf = _EPUB_OPF.replace("webshot-office-fixture", "webshot-line-break-fixture")
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head>
+<body>
+  <p>{SENTINELS["line_break_book.epub"]}</p>
+{_line_break_html("line_break_book.epub")}
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", opf),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+def write_line_break_archive(path: Path) -> None:
+    """An HTML page in a zip, as `write_edge_space_archive` explains."""
+    page = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Line breaks</title></head>
+<body>
+  <p>{SENTINELS["line_break_archive.zip"]}</p>
+{_line_break_html("line_break_archive.zip")}
+</body></html>
+"""
+    _write_archive(path, [("pages/line-breaks.html", page)])
+
+
+# --------------------------------------------------------------------------- #
+# Bare links — a link whose text is its target (docs/09 P75)
+# --------------------------------------------------------------------------- #
+
+#: Targets a link's text repeats, by a made-up label.  markdownify wrote each
+#: as `<target>`, which Python-Markdown links only for http, https and ftp; it
+#: read the rest as an HTML tag, which nh3 dropped with the text, or kept and
+#: let run on.  The https target is the control, whose page did not change.
+#: The tag names come last: `script` and the rest took what followed them.
+BARE_LINK_TARGETS = {
+    "pdf": "quillmoss.pdf",
+    "xhtml": "chapter-vornet.xhtml",
+    "folder": "notes/brindlow.txt",
+    "root": "/sorvane/index.html",
+    "host": "//example.invalid/fenwold",
+    "query": "?glimt=1",
+    "www": "www.example.invalid",
+    "file": "file:///tmp/tarnby.pdf",
+    "https": "https://example.invalid/marrowby",
+    "em": "em",
+    "br": "br",
+    "strong": "strong",
+    "a": "a",
+    "img": "img",
+    "li": "li",
+    "pre": "pre",
+    "table": "table",
+    "title": "title",
+    "textarea": "textarea",
+    "style": "style",
+    "script": "script",
+}
+#: Where a book or a page puts a link besides a paragraph, and which target it
+#: links there.  A link in code is written as its text: a code span holds none.
+_BARE_LINK_PLACES = (
+    ("heading", "pdf"),
+    ("item", "pdf"),
+    ("cell", "pdf"),
+    ("code", "pdf"),
+    ("code", "https"),
+    ("kbd", "em"),
+    ("samp", "folder"),
+)
+#: Word has no heading, list or code here without a style map: a table cell.
+_WORD_BARE_LINK_PLACES = (("cell", "pdf"),)
+_BARE_LINK_HTML = {
+    "para": "<p>{0} {1} {2}</p>",
+    "heading": "<h2>{0} {1} {2}</h2>",
+    "item": "<ul><li>{0} {1} {2}</li></ul>",
+    "cell": "<table><tr><td>{0} {1} {2}</td></tr></table>",
+    "code": "<p>{0} <code>{1}</code> {2}</p>",
+    "kbd": "<p>{0} <kbd>{1}</kbd> {2}</p>",
+    "samp": "<p>{0} <samp>{1}</samp> {2}</p>",
+}
+
+
+@dataclass(frozen=True)
+class BareLinkLine:
+    """One block of a `bare_link_*` fixture: a made-up word, a link whose text
+    is its target, and another made-up word, in the block `where` names."""
+
+    label: str
+    target: str
+    where: str
+
+    @property
+    def words(self) -> tuple[str, str, str]:
+        stem = f"{self.label}{self.where}"
+        return (f"{stem}prior", self.target, f"{stem}next")
+
+    @property
+    def text(self) -> str:
+        """The block as the page must read it."""
+        return " ".join(self.words)
+
+
+def bare_link_lines(name: str) -> list[BareLinkLine]:
+    """The blocks of the `bare_link_*` fixture called `name`: each place, then
+    a paragraph for every target."""
+    places = _WORD_BARE_LINK_PLACES if name.endswith(".docx") else _BARE_LINK_PLACES
+    return [
+        BareLinkLine(label, BARE_LINK_TARGETS[label], where) for where, label in places
+    ] + [
+        BareLinkLine(label, target, "para")
+        for label, target in BARE_LINK_TARGETS.items()
+    ]
+
+
+def write_bare_link_report(path: Path) -> None:
+    lines = bare_link_lines("bare_link_report.docx")
+    ids = {
+        target: f"rId{index}"
+        for index, target in enumerate(dict.fromkeys(line.target for line in lines), 2)
+    }
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + "".join(
+            f'<Relationship Id="{rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"'
+            f' Target="{target}" TargetMode="External"/>'
+            for target, rid in ids.items()
+        )
+        + "</Relationships>\n"
+    )
+
+    def block(line: BareLinkLine) -> str:
+        prior, target, following = line.words
+        link = f'<w:hyperlink r:id="{ids[target]}">{_word_run(target)}</w:hyperlink>'
+        paragraph = (
+            f"<w:p>{_word_run(prior + ' ')}{link}{_word_run(' ' + following)}</w:p>"
+        )
+        if line.where == "cell":
+            return f"<w:tbl><w:tblPr/><w:tr><w:tc><w:tcPr/>{paragraph}</w:tc></w:tr></w:tbl>"
+        return paragraph
+
+    body = _docx_paragraph(SENTINELS["bare_link_report.docx"]) + "".join(
+        map(block, lines)
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", _DOCX_CONTENT_TYPES),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+            ("word/_rels/document.xml.rels", relationships),
+        ],
+    )
+
+
+def _bare_link_html(name: str) -> str:
+    return "\n".join(
+        "  "
+        + _BARE_LINK_HTML[line.where].format(
+            line.words[0],
+            f'<a href="{line.target}">{line.target}</a>',
+            line.words[2],
+        )
+        for line in bare_link_lines(name)
+    )
+
+
+def write_bare_link_book(path: Path) -> None:
+    opf = _EPUB_OPF.replace("webshot-office-fixture", "webshot-bare-link-fixture")
+    chapter = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head>
+<body>
+  <p>{SENTINELS["bare_link_book.epub"]}</p>
+{_bare_link_html("bare_link_book.epub")}
+</body></html>
+"""
+    _write_archive(
+        path,
+        [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", _EPUB_CONTAINER),
+            ("OEBPS/content.opf", opf),
+            ("OEBPS/chapter.xhtml", chapter),
+        ],
+        first_stored=True,
+    )
+
+
+def write_bare_link_archive(path: Path) -> None:
+    """An HTML page in a zip, as `write_edge_space_archive` explains."""
+    page = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Bare links</title></head>
+<body>
+  <p>{SENTINELS["bare_link_archive.zip"]}</p>
+{_bare_link_html("bare_link_archive.zip")}
+</body></html>
+"""
+    _write_archive(path, [("pages/bare-links.html", page)])
+
+
 WRITERS = {
     "sample_report.docx": write_docx,
     "sample_deck.pptx": write_pptx,
@@ -3198,6 +4119,17 @@ WRITERS = {
     "adjacent_blocks_book.epub": write_adjacent_blocks_book,
     "adjacent_blocks_report.docx": write_adjacent_blocks_report,
     "adjacent_blocks_archive.zip": write_adjacent_blocks_archive,
+    "numbered_report.docx": write_numbered_report,
+    "definitions_book.epub": write_definitions_book,
+    "definitions_archive.zip": write_definitions_archive,
+    "quoted_lists_book.epub": write_quoted_lists_book,
+    "quoted_lists_archive.zip": write_quoted_lists_archive,
+    "line_break_report.docx": write_line_break_report,
+    "line_break_book.epub": write_line_break_book,
+    "line_break_archive.zip": write_line_break_archive,
+    "bare_link_report.docx": write_bare_link_report,
+    "bare_link_book.epub": write_bare_link_book,
+    "bare_link_archive.zip": write_bare_link_archive,
 }
 
 

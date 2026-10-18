@@ -39,6 +39,7 @@ from ..capture.session import devtools
 from ..capture.snapshot import (
     _accessibility_snapshot,
     extract_semantic_content,
+    line_number_warnings,
     unread_text_warnings,
     with_frame_content,
 )
@@ -322,6 +323,7 @@ async def create_ai_bundle(
             chrome_pictured=extraction.chrome_pictured_asset_ids,
         )
     )
+    warnings.extend(line_number_warnings(extracted))
     if accessibility_warning:
         warnings.append(accessibility_warning)
     warnings.extend(extraction.warnings)

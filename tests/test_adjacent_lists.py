@@ -117,9 +117,7 @@ MERGED = [
     ("empty-div", _ol("Alpha") + "<div></div>" + _ol("Bravo"), None),
     ("empty-paragraph", _ol("Alpha") + "<p></p>" + _ol("Bravo"), None),
     ("comment", _ol("Alpha") + "<!-- c -->" + _ol("Bravo"), None),
-    ("line-break", _ol("Alpha") + "<br/>" + _ol("Bravo"), None),
     ("no-break-space", _ol("Alpha") + "<p>\u00a0</p>" + _ol("Bravo"), None),
-    ("break-in-paragraph", _ol("Alpha") + "<p><br/></p>" + _ol("Bravo"), None),
     ("empty-anchor", _ol("Alpha") + '<a id="x"></a>' + _ol("Bravo"), None),
     ("empty-list", _ol("Alpha") + "<ol></ol>" + _ol("Bravo"), None),
     # markdownify writes an empty item as nothing, so the list between is gone.
@@ -169,6 +167,27 @@ def test_the_separator_shows_nothing(case: str) -> None:
         .markdown
     )
     assert re.sub(r"<[^>]+>|\s", "", page) == re.sub(r"<[^>]+>|\s", "", upstream)
+
+
+#: A `<br>` between two lists.  markdownify's line break wrote nothing a
+#: Markdown block could hold, so the two met; the bridge's is a `<br>`, which
+#: is a block of its own between them, as a browser draws it (docs/09 P77).
+BROKEN_BETWEEN = [
+    ("line-break", _ol("Alpha") + "<br/>" + _ol("Bravo")),
+    ("break-in-paragraph", _ol("Alpha") + "<p><br/></p>" + _ol("Bravo")),
+]
+
+
+@pytest.mark.parametrize(
+    "body", [body for _, body in BROKEN_BETWEEN], ids=[c for c, _ in BROKEN_BETWEEN]
+)
+def test_a_line_break_between_two_lists_stands_between_them(body: str) -> None:
+    converted = _converted(body)
+    assert LIST_SEPARATOR not in converted, converted
+    page = _render(converted)
+    assert _lists(page) == [("ol", ["Alpha"]), ("ol", ["Bravo"])], page
+    assert not re.search(r"<li>\s*<p>", page), page
+    assert re.search(r"</ol>\s*<p><br>\s*</p>\s*<ol>", page), page
 
 
 #: Lists that never met: written exactly as MarkItDown writes them.
