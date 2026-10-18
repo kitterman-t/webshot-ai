@@ -5,7 +5,7 @@ which formats it accepts, how big they may be, how the resulting page is
 titled and styled — is decided in `adapters.py`; this file's whole job is to
 hand MarkItDown a stream with an explicit type hint and hand back a string.
 
-Eleven behaviors of MarkItDown are corrected here rather than inherited, because
+Twelve behaviors of MarkItDown are corrected here rather than inherited, because
 each damages content WebShot promises to preserve (docs/09 P3-1):
 
 1. **TSV is not a format MarkItDown knows.**  Its CSV converter is
@@ -102,6 +102,14 @@ each damages content WebShot promises to preserve (docs/09 P3-1):
     line, so `one<br/>two` and a Word file's manual line breaks reached the page
     as one line.  The writer writes `<br>` itself where text flows (docs/09
     P77).
+12. **It reads an HTML file's line endings as text.**  An HTML parser reads
+    `\\r\\n` and a lone `\\r` as `\\n` before anything else, so a page is
+    the same page whichever line endings it was saved with; Python's
+    `html.parser` does not, and markdownify kept each `\\r`.  The same file
+    saved with Windows line endings gave other code than with Unix ones: a
+    `<pre>`'s blank first and last lines stayed, and a `\\r` left before a
+    `\\r\\n` was a line break inside an item but nothing outside it.  The
+    reader takes the line endings as a browser does (docs/09 P92).
 
 MarkItDown itself parses XML through `defusedxml` (its RSS and EPUB
 converters), which is *not* what spec §6.6 rests on: the adapter defuses every
@@ -135,6 +143,7 @@ from urllib.parse import quote, unquote, urlsplit
 from xml.etree.ElementTree import Element
 
 from bs4 import BeautifulSoup, Comment, Doctype, NavigableString, Tag
+from bs4.builder._htmlparser import HTMLParserTreeBuilder
 from markitdown import (
     DocumentConverterResult,
     FileConversionException,
@@ -1641,19 +1650,42 @@ def _number_word_lists(soup: BeautifulSoup, numbers: ooxml.WordListNumbers) -> N
     numbers.applied = True
 
 
+class _HtmlLineEndings(HTMLParserTreeBuilder):
+    """BeautifulSoup's `html.parser` reader, reading line endings as HTML does.
+
+    An HTML parser turns each `\\r\\n`, and each `\\r` alone, into `\\n` before
+    it reads anything else (the input stream's preprocessing), so one file
+    saved with Windows line endings and one saved with Unix ones are the same
+    page.  `html.parser` keeps every `\\r`, and markdownify kept them in the
+    Markdown: a `<pre>`'s blank first and last lines survived its trim, and a
+    `\\r` left before a `\\r\\n` was a line break in an item's code and none
+    outside a list (docs/09 P92).  The text is decoded exactly as before and
+    its line endings are then the browser's; a `&#13;` is a reference, read
+    after this, and stays the character it names, as it does in a browser.
+    """
+
+    def prepare_markup(
+        self, markup: Any, *args: Any, **kwargs: Any
+    ) -> Iterable[tuple[str, str | None, str | None, bool]]:
+        for text, *rest in super().prepare_markup(markup, *args, **kwargs):
+            yield (_LINE_BREAK_RE.sub("\n", text), *rest)  # type: ignore[misc]
+
+
 class _TextHtmlConverter(HtmlConverter):
     """MarkItDown's HTML reader, writing through `_TextMarkdownify`.
 
     `convert` is MarkItDown 0.1.8's `HtmlConverter.convert`, because upstream
     names its writer inside that method rather than taking it as a parameter;
     `test_the_text_html_converter_is_upstreams_on_plain_text` holds the copy to
-    the original.  It differs in six places: a Word file's lists are numbered
-    as Word numbers them, when the Word reader hands over their numbers as
-    `word_lists` (docs/09 P31); pictures are drawn from their own bytes or said
-    to be missing (docs/09 P36), the attributes markdownify writes are made
-    safe, the writer is `_TextMarkdownify`, the text the too-deeply-nested
-    fallback returns is encoded, where upstream writes it into Markdown raw,
-    and two lists, quotations or definition lists that meet are kept apart.
+    the original.  It differs in seven places: the file's line endings are
+    read as a browser reads them (`_HtmlLineEndings`, docs/09 P92), a Word
+    file's lists are numbered as Word numbers them, when the Word reader hands
+    over their numbers as `word_lists` (docs/09 P31); pictures are drawn from
+    their own bytes or said to be missing (docs/09 P36), the attributes
+    markdownify writes are made safe, the writer is `_TextMarkdownify`, the
+    text the too-deeply-nested fallback returns is encoded, where upstream
+    writes it into Markdown raw, and two lists, quotations or definition lists
+    that meet are kept apart.
 
     `list_seams` is for a reader that joins several documents' Markdown, as
     EPUB joins its chapters: their lists are left marked, and it resolves them
@@ -1674,7 +1706,9 @@ class _TextHtmlConverter(HtmlConverter):
         strict: bool = kwargs.pop("strict", False)
         word_lists: ooxml.WordListNumbers | None = kwargs.pop("word_lists", None)
         encoding = "utf-8" if stream_info.charset is None else stream_info.charset
-        soup = BeautifulSoup(file_stream, "html.parser", from_encoding=encoding)
+        soup = BeautifulSoup(
+            file_stream, builder=_HtmlLineEndings(), from_encoding=encoding
+        )
         for script in soup(["script", "style"]):
             script.extract()
         # First, while the lists are as mammoth wrote them and every mark is

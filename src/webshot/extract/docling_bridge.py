@@ -76,6 +76,12 @@ versions rather than assumed (docs/09 S3 and the Phase 2 corrections):
   text was dropped from every surface, and with no term the list too. A
   further subclass reads such a description as any other wherever that
   loses something (docs/09 P73).
+- The backend keeps a link's target that is not an absolute URL as a `Path`,
+  and docling-core writes it as `Path.as_posix()`. A path is not a URL:
+  `docs/` lost its slash and `./a` its `./` on every platform, and on Windows
+  `//host/x`, an address naming a host, was read as a network share and
+  written `//host/x/`. A subclass gives the backend a path that is written
+  as the page wrote it (docs/09 P92).
 """
 
 from __future__ import annotations
@@ -89,6 +95,7 @@ from dataclasses import dataclass, field, replace
 from functools import cache
 from html.parser import HTMLParser
 from io import BytesIO
+from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from ..bundle.publish import dump_json
@@ -1383,6 +1390,107 @@ def _reading_terms(base: type[Any]) -> type[Any]:
     return _TermReader
 
 
+#: The concrete `Path` of this platform, which `_LinkTarget` must be to be
+#: one: a `PosixPath` cannot be made on Windows, nor a `WindowsPath` elsewhere.
+_NATIVE_PATH: type[Path] = type(Path())
+
+
+class _LinkTarget(_NATIVE_PATH):  # type: ignore[misc,valid-type]
+    """A link's target as the page writes it, where docling holds a `Path`.
+
+    The backend keeps a target that is not an absolute URL as a `Path`, and
+    docling-core writes a path's `as_posix()`. A path normalizes what it is
+    given, and a URL means what it says: `docs/` lost its slash and `./a` its
+    `./` everywhere, and on Windows `//host/x`, a URL naming a host, was read
+    as a network share and written `//host/x/` (docs/09 P92). This is the
+    path docling asks for, written, compared and copied as the text it was
+    made from.
+    """
+
+    def __new__(cls, text: str) -> _LinkTarget:
+        target: _LinkTarget = super().__new__(cls, text)
+        target.__dict__["text"] = text
+        return target
+
+    @property
+    def _text(self) -> str | None:
+        """The text this was made from. None on a path pathlib derived from
+        one (its parent, say) through 3.11's constructor, which is a path."""
+        text: str | None = self.__dict__.get("text")
+        return text
+
+    def with_segments(self, *segments: Any) -> Path:
+        """A path derived from a link's target (3.12 on) is a path."""
+        return _NATIVE_PATH(*segments)
+
+    def as_posix(self) -> str:
+        text = self._text
+        return super().as_posix() if text is None else text
+
+    def __str__(self) -> str:
+        text = self._text
+        return super().__str__() if text is None else text
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({str(self)!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, _LinkTarget):
+            return str(self) == str(other)
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+    def __reduce__(self) -> tuple[type[_LinkTarget], tuple[str]]:
+        return type(self), (str(self),)
+
+
+#: The backend methods `_keeping_link_targets` overrides or calls, private to
+#: docling as `_BACKEND_HOOKS` are, so `extract` checks they are still there.
+_LINK_HOOKS = ("_use_hyperlink", "_resolve_relative_path")
+#: Each backend `_keeping_link_targets` has made, by the class it extends.
+_LINK_KEEPERS: dict[type, type] = {}
+
+
+def _keeping_link_targets(base: type[Any]) -> type[Any]:
+    """`base`, docling's HTML backend or a subclass, keeping each link's target
+    as the page writes it (`_LinkTarget`, docs/09 P92).
+
+    The backend resolves a link's `href` (`_resolve_relative_path`, which with
+    no base path strips its whitespace and a `file://`) and makes an `AnyUrl`
+    of it, or a `Path` where that fails. Where it made a path, this puts in
+    its place a `_LinkTarget` of the same resolved text, for as long as the
+    backend reads the link; an `AnyUrl` is left as it is.
+    """
+    made = _LINK_KEEPERS.get(base)
+    if made is not None:
+        return made
+
+    class _LinkKeeper(base):
+        #: The target the backend gives what it reads, docling's own attribute.
+        hyperlink: Any
+
+        @contextmanager
+        def _use_hyperlink(self, tag: Any) -> Iterator[None]:
+            with super()._use_hyperlink(tag):
+                href = tag.get("href")
+                if (
+                    isinstance(href, str)
+                    and href
+                    and isinstance(self.hyperlink, PurePath)
+                ):
+                    try:
+                        resolved = self._resolve_relative_path(href)
+                    except ValueError:
+                        resolved = href
+                    self.hyperlink = _LinkTarget(resolved)
+                yield None
+
+    _LINK_KEEPERS[base] = _LinkKeeper
+    return _LinkKeeper
+
+
 #: The backend methods `_reading_descriptions` overrides or calls, private to
 #: docling as `_BACKEND_HOOKS` are, so `extract` checks they are still there.
 _DESCRIPTION_HOOKS = ("_extract_text_and_hyperlink_recursively", "_handle_list")
@@ -2496,6 +2604,18 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             "read the terms and descriptions a <div> groups in a description "
             "list, so each such group is left out of every surface, its text "
             "included (docs/09 P72)."
+        )
+    # And the method that makes a link's target, which reads no list, so it
+    # may sit anywhere below the footer layer.
+    if all(hasattr(HTMLDocumentBackend, hook) for hook in _LINK_HOOKS):
+        base = _keeping_link_targets(base)
+    else:
+        extraction_warnings.append(
+            "docling's HTML backend no longer has the methods WebShot extends to "
+            "keep a link's target as the page writes it, so content.md writes a "
+            "target that is not an absolute URL as docling's path of it: `docs/` "
+            "without its slash, and on Windows `//host/x` as `//host/x/` "
+            "(docs/09 P92)."
         )
     # Every item the backend made inside a <footer>, which stays on the
     # furniture layer whatever its text. Held as the items, not their

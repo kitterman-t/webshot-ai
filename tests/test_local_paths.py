@@ -19,7 +19,7 @@ import hashlib
 import json
 import shutil
 from collections.abc import Iterator
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import pikepdf
@@ -79,6 +79,28 @@ def test_a_record_gains_no_key_it_did_not_have() -> None:
         "sourceUrl": "./ADA_R-456_Query%20result.png",
         "tracks": [{"kind": "x"}],
     }
+
+
+def test_residue_reads_a_windows_directory_with_either_separator(
+    tmp_path: Path,
+) -> None:
+    """Windows reads `C:/x` as it reads `C:\\x`. On the Windows run the
+    directory written with `/` was missed, looked for with `\\` alone
+    (docs/09 P92); a Windows path is checked here on any platform."""
+    recorder = _recorder()
+    recorder._directory = PureWindowsPath("C:/capture machine/readings")
+    for name, text in (
+        ("backslashes.md", "C:\\capture machine\\readings\\x.csv"),
+        ("slashes.md", "C:/capture machine/readings/x.csv"),
+        ("escaped.json", json.dumps(["C:\\capture machine\\readings\\x.csv"])),
+        ("elsewhere.md", "C:/capture machine/other/x.csv"),
+    ):
+        (tmp_path / name).write_text(text, "utf-8")
+    assert recorder.residue(tmp_path) == [
+        "backslashes.md",
+        "escaped.json",
+        "slashes.md",
+    ]
 
 
 def test_residue_names_every_file_still_spelling_the_directory(

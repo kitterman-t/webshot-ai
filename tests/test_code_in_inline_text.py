@@ -110,9 +110,9 @@ def _converted(tmp_path: Path, body: str) -> str:
     """`body` as the bridge writes an HTML file's Markdown, MarkItDown's own
     clean-up included."""
     source = tmp_path / "page.html"
-    source.write_text(
-        f"<html><body><p>Top</p>{body}<p>End</p></body></html>", encoding="utf-8"
-    )
+    # The bytes the case is: Windows writes text with each `\n` a `\r\n`,
+    # which is another document where the code holds a `\r` (docs/09 P92).
+    source.write_bytes(f"<html><body><p>Top</p>{body}<p>End</p></body></html>".encode())
     return to_markdown(source, suffix=".html").markdown
 
 

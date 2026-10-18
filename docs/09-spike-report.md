@@ -18676,3 +18676,126 @@ more passes: the 8, plus the recorded TSV and the two `doctor` cases added
 after the first run. The skip count did not move. The other 153 failures
 and 17 errors are the same tests in both runs, and none is in a file this
 change touches: master's Windows run is red without it.
+
+## P92 — master's Windows run: line endings, link targets and path spellings (2026-10-18)
+
+`windows-smoke.yml` last ran on master by its schedule on 2026-10-05: run
+37327779601, master 02c9775, 3 failed, 1,880 passed, 42 skipped. The run due
+on 2026-10-12 never started, because the workflow had been disabled that
+morning with the rest of CI, and it was enabled again on 10-17. Nothing
+measured Windows while 13 days of merges landed. The next runs were P91's,
+dispatched on 10-18. With P91's fix, run 39105487616 had 153 failed, 4,967
+passed, 117 skipped and 17 errors. P91 removed 8 failures; this entry
+accounts for the other 170.
+
+Every failure, grouped by cause, from that run's log:
+
+| Cause | Failed | Since | Was the output wrong? |
+|---|---|---|---|
+| P92-1, HTML line endings | 142 | #243, 10-17 | yes, for an HTML file saved with `\r\n`, on every platform |
+| P92-2, link targets held as paths | 2 | #257, 10-17 | yes, on Windows; on every platform for some targets |
+| P92-3, a directory written with `/` | 1 | #135, 10-04 | yes, on Windows: a leak check missed what it looks for |
+
+The other 25, 17 of them errors, were in tests of tools this copy does not
+have.
+
+Three of the 170 were already failing on 10-05. The rest arrived between
+10-10 and 10-17, the 144 of P92-1 and P92-2 with the batches merged on 10-17.
+
+### P92-1 — an HTML file's `\r` reached its code
+
+A browser turns each `\r\n`, and each `\r` alone, into `\n` before it parses
+a page (HTML's input-stream preprocessing). The MarkItDown bridge parses
+HTML with `html.parser`, which keeps every `\r`, and markdownify kept them in
+the Markdown. Measured on macOS against master 3335170, one document saved
+with `\n` and with `\r\n`:
+
+- A top-level `<pre>` holding `\n\n   lead\nmid  \n\n  ` reached the page as
+  `   lead\nmid\n` from the `\n` copy and as `\n   lead\nmid\n\n` from the
+  `\r\n` copy: its blank first and last lines survived the trim.
+- A `<pre>` holding `a\rb\r\nc`, saved with `\r\n`, holds `a\rb\r\r\nc`,
+  which a browser reads as `a`, `b`, a blank line and `c`. At the top level
+  the page showed `a\nb\nc\n`; in a list item or a quotation it showed
+  `a\nb\n\nc\n`.
+
+This reader is reached by an EPUB's chapters and a zip's HTML members. A
+local `.html` or `.htm` file is opened by the browser itself, and mammoth
+writes no `\r` for a Word file.
+
+The Windows run found it through the three code-in tests (P44, P47, P59),
+which wrote each page with `write_text`. On Windows that writes `\r\n`, so
+every case was the `\r\n` copy of its document. To confirm the cause, the
+same three files were run on macOS with Python's text writes made to
+translate `\n` to `\r\n`. They failed 142 tests, the same test ids as the
+Windows run.
+
+The reader is now `_HtmlLineEndings`, `html.parser` with its decoded text's
+line endings read as a browser reads them. A `&#13;` is a reference, read
+after this step, and still means the character it names, as in a browser.
+`tests/test_html_line_endings.py` converts one document with `\n`, `\r\n`
+and `\r` endings, as a file and as a zip member, and checks the `a\rb\r\r\nc`
+code in all three places. All 5 cases fail on master and pass with the fix.
+The code-in tests now write the bytes each case means. Their expected code
+is computed from the case, and with `\r\n` added the document is a
+different one wherever the code holds a `\r`.
+
+### P92-2 — a link's target was held as a path
+
+docling's HTML backend makes an `AnyUrl` of a link's target, or a `Path`
+where pydantic refuses it, and docling-core writes a path's `as_posix()`. A
+path normalizes what it holds. On macOS, master 3335170 wrote these targets
+into content.md as follows:
+
+| `href` | content.md target |
+|---|---|
+| `docs/` | `docs` |
+| `./notes.txt` | `notes.txt` |
+| `guide//intro.html` | `guide/intro.html` |
+| `///sorvane` | `/sorvane` |
+| `../up/` | `../up` |
+
+Two adjacent links to `docs/` and `docs` compared equal as paths, and the
+backend merged them into one link: `[firstsecond](docs)`.
+
+On Windows, `//example.invalid/fenwold`, a URL that names a host, is a UNC
+path. The `bare_link` EPUB and zip captures (P75) failed there on that line.
+The assertion did not print the captured content.md, but
+`PureWindowsPath("//example.invalid/fenwold").as_posix()` is
+`//example.invalid/fenwold/`. The Word fixture holds the same link and was
+not measured: it needs the `office` extra, which the Windows run does not
+install.
+
+A backend layer, `_keeping_link_targets`, puts a `_LinkTarget` where the
+backend made a path. It is a `Path` to docling, but it is written, compared,
+copied and pickled as the text the backend resolved. An `AnyUrl` is left
+alone. Without the two private methods the layer uses, the capture runs on
+docling's paths and a warning says so. `tests/test_link_targets.py`: the
+targets above and the merged pair fail on master and pass with the fix.
+
+### P92-3 — a directory written with `/`
+
+`LocalPathRecorder.residue` (P14-61) looked for the source directory as
+`str()` writes it and as JSON writes that. On Windows the directory is
+`\capture machine\…`, and the test's content.md wrote it with `/`, which
+Windows reads as the same path. The check missed it, and this test has
+failed on every Windows run since 10-05. The recorder now also looks for
+the directory's `as_posix()`. `tests/test_local_paths.py` checks a
+`PureWindowsPath` directory written each way on any platform; the
+forward-slash case fails on master.
+
+### P92-5 — measured on Windows
+
+`windows-smoke.yml` on `windows-latest`, Python 3.12.10:
+
+| Run | Tree | Unit tests |
+|---|---|---|
+| 39105487616 | master 2adef95 plus P91's fix, 61b135f | 153 failed, 4,967 passed, 117 skipped, 17 errors |
+| 39109819262 | master 3335170 plus P92-1 to P92-4's code and tests, e953ddd | 0 failed, 5,150 passed, 118 skipped, 0 errors |
+
+Every step of the run passed, the two captures and the profile check too.
+The counts move as the changes predicted. There are 14 more tests, all new
+here, and none of them skipped: 5,254 before, 5,268 after. 183 more passed:
+the 153 that failed, the 16 that had errored at setup, and the 14 new ones.
+One more skipped, the overview delivery of P92-4, which had errored at
+setup. The log names no failed test, so P91's cases did not fail; it does
+not list passes one by one.
