@@ -22,13 +22,13 @@
   "ai_bundle": "<OUT>/form-overlapping-passwords.ai",
   "counts": {
     "pages": 1,
-    "items": 14,
+    "items": 15,
     "tables": 0,
     "links": 0,
-    "chunks": 12,
+    "chunks": 13,
     "visual_assets": 0,
     "ocr_words": 0,
-    "text_characters": 559,
+    "text_characters": 566,
     "failed_requests": 0
   },
   "options": {

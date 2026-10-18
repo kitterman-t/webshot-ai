@@ -28,7 +28,11 @@ from typing import Any
 import pytest
 from pypdf import PdfReader
 
-from webshot.capture.snapshot import DISPLAY_ATTRIBUTE, INLINE_TAGS
+from webshot.capture.snapshot import (
+    DISPLAY_ATTRIBUTE,
+    INLINE_TAGS,
+    MEASURED_INLINE_TAGS,
+)
 from webshot.extract import docling_bridge
 from webshot.extract.chunks import build_chunk_records
 from webshot.extract.docling_bridge import (
@@ -200,11 +204,14 @@ def test_an_element_laid_out_as_a_box_keeps_doclings_spacing() -> None:
 
 def test_the_joined_elements_are_those_docling_formats_or_links() -> None:
     """The set follows the backend: an upgrade that formats another element
-    fails here until the bridge marks it too."""
+    fails here until the bridge marks it by P48's rule. Every other element
+    of `INLINE_TAGS` but `wbr` is one the snapshot measures (docs/09 P70), so
+    one that the backend stops formatting fails here too."""
     from docling.backend.html_backend import _FORMAT_TAG_MAP
 
     assert set(_FORMAT_TAG_MAP) | {"a"} == _JOINED_TAGS
     assert _JOINED_TAGS <= INLINE_TAGS
+    assert MEASURED_INLINE_TAGS == INLINE_TAGS - _JOINED_TAGS - {"wbr"}
 
 
 def _marked_by_slicing(html: str, marks: set[tuple[int, str]]) -> str:
@@ -355,7 +362,9 @@ def test_the_snapshot_records_where_css_made_a_box(captured: dict[str, str]) -> 
             display,
             text,
         )
-    assert re.search(r"<span>yar</span>", html)
+    # The span touches the bold "bistle" and is drawn against it, which the
+    # snapshot records as well (docs/09 P70).
+    assert '<span data-webshot-touches="after">yar</span>' in html
     assert html.count(DISPLAY_ATTRIBUTE) == 5
 
 

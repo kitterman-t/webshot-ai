@@ -9,7 +9,6 @@ back-links, and the associated-file requirements of PDF/A-3 are checked.
 from __future__ import annotations
 
 import asyncio
-import inspect
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +18,6 @@ from playwright.async_api import async_playwright
 from pypdf import PdfReader
 from pypdf.generic import ArrayObject, NumberObject
 
-import webshot.protected.viewer as viewer_module
 from webshot.bundle.publish import EmbeddedPayload
 from webshot.config import DEFAULT_VIEWPORT
 from webshot.errors import WebShotError
@@ -34,11 +32,19 @@ from webshot.protected.appendix import (
     appendix_html,
     back_link_target,
 )
-from webshot.protected.assemble import build_searchable_pdf, page_dimensions
+from webshot.protected.assemble import (
+    build_searchable_pdf,
+    document_page_dimensions,
+    pack_page_images,
+    page_dimensions,
+)
 from webshot.protected.viewer import (
     PAGE_ELEMENT,
     PAGE_LABEL_PATTERN,
     VIEWER_CONTAINER,
+    ZOOM_FIT_SLIDE,
+    ZOOM_MENU_NAME,
+    ZOOM_WINDOW_SIZE,
     capture_sharepoint_pdf_viewer,
     stitch_segmented_pages,
 )
@@ -92,7 +98,7 @@ def test_overlapping_segments_are_stitched_to_exact_page_height(tmp_path: Path) 
     top.save(raw / "page-001-top.png")
     bottom.save(raw / "page-001-bottom.png")
 
-    result = stitch_segmented_pages(raw, pages, page_count=1, page_height=100)
+    result = stitch_segmented_pages(raw, pages, page_heights={1: 100})
     assert [path.name for path in result] == ["page-001.png"]
     with Image.open(result[0]) as stitched:
         assert stitched.size == (20, 100)
@@ -105,7 +111,7 @@ def test_missing_segment_is_rejected(tmp_path: Path) -> None:
     raw.mkdir()
     Image.new("RGB", (20, 60), "red").save(raw / "page-001-top.png")
     with pytest.raises(FileNotFoundError):
-        stitch_segmented_pages(raw, tmp_path / "pages", page_count=1, page_height=100)
+        stitch_segmented_pages(raw, tmp_path / "pages", page_heights={1: 100})
 
 
 def test_portrait_pages_use_letter_width() -> None:
@@ -114,6 +120,63 @@ def test_portrait_pages_use_letter_width() -> None:
 
 def test_widescreen_pages_preserve_aspect_ratio() -> None:
     assert page_dimensions(960, 540) == (960.0, 540.0)
+
+
+def _flat(pairs: list[tuple[float, float]]) -> list[float]:
+    """`pytest.approx` compares flat sequences only."""
+    return [side for pair in pairs for side in pair]
+
+
+def test_a_document_s_pages_share_one_scale() -> None:
+    """Each page was sized by itself, Letter-wide if portrait and 960pt if
+    wider than tall, so a landscape Letter page among portrait ones came out
+    13.33 x 10.30in and a half-width page Letter-wide (docs/09 P46). The
+    pages of `sharepoint-portrait-mixed.html`, as the capture writes them:"""
+    sizes = [(1632, 2112), (2112, 1632), (1632, 2688), (1632, 3072), (1056, 1224)]
+    inches = [
+        (width / 72, height / 72) for width, height in document_page_dimensions(sizes)
+    ]
+    assert _flat(inches) == pytest.approx(
+        _flat([(8.5, 11), (11, 8.5), (8.5, 14), (8.5, 16), (5.5, 6.375)])
+    )
+
+
+def test_the_scale_is_the_commonest_page_s() -> None:
+    """Not the first page's: a half-width cover would otherwise blow every
+    page after it up by half again."""
+    sizes = [(1056, 1224), (1632, 2112), (1632, 2112)]
+    assert _flat(document_page_dimensions(sizes)) == pytest.approx(
+        _flat([(396, 459), (612, 792), (612, 792)])
+    )
+
+
+def test_a_document_of_one_page_size_is_packed_as_it_was() -> None:
+    """Exactly, not approximately: the packed PDF's page boxes, and with them
+    the protected golden, must not move for a document whose pages agree."""
+    assert (
+        document_page_dimensions([(1275, 1650)] * 2)
+        == [page_dimensions(1275, 1650)] * 2
+    )
+    assert (
+        document_page_dimensions([(1700, 2200), (1700, 2200)])
+        == [page_dimensions(1700, 2200)] * 2
+    )
+
+
+def test_packed_pages_keep_their_relative_sizes(tmp_path: Path) -> None:
+    """The scale reaches the packed file, page by page."""
+    images = []
+    for number, size in enumerate(((816, 1056), (1056, 816), (528, 612)), start=1):
+        path = tmp_path / f"page-{number:03d}.png"
+        Image.new("RGB", size, "white").save(path)
+        images.append(path)
+    packed = tmp_path / "packed.pdf"
+    pack_page_images(images, packed)
+    boxes = [
+        (float(page.mediabox.width), float(page.mediabox.height))
+        for page in PdfReader(packed).pages
+    ]
+    assert _flat(boxes) == pytest.approx(_flat([(612, 792), (792, 612), (396, 459)]))
 
 
 def test_back_link_targets_are_recognized_only_in_their_own_scheme() -> None:
@@ -311,47 +374,35 @@ def test_a_css_page_height_against_device_pixel_segments_is_rejected(
     """
     raw = _segments(tmp_path, (1600, 1800))
     with pytest.raises(ValueError, match="unnecessary"):
-        stitch_segmented_pages(raw, tmp_path / "pages", page_count=1, page_height=1100)
+        stitch_segmented_pages(raw, tmp_path / "pages", page_heights={1: 1100})
 
 
 def test_device_pixel_dimensions_stitch_to_the_exact_page(tmp_path: Path) -> None:
     """And the same geometry in one consistent unit works."""
     raw = _segments(tmp_path, (1600, 1800))
-    pages = stitch_segmented_pages(
-        raw, tmp_path / "pages", page_count=1, page_height=2200
-    )
+    pages = stitch_segmented_pages(raw, tmp_path / "pages", page_heights={1: 2200})
     with Image.open(pages[0]) as stitched:
         assert stitched.size == (1600, 2200)
 
 
-def test_the_portrait_capture_reports_the_ratio_it_measured() -> None:
-    """The returned metrics describe the files that were written, so a reader
-    can tell CSS pixels from device pixels without guessing the scale."""
-    source = inspect.getsource(viewer_module._capture_portrait_viewer)
-    assert "window.devicePixelRatio" in source
-    assert '"device_pixel_ratio": ratio' in source
-    # `page_width` and `page_height` describe the same images, so both are
-    # scaled or neither is.
-    assert 'round(page_rect["width"] * ratio)' in source
-    assert 'round(page_rect["height"] * ratio)' in source
-
-
-def test_a_single_page_document_needs_no_spacing_sample() -> None:
-    """One rectangle means no inter-page spacing to measure, and the check for
-    it aborted the capture instead of noticing that (docs/09 P8-47)."""
-    source = inspect.getsource(viewer_module._capture_portrait_viewer)
-    assert 'metrics["pageCount"] > 1 and len(metrics["pages"]) < 2' in source
-    # A page that fits inside the viewer is shot once, not stitched from two
-    # segments that would not overlap.
-    assert "segmented = page_height > segment_height" in source
-
-
-def test_the_scroll_target_is_an_absolute_offset() -> None:
-    """`pages[0].y` and `viewer.y` are both viewport-relative, so their
-    difference is the page's offset in the *current* scroll state — written
-    straight to `scrollTop`, which is a document coordinate (docs/09 P8-45)."""
-    source = inspect.getsource(viewer_module._capture_portrait_viewer)
-    assert 'page_top = viewer["scrollTop"] + (page_rect["y"] - viewer["y"])' in source
+def test_each_page_is_stitched_at_its_own_size(tmp_path: Path) -> None:
+    """The stitch took one height for every page (docs/09 P46). Page 2 here is
+    wider and taller than page 1, and page 3 was shot in one piece, so it is
+    not the stitch's to touch."""
+    raw = tmp_path / "segments"
+    raw.mkdir()
+    for number, size in ((1, (1600, 1800)), (2, (2000, 1800))):
+        for half, colour in (("top", (240, 240, 240)), ("bottom", (200, 200, 200))):
+            Image.new("RGB", size, colour).save(raw / f"page-{number:03d}-{half}.png")
+    pages = stitch_segmented_pages(
+        raw, tmp_path / "pages", page_heights={2: 3000, 1: 2200}
+    )
+    assert [path.name for path in pages] == ["page-001.png", "page-002.png"]
+    sizes = []
+    for path in pages:
+        with Image.open(path) as stitched:
+            sizes.append(stitched.size)
+    assert sizes == [(1600, 2200), (2000, 3000)]
 
 
 # --------------------------------------------------------------------------- #
@@ -361,34 +412,49 @@ def test_the_scroll_target_is_an_absolute_offset() -> None:
 VIEWER_DOM = Path(__file__).resolve().parent / "fixtures" / "viewer" / "dom"
 
 #: Every band the fixture draws, page by page: its offset from its page's top
-#: and its height in CSS pixels, and its colour. Read from the page rather than
-#: retyped, so the fixture stays the one description of what each page shows.
+#: and its height in CSS pixels, and its colour; and each page's own size. Read
+#: from the page rather than retyped, so the fixture stays the one description
+#: of what each page shows.
 BANDS_JS = """(contract) => {
     const labelPattern = new RegExp(contract.pageLabel);
     const colour = element => getComputedStyle(element).backgroundColor
         .match(/\\d+/g).slice(0, 3).map(Number);
     const viewer = document.querySelector(contract.container);
-    const pages = [...document.querySelectorAll(contract.page)]
-        .filter(element => labelPattern.test(element.getAttribute('aria-label') || ''))
-        .map(element => {
-            const top = element.getBoundingClientRect().top;
-            return [...element.querySelectorAll('.canvas-stand-in > div')].map(band => {
-                const rect = band.getBoundingClientRect();
-                return {offset: rect.top - top, height: rect.height, colour: colour(band)};
-            });
+    const elements = [...document.querySelectorAll(contract.page)]
+        .filter(element => labelPattern.test(element.getAttribute('aria-label') || ''));
+    const pages = elements.map(element => {
+        const top = element.getBoundingClientRect().top;
+        return [...element.querySelectorAll('.canvas-stand-in > div')].map(band => {
+            const rect = band.getBoundingClientRect();
+            return {offset: rect.top - top, height: rect.height, colour: colour(band)};
         });
-    return {pages, viewer: colour(viewer)};
+    });
+    const sizes = elements.map(element => {
+        const rect = element.getBoundingClientRect();
+        return {width: rect.width, height: rect.height};
+    });
+    return {pages, sizes, viewer: colour(viewer)};
 }"""
 
 
 async def _capture_from_the_last_page(
-    fixture: Path, directory: Path, *, style: str | None = None
+    fixture: Path,
+    directory: Path,
+    *,
+    style: str | None = None,
+    script: str | None = None,
+    zoom: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the protected capture on a fixture a reader left at its last page.
 
     That is P8-45's case: the viewer is wherever the person signing in left
     it, so the capture's first scroll crosses the document rather than one
-    page.
+    page, and a capture that took the viewer's scroll position for the
+    page's offset would shoot every page from the wrong place. `script` is a
+    function of the viewer contract, run once the bands are read. `zoom`
+    names the zoom-menu item the bands are read at, for a deck the capture
+    shoots at another zoom than the one it opens at; the toolbar is put back
+    to "Window size" before the capture starts.
     """
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
@@ -401,14 +467,25 @@ async def _capture_from_the_last_page(
             await page.goto(fixture.as_uri())
             if style:
                 await page.add_style_tag(content=style)
-            drawn: dict[str, Any] = await page.evaluate(
-                BANDS_JS,
-                {
-                    "container": VIEWER_CONTAINER,
-                    "page": PAGE_ELEMENT,
-                    "pageLabel": PAGE_LABEL_PATTERN,
-                },
-            )
+            contract = {
+                "container": VIEWER_CONTAINER,
+                "page": PAGE_ELEMENT,
+                "pageLabel": PAGE_LABEL_PATTERN,
+            }
+            zoom_menu = page.get_by_role("menuitem", name=ZOOM_MENU_NAME, exact=True)
+            if zoom:
+                await zoom_menu.click()
+                await page.get_by_role(
+                    "menuitemcheckbox", name=zoom, exact=True
+                ).click()
+            drawn: dict[str, Any] = await page.evaluate(BANDS_JS, contract)
+            if zoom:
+                await zoom_menu.click()
+                await page.get_by_role(
+                    "menuitemcheckbox", name=ZOOM_WINDOW_SIZE, exact=True
+                ).click()
+            if script:
+                await page.evaluate(script, contract)
             await page.evaluate(
                 """(selector) => {
                     const viewer = document.querySelector(selector);
@@ -452,6 +529,43 @@ def _band_runs(
     return runs
 
 
+def _misplaced_pages(directory: Path, ratio: float, drawn: dict[str, Any]) -> list[str]:
+    """Every stitched page that is not its own page, band for band and size
+    for size, each named with what it holds.
+
+    Every page is checked before anything is reported, so a failure shows the
+    whole document rather than the first page that went wrong.
+    """
+    colours = {
+        f"page {number} band {index}": tuple(band["colour"])
+        for number, bands in enumerate(drawn["pages"], start=1)
+        for index, band in enumerate(bands)
+    }
+    colours["viewer"] = tuple(drawn["viewer"])
+    wrong: list[str] = []
+    for number, (bands, size) in enumerate(
+        zip(drawn["pages"], drawn["sizes"], strict=True), start=1
+    ):
+        expected = [
+            (
+                f"page {number} band {index}",
+                round(band["offset"] * ratio),
+                round((band["offset"] + band["height"]) * ratio),
+            )
+            for index, band in enumerate(bands)
+        ]
+        expected_size = (round(size["width"] * ratio), round(size["height"] * ratio))
+        with Image.open(directory / f"page-{number:03d}.png") as image:
+            found = _band_runs(image, colours)
+            found_size = image.size
+        if found != expected or found_size != expected_size:
+            wrong.append(
+                f"page {number}: {found_size} px, expected {expected_size};\n"
+                f"  found    {found}\n  expected {expected}"
+            )
+    return wrong
+
+
 @pytest.mark.browser
 @pytest.mark.parametrize(
     "fixture", ["sharepoint-portrait.html", "sharepoint-portrait-smooth.html"]
@@ -471,25 +585,139 @@ def test_each_stitched_page_is_its_own_page_band_for_band(
 
     assert result["segmented"], "the fixture's pages must be taller than its viewer"
     assert result["page_count"] == len(drawn["pages"]) == 3
+    wrong = _misplaced_pages(pages, result["device_pixel_ratio"], drawn)
+    assert not wrong, "\n".join(wrong)
+    # Device pixels, the size of every image written, so a reader can tell
+    # them from CSS pixels without guessing the scale (docs/09 P8-46).
+    assert result["device_pixel_ratio"] == 2
+    assert (result["page_width"], result["page_height"]) == (1632, 2112)
+    assert result["segment_height"] == 1640
+    assert result["segment_overlap"] == 1640 * 2 - 2112
+
+
+#: A viewer that keeps only the pages it shows in the DOM, putting each back
+#: where it was when the view reaches it. Whether SharePoint's does is not
+#: recorded, so the capture must not depend on it either way.
+VIRTUALIZE_JS = """(contract) => {
+    const viewer = document.querySelector(contract.container);
+    const labelPattern = new RegExp(contract.pageLabel);
+    const slots = [...viewer.querySelectorAll(contract.page)]
+        .filter(element => labelPattern.test(element.getAttribute('aria-label')))
+        .map(element => ({
+            element,
+            top: element.offsetTop,
+            bottom: element.offsetTop + element.offsetHeight,
+            stand: document.createComment(element.getAttribute('aria-label'))
+        }));
+    const draw = () => {
+        const from = viewer.scrollTop, to = from + viewer.clientHeight;
+        for (const slot of slots) {
+            const shown = slot.top < to && slot.bottom > from;
+            if (shown && !slot.element.isConnected) slot.stand.replaceWith(slot.element);
+            if (!shown && slot.element.isConnected) slot.element.replaceWith(slot.stand);
+        }
+    };
+    viewer.addEventListener('scroll', draw);
+    draw();
+}"""
+
+
+def _sizes_in_device_pixels(
+    drawn: dict[str, Any], ratio: float
+) -> list[tuple[int, int]]:
+    return [
+        (round(size["width"] * ratio), round(size["height"] * ratio))
+        for size in drawn["sizes"]
+    ]
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("virtual", [False, True], ids=["every-page", "pages-in-view"])
+def test_pages_of_differing_sizes_are_each_shot_from_their_own_rectangle(
+    virtual: bool, tmp_path: Path
+) -> None:
+    """Every page was shot where page 1's position and height, and the step
+    from page 1 to page 2, put it, at page 1's width (docs/09 P42-5). In a
+    document of Letter, landscape, Legal and appended-form pages and a short
+    last page, every page after the first came out page 1's size: pages 2, 4
+    and 5 held parts of their neighbours, page 3 began 240px into itself, and
+    the capture reported nothing (docs/09 P46).
+
+    The short last page cannot be scrolled to its top, so it is shot where
+    it stands. With only the pages in view in the DOM, the reader's last
+    page is the first one there, and every other page has to be scrolled to
+    before it can be found."""
+    pages = tmp_path / "pages"
+    result, drawn = asyncio.run(
+        _capture_from_the_last_page(
+            VIEWER_DOM / "sharepoint-portrait-mixed.html",
+            pages,
+            script=VIRTUALIZE_JS if virtual else None,
+        )
+    )
+
+    assert result["page_count"] == len(drawn["pages"]) == 5
     ratio = result["device_pixel_ratio"]
-    colours = {
-        f"page {number} band {index}": tuple(band["colour"])
-        for number, bands in enumerate(drawn["pages"], start=1)
-        for index, band in enumerate(bands)
-    }
-    colours["viewer"] = tuple(drawn["viewer"])
-    for number, bands in enumerate(drawn["pages"], start=1):
-        expected = [
-            (
-                f"page {number} band {index}",
-                round(band["offset"] * ratio),
-                round((band["offset"] + band["height"]) * ratio),
+    wrong = _misplaced_pages(pages, ratio, drawn)
+    assert not wrong, "\n".join(wrong)
+
+    sizes = _sizes_in_device_pixels(drawn, ratio)
+    assert [
+        (image["page"], image["width"], image["height"], image["segments"])
+        for image in result["page_images"]
+    ] == [
+        (number, width, height, 2 if height > result["segment_height"] else 1)
+        for number, (width, height) in enumerate(sizes, start=1)
+    ]
+    # The fixture is built to need both: pages that fit the viewer and pages
+    # that do not.
+    assert {image["segments"] for image in result["page_images"]} == {1, 2}
+    # No one size describes these pages, so none is claimed.
+    assert result["page_width"] is None
+    assert result["page_height"] is None
+    assert result["segment_overlap"] is None
+    assert result["segmented"] is True
+
+
+@pytest.mark.browser
+def test_a_single_page_document_is_captured(tmp_path: Path) -> None:
+    """A single-page letter exposes one page rectangle, and the capture
+    stopped for want of a second to measure the spacing from (docs/09
+    P8-47). Nothing about another page is needed to shoot one now."""
+    pages = tmp_path / "pages"
+    result, drawn = asyncio.run(
+        _capture_from_the_last_page(
+            VIEWER_DOM / "sharepoint-portrait.html",
+            pages,
+            script="""() => {
+                document.querySelector('[aria-label="Page 2."]').remove();
+                document.querySelector('[aria-label="Page 3."]').remove();
+                document.querySelector('[aria-label="Page 1 of 3"]')
+                    .setAttribute('aria-label', 'Page 1 of 1');
+            }""",
+        )
+    )
+
+    assert result["page_count"] == 1
+    assert sorted(path.name for path in pages.glob("page-*.png")) == ["page-001.png"]
+    drawn = {**drawn, "pages": drawn["pages"][:1], "sizes": drawn["sizes"][:1]}
+    wrong = _misplaced_pages(pages, result["device_pixel_ratio"], drawn)
+    assert not wrong, "\n".join(wrong)
+
+
+@pytest.mark.browser
+def test_a_page_wider_than_the_viewer_is_refused(tmp_path: Path) -> None:
+    """The capture never scrolls sideways, so a page the viewer shows only
+    part of across would be shot without its edges. In a 900px viewer the
+    1,056px landscape page is."""
+    with pytest.raises(RuntimeError, match=r"Page 2 is 1056px wide and the viewer"):
+        asyncio.run(
+            _capture_from_the_last_page(
+                VIEWER_DOM / "sharepoint-portrait-mixed.html",
+                tmp_path / "pages",
+                style=".viewer { width: 900px; }",
             )
-            for index, band in enumerate(bands)
-        ]
-        with Image.open(pages / f"page-{number:03d}.png") as image:
-            found = _band_runs(image, colours)
-        assert found == expected, f"page {number}: found {found}, expected {expected}"
+        )
 
 
 @pytest.mark.browser
@@ -513,6 +741,79 @@ def test_a_segment_the_viewer_would_not_scroll_to_is_refused(tmp_path: Path) -> 
                     ".viewer { scroll-snap-type: y mandatory; } "
                     ".canvas-stand-in > div { scroll-snap-align: start; }"
                 ),
+            )
+        )
+
+
+# --------------------------------------------------------------------------- #
+# The deck, paged through the toolbar
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("virtual", [False, True], ids=["every-page", "pages-in-view"])
+def test_slides_of_differing_sizes_are_each_shot_from_their_own_rectangle(
+    virtual: bool, tmp_path: Path
+) -> None:
+    """Every slide was clipped at page 1's rectangle at the top of the viewer.
+    In a deck of a 16:9 slide, a 4:3 one and a portrait page, slides 2 and 3
+    came out 2112 x 1188, slide 1's size: slide 2 with the viewer's
+    background beside it and 18px of it below, slide 3 without its last 18px
+    (docs/09 P51).
+
+    With only the slides in view in the DOM, the reader's last slide, the
+    portrait page, was the one the orientation was read from. The deck took
+    the scroll path at "Window size", and every slide came out a third
+    larger than the toolbar path shoots it. Page 1 decides now, and the
+    viewer is scrolled to its top to find it."""
+    pages = tmp_path / "pages"
+    result, drawn = asyncio.run(
+        _capture_from_the_last_page(
+            VIEWER_DOM / "sharepoint-landscape-mixed.html",
+            pages,
+            zoom=ZOOM_FIT_SLIDE,
+            script=VIRTUALIZE_JS if virtual else None,
+        )
+    )
+
+    assert result["page_count"] == len(drawn["pages"]) == 3
+    # The helper's scale factor, so the slides are checked before anything
+    # the capture reports about itself.
+    ratio = 2
+    wrong = _misplaced_pages(pages, ratio, drawn)
+    assert not wrong, "\n".join(wrong)
+    assert result["viewer_zoom_for_capture"] == ZOOM_FIT_SLIDE
+    assert result["device_pixel_ratio"] == ratio
+    assert [
+        (image["page"], image["width"], image["height"], image["segments"])
+        for image in result["page_images"]
+    ] == [
+        (number, width, height, 1)
+        for number, (width, height) in enumerate(
+            _sizes_in_device_pixels(drawn, ratio), start=1
+        )
+    ]
+    # No one size describes these slides, so none is claimed.
+    assert result["page_width"] is None
+    assert result["page_height"] is None
+    assert result["segmented"] is False
+
+
+@pytest.mark.browser
+def test_a_slide_the_viewer_does_not_show_whole_is_refused(tmp_path: Path) -> None:
+    """Only page 1 was checked against the viewer. In a 600px viewer the
+    portrait page, 612px tall at 75%, was shot at page 1's 594px and lost
+    its last 18px without a word (docs/09 P51)."""
+    with pytest.raises(
+        RuntimeError,
+        match=r"Page 3 measures 456 x 612px at 75% zoom, .* the viewer shows "
+        r"\d+(\.\d+)? x 600px",
+    ):
+        asyncio.run(
+            _capture_from_the_last_page(
+                VIEWER_DOM / "sharepoint-landscape-mixed.html",
+                tmp_path / "pages",
+                style=".viewer { height: 600px; }",
             )
         )
 

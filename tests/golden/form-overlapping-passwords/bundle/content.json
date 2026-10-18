@@ -4,7 +4,7 @@
   "name": "content",
   "origin": {
     "mimetype": "text/html",
-    "binary_hash": 6498011047638131597,
+    "binary_hash": 14616848460034121197,
     "filename": "content.html"
   },
   "furniture": {
@@ -68,6 +68,9 @@
         },
         {
           "$ref": "#/texts/12"
+        },
+        {
+          "$ref": "#/texts/13"
         }
       ],
       "content_layer": "body",
@@ -167,10 +170,10 @@
       },
       "children": [],
       "content_layer": "body",
-      "label": "checkbox_selected",
+      "label": "text",
       "prov": [],
-      "orig": "Email me about sign-ins",
-      "text": "Email me about sign-ins"
+      "orig": "Dense",
+      "text": "Dense"
     },
     {
       "self_ref": "#/texts/9",
@@ -179,7 +182,7 @@
       },
       "children": [],
       "content_layer": "body",
-      "label": "text",
+      "label": "checkbox_selected",
       "prov": [],
       "orig": "Email me about sign-ins",
       "text": "Email me about sign-ins"
@@ -193,11 +196,23 @@
       "content_layer": "body",
       "label": "text",
       "prov": [],
+      "orig": "Email me about sign-ins",
+      "text": "Email me about sign-ins"
+    },
+    {
+      "self_ref": "#/texts/11",
+      "parent": {
+        "$ref": "#/texts/0"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "text",
+      "prov": [],
       "orig": "Recovery note",
       "text": "Recovery note"
     },
     {
-      "self_ref": "#/texts/11",
+      "self_ref": "#/texts/12",
       "parent": {
         "$ref": "#/texts/0"
       },
@@ -209,13 +224,13 @@
       "text": "live recovery note"
     },
     {
-      "self_ref": "#/texts/12",
+      "self_ref": "#/texts/13",
       "parent": {
         "$ref": "#/texts/0"
       },
       "children": [
         {
-          "$ref": "#/texts/13"
+          "$ref": "#/texts/14"
         }
       ],
       "content_layer": "body",
@@ -226,9 +241,9 @@
       "level": 1
     },
     {
-      "self_ref": "#/texts/13",
+      "self_ref": "#/texts/14",
       "parent": {
-        "$ref": "#/texts/12"
+        "$ref": "#/texts/13"
       },
       "children": [],
       "content_layer": "body",

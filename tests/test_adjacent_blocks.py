@@ -130,10 +130,12 @@ def _converted(body: str) -> str:
 
 def _unmarked(monkeypatch: pytest.MonkeyPatch, body: str) -> str:
     """`body` as the bridge wrote it before quotations and definition lists
-    were marked: markdownify's own writers for both."""
+    were marked: markdownify's own writers for both, and for terms and
+    definitions, whose marks (docs/09 P64) only the bridge's `convert_dl`
+    takes away."""
     upstream = vars(MarkdownConverter)
     with monkeypatch.context() as patch:
-        for name in ("convert_blockquote", "convert_dl"):
+        for name in ("convert_blockquote", "convert_dl", "convert_dt", "convert_dd"):
             patch.setattr(_TextMarkdownify, name, upstream[name])
         return _converted(body)
 
@@ -173,7 +175,7 @@ MERGED: list[tuple[str, str, Blocks]] = [
     ),
     (
         "quotations-nothing-between",
-        _bq("Alpha") + "\n  <div></div><p></p><!-- c --><br/>" + _bq("Bravo"),
+        _bq("Alpha") + "\n  <div></div><p></p><!-- c -->" + _bq("Bravo"),
         TWO_QUOTATIONS,
     ),
     (
@@ -236,7 +238,7 @@ MERGED: list[tuple[str, str, Blocks]] = [
     (
         "definition-lists-nothing-between",
         _dl(("Term", "Alpha"))
-        + "\n  <div></div><p></p><!-- c --><br/>"
+        + "\n  <div></div><p></p><!-- c -->"
         + _dl(("Word", "Bravo")),
         TWO_LISTS,
     ),
@@ -312,6 +314,45 @@ def test_the_separator_is_all_that_changed(
     page, earlier = _render(after), _render(before)
     assert "<!--" not in page
     assert re.sub(r"<[^>]+>|\s", "", page) == re.sub(r"<[^>]+>|\s", "", earlier)
+
+
+#: A `<br>` between two quotations or two definition lists.  markdownify's
+#: line break wrote nothing a Markdown block could hold, so the two met; the
+#: bridge's is a `<br>`, a block of its own between them, as a browser draws
+#: it (docs/09 P77), and as it is between two lists (`test_adjacent_lists`).
+BROKEN_BETWEEN: list[tuple[str, str, Blocks]] = [
+    ("quotations-line-break", _bq("Alpha") + "<br/>" + _bq("Bravo"), TWO_QUOTATIONS),
+    (
+        "quotations-break-in-paragraph",
+        _bq("Alpha") + "<p><br/></p>" + _bq("Bravo"),
+        TWO_QUOTATIONS,
+    ),
+    (
+        "definition-lists-line-break",
+        _dl(("Term", "Alpha")) + "<br/>" + _dl(("Word", "Bravo")),
+        TWO_LISTS,
+    ),
+    (
+        "definition-lists-break-in-paragraph",
+        _dl(("Term", "Alpha")) + "<p><br/></p>" + _dl(("Word", "Bravo")),
+        TWO_LISTS,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [(body, expected) for _, body, expected in BROKEN_BETWEEN],
+    ids=[case for case, *_ in BROKEN_BETWEEN],
+)
+def test_a_line_break_between_two_blocks_stands_between_them(
+    body: str, expected: Blocks
+) -> None:
+    converted = _converted(body)
+    assert LIST_SEPARATOR not in converted, converted
+    page = _render(converted)
+    assert _blocks(page) == expected, page
+    assert re.search(r"</(blockquote|dl)>\s*<p><br>\s*</p>\s*<\1>", page), page
 
 
 @pytest.mark.parametrize(

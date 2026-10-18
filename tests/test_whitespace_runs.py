@@ -8,7 +8,9 @@ whitespace alone wrote nothing: `This<strong> </strong>course` read
 a link was lost the same way, and MarkItDown's `<a>` lost even a plain space
 where it writes no markup: with no target, inside `pre`, and where its text is
 its address.  The bridge writes each run of ASCII whitespace at an edge, or
-alone, as one space, and in `pre` and `code` as the document has it.
+alone, as one space, and in `pre` and `code` as the document has it.  A
+`<br>` there is the line break it is, written outside the markup (docs/09
+P77).
 
 The `whitespace_run_*` fixtures are written by `tools/fixtures/office.py`;
 every word in them is made up.  `tests/test_office_formats.py` captures them
@@ -55,17 +57,19 @@ FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "office"
 ASCII_WHITESPACE = [c for c in map(chr, range(128)) if c.isspace()]
 
 #: What a run can hold that a browser shows as one space between two words:
-#: each ASCII whitespace character, runs of them, and line breaks, which
-#: MarkItDown makes a space by stripping the end of every line.
-WHITESPACE_ALONE = [
-    *ASCII_WHITESPACE,
-    "  ",
-    " \n ",
-    "\r\n",
-    "<br/>",
-    " <br/> ",
-    "<br/><br/>",
-]
+#: each ASCII whitespace character, and runs of them.
+WHITESPACE_ALONE = [*ASCII_WHITESPACE, "  ", " \n ", "\r\n"]
+#: A run that holds line breaks alone, and what the bridge writes for it: the
+#: line breaks outside the markup, each followed by the space `convert_br`
+#: writes, and the whitespace beside them one space (docs/09 P77).
+LINE_BREAKS_ALONE = {
+    "<br/>": "alpha<br> omega",
+    " <br/> ": "alpha <br> omega",
+    "<br/><br/>": "alpha<br> <br> omega",
+}
+#: Where markdownify writes text as it stands, and so a `<br>` as its own
+#: line ending, which Markdown reads as a space there.
+LITERAL = {"code", "kbd", "samp"}
 
 #: Each inline element whose converter `chomp`s, as HTML around a word, and
 #: the three ways MarkItDown's `<a>` returns without its markup.
@@ -163,14 +167,50 @@ def test_whitespace_alone_is_one_space(tag: str) -> None:
 
 
 @pytest.mark.parametrize("tag", list(INLINE))
-def test_a_line_break_at_an_edge_is_one_space(tag: str) -> None:
+def test_a_line_break_alone_is_written_outside_the_markup(tag: str) -> None:
+    opening, closing = INLINE[tag]
     wrong = []
-    for edge in ("\n", "\r\n", "<br/>", " <br/>", "<br/> ", "\x0c"):
+    for run, expected in LINE_BREAKS_ALONE.items():
+        document = f"<p>alpha{opening}{run}{closing}omega</p>"
+        if tag in LITERAL:
+            expected = "alpha omega"
+        if _markdown(document).strip() != expected:
+            wrong.append((run, _markdown(document)))
+    assert not wrong, wrong
+
+
+@pytest.mark.parametrize("tag", list(INLINE))
+def test_a_newline_at_an_edge_is_one_space(tag: str) -> None:
+    wrong = []
+    for edge in ("\n", "\r\n", "\x0c"):
         for lead, trail in ((edge, ""), ("", edge), (edge, edge)):
             document = _line(tag, lead, trail)
             written = _markdown(document).strip()
             if "\n" in written or _reads(_page(document)) != "alpha beta omega":
                 wrong.append((lead, trail, written))
+    assert not wrong, wrong
+
+
+@pytest.mark.parametrize("tag", list(INLINE))
+def test_a_br_at_an_edge_is_a_line_break_outside_the_markup(tag: str) -> None:
+    """The words either side stay apart, no newline is written, and the page
+    holds each `<br>` the edges did, outside the formatting: where the
+    formatting held the `<br>`, it held nothing else there."""
+    wrong = []
+    for edge in ("<br/>", " <br/>", "<br/> "):
+        for lead, trail in ((edge, ""), ("", edge), (edge, edge)):
+            document = _line(tag, lead, trail)
+            written = _markdown(document).strip()
+            page = _page(document)
+            breaks = 0 if tag in LITERAL else document.count("<br/>")
+            if (
+                "\n" in written
+                or _reads(page) != "alpha beta omega"
+                or page.count("<br>") != breaks
+                or re.search(r"<(strong|em|del|sub|sup|a)\b[^>]*>\s*<br>", page)
+                or re.search(r"<br>\s*</(strong|em|del|sub|sup|a)>", page)
+            ):
+                wrong.append((lead, trail, written, page))
     assert not wrong, wrong
 
 
@@ -185,11 +225,13 @@ def test_a_space_at_an_edge_is_kept_where_a_link_writes_no_markup(tag: str) -> N
 
 def test_a_link_whose_text_is_its_address_keeps_its_edges() -> None:
     # MarkItDown writes `<address>` for it, and returned that without `chomp`'s
-    # spaces: `Retrieved from<a href=…> https://…</a>` ran together.
+    # spaces: `Retrieved from<a href=…> https://…</a>` ran together.  The
+    # writer no longer writes that form (docs/09 P75); the edges stay either way.
     address = "https://example.invalid/whitespace"
     document = f'<p>alpha<a href="{address}"> {address} </a>omega</p>'
-    assert _markdown(document).strip() == f"alpha <{address}> omega"
-    assert _markdown(document, _Upstream).strip() == f"alpha<{address}>omega"
+    assert _markdown(document).strip() == f"alpha [{address}]({address}) omega"
+    upstream = _CustomMarkdownify().convert_soup(BeautifulSoup(document, "html.parser"))
+    assert upstream.strip() == f"alpha<{address}>omega"
     assert _reads(_page(document)) == f"alpha {address} omega"
 
 
@@ -241,7 +283,7 @@ def test_whitespace_alone_in_a_heading_a_cell_and_an_item_is_one_space() -> None
     for document in (
         "<h2>alpha<strong> </strong>omega</h2>",
         "<table><tr><th>h</th></tr><tr><td>alpha<em>\n</em>omega</td></tr></table>",
-        "<ul><li>alpha<b><br/></b>omega</li></ul>",
+        "<ul><li>alpha<b>\t</b>omega</li></ul>",
     ):
         assert "alpha omega" in _reads(_page(document)), document
 

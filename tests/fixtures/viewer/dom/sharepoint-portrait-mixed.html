@@ -1,0 +1,117 @@
+<!doctype html>
+<!--
+  Structure-only reproduction of an authenticated SharePoint PDF viewer showing
+  a portrait document whose pages are not all one size. Authored from the
+  accessibility-tree contract in webshot/protected/viewer.py — see README.md in
+  this directory. No tenant data.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Protected viewer fixture — pages of differing sizes</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px system-ui, sans-serif; background: #f3f2f1; }
+  .commandbar { height: 48px; background: #ffffff; border-bottom: 1px solid #e1dfdd;
+                display: flex; align-items: center; gap: 16px; padding: 0 16px; }
+  .viewer { position: relative; height: 820px; overflow: auto; background: #605e5c; }
+  /* Each page sets its own size, and centres itself with a margin of half its
+     width, as the viewer centres a page of any width. */
+  .page { position: absolute; left: 50%; background: #ffffff;
+          box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+  /* Bands, no two alike in the document, as in sharepoint-portrait.html: a
+     page shot from anywhere but its own rectangle shows in the stitched image
+     as a band out of place, out of length, or from another page. */
+  .canvas-stand-in { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+  <div class="commandbar" role="toolbar" aria-label="Document commands">
+    <span aria-label="Page 1 of 5">1 / 5</span>
+  </div>
+
+  <div class="viewer" aria-label="fixture-mixed-sizes.pdf" tabindex="0">
+    <!-- Letter, portrait: 816 x 1056 -->
+    <div class="page" aria-label="Page 1." style="top: 24px; width: 816px; height: 1056px; margin-left: -408px">
+      <div class="canvas-stand-in">
+        <div style="height: 96px; background: rgb(250, 10, 10)"></div>
+        <div style="height: 96px; background: rgb(250, 34, 10)"></div>
+        <div style="height: 96px; background: rgb(250, 58, 10)"></div>
+        <div style="height: 96px; background: rgb(250, 82, 10)"></div>
+        <div style="height: 96px; background: rgb(250, 106, 10)"></div>
+        <div style="height: 96px; background: rgb(250, 130, 10)"></div>
+        <div style="height: 96px; background: rgb(250, 154, 10)"></div>
+        <div style="height: 96px; background: rgb(250, 178, 10)"></div>
+        <div style="height: 96px; background: rgb(250, 202, 10)"></div>
+        <div style="height: 96px; background: rgb(250, 226, 10)"></div>
+        <div style="height: 96px; background: rgb(250, 250, 10)"></div>
+      </div>
+    </div>
+    <!-- Letter, landscape: wider than page 1 and short enough for one shot: 1056 x 816 -->
+    <div class="page" aria-label="Page 2." style="top: 1104px; width: 1056px; height: 816px; margin-left: -528px">
+      <div class="canvas-stand-in">
+        <div style="height: 102px; background: rgb(10, 250, 10)"></div>
+        <div style="height: 102px; background: rgb(10, 250, 40)"></div>
+        <div style="height: 102px; background: rgb(10, 250, 70)"></div>
+        <div style="height: 102px; background: rgb(10, 250, 100)"></div>
+        <div style="height: 102px; background: rgb(10, 250, 130)"></div>
+        <div style="height: 102px; background: rgb(10, 250, 160)"></div>
+        <div style="height: 102px; background: rgb(10, 250, 190)"></div>
+        <div style="height: 102px; background: rgb(10, 250, 220)"></div>
+      </div>
+    </div>
+    <!-- Legal, portrait: taller than page 1: 816 x 1344 -->
+    <div class="page" aria-label="Page 3." style="top: 1944px; width: 816px; height: 1344px; margin-left: -408px">
+      <div class="canvas-stand-in">
+        <div style="height: 96px; background: rgb(10, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(28, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(46, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(64, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(82, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(100, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(118, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(136, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(154, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(172, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(190, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(208, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(226, 10, 250)"></div>
+        <div style="height: 96px; background: rgb(244, 10, 250)"></div>
+      </div>
+    </div>
+    <!-- a form appended to the document: taller still: 816 x 1536 -->
+    <div class="page" aria-label="Page 4." style="top: 3312px; width: 816px; height: 1536px; margin-left: -408px">
+      <div class="canvas-stand-in">
+        <div style="height: 96px; background: rgb(10, 26, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 40, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 54, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 68, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 82, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 96, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 110, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 124, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 138, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 152, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 166, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 180, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 194, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 208, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 222, 250)"></div>
+        <div style="height: 96px; background: rgb(10, 236, 250)"></div>
+      </div>
+    </div>
+    <!-- a short, narrow last page, which the viewer cannot scroll to its top: 528 x 612 -->
+    <div class="page" aria-label="Page 5." style="top: 4872px; width: 528px; height: 612px; margin-left: -264px">
+      <div class="canvas-stand-in">
+        <div style="height: 102px; background: rgb(250, 10, 40)"></div>
+        <div style="height: 102px; background: rgb(250, 10, 66)"></div>
+        <div style="height: 102px; background: rgb(250, 10, 92)"></div>
+        <div style="height: 102px; background: rgb(250, 10, 118)"></div>
+        <div style="height: 102px; background: rgb(250, 10, 144)"></div>
+        <div style="height: 102px; background: rgb(250, 10, 170)"></div>
+      </div>
+    </div>
+    <div style="position:absolute; top: 5484px; height: 24px; width: 1px"></div>
+  </div>
+</body>
+</html>

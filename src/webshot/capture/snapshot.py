@@ -104,7 +104,7 @@ SNAPSHOT_EXTRA_ATTRIBUTES = {
         "disabled",
     },
     "textarea": {"name", "rows", "cols", "placeholder", "readonly", "disabled"},
-    "select": {"name", "multiple", "disabled"},
+    "select": {"name", "multiple", "size", "disabled"},
     "option": {"value", "selected"},
     "video": {"src", "width", "height", "poster", "preload", "controls"},
     "audio": {"src", "preload", "controls"},
@@ -164,6 +164,19 @@ def standalone_document(title: str, language: str, sanitized_body: str) -> str:
 #: `display:none` counted as captured content (docs/09 P8-25).
 VISIBLE_JS = """element => {
     if (element.closest('[data-webshot-hidden="true"]')) return false;
+    // A dropdown (a <select> without `multiple`, `size` at most 1) draws its
+    // chosen option in its own box and lays out none of its options, so the
+    // box test below failed every one of them and content.html held an empty
+    // <select> (docs/09 P69). The dropdown shows its choice exactly when it is
+    // shown itself, a placeholder the page hid from the list included, so the
+    // rest of the test is asked of the dropdown. An <optgroup> in one is never
+    // drawn, and stays only around the choice. A list box lays its options
+    // out, and they answer for themselves.
+    const menu = element.localName === 'option' ? element.closest('select') : null;
+    if (menu && !menu.multiple && menu.size <= 1) {
+        if (!element.selected) return false;
+        element = menu;
+    }
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
     return style.display !== 'none' && style.visibility !== 'hidden'
@@ -277,6 +290,65 @@ INLINE_TAGS = frozenset(
 #: between them, so the bridge treats it as a separator (docs/09 P48). Always
 #: WebShot's: the snapshot removes a page's own before it decides.
 DISPLAY_ATTRIBUTE = "data-webshot-display"
+
+#: Set on the element the snapshot writes in place of a `<math>`, a `<span>`
+#: or a `<div>` holding the formula as text, to where that text came from:
+#: `tex`, `alttext` or `text`. It is a formula, not part of the word beside
+#: it, so the bridge treats its edges as separators (docs/09 P70).
+MATH_ATTRIBUTE = "data-webshot-math"
+
+#: The elements of `INLINE_TAGS` whose text docling's HTML backend merges with
+#: the text beside it, because it gives them no formatting or link of its own:
+#: all but the void `wbr` and the elements it formats or links (docs/09 P48,
+#: P70). Where one touches the text beside it with no whitespace between, the
+#: markup alone does not say whether the page draws the two as one word: a
+#: date line's `<span>Article</span><span>•</span><span>12 Oct</span>` is
+#: drawn with a gap at each edge by the spans' margins. So the snapshot
+#: measures each such edge (`TOUCH_ATTRIBUTE`).
+MEASURED_INLINE_TAGS = frozenset(
+    {
+        "abbr",
+        "bdi",
+        "bdo",
+        "big",
+        "cite",
+        "data",
+        "dfn",
+        "font",
+        "label",
+        "mark",
+        "q",
+        "small",
+        "span",
+        "strike",
+        "time",
+        "tt",
+    }
+)
+
+#: Set on an element of `MEASURED_INLINE_TAGS` to `before`, `after` or both:
+#: the edges where its text touches the text beside it, with no whitespace
+#: between, and the page draws no gap between the two characters. On one line
+#: that is measured between the two glyphs' boxes; where the line wraps
+#: between them, it is the margins, paddings and borders of the boxes that end
+#: or start there, with no generated content. Either way the gap must be under
+#: `TOUCH_TOLERANCE_EM` of the smaller of their font sizes. The bridge joins
+#: such an element's text to its neighbour's only at an edge named here, so a
+#: snapshot that records none, as every one before docs/09 P70 does, keeps
+#: docling's space. Always WebShot's: the snapshot removes a page's own.
+TOUCH_ATTRIBUTE = "data-webshot-touches"
+
+#: The widest gap between two characters that still counts as touching, in
+#: ems. Glyphs that touch in the text are drawn with their advances abutting,
+#: 0 apart; the narrowest space a text face draws between words is about a
+#: fifth of an em. A margin, a padding, a border or generated content between
+#: them is drawn as a gap (docs/09 P70).
+TOUCH_TOLERANCE_EM = 0.1
+
+#: The characters Python's `str.isspace()` accepts, which are the ones the
+#: bridge reads as whitespace beside an element: the snapshot measures only
+#: an edge where neither character is one of them.
+_PYTHON_WHITESPACE = tuple(chr(code) for code in range(0x110000) if chr(code).isspace())
 
 
 LOCATOR_JS = """function locate(element) {
@@ -497,11 +569,79 @@ async def extract_semantic_content(
                     && style.visibility !== 'hidden'
                     && [...element.getClientRects()].some(rect => rect.height > 0);
             };
+            // A line's number, where a highlighter writes it into the code
+            // (docs/09 P68). Pygments' and Chroma's inline line numbers start
+            // each line of a <pre> with an element holding the number, which
+            // the page sets apart with padding and marks `user-select: none`.
+            // As text it is the line's first characters: `1package main`, and
+            // the code item no longer held the code. A prompt (`>>> `, `$ `)
+            // is marked unselectable the same way and is part of what the
+            // block says, so the test is narrower than that mark: only
+            // digits, at the start of a line. Whether the <pre> holds code
+            // besides is decided once the copy holds only what is shown.
+            const lineNumbers = [];     // {live, copy}, in reading order
+            const preCopies = new Map();
+            let inLineNumber = false;
+            const blockLevel = style => !/^(inline|contents|none)/.test(style.display);
+            // Whether `node`'s laid-out text ends a line, or null if it lays
+            // out none: a <br>, a final line ending, or a block box's end.
+            const endsLine = node => {
+                if (node.nodeType === Node.TEXT_NODE) return node.data ? /[\\n\\r]$/.test(node.data) : null;
+                if (node.nodeType !== Node.ELEMENT_NODE) return null;
+                if (node.localName === 'br') return true;
+                const style = getComputedStyle(node);
+                if (style.display === 'none') return null;
+                if (blockLevel(style)) return true;
+                for (let child = node.lastChild; child; child = child.previousSibling) {
+                    const ended = endsLine(child);
+                    if (ended !== null) return ended;
+                }
+                return null;
+            };
+            // Nothing laid out stands between the start of its line and it.
+            // Chroma's number opens a flex line; Pygments' follows a line
+            // ending, sometimes from inside the span that highlights a line.
+            const startsLine = (element, pre) => {
+                for (let node = element; node && node !== pre; node = node.parentNode) {
+                    if (node.nodeType === Node.ELEMENT_NODE && blockLevel(getComputedStyle(node))) return true;
+                    for (let before = node.previousSibling; before; before = before.previousSibling) {
+                        const ended = endsLine(before);
+                        if (ended !== null) return ended;
+                    }
+                }
+                return true;
+            };
+            // Unselectable where the code around it is not: a page that marks
+            // a whole block unselectable has every token read so, numbers in
+            // the code included.
+            const isLineNumber = (element, pre) => getComputedStyle(element).userSelect === 'none'
+                && getComputedStyle(pre).userSelect !== 'none'
+                && /^\\s*\\d+\\s*$/.test(element.textContent) && startsLine(element, pre);
+            // A space that ends a line hangs past its end, so an inline
+            // element holding only that space has no width either, and it
+            // went with its space wherever the page wrapped there: a
+            // citation's `am<span> </span>29. Januar` read "am29." once the
+            // bridge stopped spacing a span from its neighbours (docs/09
+            // P70). Like a line break, it is shown where it has a box at all.
+            const spaceShown = element => {
+                const text = element.textContent;
+                return inlineTags.has(element.localName) && text !== ''
+                    && text.trim() === '' && lineBreakShown(element);
+            };
+            // Each copied text node's live original, where the touches pass
+            // below measures the glyphs.
+            const liveText = new WeakMap();
             const copyOf = node => {
-                if (node.nodeType === Node.TEXT_NODE) return inert.createTextNode(node.data);
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const copy = inert.createTextNode(node.data);
+                    liveText.set(copy, node);
+                    return copy;
+                }
                 if (node.nodeType !== Node.ELEMENT_NODE) return null;
                 elements.push(node);
-                const shown = node.localName === 'br' ? lineBreakShown(node) : visible(node);
+                const shown = node.localName === 'br'
+                    ? lineBreakShown(node)
+                    : visible(node) || spaceShown(node);
                 const frame = flat.isFrame(node) && shown;
                 const body = frame ? flat.frameBody(node) : null;
                 // Ours in every tree the walk enters, because the harvest
@@ -539,21 +679,28 @@ async def extract_semantic_content(
                 // "aiconvertdocument-parser" (docs/09 P48). The display the
                 // browser computed travels with the copy.
                 copy.removeAttribute('__DISPLAY_ATTRIBUTE__');
+                copy.removeAttribute('__TOUCH_ATTRIBUTE__');
                 if (inlineTags.has(node.localName)) {
                     const display = getComputedStyle(node).display;
                     if (!['inline', 'contents', 'none'].includes(display)) {
                         copy.setAttribute('__DISPLAY_ATTRIBUTE__', display);
                     }
                 }
-                if (['INPUT', 'TEXTAREA', 'SELECT'].includes(node.tagName)) liveOf.set(copy, node);
+                if (['INPUT', 'TEXTAREA', 'SELECT', 'OPTION'].includes(node.tagName)) liveOf.set(copy, node);
                 // An <svg>'s <title> is never rendered, so the filter below
                 // removes it from the copy; its label is read off the live one.
                 if (node.localName === 'svg') liveOf.set(copy, node);
+                if (node.localName === 'pre') preCopies.set(node, copy);
+                const pre = inLineNumber || node.localName === 'pre' ? null : node.closest('pre');
+                const lineNumber = pre !== null && isLineNumber(node, pre);
+                if (lineNumber) lineNumbers.push({live: node, copy});
                 const ownText = !shown && showsOwnText(node);
                 // Asked once, and only of an element that has a line break.
                 let lineBreaks = null;
                 const breaks = () => (lineBreaks ??= !shown && !ownText && breaksLines(node));
                 let keepsChild = false;
+                const outerLineNumber = inLineNumber;
+                inLineNumber ||= lineNumber;
                 for (const child of [...flat.children(node, body)]) {
                     const childCopy = copyOf(child);
                     if (!childCopy) continue;
@@ -562,6 +709,7 @@ async def extract_semantic_content(
                         || (ownText && child.nodeType === Node.TEXT_NODE && rendered(child))
                         || (child.nodeType === Node.TEXT_NODE && /[\\n\\r]/.test(child.data) && breaks());
                 }
+                inLineNumber = outerLineNumber;
                 // A frame that was read is kept for what is in it, not for its
                 // own box: an empty one (an `about:blank` player not yet
                 // loaded) leaves no container behind.
@@ -663,11 +811,43 @@ async def extract_semantic_content(
                 const [source, text] = tex ? ['tex', tex] : alttext ? ['alttext', alttext] : ['text', linear];
                 if (!text) { math.remove(); continue; }
                 const holder = inert.createElement(math.getAttribute('display') === 'block' ? 'div' : 'span');
-                holder.setAttribute('data-webshot-math', source);
+                holder.setAttribute('__MATH_ATTRIBUTE__', source);
                 holder.textContent = text;
                 math.replaceWith(holder);
             }
             clone.querySelectorAll(excluded).forEach(x => x.remove());
+            // Line numbers leave the copy only now, when it holds no more than
+            // is shown, and only from a <pre> that holds code besides them. A
+            // <pre> of numbers alone is a line-number table's gutter, which
+            // the bridge reads beside its code (P55), and an unselectable cell
+            // reads as unselectable all the way down.
+            const lineNumbered = [];
+            const numbersIn = new Map();
+            for (const number of lineNumbers) {
+                if (!clone.contains(number.copy)) continue;
+                const pre = number.live.closest('pre');
+                if (!numbersIn.has(pre)) numbersIn.set(pre, []);
+                numbersIn.get(pre).push(number);
+            }
+            for (const [pre, numbers] of numbersIn) {
+                const preCopy = preCopies.get(pre);
+                const own = new Set(numbers.map(number => number.copy));
+                const texts = inert.createTreeWalker(preCopy, NodeFilter.SHOW_TEXT);
+                let holdsCode = false;
+                for (let text = texts.nextNode(); text && !holdsCode; text = texts.nextNode()) {
+                    if (!text.data.trim()) continue;
+                    let element = text.parentElement;
+                    while (element !== preCopy && !own.has(element)) element = element.parentElement;
+                    holdsCode = element === preCopy;
+                }
+                if (!holdsCode) continue;
+                numbers.forEach(number => number.copy.remove());
+                lineNumbered.push({
+                    locator: locator(pre),
+                    first: numbers[0].live.textContent.trim(),
+                    last: numbers.at(-1).live.textContent.trim(),
+                });
+            }
             // Live control state, from the live control each copy was made from.
             //
             // A copy carries content *attributes*, not IDL properties, so a
@@ -708,14 +888,23 @@ async def extract_semantic_content(
                 const live = liveOf.get(element);
                 element.textContent = (live ? live.value : element.value) || '';
             });
-            clone.querySelectorAll('select').forEach(element => {
-                const live = liveOf.get(element);
+            // An option is paired with its own live option for the same
+            // reason. The filter keeps only the options a select drew, so a
+            // dropdown's choice is usually not at the index it holds on the
+            // page, and an index pairing marked it unchosen (docs/09 P69).
+            // A select draws an option's label, which is its text unless the
+            // page gave it a `label`, and the sanitizer keeps no `label`: the
+            // copy holds the words the select drew, not text it never showed.
+            // An empty `label` is drawn as the text, though `.label` reads it
+            // back empty, so it falls back here; one that is only spaces is
+            // drawn blank, and stays.
+            clone.querySelectorAll('option').forEach(option => {
+                const live = liveOf.get(option);
                 if (!live) return;
-                const chosen = new Set([...live.selectedOptions].map(option => option.index));
-                [...element.options].forEach((option, position) => {
-                    if (chosen.has(position)) option.setAttribute('selected', '');
-                    else option.removeAttribute('selected');
-                });
+                if (live.selected) option.setAttribute('selected', '');
+                else option.removeAttribute('selected');
+                const drawn = live.label || live.text;
+                if (drawn !== live.text) option.textContent = drawn;
             });
             // Harvested visuals point at their bundle copies: the snapshot is
             // standalone, and the bridge matches pictures to assets by these
@@ -781,13 +970,167 @@ async def extract_semantic_content(
             for (const figure of [...clone.querySelectorAll('figure')]) {
                 if (!figure.querySelector('img')) figure.replaceWith(...figure.childNodes);
             }
-            return {metadata, blocks, links, jsonLd, text: (document.body.innerText || '').trim(), bodyHtml: clone.innerHTML, unreadFrames, readFrameAssets};
+
+            // Where an element whose text docling merges with its neighbours'
+            // touches the text beside it, whether the page draws the two as
+            // one word (docs/09 P70). The markup cannot say: a date line's
+            // `<span>Article</span><span>•</span><span>12 Oct 2026</span>`
+            // read "Article•12 Oct 2026" once the bridge joined spans, where
+            // the spans' margins draw a gap at each edge and the PDF prints
+            // "Article • 12 Oct 2026". So each such edge is measured, on the
+            // live glyphs either side of it. The pass runs on the finished
+            // copy and reads a run as the bridge reads one: an element outside
+            // `INLINE_TAGS`, or one that is a box or a formula, ends it. So
+            // each edge measured is one the bridge sees, between the same two
+            // characters.
+            const spaces = new Set(__PYTHON_WHITESPACE__);
+            const measuredTags = new Set(__MEASURED_INLINE_TAGS__);
+            const fontSizes = new Map();
+            const emOf = text => {
+                const element = text.parentElement ?? text.getRootNode().host;
+                if (!element) return 0;
+                if (!fontSizes.has(element)) {
+                    fontSizes.set(element, parseFloat(getComputedStyle(element).fontSize) || 0);
+                }
+                return fontSizes.get(element);
+            };
+            const glyph = (text, start, end) => {
+                const range = text.ownerDocument.createRange();
+                range.setStart(text, start);
+                range.setEnd(text, end);
+                return [...range.getClientRects()].filter(rect => rect.height > 0);
+            };
+            // A character is a code point, as the bridge reads one.
+            const lastCharacter = data => [...data.slice(-2)].at(-1);
+            const firstCharacter = data => [...data.slice(0, 2)][0];
+            // The element a node is laid out in: a slotted node's slot, a
+            // shadow root's host.
+            const flatParent = node => {
+                if (node.assignedSlot) return node.assignedSlot;
+                const parent = node.parentNode;
+                return parent?.nodeType === Node.DOCUMENT_FRAGMENT_NODE ? (parent.host ?? null) : parent;
+            };
+            const ancestors = node => {
+                const found = [];
+                for (let at = flatParent(node); at?.nodeType === Node.ELEMENT_NODE; at = flatParent(at)) {
+                    found.push(at);
+                }
+                return found;
+            };
+            // What the boxes between two characters draw there: the end of
+            // each element the first is in and the second is not, and the
+            // start of each the second is in and the first is not. A margin,
+            // a padding and a border have a width; generated content draws
+            // whatever it holds, so any at all counts.
+            const boxesBetween = (before, after) => {
+                const above = ancestors(before);
+                const below = ancestors(after);
+                const inAbove = new Set(above);
+                const inBelow = new Set(below);
+                let extent = 0;
+                for (const [elements, side, pseudo] of [
+                    [above.filter(element => !inBelow.has(element)), 'End', '::after'],
+                    [below.filter(element => !inAbove.has(element)), 'Start', '::before'],
+                ]) {
+                    for (const element of elements) {
+                        const style = getComputedStyle(element);
+                        extent += parseFloat(style[`marginInline${side}`])
+                            + parseFloat(style[`paddingInline${side}`])
+                            + parseFloat(style[`borderInline${side}Width`]);
+                        const content = getComputedStyle(element, pseudo).content;
+                        if (content !== 'none' && content !== 'normal') return Infinity;
+                    }
+                }
+                return extent;
+            };
+            // On one line, the gap is measured between the two glyphs' boxes,
+            // as the page draws them. Where the line wraps between the two
+            // there is no gap to measure, and the page draws none if the boxes
+            // between draw nothing: a page range `<span>123&ndash;</span>165` wraps
+            // after its dash at one width and not at another, and is one range
+            // at both. Absent evidence is not evidence: a glyph with no box, or
+            // a copy with no live text, touches nowhere.
+            const drawnTouching = (left, right) => {
+                const before = liveText.get(left);
+                const after = liveText.get(right);
+                if (!before || !after) return false;
+                const last = lastCharacter(before.data);
+                const first = firstCharacter(after.data);
+                if (spaces.has(last) || spaces.has(first)) return false;
+                const a = glyph(before, before.data.length - last.length, before.data.length).at(-1);
+                const b = glyph(after, 0, first.length)[0];
+                if (!a || !b) return false;
+                const em = Math.min(emOf(before), emOf(after));
+                const oneLine = a.top < b.bottom && b.top < a.bottom;
+                const gap = oneLine
+                    ? Math.max(0, b.left - a.right, a.left - b.right)
+                    : boxesBetween(before, after);
+                return em > 0 && gap <= __TOUCH_TOLERANCE_EM__ * em;
+            };
+            const touches = new Map();
+            const touch = (element, edge) => {
+                if (!touches.has(element)) touches.set(element, new Set());
+                touches.get(element).add(edge);
+            };
+            let lastText = null;  // the run's last text so far; null after a separator
+            let ended = [];       // measured elements whose text has ended, until the next text
+            const open = [];
+            const separate = () => {
+                lastText = null;
+                ended = [];
+                for (const element of open) if (!element.first) element.before = null;
+            };
+            const readRun = node => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    if (!node.data) return;
+                    for (const element of ended) {
+                        if (drawnTouching(element.last, node)) touch(element.copy, 'after');
+                    }
+                    ended = [];
+                    for (const element of open) element.first ??= node;
+                    lastText = node;
+                    return;
+                }
+                if (node.nodeType !== Node.ELEMENT_NODE) return;
+                const tag = node.localName;
+                if (!inlineTags.has(tag)) {
+                    separate();
+                    for (const child of [...node.childNodes]) readRun(child);
+                    separate();
+                    return;
+                }
+                if (tag === 'wbr') return;
+                const box = node.hasAttribute('__DISPLAY_ATTRIBUTE__') || node.hasAttribute('__MATH_ATTRIBUTE__');
+                if (box) separate();
+                const element = {copy: node, before: lastText, first: null};
+                open.push(element);
+                for (const child of [...node.childNodes]) readRun(child);
+                open.pop();
+                if (box) {
+                    separate();
+                    return;
+                }
+                if (!element.first || !measuredTags.has(tag)) return;
+                if (element.before && drawnTouching(element.before, element.first)) touch(node, 'before');
+                if (lastText) ended.push({copy: node, last: lastText});
+            };
+            for (const child of [...clone.childNodes]) readRun(child);
+            for (const [element, edges] of touches) {
+                element.setAttribute(
+                    '__TOUCH_ATTRIBUTE__', ['before', 'after'].filter(edge => edges.has(edge)).join(' '));
+            }
+            return {metadata, blocks, links, jsonLd, text: (document.body.innerText || '').trim(), bodyHtml: clone.innerHTML, unreadFrames, readFrameAssets, lineNumbered};
         }""".replace("__LOCATOR__", LOCATOR_JS)
         .replace("__VISIBLE__", VISIBLE_JS)
         .replace("__FLAT_TREE__", FLAT_TREE_JS)
         .replace("__HARVEST_MARKERS__", json.dumps(HARVEST_MARKERS))
         .replace("__INLINE_TAGS__", json.dumps(sorted(INLINE_TAGS)))
-        .replace("__DISPLAY_ATTRIBUTE__", DISPLAY_ATTRIBUTE),
+        .replace("__DISPLAY_ATTRIBUTE__", DISPLAY_ATTRIBUTE)
+        .replace("__MATH_ATTRIBUTE__", MATH_ATTRIBUTE)
+        .replace("__TOUCH_ATTRIBUTE__", TOUCH_ATTRIBUTE)
+        .replace("__MEASURED_INLINE_TAGS__", json.dumps(sorted(MEASURED_INLINE_TAGS)))
+        .replace("__PYTHON_WHITESPACE__", json.dumps(_PYTHON_WHITESPACE))
+        .replace("__TOUCH_TOLERANCE_EM__", repr(TOUCH_TOLERANCE_EM)),
         {"ownLabels": dict(own_labels or {})},
     )
     extracted["html"] = standalone_document(
@@ -1001,6 +1344,29 @@ def unread_text_warnings(
             f"it is visible, and not in {_TEXT_SURFACES}."
         )
     return warnings
+
+
+def line_number_warnings(extracted: Mapping[str, Any]) -> list[str]:
+    """The code blocks whose line numbers the snapshot left out, by name.
+
+    The PDF prints each number beside its line, and the text surfaces hold the
+    code without them (docs/09 P68), so the manifest says which blocks were
+    numbered and from where: a block that starts at line 42 of a file says so
+    nowhere else.
+    """
+    blocks = extracted["lineNumbered"]
+    if not blocks:
+        return []
+    named = ", ".join(
+        f"`{block['locator']}` (numbered {block['first']} to {block['last']})"
+        for block in blocks
+    )
+    return [
+        f"{len(blocks)} code block(s) number their lines with text the page marks "
+        f"unselectable: {named}. The numbers are in the PDF, and left out of "
+        "content.html and the content.md, content.txt, content.json and "
+        "chunks.jsonl built from it, so each block holds its code alone."
+    ]
 
 
 #: Every password value in one frame's document and in each open shadow root

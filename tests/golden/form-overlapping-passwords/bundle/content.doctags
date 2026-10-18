@@ -6,6 +6,7 @@
 <text>Account</text>
 <text>live@example.com</text>
 <text>Display mode</text>
+<text>Dense</text>
 <checkbox_selected>Email me about sign-ins</checkbox_selected>
 <text>Email me about sign-ins</text>
 <text>Recovery note</text>

@@ -324,31 +324,31 @@ def test_an_authors_markdown_reads_the_same_way(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 #: How many seeded trees `test_any_nesting_reaches_the_page_as_it_is` draws.
-TREES = 80
+TREES = 120
 
 
-def _document(rng: random.Random, depth: int = 1, *, quoted: bool = False) -> str:
+def _document(rng: random.Random, depth: int = 1) -> str:
     """Lists, definition lists and quotations, three deep, in any order.
 
     Two definition lists or two quotations side by side are left out: they
     merge whether or not an item holds them, which is docs/09 P63's.  So are
     two terms in a row and a definition after one of more than a paragraph,
     which markdownify writes as no definition list Python-Markdown reads,
-    anywhere; code, whose place in a definition is docs/09 P47's; and a list
-    in a quotation, which markdownify writes as the item's own when an item
-    holds the quotation, with no definition list anywhere.
+    anywhere; and code, whose place in a definition is docs/09 P47's.  A list
+    in a quotation was left out too, until docs/09 P74 wrote it as the
+    quotation's.
     """
 
     def word() -> str:
         return f"w{rng.randint(0, 99)}"
 
-    def content(levels: int, *, quoting: bool = quoted) -> str:
+    def content(levels: int) -> str:
         pieces: list[str] = []
         last = ""
         for _ in range(rng.randint(1, 3)):
             shape = rng.choice(["text", "paragraph", "block"])
             if shape == "block" and levels < 3:
-                piece = _document(rng, levels + 1, quoted=quoting)
+                piece = _document(rng, levels + 1)
                 kind = piece[1:3]
                 if kind == last and kind in ("dl", "bl"):
                     continue
@@ -360,7 +360,7 @@ def _document(rng: random.Random, depth: int = 1, *, quoted: bool = False) -> st
             pieces.append(piece)
         return "".join(pieces) or f" {word()} "
 
-    shape = rng.choice(["dl"] if quoted else ["ul", "ol", "dl", "blockquote"])
+    shape = rng.choice(["ul", "ol", "dl", "blockquote"])
     if shape == "dl":
         # A definition before another is one line, so that markdownify writes
         # the next term after a blank line.
@@ -368,7 +368,7 @@ def _document(rng: random.Random, depth: int = 1, *, quoted: bool = False) -> st
         earlier = f"<dt>{word()}</dt><dd> {word()} </dd>" * rng.randint(0, 1)
         return f"<dl>{earlier}{last}</dl>"
     if shape == "blockquote":
-        return f"<blockquote>{content(depth, quoting=True)}</blockquote>"
+        return f"<blockquote>{content(depth)}</blockquote>"
     items = "".join(f"<li>{content(depth)}</li>" for _ in range(rng.randint(1, 3)))
     return f"<{shape}>{items}</{shape}>"
 

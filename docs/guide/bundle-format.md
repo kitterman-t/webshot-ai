@@ -94,6 +94,14 @@ flex item, a block, an inline-block) keeps two parts apart. `content.html`
 records that last case on the element as `data-webshot-display`, the display
 the browser computed.
 
+A word with a part in a `<span>` or another inline element that is not
+formatting is one word too, where the page draws the parts with no gap
+between them. `content.html` records each such edge on the element as
+`data-webshot-touches` (`before`, `after` or both). Where the page draws a
+margin, a padding, a border or generated content there, as around the bullet
+in "Article • 12 Oct 2026", the parts stay apart, and so do the spans of a
+`content.html` captured before WebShot measured this.
+
 **`chunks.jsonl`** is one JSON object per line, sized for retrieval:
 
 ```json

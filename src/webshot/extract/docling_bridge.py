@@ -23,14 +23,18 @@ versions rather than assumed (docs/09 S3 and the Phase 2 corrections):
 - The backend strips every text node and keeps no record of where the source
   had whitespace, and docling-core's serializers join the parts of an inline
   group with a space, so "H<sub>0</sub>" reached every text surface as "H 0"
-  and "un<b>break</b>able" as "un break able". Where a formatted part touches
-  the text beside it is carried through the backend as two marker characters
-  (docs/09 P14-56, P48).
+  and "un<b>break</b>able" as "un break able"; it merges a `<span>`'s text
+  with the text beside it with a space too, so "un<span>break</span>able" read
+  the same. Where an inline element touches the text beside it is carried
+  through the backend as two marker characters (docs/09 P14-56, P48), for a
+  span and the rest only where the snapshot measured the page drawing the two
+  touching (P70).
 - The backend makes no item of an `<li>` with no text of its own, so a list
   that item holds hangs straight off the outer list, the item has no line in
   content.md, and an ordered list given a start number counts the items after
   it one short. A third marker character stands in for the item's text until
-  the document is built (docs/09 P45).
+  the document is built (docs/09 P45). A picture or a table that is all an
+  item holds was dropped with it, from every surface (docs/09 P52).
 - The backend reads a `<pre>` in a list item into the item's line with its
   whitespace joined, and docling-core indents only the first line of a list
   item's child, so an item's code reached content.md as one line. The bridge
@@ -52,6 +56,25 @@ versions rather than assumed (docs/09 S3 and the Phase 2 corrections):
   its lines, and docling-core fences code with three backticks whatever it
   holds. The bridge reads a `<pre>`'s text as the page lays it out, and fences
   it with more backticks than any run in the code (docs/09 P55).
+- docling-core writes what a list item holds after the item's line, at the
+  margin, so a CommonMark reader took a picture's caption for more of the
+  item's text and a table for a paragraph of pipes (docs/09 P61).
+- The backend reads a description-list term (`<dt>`) for its text alone and
+  never visits what it holds, so a picture, a table or a list in a term was
+  dropped from every surface. The conversion drives a subclass of the backend
+  that visits a term as the backend visits a list item, and a term with no
+  text of its own takes the third marker character as a list item does
+  (docs/09 P60).
+- The backend reads only a description list's own `<dt>` and `<dd>`
+  children, so a `<div>` grouping a term with its descriptions, which HTML
+  allows, dropped the terms and descriptions it held from every surface. A
+  subclass of the backend takes those `<div>`s away before it reads the list
+  (docs/09 P72).
+- The backend reads a description (`<dd>`) whose own child is a description
+  list for that list alone, hanging it off the term, so the description's
+  text was dropped from every surface, and with no term the list too. A
+  further subclass reads such a description as any other wherever that
+  loses something (docs/09 P73).
 """
 
 from __future__ import annotations
@@ -68,7 +91,14 @@ from io import BytesIO
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from ..bundle.publish import dump_json
-from ..capture.snapshot import DISPLAY_ATTRIBUTE, INLINE_TAGS, TITLE_ELEMENT_RE
+from ..capture.snapshot import (
+    DISPLAY_ATTRIBUTE,
+    INLINE_TAGS,
+    MATH_ATTRIBUTE,
+    MEASURED_INLINE_TAGS,
+    TITLE_ELEMENT_RE,
+    TOUCH_ATTRIBUTE,
+)
 from ..capture.visuals import VisualAsset
 from ..errors import BundleBuildError
 
@@ -199,6 +229,12 @@ class _SnapshotFacts(HTMLParser):
     element with one of their landmark roles) — the one kind of content that
     legitimately lands on the furniture layer.
 
+    It reads the page the backend parsed, join markers and all, and takes the
+    markers out of a caption's or a region's text as `extract` takes them out
+    of the items: a nav's `<span>Module 1</span><span>Overview</span>` is one
+    item, "Module 1Overview", which a region spelled "Module 1 Overview" did
+    not hold, so the item was filed in the body (docs/09 P70).
+
     `clean` writes text as the backend writes an item's text. Chrome text is
     compared that way, because that is how every item's text arrives: the
     backend makes dashes and quotes plain and drops soft hyphens, so a menu
@@ -292,7 +328,9 @@ class _SnapshotFacts(HTMLParser):
             self._pre_parts.append(" ")
         if tag == "caption" and self._caption_depth:
             self._caption_depth -= 1
-            self.table_captions[-1] = " ".join(" ".join(self._caption_parts).split())
+            self.table_captions[-1] = " ".join(
+                unmark_joins(" ".join(self._caption_parts)).split()
+            )
         # The end tag closes the innermost element of its name, and every
         # element still open inside it; one that closes nothing open is ignored.
         for index in range(len(self._open) - 1, -1, -1):
@@ -307,7 +345,7 @@ class _SnapshotFacts(HTMLParser):
                 self._chrome_depth -= 1
                 if not self._chrome_depth:
                     self.chrome_regions.append(
-                        self._normalized(" ".join(self._chrome_parts))
+                        self._normalized(unmark_joins(" ".join(self._chrome_parts)))
                     )
 
     def handle_data(self, data: str) -> None:
@@ -347,7 +385,7 @@ class _SnapshotFacts(HTMLParser):
 
 
 #: Two Unicode noncharacters, which the standard keeps for a program's internal
-#: use: the first opens a formatted part's text that touches the text before
+#: use: the first opens an inline element's text that touches the text before
 #: it, the second closes one that touches the text after it.
 JOINED_BEFORE = "\ufdd0"
 JOINED_AFTER = "\ufdd1"
@@ -370,32 +408,18 @@ _FOOTER_TAG_RE = re.compile(r"<footer[\s>]", re.IGNORECASE)
 #: Stands in for a part's text, to read what a serializer wraps text in.
 _WRAPPER_PROBE = "\x00"
 
+#: The one element of `INLINE_TAGS` that has no end tag.
+_VOID_INLINE_TAGS = frozenset({"wbr"})
 #: The elements whose text the backend gives a formatting or a link of its
 #: own: its `_FORMAT_TAG_MAP` (emphasis, strong, strikethrough, underline,
 #: sub/superscript, inline code) and `a`. Their text becomes an item apart
 #: from the text beside it, which every serializer joins to the next with a
 #: space, so "un<b>break</b>able" read "un **break** able" (docs/09 P48).
-_JOINED_TAGS = frozenset(
-    {
-        "a",
-        "b",
-        "code",
-        "del",
-        "em",
-        "i",
-        "ins",
-        "kbd",
-        "s",
-        "samp",
-        "strong",
-        "sub",
-        "sup",
-        "u",
-        "var",
-    }
-)
-#: The one element of `INLINE_TAGS` that has no end tag.
-_VOID_INLINE_TAGS = frozenset({"wbr"})
+#: Each joins the text it touches wherever no whitespace separates them, as
+#: Chromium's own selection text does. Every other element of `INLINE_TAGS`
+#: joins only where the snapshot measured the page drawing the two touching
+#: (`MEASURED_INLINE_TAGS`, docs/09 P70).
+_JOINED_TAGS = INLINE_TAGS - MEASURED_INLINE_TAGS - _VOID_INLINE_TAGS
 
 
 @dataclass(slots=True)
@@ -403,8 +427,14 @@ class _OpenInline:
     """An inline element the parse is inside of."""
 
     tag: str
-    #: Laid out as a box of its own, so its edges separate (`DISPLAY_ATTRIBUTE`).
+    #: Laid out as a box of its own (`DISPLAY_ATTRIBUTE`), or a formula the
+    #: snapshot wrote as text (`MATH_ATTRIBUTE`), so its edges separate.
     box: bool
+    #: Whether its start, and its end, may join the text it touches: always
+    #: for an element of `_JOINED_TAGS`, and for any other only at an edge
+    #: the snapshot names in `TOUCH_ATTRIBUTE`.
+    joins_before: bool = False
+    joins_after: bool = False
     #: The character the element follows; "" where nothing in its run does.
     before: str = ""
     #: Where its text starts, with which character, once it has any.
@@ -412,14 +442,27 @@ class _OpenInline:
 
 
 class _InlineJoins(HTMLParser):
-    """Where each formatted element touches the text beside it, as insertions.
+    """Where each inline element touches the text beside it, as insertions.
 
-    An element of `_JOINED_TAGS` whose text starts with no whitespace between
+    An element of `INLINE_TAGS` whose text starts with no whitespace between
     it and the text before it gets `JOINED_BEFORE` at the start of its text;
     one whose text ends with no whitespace before the text after it gets
     `JOINED_AFTER` at the end. Offsets are into the parsed string, and a
     marker goes inside the element's innermost text, never into a text node
     of its own, which the backend would make an item of.
+
+    The text of an element the backend formats or links (`_JOINED_TAGS`)
+    becomes an item apart from the text beside it, which the serializers join
+    to the next with a space, so "un<b>break</b>able" read "un **break** able"
+    (docs/09 P48); every touching edge of one is marked, and the inline
+    serializer joins those items. The text of any other, a `<span>`, a
+    `<mark>`, a `<small>`, is merged with the text beside it into one item,
+    with a space, so "un<span>break</span>able" read "un break able"; the
+    marker sits inside that one string, and `extract` takes the space out
+    with it. Such an edge is marked only where the snapshot measured the page
+    drawing the two glyphs touching (`TOUCH_ATTRIBUTE`): touching in the
+    markup, a date line's spans are drawn apart by their margins (docs/09
+    P70).
     """
 
     def __init__(self, source: str) -> None:
@@ -459,10 +502,34 @@ class _InlineJoins(HTMLParser):
             return
         if tag in _VOID_INLINE_TAGS:
             return
-        box = any(name == DISPLAY_ATTRIBUTE for name, _ in attrs)
+        # A formula's holder touches the text beside it wherever the page
+        # draws the formula itself too: MathJax's own rendering of 22/40
+        # reaches the snapshot as "2240" beside the holder's "2240", which
+        # joined read as one number (docs/09 P70).
+        box = any(name in (DISPLAY_ATTRIBUTE, MATH_ATTRIBUTE) for name, _ in attrs)
         if box:
             self._separate()
-        self._open.append(_OpenInline(tag, box, before=self._last))
+        if tag in _JOINED_TAGS:
+            joins_before = joins_after = True
+        else:
+            # Only the edges the snapshot measured touching: one that names
+            # none, as no snapshot did before docs/09 P70, keeps docling's
+            # space at both.
+            touches = set(
+                " ".join(
+                    value or "" for name, value in attrs if name == TOUCH_ATTRIBUTE
+                ).split()
+            )
+            joins_before, joins_after = "before" in touches, "after" in touches
+        self._open.append(
+            _OpenInline(
+                tag,
+                box,
+                joins_before=joins_before,
+                joins_after=joins_after,
+                before=self._last,
+            )
+        )
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self._event()
@@ -489,12 +556,20 @@ class _InlineJoins(HTMLParser):
         if element.box:
             self._separate()
             return
-        if tag not in _JOINED_TAGS or element.first is None:
+        if element.first is None:
             return
         offset, character = element.first
-        if element.before and not element.before.isspace() and not character.isspace():
+        if (
+            element.joins_before
+            and element.before
+            and not element.before.isspace()
+            and not character.isspace()
+        ):
             self.marks.add((offset, JOINED_BEFORE))
-        if self._last and not self._last.isspace():
+        # Set, never cleared: an element inside this one that ends at the same
+        # character may already have, and both are read off the same two
+        # glyphs.
+        if element.joins_after and self._last and not self._last.isspace():
             self._after_at = self._text_end
 
     def handle_data(self, data: str) -> None:
@@ -516,7 +591,7 @@ class _InlineJoins(HTMLParser):
 
 
 def mark_inline_joins(html: str) -> str:
-    """`html` with each formatted element's touching edges marked for the backend.
+    """`html` with each inline element's touching edges marked for the backend.
 
     The backend normalizes every text node with `" ".join(text.split())`,
     which drops the one fact the serializers would need: whether "un" and its
@@ -552,8 +627,9 @@ def unmark_joins(text: str) -> str:
     return _JOIN_MARK_RE.sub("", text)
 
 
-#: A third noncharacter: the text of a list item that has none of its own but
-#: holds a list, so the backend makes an item of it (docs/09 P45).
+#: A third noncharacter: the text of a list item or a description-list term
+#: that has none of its own but holds a list, a picture or a table, so the
+#: backend makes an item of it (docs/09 P45, P52, P60).
 EMPTY_ITEM = "\ufdd2"
 #: The stand-in as a character reference, which the backend's parser reads as
 #: the character and `html.unescape` drops, as it drops every noncharacter.
@@ -564,35 +640,72 @@ _EMPTY_ITEM_REF_RE = re.compile(
 #: The lists an `<li>` belongs to, and the lists one can hold.
 _ITEM_LIST_TAGS = frozenset({"ul", "ol"})
 _LIST_TAGS = _ITEM_LIST_TAGS | {"dl"}
-#: What a list item may hold beside its lists and still have no text of its
-#: own, as the backend reads one: elements that carry nothing but their text.
-#: Anything else (an image, a checkbox, a table) is left as the backend reads it,
-#: and so is a `<br>`, which the backend writes as a character of its own
-#: (U+E000), so it makes an item of one with nothing else in it. `extract`
-#: takes out the `<br>`s of an item with no text before this reads the page
-#: (`drop_lone_line_breaks`, docs/09 P56), so an item whose only content
-#: beside its lists was line breaks reaches this holding only its lists.
-_CARRIER_TAGS = INLINE_TAGS | frozenset({"div", "p"})
+#: Each element the backend makes an item of, and the list it must stand in.
+#: A `<dd>` is not one: the backend hangs what a description holds off its
+#: term's descriptions when it has no text, so nothing of it is lost.
+_ITEM_PARENTS = {"li": _ITEM_LIST_TAGS, "dt": frozenset({"dl"})}
+#: What may stand between a description list and its terms: the `<div>` HTML
+#: allows around a term and its descriptions, which `_reading_groups` takes
+#: away before the backend reads the list (docs/09 P72).
+_GROUP_TAG = "div"
+#: What the backend puts inside an item it has made and never reads as the
+#: item's text: its lists and tables, whose text is their own, and its pictures.
+#: Without the item, it hung the lists off the outer list and dropped the rest
+#: (docs/09 P52).
+_BLOCK_TAGS = _LIST_TAGS | {"table"}
+_HELD_TAGS = _BLOCK_TAGS | {"img"}
+#: What a list item may hold beside those and still have no text of its own,
+#: as the backend reads one: elements that carry nothing but their text, and
+#: a rule and media it makes nothing of, wherever they stand. A figure's
+#: caption is text, so a figure with one has text of its own. Anything else (a
+#: checkbox, a code block) is left as the backend reads it, and so is a `<br>`,
+#: which the backend writes as a character of its own (U+E000), so it makes an
+#: item of one with nothing else in it. `extract` takes out the `<br>`s of an
+#: item with no text before this reads the page (`drop_lone_line_breaks`,
+#: docs/09 P56), so an item whose only content beside what it holds was line
+#: breaks reaches this holding only that.
+_CARRIER_TAGS = INLINE_TAGS | frozenset(
+    {
+        "audio",
+        "div",
+        "figcaption",
+        "figure",
+        "hr",
+        "p",
+        "picture",
+        "source",
+        "track",
+        "video",
+    }
+)
 
 
 @dataclass(slots=True)
 class _OpenItem:
     #: Where the item's content starts, which is where its stand-in text goes.
     at: int
-    #: How many lists of its own are open, so text inside them is theirs.
+    #: How many lists and tables of its own are open, so text inside them is
+    #: theirs.
     lists: int = 0
-    holds_list: bool = False
+    #: Whether it holds a list, a picture or a table.
+    holds: bool = False
     holds_other: bool = False
 
 
 class _EmptyItems(HTMLParser):
-    """Where each `<li>` that holds a list and no text of its own opens.
+    """Where each `<li>` or `<dt>` that holds a list, a picture or a table and
+    no text of its own opens.
 
     The backend makes no item of such an `<li>`: it reads the item's text with
-    its lists left out, finds none, and hangs the lists straight off the outer
-    list. content.md then has no line for the item, and a list holding nothing
-    but lists is the shape an invalid `<ul><ul>` gives too, so it cannot be
-    told apart once the document is built (docs/09 P45).
+    its lists and tables left out, finds none, and hangs the lists straight
+    off the outer list. content.md then has no line for the item, and a list
+    holding nothing but lists is the shape an invalid `<ul><ul>` gives too, so
+    it cannot be told apart once the document is built (docs/09 P45). Only an
+    item's lists are looked for in it, so its pictures and tables were dropped
+    from every surface, with no warning (docs/09 P52). A term made no item
+    either, and so took its descriptions' item with it: they hung off the
+    description list as terms of their own (docs/09 P60). A term is one in a
+    `<div>` grouping it with its descriptions as well (docs/09 P72).
     """
 
     def __init__(self, source: str) -> None:
@@ -612,19 +725,32 @@ class _EmptyItems(HTMLParser):
             return self._items[-1][1]
         return None
 
+    def _list_of(self, tag: str) -> str | None:
+        """The open element an item `tag` opening now would stand in.
+
+        For a term, that is past the `<div>`s grouping it with its
+        descriptions, as the backend reads it once they are taken away
+        (docs/09 P72).
+        """
+        depth = len(self._open)
+        if tag == "dt":
+            while depth and self._open[depth - 1] == _GROUP_TAG:
+                depth -= 1
+        return self._open[depth - 1] if depth else None
+
     def _element(self, tag: str) -> None:
         item = self._inside()
         if item is not None:
-            if tag in _LIST_TAGS:
-                item.holds_list = True
+            if tag in _HELD_TAGS:
+                item.holds = True
             elif tag not in _CARRIER_TAGS:
                 item.holds_other = True
-        if self._items and tag in _LIST_TAGS:
+        if self._items and tag in _BLOCK_TAGS:
             self._items[-1][1].lists += 1
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self._element(tag)
-        if tag == "li" and self._open and self._open[-1] in _ITEM_LIST_TAGS:
+        if self._list_of(tag) in _ITEM_PARENTS.get(tag, ()):
             at = self._offset() + len(self.get_starttag_text() or "")
             self._items.append((len(self._open), _OpenItem(at)))
         if tag not in _VOID_TAGS:
@@ -640,9 +766,9 @@ class _EmptyItems(HTMLParser):
             closed = self._open.pop()
             if self._items and self._items[-1][0] == len(self._open):
                 _, item = self._items.pop()
-                if item.holds_list and not item.holds_other:
+                if item.holds and not item.holds_other:
                     self.marks.append(item.at)
-            elif closed in _LIST_TAGS and self._items:
+            elif closed in _BLOCK_TAGS and self._items:
                 self._items[-1][1].lists -= 1
             if closed == tag:
                 return
@@ -654,14 +780,16 @@ class _EmptyItems(HTMLParser):
 
 
 def mark_empty_items(html: str) -> str:
-    """`html` with `EMPTY_ITEM` as the text of each item that holds only lists.
+    """`html` with `EMPTY_ITEM` as the text of each item with none of its own.
 
-    The backend then makes an item of it, numbered among its siblings, with
-    its lists inside it, and `extract` empties its text once the document is
-    built. A marked page opens with a byte-order mark, as `mark_inline_joins`
-    explains.
+    That is each item or term holding lists, pictures or tables and nothing
+    else. The backend then makes an item of it, numbered among its siblings,
+    with what it holds inside it (a term's, as `_reading_terms` reads them),
+    and `extract` empties its text once the document is built. A marked page
+    opens with a byte-order mark, as `mark_inline_joins` explains.
     """
-    if "<li" not in html.lower():
+    lowered = html.lower()
+    if "<li" not in lowered and "<dt" not in lowered:
         return html
     parser = _EmptyItems(html)
     parser.feed(html)
@@ -697,13 +825,16 @@ def write_empty_items(markdown: str) -> str:
 
     An item that holds only a list goes on the line of its list's first item,
     `-   - Gorvane`, its marker padded to where docling indents the list, so
-    the next item of that list lines up beneath it. A marker on a line of its
+    the next item of that list lines up beneath it. A picture or a table is
+    indented there too (`_holding` in `extract`), so it goes on the item's line
+    the same way, `-   <!-- image -->`, and its other lines are the item's
+    (docs/09 P52). A marker on a line of its
     own (`-`) is an empty item, which CommonMark does not let interrupt a
     paragraph: under an item with text, it read as that text's setext
     underline and the list beneath it as a code block (docs/09 P45). A
-    stand-in with no deeper line after it, or with a marker too wide for
-    docling's four-space indent (`1000.`), keeps its line with the marker
-    alone. In a table cell, which docling writes on one line, the item is its
+    stand-in with no deeper line after it, or with a list after a marker too
+    wide for docling's four-space indent (`1000.`), keeps its line with the
+    marker alone; a picture or a table goes one space past such a marker. In a table cell, which docling writes on one line, the item is its
     marker before its list's first, `- - Gorvane`. A stand-in anywhere else is
     left for the caller to find.
     """
@@ -771,6 +902,8 @@ _LINE_HOLDERS = {
     "dt": frozenset({"dl"}),
     "dd": frozenset({"dl"}),
 }
+#: The holders a `<div>` may group in their list (docs/09 P72).
+_GROUPED_TAGS = frozenset({"dt", "dd"})
 #: The captions, which the backend reads whole and keeps only with text.
 _CAPTION_TAGS = frozenset({"caption", "figcaption"})
 #: What a list item's own text leaves out, as the backend reads it: the lists
@@ -813,12 +946,27 @@ class _LoneBreaks(HTMLParser):
             start = self._line_starts[line - 1] + column
             holder.breaks.append((start, start + len(self.get_starttag_text() or "")))
 
+    def _within(self, tag: str) -> str:
+        """The open element `tag` opening now is read in.
+
+        For a term or a description, that is past the `<div>`s grouping it in
+        its list, which the backend takes away before it reads the list
+        (`_reading_groups`, docs/09 P72): a grouped term holding only a
+        `<br>` was made as an empty bold term, `- ****`, where the same term
+        ungrouped is none.
+        """
+        depth = len(self._open)
+        if tag in _GROUPED_TAGS:
+            while depth and self._open[depth - 1][0] == _GROUP_TAG:
+                depth -= 1
+        return self._open[depth - 1][0] if depth else ""
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag == "br":
             self._line_break()
         if tag in _VOID_TAGS:
             return
-        within = self._open[-1][0] if self._open else ""
+        within = self._within(tag)
         opened = None
         if tag in _CAPTION_TAGS or within in _LINE_HOLDERS.get(tag, ()):
             opened = _Holder(caption=tag in _CAPTION_TAGS)
@@ -1004,6 +1152,404 @@ def _remove_items(document: Any, refs: set[str]) -> None:
     visit(document)
 
 
+#: Each docling serializer `_holding` has made, by the class it extends: a
+#: pydantic model class costs milliseconds to build, so it is built once.
+_HOLDING: dict[type, type] = {}
+
+
+def _holding(base: type[_Serializer]) -> type[_Serializer]:
+    """`base`, writing a list item's pictures and tables inside the item.
+
+    docling writes what an item holds after the item's line, its first line at
+    the item's own indent and the rest at none, so a picture's caption read as
+    more of the item's text, the `<!-- image -->` ended the list, and a table
+    became a paragraph of pipes in the item. A picture or a table whose parent
+    is a list item is indented to the column where that item's content begins,
+    so a CommonMark reader reads every line of it as the item's:
+
+    - An empty item's (a child of an item in `holders`) goes where the item's
+      lists go, so that `write_empty_items` puts its first line on the item's,
+      the marker padded to that column (docs/09 P52), or one space past a
+      marker too wide for it, `100.` (docs/09 P61).
+    - An item with text has its content one space past its marker, so its
+      picture or table goes there, after a blank line, and reads as the same
+      lines would at the margin (docs/09 P61). On the next line a caption
+      would be more of the item's text, or after a table one more row, so an
+      empty item's picture or table that is not on the item's line gets the
+      blank line too.
+    - An item docling made with no text of its own, as it does of one that
+      holds code, which is not marked as empty, is written as a marker alone,
+      and a blank line after that ends the item. Its first picture or table
+      goes on the marker's line as an empty item's does, and the rest where
+      its lists go (docs/09 P61).
+
+    Everything else is written as `base` writes it, and a table cell, which
+    docling writes on one line, is left as it is.
+    """
+    made = _HOLDING.get(base)
+    if made is not None:
+        return made
+    from docling_core.transforms.serializer.base import SerializationResult
+    from docling_core.types.doc.document import (
+        InlineGroup,
+        ListItem,
+        NodeItem,
+        PictureItem,
+        TableItem,
+    )
+    from pydantic import PrivateAttr
+
+    class _Part(SerializationResult):
+        """A part of a list, with the list item it is the line or a block of."""
+
+        #: The `self_ref` of the item this is the line of.
+        line_of: str = ""
+        #: The `self_ref` of the item this picture or table is a block of.
+        block_of: str = ""
+
+    class _Holding(base):  # type: ignore[misc,valid-type]
+        #: The `self_ref`s of the items standing in for an empty `<li>`.
+        holders: frozenset[str] = frozenset()
+        #: Where each list item's content begins, by its `self_ref`, as its
+        #: line was written.
+        _columns: dict[str, int] = PrivateAttr(default_factory=dict)
+        #: The column and marker of each item whose line is its marker alone:
+        #: one with no text of its own that docling made, as it does of one
+        #: holding code (P50), which is not marked as empty (P52).
+        _bare: dict[str, tuple[int, str]] = PrivateAttr(default_factory=dict)
+
+        def serialize(
+            self,
+            *,
+            item: NodeItem | None = None,
+            list_level: int = 0,
+            **kwargs: Any,
+        ) -> SerializationResult:
+            result: SerializationResult = super().serialize(
+                item=item, list_level=list_level, **kwargs
+            )
+            # Only the list serializer hands out a level, and it writes a table
+            # cell on one line, indent and all.
+            if (
+                item is None
+                or not list_level
+                or not result.text
+                or kwargs.get("in_table_cell")
+            ):
+                return result
+            if isinstance(item, ListItem):
+                # The list serializer hands an item the level below its list's
+                # and indents its line by its list's. The item's content begins
+                # past its marker and the one to four spaces after it, as
+                # CommonMark reads it: one for text, more where an empty item
+                # opens with code (P50).
+                line = result.text.split("\n", 1)[0]
+                marker = line.split(" ", 1)[0]
+                rest = line[len(marker) :]
+                gap = len(rest) - len(rest.lstrip(" "))
+                at = (list_level - 1) * self.params.indent
+                self._columns[item.self_ref] = (
+                    at + len(marker) + (gap if 1 <= gap <= 4 and rest.strip() else 1)
+                )
+                # An item whose text is an inline group of its own is written
+                # with that group, as the part after its marker.
+                if not (
+                    rest.strip()
+                    or "\n" in result.text
+                    or any(
+                        isinstance(child.resolve(self.doc), InlineGroup)
+                        for child in item.children
+                    )
+                ):
+                    self._bare[item.self_ref] = (at, marker)
+                return _Part(
+                    text=result.text, spans=result.spans, line_of=item.self_ref
+                )
+            owner = item.parent.cref if item.parent is not None else ""
+            if (
+                not isinstance(item, PictureItem | TableItem)
+                or owner not in self._columns
+            ):
+                return result
+            column = self._columns[owner]
+            if owner in self.holders or owner in self._bare:
+                # An item's children are handed the level below its own, which
+                # is where its lists go and where an empty item's marker is
+                # padded to, unless the marker is too wide for it (`100.`).
+                column = max(column, list_level * self.params.indent)
+            indent = " " * column
+            return _Part(
+                text="\n".join(
+                    indent + line if line else line for line in result.text.split("\n")
+                ),
+                spans=result.spans,
+                block_of=owner,
+            )
+
+        def get_parts(
+            self, item: NodeItem | None = None, **kwargs: Any
+        ) -> list[SerializationResult]:
+            parts: list[SerializationResult] = super().get_parts(item=item, **kwargs)
+            # The list serializer joins its parts with a newline and indents a
+            # part that does not start with a space, a blank line included, so
+            # the blank line before a block ends the part before it.
+            written: list[SerializationResult] = []
+            for part in parts:
+                before = written[-1] if written else None
+                if isinstance(part, _Part) and part.block_of and before is not None:
+                    owner = part.block_of
+                    on_its_line = isinstance(before, _Part) and before.line_of == owner
+                    if on_its_line and owner in self.holders:
+                        # `write_empty_items` puts it on the item's line (P52).
+                        pass
+                    elif on_its_line and owner in self._bare:
+                        written[-1] = self._on_the_line(before, part)
+                        continue
+                    else:
+                        before.text += "\n"
+                written.append(part)
+            return written
+
+        def _on_the_line(self, line: Any, block: Any) -> Any:
+            """`block` written on `line`, the line of an item with no text.
+
+            After a marker alone on its line, a blank line ends the item, so its
+            first block goes on the marker's line, the marker padded to the
+            block's column, as an empty item's does (P52). The list serializer
+            indents the part's first line by the list's, so it starts with the
+            marker.
+            """
+            at, marker = self._bare[block.block_of]
+            lines = block.text.split("\n")
+            column = len(lines[0]) - len(lines[0].lstrip(" "))
+            lines[0] = marker.ljust(column - at) + lines[0][column:]
+            return _Part(
+                text="\n".join(lines),
+                spans=[*line.spans, *block.spans],
+                block_of=block.block_of,
+            )
+
+    _HOLDING[base] = _Holding
+    return _Holding
+
+
+#: The backend methods `_reading_terms` overrides or calls, private to docling
+#: as `_BACKEND_HOOKS` are, so `extract` checks they are still there.
+_TERM_HOOKS = (
+    "_add_list_item_with_content",
+    "_process_list_item_nested_content",
+    "_use_list_item_context",
+)
+#: Each backend `_reading_terms` has made, by the class it extends, built once
+#: as `_HOLDING`'s serializers are.
+_TERM_READERS: dict[type, type] = {}
+
+
+def _reading_terms(base: type[Any]) -> type[Any]:
+    """`base`, docling's HTML backend or a subclass, reading what a
+    description-list term holds.
+
+    The backend reads a term (`<dt>`) for its text alone, leaving out its
+    lists and tables. Unlike a list item's or a description's, what a term
+    holds is never visited after, so a picture, a table or a list in a term
+    was dropped from every surface, with no warning, and a dropped picture
+    left the pictures one short of the snapshot's images, which omits every
+    OCR annotation on the page (docs/09 P60). This backend visits a term as
+    the backend visits a list item, in document order once the term's item is
+    made, so what it holds goes inside the term. A term the backend made no
+    item of, which `mark_empty_items` gives one wherever it can, has what it
+    holds put in the description list in its place, as a list item's
+    checkbox puts it, rather than nowhere.
+    """
+    made = _TERM_READERS.get(base)
+    if made is not None:
+        return made
+
+    class _TermReader(base):
+        def _add_list_item_with_content(  # type: ignore[no-untyped-def]
+            self, tag, doc, parent, *args: Any, **kwargs: Any
+        ):
+            item = super()._add_list_item_with_content(
+                tag, doc, parent, *args, **kwargs
+            )
+            if tag.name == "dt":
+                with self._use_list_item_context(item):
+                    self._process_list_item_nested_content(tag, doc, set())
+            return item
+
+    _TERM_READERS[base] = _TermReader
+    return _TermReader
+
+
+#: The backend methods `_reading_descriptions` overrides or calls, private to
+#: docling as `_BACKEND_HOOKS` are, so `extract` checks they are still there.
+_DESCRIPTION_HOOKS = ("_extract_text_and_hyperlink_recursively", "_handle_list")
+#: Each backend `_reading_descriptions` has made, by the class it extends.
+_DESCRIPTION_READERS: dict[type, type] = {}
+
+
+def _descriptions_hooked() -> bool:
+    """Whether docling's backend still has everything `_reading_descriptions`
+    uses: its methods, the character it reads a `<br>` as, and the reading of
+    a text's runs."""
+    from docling.backend import html_backend
+
+    return (
+        all(
+            hasattr(html_backend.HTMLDocumentBackend, hook)
+            for hook in _DESCRIPTION_HOOKS
+        )
+        and isinstance(getattr(html_backend, "_BR_SENTINEL", None), str)
+        and hasattr(
+            getattr(html_backend, "AnnotatedTextList", None), "simplify_text_elements"
+        )
+    )
+
+
+def _reading_descriptions(base: type[Any]) -> type[Any]:
+    """`base`, docling's HTML backend or a subclass, reading a description
+    beside the description list it holds.
+
+    The backend reads a description (`<dd>`) whose own child is a description
+    list for that list alone: it hangs the list off the term, so a description
+    holding only the list is not indented twice, and never reads the
+    description's text, so text beside the list was dropped from every
+    surface, with no warning, and with no term the list went too (docs/09
+    P73). This backend leaves that reading to a description it loses nothing
+    of, one with a term and no text of its own; any other is read as every
+    other description is, an item with its text and what it holds inside it.
+    """
+    made = _DESCRIPTION_READERS.get(base)
+    if made is not None:
+        return made
+    from docling.backend.html_backend import _BR_SENTINEL
+
+    class _DescriptionReader(base):
+        def _own_text(self, tag: Any) -> str:
+            """The text of `tag`, a term or a description, as
+            `_add_list_item_with_content` reads it for the item it makes, which
+            it makes no item of when that is empty. A description's code that
+            `base` reads as a block of its own (P50) is no text of it."""
+            is_code_block = getattr(self, "_is_code_block", None)
+            if is_code_block is None or tag.name not in _CODE_ITEM_TAGS:
+                return self._item_text(tag)
+            # As P50's `_add_list_item_with_content` reads the item's text.
+            self._reading = frozenset(
+                id(pre) for pre in tag.find_all("pre") if is_code_block(pre, tag)
+            )
+            try:
+                return self._item_text(tag)
+            finally:
+                self._reading = frozenset()
+
+        def _item_text(self, tag: Any) -> str:
+            parts = self._extract_text_and_hyperlink_recursively(
+                tag, ignore_list=True, find_parent_annotation=True
+            ).simplify_text_elements()
+            return "".join(part.text for part in parts).strip()
+
+        def _wrap_description_lists(self, dl: Any) -> list[Any]:
+            """Each description of `dl` that docling would read for its
+            description list alone, made to read as a description.
+
+            The backend reads a description as a description unless a
+            description list is its own child, so that list is put inside a
+            `<div>`, which the backend walks through and reads no text from.
+            The wrappers are returned for the caller to take out again.
+            """
+            wrappers: list[Any] = []
+            # The term the backend hangs a description's list off, when it made
+            # an item of it: when its text, a `<br>` alone included, is not
+            # empty. Read only for a description holding a description list.
+            term = None
+            for child in dl.find_all(["dt", "dd"], recursive=False):
+                if child.name == "dt":
+                    term = child
+                    continue
+                inner = child.find_all("dl", recursive=False)
+                # A `<br>`, which the backend reads as U+E000, is no text of
+                # the description's: beside its list it loses only the line
+                # break, and made an item it would carry the character into
+                # every surface (docs/09 P56).
+                if inner and (
+                    term is None
+                    or not self._own_text(term)
+                    or self._own_text(child).replace(_BR_SENTINEL, "").strip()
+                ):
+                    wrappers += (each.wrap(self.soup.new_tag("div")) for each in inner)
+            return wrappers
+
+        def _handle_list(self, tag, doc):  # type: ignore[no-untyped-def]
+            if tag.name != "dl" or getattr(self, "soup", None) is None:
+                return super()._handle_list(tag, doc)
+            wrappers = self._wrap_description_lists(tag)
+            try:
+                return super()._handle_list(tag, doc)
+            finally:
+                # The page's tree as parsed, for whatever reads it next.
+                for wrapper in wrappers:
+                    wrapper.unwrap()
+
+    _DESCRIPTION_READERS[base] = _DescriptionReader
+    return _DescriptionReader
+
+
+#: The backend methods `_reading_groups` overrides or calls, private to docling
+#: as `_BACKEND_HOOKS` are, so `extract` checks they are still there.
+_GROUP_HOOKS = ("_handle_list", "_is_invisible_tag")
+#: Each backend `_reading_groups` has made, by the class it extends, built once
+#: as `_reading_terms`' are.
+_GROUP_READERS: dict[type, type] = {}
+
+
+def _reading_groups(base: type[Any]) -> type[Any]:
+    """`base`, docling's HTML backend or a subclass, reading the terms and
+    descriptions a `<div>` groups in a description list.
+
+    The backend reads only a description list's own `<dt>` and `<dd>`
+    children, so a `<div>` grouping a term with its descriptions, which HTML
+    allows and design systems' summary lists use, dropped the group from
+    every surface, text and all, with no warning, and a picture in it left
+    the pictures short of the snapshot's images (docs/09 P72). This backend
+    takes those `<div>`s away, and any `<div>` they hold in turn, before
+    `base` reads the list, so it reads the terms and descriptions as if the
+    list held them. A `<div>` the backend reads as hidden, which in a
+    snapshot is one marked `aria-hidden`, is left, so what it holds stays out
+    of the document, as a hidden term does. `extract` makes this the
+    outermost of the backends that read a list (only the footer layer, which
+    reads none, is outside it), so a list is ungrouped before anything else
+    reads it.
+    """
+    made = _GROUP_READERS.get(base)
+    if made is not None:
+        return made
+
+    class _GroupReader(base):
+        def _handle_list(self, tag, doc):  # type: ignore[no-untyped-def]
+            if tag.name.lower() == "dl":
+                self._ungrouping(tag)
+            return super()._handle_list(tag, doc)
+
+        def _ungrouping(self, tag) -> None:  # type: ignore[no-untyped-def]
+            """`tag`'s terms and descriptions as its own, out of their `<div>`s."""
+            groups = self._groups(tag)
+            while groups:
+                for group in groups:
+                    group.unwrap()
+                groups = self._groups(tag)
+
+        def _groups(self, tag):  # type: ignore[no-untyped-def]
+            """The `<div>`s among `tag`'s children the backend would read."""
+            return [
+                child
+                for child in tag.find_all(_GROUP_TAG, recursive=False)
+                if not self._is_invisible_tag(child)
+            ]
+
+    _GROUP_READERS[base] = _GroupReader
+    return _GroupReader
+
+
 def _aligned(
     items: Sequence[_Item], facts: Sequence[_Fact]
 ) -> list[tuple[_Item, _Fact]] | None:
@@ -1131,8 +1677,9 @@ def _grids_built_once(tables: Sequence[Any]) -> Iterator[None]:
 
 
 #: The elements the backend makes a list item of and then walks for nested
-#: content: a list item and a description. A term (`<dt>`) it does not walk,
-#: so a term's code stays in its line.
+#: content: a list item and a description. A term (`<dt>`) is walked too
+#: (`_reading_terms`), but for its pictures, tables and lists: its code stays
+#: in its line, as the backend reads it.
 _CODE_ITEM_TAGS = frozenset({"li", "dd"})
 #: An element between an item and its `<pre>` that the backend reads as a
 #: block of its own, so the code is that block's, not the item's.
@@ -1771,10 +2318,10 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     if not markable:
         extraction_warnings.append(
             "the page contains U+FDD0 or U+FDD1, the characters WebShot uses to "
-            "keep formatted text (a link, emphasis, inline code, a subscript or "
-            "superscript) joined to the text it touches, so content.md, "
-            "content.txt and chunks.jsonl separate each such part from its "
-            "neighbours with a space (docs/09 P14-56, P48)."
+            "keep the text of an inline element (a link, emphasis, inline code, "
+            "a subscript or superscript, a span) joined to the text it touches, "
+            "so content.md, content.txt and chunks.jsonl separate each such part "
+            "from its neighbours with a space (docs/09 P14-56, P48, P70)."
         )
     # Likewise a page carrying the stand-in for an item's missing text.
     items_markable = EMPTY_ITEM not in docling_html and not _EMPTY_ITEM_REF_RE.search(
@@ -1783,10 +2330,14 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     if not items_markable:
         extraction_warnings.append(
             "the page contains U+FDD2, the character WebShot uses to stand in "
-            "for the text of a list item that holds only a list, so content.md, "
-            "content.txt and chunks.jsonl write such an item as docling does, "
-            "with no line of its own, and an ordered list given a start number "
-            "numbers the items after it one too low (docs/09 P45)."
+            "for the text of a list item with none of its own, so such items "
+            "are read as docling reads them: one holding only a list has no "
+            "line of its own in content.md, content.txt and chunks.jsonl, an "
+            "ordered list given a start number numbers the items after it one "
+            "too low, a picture or a table that is all an item holds is left "
+            "out of every surface (docs/09 P45, P52), and a description-list "
+            "term holding only those has no line of its own, so what it holds "
+            "and its descriptions stand in the list in its place (docs/09 P60)."
         )
     own_line_breaks = LINE_BREAK in docling_html or bool(
         _LINE_BREAK_REF_RE.search(docling_html)
@@ -1812,6 +2363,40 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             "hold code as docling reads it: highlighted code with its lines "
             "joined, a first line without its indentation, and each list item's "
             "block on one line, in its item's text (docs/09 P50, P55)."
+        )
+    # Likewise the methods that read what a term holds. Applied here, below
+    # the footer layer: `_reading_terms` keeps one class per backend it
+    # extends, and `_FooterBackend` is a new class on every call.
+    if all(hasattr(HTMLDocumentBackend, hook) for hook in _TERM_HOOKS):
+        base = _reading_terms(base)
+    else:
+        extraction_warnings.append(
+            "docling's HTML backend no longer has the methods WebShot extends to "
+            "read what a description-list term holds, so a picture, a table or a "
+            "list in a term (<dt>) is left out of every surface (docs/09 P60)."
+        )
+    # And those that read a description beside the description list it holds.
+    if _descriptions_hooked():
+        base = _reading_descriptions(base)
+    else:
+        extraction_warnings.append(
+            "docling's HTML backend no longer has the methods WebShot extends to "
+            "read a description (<dd>) whose own child is a description list, so "
+            "the description's text beside that list is left out of every "
+            "surface, and with no term above the description, the list too "
+            "(docs/09 P73)."
+        )
+    # And the methods that read a description list's grouped terms. Last of
+    # the layers that read a list, so a list is ungrouped before anything
+    # else reads it; below the footer layer, as the term reader is.
+    if all(hasattr(HTMLDocumentBackend, hook) for hook in _GROUP_HOOKS):
+        base = _reading_groups(base)
+    else:
+        extraction_warnings.append(
+            "docling's HTML backend no longer has the methods WebShot extends to "
+            "read the terms and descriptions a <div> groups in a description "
+            "list, so each such group is left out of every surface, its text "
+            "included (docs/09 P72)."
         )
     # Every item the backend made inside a <footer>, which stays on the
     # furniture layer whatever its text. Held as the items, not their
@@ -1870,6 +2455,10 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         parsed = drop_lone_line_breaks(docling_html)
         if markable:
             parsed = mark_inline_joins(parsed)
+        # The snapshot's facts are read off the text the backend reads, join
+        # markers and all, before the empty items' stand-ins, which no region
+        # or caption of the page holds (docs/09 P45, P70).
+        joins_marked = parsed
         # After the lone line breaks are out: an item whose only content
         # beside its lists was `<br>`s holds only its lists (docs/09 P45, P56).
         if items_markable:
@@ -1893,8 +2482,9 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
 
     # Take the join markers back out before anything reads a text, keeping
     # which items they opened or closed. A marker inside a text, where the
-    # backend flattened an element into one string (a heading, a table cell),
-    # takes the backend's space with it, which joins those two in place.
+    # backend flattened an element into one string (a heading, a table cell)
+    # or merged a span's text with the text beside it, takes the backend's
+    # space with it, which joins those two in place.
     joined_before: set[str] = set()
     joined_after: set[str] = set()
     if markable:
@@ -1917,10 +2507,13 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             if isinstance(item, ListItem) and item.text == EMPTY_ITEM:
                 item.text = item.orig = ""
                 empty_items.append(item)
-        # A cell's own text is its content's, flattened, stand-in and all.
+        # A cell's own text is its content's, flattened, stand-in and all. The
+        # backend joins a cell's items with a space and strips the ends, so an
+        # empty item first or last in a cell left a space there (docs/09 P52).
         for table in document.tables:
             for cell in table.data.table_cells:
-                cell.text = cell.text.replace(EMPTY_ITEM, "")
+                if EMPTY_ITEM in cell.text:
+                    cell.text = cell.text.replace(EMPTY_ITEM, "").strip()
 
     @contextmanager
     def _standing_in() -> Iterator[None]:
@@ -1929,15 +2522,21 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         content.md, content.txt and the chunks write an item as `marker text`,
         so an item with no text is a bare marker there, which
         `write_empty_items` cannot tell from any other; with the stand-in it
-        can. content.json and the doctags hold the item as it is, empty.
+        can. content.json and the doctags hold the item as it is, empty. A
+        term is bold there, as the backend makes every term, which content.md
+        would write around the stand-in as `**`, so it stands in unformatted
+        (docs/09 P60).
         """
+        formatting = [item.formatting for item in empty_items]
         for item in empty_items:
             item.text = EMPTY_ITEM
+            item.formatting = None
         try:
             yield
         finally:
-            for item in empty_items:
+            for item, kept in zip(empty_items, formatting, strict=True):
                 item.text = ""
+                item.formatting = kept
 
     def as_the_backend_writes(text: str) -> str:
         """`text` as the backend writes an item's text, for comparing the two.
@@ -1951,7 +2550,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         return cleaned.replace(_BR_SENTINEL, " ")
 
     facts = _SnapshotFacts(clean=as_the_backend_writes)
-    facts.feed(sanitized_html)
+    facts.feed(joins_marked)
 
     # The backend files everything before the first heading on the furniture
     # layer, which serializers and the chunker skip. That is right for page
@@ -2254,6 +2853,8 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         )
         return serializer
 
+    holders = frozenset(item.self_ref for item in empty_items)
+
     def _wrapper(
         serializer: Any, formatting: Formatting | None, hyperlink: Any
     ) -> tuple[str, str]:
@@ -2405,8 +3006,9 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             # Full-fidelity table text: the default triplet serialization drops
             # row-header cells, which chunk coverage would rightly flag.
             return _unpadded(
-                ChunkingDocSerializer(
+                _holding(ChunkingDocSerializer)(
                     doc=doc,
+                    holders=holders,
                     text_serializer=markdown_text(),
                     table_serializer=MarkdownTableSerializer(),
                     annotation_serializer=_MarkedOcr(),
@@ -2507,8 +3109,9 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         with _standing_in():
             markdown = (
                 _unpadded(
-                    MarkdownDocSerializer(
+                    _holding(MarkdownDocSerializer)(
                         doc=document,
+                        holders=holders,
                         text_serializer=markdown_text(),
                         annotation_serializer=_MarkedOcr(),
                         inline_serializer=_JoinedInline(),
@@ -2519,8 +3122,9 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             )
             text = (
                 _unpadded(
-                    PlainTextDocSerializer(
+                    _holding(PlainTextDocSerializer)(
                         doc=document,
+                        holders=holders,
                         text_serializer=plain_text(),
                         annotation_serializer=_MarkedOcr(),
                         inline_serializer=_JoinedInline(),
@@ -2570,10 +3174,10 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 for seed in seeds
             ]
             extraction_warnings.append(
-                "a formatted part's join marker reached a field WebShot does not "
+                "an inline element's join marker reached a field WebShot does not "
                 f"rejoin ({', '.join(leaked)}); it was removed there, and that "
-                "text may separate the part from its neighbours with a space "
-                "(docs/09 P14-56, P48)."
+                "text may separate the element's text from its neighbours with a "
+                "space (docs/09 P14-56, P48, P70)."
             )
     if items_markable:
         # The stand-in was taken out of its item, the cells, and the item's
@@ -2606,10 +3210,10 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 for seed in seeds
             ]
             extraction_warnings.append(
-                "the stand-in for the text of a list item that holds only a "
-                f"list reached a field it does not belong in ({', '.join(strayed)}); "
+                "the stand-in for the text of a list item with none of its own "
+                f"reached a field it does not belong in ({', '.join(strayed)}); "
                 "it was removed there, and the item may have no line of its own "
-                "there (docs/09 P45)."
+                "there (docs/09 P45, P52)."
             )
     if not own_line_breaks:
         # Every text item had its line breaks written out. One that reached
