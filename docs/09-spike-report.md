@@ -5571,12 +5571,13 @@ once more.
 `opencv-python`. The footprint test that keeps the `ocr-rapid` extra's weight
 out of the default install named only `opencv-python`, so after the bump that
 part of it would have checked a package the lock no longer holds. It now
-names both.
+names both. P90-3 drops `opencv-python` now that 3.10 is locked.
 
 What this leaves open: an error raised by recognition itself, after the
 models have loaded, still reaches the per-asset handler as RapidOCR's
 `ONNXRuntimeError`, which also derives from `Exception` alone. That was as
-true on 3.9.2. It is not this bump's change, and it is not fixed here.
+true on 3.9.2. It is not this bump's change, and it is not fixed here. P90
+fixes it.
 
 ## P14 — a signed-in reading page, captured from a browser export (2026-09-06)
 
@@ -18443,3 +18444,112 @@ It covers each verdict, exemption and gate branch, and the re-run paths
 against a fake `gh`. Among those cases are a read that fails, which fails the
 verdict, and a reply whose thread is resolved only on the third look.
 
+
+## P90 — one image the OCR engine could not read ended the capture (2026-10-18)
+
+P10-33 left one thing open. An error RapidOCR raises during recognition,
+after its models have loaded, was not caught per image. Measured on master
+d57578b with RapidOCR 3.10.0 and onnxruntime 1.31.0: the recognizer
+session's `run` was made to raise onnxruntime's `Fail` while reading the
+second of three charts in `tests/fixtures/ocr_recognition_failure.html`.
+RapidOCR re-raises it as its own `ONNXRuntimeError`, and `Exception` is the
+only base of either. The visual stage's per-asset handler catches
+`RuntimeError`, `OSError` and `TimeoutExpired`. A capture of the fixture
+under `--ocr-engine rapid` therefore stopped at the second chart: exit 5,
+`ERROR: ONNXRuntimeError: Traceback (most recent call last):`, and no
+bundle. The first chart had been read. RapidOCR builds that error's message
+with `traceback.format_exc()`, so it is seven lines and holds the paths of
+the capturing machine's site-packages.
+
+### P90-1 — the bridges raise WebShot's own error
+
+`OcrRecognitionError`, in `ocr/engine.py`, is what a bridge raises for an
+image its engine ran on and could not read. It is a `RuntimeError`, and the
+stage's handler names it. The engine's own exception types stop at the
+bridge (CONTRIBUTING rule 1), so the stage never has to import onnxruntime
+or RapidOCR to catch them.
+
+The RapidOCR bridge wraps the recognizer call and catches everything it
+raises: onnxruntime's errors, RapidOCR's wrapper of them, and OpenCV's and
+RapidOCR's image-loader errors all come from inside that call. Building the
+recognizer stays outside the wrap, because it is the preflight's question
+(P10-33), and a missing package there still reads as RapidOCR not
+installed. The message names the wrapper and takes one line from the
+original error, for example `RapidOCR could not read the image:
+ONNXRuntimeError, from Fail: [ONNXRuntimeError] : 1 : FAIL : ...`. The full
+traceback stays on the exception's `__cause__`.
+
+The same capture after the fix exits 0. Its manifest's `warnings` holds
+exactly `OCR failed for asset-002: RapidOCR could not read the image:
+ONNXRuntimeError, from Fail: [ONNXRuntimeError] : 1 : FAIL : injected
+during recognition`. RapidOCR read `asset-001` and `asset-003` as `FIRST
+CHART` and `THIRD CHART`, and `asset-002` is saved with no text and no
+engine. Under `--require-ocr` the same failure is exit 6, as any other
+per-asset failure is (P8-44).
+
+### P90-2 — Tesseract's path, checked
+
+Tesseract's own failures were already caught per image. On a 300-byte
+truncation of `tests/fixtures/viewer/page-001.png`, Tesseract 5.5.3 exits
+1 with `Error during processing.`. The bridge raised a `RuntimeError`
+carrying its stderr, and the handler caught it. A binary that will not
+start (`OSError`) and the 45-second timeout (`TimeoutExpired`) are types
+the handler names. Neither was reproduced.
+
+One gap was found, in the decoding of Tesseract's output rather than in
+Tesseract itself. `subprocess` decodes the output with the locale's
+encoding unless Python runs in UTF-8 mode, and Tesseract writes UTF-8. On
+macOS under `LC_ALL=C` with `PYTHONUTF8=0` and `PYTHONCOERCECLOCALE=0`,
+`locale.getencoding()` is `US-ASCII`. Tesseract read `Café` from a rendered
+image (bytes `Caf\xc3\xa9`), and the bridge raised `UnicodeDecodeError:
+'ascii' codec can't decode byte 0xc3 in position 236`. That is a
+`ValueError`, which no handler caught, so the capture would have ended the
+way P90's did. Under the machine's default locale, where Python ran in
+UTF-8 mode, the same image read as `Café`.
+
+The bridge now raises `OcrRecognitionError("Tesseract's output could not
+be decoded: ...")` for it. Re-run in the same environment, that error was
+raised and is one the handler catches. Tesseract's other failures are
+wrapped too, with their messages unchanged, so both bridges keep one
+contract and no existing warning's text moves.
+
+What this does not fix: the output is still decoded with the locale's
+encoding. That was not measured on Windows. Decoding the same bytes with
+Python's `cp1252` codec, the ANSI code page of an English Windows
+installation, turns `Café` into `CafÃ©` with no error, and fails on `Í`
+(bytes `C3 8D`). Decoding Tesseract's output as UTF-8 would fix both. That
+is a change to recognized text, and it is not made here.
+
+### P90-3 — the footprint test names the OpenCV that is installed
+
+`uv.lock` holds rapidocr 3.10.0 and opencv-python-headless 5.0.0.93, and no
+`opencv-python`. P10-33 kept both names in the footprint test's
+extra-only list until 3.10 was locked. Now `opencv-python` is dropped.
+`test_every_extra_only_package_arrives_with_its_extra` is new: it requires
+each name on that list to be in its extra's resolution, so a name the extra
+no longer installs fails the test instead of being denied for nothing.
+With `opencv-python` put back, the test fails and names it.
+
+### P90-4 — the tests
+
+`tests/test_ocr_recognition_errors.py` makes recognition fail on the
+fixture's second chart, after the engine has started and read the first:
+
+- RapidOCR, through a stand-in recognizer that raises an `Exception`-only
+  error wrapping another, as RapidOCR does;
+- Tesseract, through the `UnicodeDecodeError` measured above.
+
+For each engine it requires one warning naming `asset-002` and the error,
+all three assets saved, the other two read by that engine, and exit 6's
+error under `--require-ocr`. Two more tests use the real engines. With
+real RapidOCR, onnxruntime's `Fail` is raised inside the session, and the
+bridge's error must name `ONNXRuntimeError` and `Fail` on one line. With
+real Tesseract on the truncated PNG, the bridge's error must keep
+Tesseract's stderr.
+
+All six fail on master's bridges and handler, with only the new error class
+added so that they import. The four browser cases end with the injected
+error escaping `capture_visual_assets`. The real-RapidOCR case ends with
+RapidOCR's `ONNXRuntimeError`. The Tesseract case fails because the bridge
+raised a `RuntimeError`, which the stage already caught. That case holds
+the contract; it does not reproduce a crash.

@@ -339,6 +339,19 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **An image the OCR engine cannot read is one warning, not the end of the
+  capture.** When onnxruntime failed while RapidOCR was recognizing an image,
+  RapidOCR raised its own `ONNXRuntimeError`. The per-image handler did not
+  catch that error, because it is neither a `RuntimeError` nor an `OSError`.
+  So under `--ocr-engine rapid` the capture stopped with exit 5 and no
+  bundle, and the error's message was a full traceback. Each OCR bridge now
+  turns its engine's failure into WebShot's own `OcrRecognitionError`. The
+  manifest's `warnings` then names the asset and the error on one line, the
+  other images are still read, and `--require-ocr` makes it exit 6. The
+  Tesseract path had one such gap: its UTF-8 output could not be decoded
+  under a locale whose encoding is ASCII. The footprint test also drops
+  `opencv-python`, which RapidOCR 3.10 no longer installs, and now fails on
+  any name an extra does not install. See docs/09 P90.
 - **On RapidOCR 3.10, a model that will not load is found before the first
   image again.** RapidOCR 3.10 builds its models on first use instead of when
   it starts, so `--ocr-engine rapid`'s check that the engine can run reported

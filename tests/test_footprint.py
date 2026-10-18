@@ -71,14 +71,15 @@ ONNX_EXCEPTION_CHAIN = ("markitdown", "magika")
 #: Distributions that may only arrive through an extra. Phase 3 added two
 #: extras that carry real weight, and "behind an extra" is a claim the README
 #: and docs/03 make on their behalf — so something has to check it.
-#: OpenCV is named twice because RapidOCR 3.10 changed which build it requires:
-#: `opencv-python` to 3.9, `opencv-python-headless` from 3.10 (docs/09
-#: P10-33). Naming only one would leave the other's leak unseen.
+#: OpenCV is `opencv-python-headless`, which RapidOCR requires from 3.10; up
+#: to 3.9 it was `opencv-python`, and the lock no longer holds that name
+#: (docs/09 P10-33, P90-3). A name the extra does not install would be denied
+#: forever at no cost, so `test_every_extra_only_package_arrives_with_its_extra`
+#: requires each one here to be in its extra's resolution.
 EXTRA_ONLY_PACKAGES = {
     "office": ("mammoth", "python-pptx", "openpyxl", "xlsxwriter"),
     "ocr-rapid": (
         "rapidocr",
-        "opencv-python",
         "opencv-python-headless",
         "pyclipper",
         "shapely",
@@ -124,13 +125,14 @@ def test_forbidden_module_is_not_importable(module: str) -> None:
     )
 
 
-def _default_resolution() -> set[str]:
+def _default_resolution(*extras: str) -> set[str]:
     """The DEFAULT dependency set from the lock, across every platform.
 
     The whole lockfile is deliberately not the subject: the `chunk-hybrid`
     extra legitimately references docling's tokenizer stack, and extras exist
     precisely so that weight is opt-in. What must stay clean is what
-    `pip install webshot` gives everyone — spec §4.
+    `pip install webshot` gives everyone — spec §4. Naming *extras* adds
+    theirs, for the check that a name denied above is one an extra installs.
     """
     uv = shutil.which("uv")
     if uv is None:
@@ -145,6 +147,7 @@ def _default_resolution() -> set[str]:
             "--no-annotate",
             "--format",
             "requirements-txt",
+            *(argument for extra in extras for argument in ("--extra", extra)),
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -207,6 +210,22 @@ def test_extras_do_not_leak_into_the_default_install() -> None:
         assert not leaked, (
             f"the {extra} extra leaked {sorted(leaked)} into the default install"
         )
+
+
+@pytest.mark.parametrize("extra", sorted(EXTRA_ONLY_PACKAGES))
+def test_every_extra_only_package_arrives_with_its_extra(extra: str) -> None:
+    """The positive control for the test above: each name it denies is one the
+    extra installs. RapidOCR 3.10 moved from `opencv-python` to
+    `opencv-python-headless`, and the old name stayed denied, a check of a
+    package nothing installs (docs/09 P10-33, P90-3). A rename upstream fails
+    here instead of passing there unseen."""
+    with_extra = _default_resolution(extra)
+    missing = sorted(set(EXTRA_ONLY_PACKAGES[extra]) - with_extra)
+    assert not missing, (
+        f"the {extra} extra no longer installs {missing}, so denying them in the "
+        "default install checks nothing. Name what it installs instead. It "
+        f"adds: {sorted(with_extra - _default_resolution())}"
+    )
 
 
 # ---------------------------------------------------------------------------

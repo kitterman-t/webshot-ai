@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Three charts, one unreadable</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 2rem; }
+  .chart { display: block; margin: 1rem 0; }
+</style>
+</head>
+<body>
+<h1>Three charts, one unreadable</h1>
+<p>Three visual assets in reading order. The tests make recognition fail on
+the second one only, after the engine has started and read the first.</p>
+<svg class="chart" role="img" aria-label="First chart" width="240" height="80"><rect width="240" height="80" fill="#eef"/><text x="12" y="50" font-size="28" font-family="sans-serif">FIRST CHART</text></svg>
+<svg class="chart" role="img" aria-label="Second chart" width="240" height="80"><rect width="240" height="80" fill="#fee"/><text x="12" y="50" font-size="28" font-family="sans-serif">SECOND CHART</text></svg>
+<svg class="chart" role="img" aria-label="Third chart" width="240" height="80"><rect width="240" height="80" fill="#efe"/><text x="12" y="50" font-size="28" font-family="sans-serif">THIRD CHART</text></svg>
+</body>
+</html>
