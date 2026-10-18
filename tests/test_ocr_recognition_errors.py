@@ -76,20 +76,20 @@ def _fail_rapid(monkeypatch: pytest.MonkeyPatch) -> OcrEngine:
 
 
 def _fail_tesseract(monkeypatch: pytest.MonkeyPatch) -> OcrEngine:
-    """Tesseract wrote UTF-8, and the locale's encoding could not decode it.
+    """Tesseract printed bytes that are not UTF-8.
 
-    Measured with Python's UTF-8 mode off under `LC_ALL=C`: subprocess decodes
-    the output as ASCII, and a recognized "Café" raised this, past the stage's
-    handler (docs/09 P90-2).
+    Measured with Python's UTF-8 mode off under `LC_ALL=C`: subprocess then
+    decoded the output as ASCII, and a recognized "Café" raised this, past the
+    stage's handler (docs/09 P90-2). The bridge has read Tesseract's output as
+    UTF-8 since P91, so what still raises it is bytes that are not UTF-8,
+    which `tests/test_tesseract_encoding.py` feeds a stand-in Tesseract.
     """
 
     def recognize_page(
         number: int, image: Path, language: str, psm: int, **_: Any
     ) -> OCRPage:
         if image.name == FAILING:
-            raise UnicodeDecodeError(
-                "ascii", b"1\tCaf\xc3\xa9", 5, 6, "ordinal not in range(128)"
-            )
+            raise UnicodeDecodeError("utf-8", b"1\tCaf\xff", 5, 6, "invalid start byte")
         return OCRPage(
             page=number, text=READ[image.name], confidence=90.0, words=[], tsv=""
         )
@@ -110,8 +110,7 @@ ENGINES = {
     "tesseract": (
         _fail_tesseract,
         "OCR failed for asset-002: Tesseract's output could not be decoded: "
-        "'ascii' codec can't decode byte 0xc3 in position 5: ordinal not in "
-        "range(128)",
+        "'utf-8' codec can't decode byte 0xff in position 5: invalid start byte",
     ),
 }
 
