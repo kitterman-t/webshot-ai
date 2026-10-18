@@ -423,10 +423,14 @@ _VOID_INLINE_TAGS = frozenset({"wbr"})
 #: sub/superscript, inline code) and `a`. Their text becomes an item apart
 #: from the text beside it, which every serializer joins to the next with a
 #: space, so "un<b>break</b>able" read "un **break** able" (docs/09 P48).
-#: Each joins the text it touches wherever no whitespace separates them, as
-#: Chromium's own selection text does. Every other element of `INLINE_TAGS`
-#: joins only where the snapshot measured the page drawing the two touching
-#: (`MEASURED_INLINE_TAGS`, docs/09 P70).
+#: One joins the text it touches only at an edge the snapshot measured the
+#: page drawing touching (`TOUCH_ATTRIBUTE`): a link's icon or a padded code
+#: span is drawn apart from the word it runs into (P70-11). One that carries
+#: no attribute, from a snapshot taken before the snapshot measured these,
+#: joins wherever no whitespace separates the two, as Chromium's own
+#: selection text does. Every other element of `INLINE_TAGS` joins only at a
+#: measured edge, and without the attribute nowhere (`MEASURED_INLINE_TAGS`,
+#: docs/09 P70).
 _JOINED_TAGS = INLINE_TAGS - MEASURED_INLINE_TAGS - _VOID_INLINE_TAGS
 
 
@@ -438,9 +442,9 @@ class _OpenInline:
     #: Laid out as a box of its own (`DISPLAY_ATTRIBUTE`), or a formula the
     #: snapshot wrote as text (`MATH_ATTRIBUTE`), so its edges separate.
     box: bool
-    #: Whether its start, and its end, may join the text it touches: always
-    #: for an element of `_JOINED_TAGS`, and for any other only at an edge
-    #: the snapshot names in `TOUCH_ATTRIBUTE`.
+    #: Whether its start, and its end, may join the text it touches: at an
+    #: edge the snapshot names in `TOUCH_ATTRIBUTE`, and at both for an
+    #: element of `_JOINED_TAGS` that carries no such attribute.
     joins_before: bool = False
     joins_after: bool = False
     #: The character the element follows; "" where nothing in its run does.
@@ -462,15 +466,17 @@ class _InlineJoins(HTMLParser):
     The text of an element the backend formats or links (`_JOINED_TAGS`)
     becomes an item apart from the text beside it, which the serializers join
     to the next with a space, so "un<b>break</b>able" read "un **break** able"
-    (docs/09 P48); every touching edge of one is marked, and the inline
-    serializer joins those items. The text of any other, a `<span>`, a
-    `<mark>`, a `<small>`, is merged with the text beside it into one item,
-    with a space, so "un<span>break</span>able" read "un break able"; the
-    marker sits inside that one string, and `extract` takes the space out
-    with it. Such an edge is marked only where the snapshot measured the page
-    drawing the two glyphs touching (`TOUCH_ATTRIBUTE`): touching in the
-    markup, a date line's spans are drawn apart by their margins (docs/09
-    P70).
+    (docs/09 P48); the inline serializer joins the items at a marked edge.
+    The text of any other, a `<span>`, a `<mark>`, a `<small>`, is merged with
+    the text beside it into one item, with a space, so
+    "un<span>break</span>able" read "un break able"; the marker sits inside
+    that one string, and `extract` takes the space out with it. Either kind
+    is marked only where the snapshot measured the page drawing the two
+    glyphs touching (`TOUCH_ATTRIBUTE`): touching in the markup, a date
+    line's spans are drawn apart by their margins (docs/09 P70), and a link
+    by its icon (P70-11). An element of `_JOINED_TAGS` without the
+    attribute, from a snapshot that did not measure it, is marked wherever
+    the markup touches, as P48 marked it.
     """
 
     def __init__(self, source: str) -> None:
@@ -517,17 +523,17 @@ class _InlineJoins(HTMLParser):
         box = any(name in (DISPLAY_ATTRIBUTE, MATH_ATTRIBUTE) for name, _ in attrs)
         if box:
             self._separate()
-        if tag in _JOINED_TAGS:
+        measured = [value or "" for name, value in attrs if name == TOUCH_ATTRIBUTE]
+        if tag in _JOINED_TAGS and not measured:
+            # A snapshot from before docs/09 P70-11 measured no formatted
+            # element, so the markup is all the evidence there is (P48).
             joins_before = joins_after = True
         else:
-            # Only the edges the snapshot measured touching: one that names
-            # none, as no snapshot did before docs/09 P70, keeps docling's
-            # space at both.
-            touches = set(
-                " ".join(
-                    value or "" for name, value in attrs if name == TOUCH_ATTRIBUTE
-                ).split()
-            )
+            # Only the edges the snapshot measured touching: a span that
+            # names none, as no snapshot did before docs/09 P70, keeps
+            # docling's space at both, and so does a link it measured drawn
+            # apart, which it records as an empty attribute.
+            touches = set(" ".join(measured).split())
             joins_before, joins_after = "before" in touches, "after" in touches
         self._open.append(
             _OpenInline(

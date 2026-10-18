@@ -304,7 +304,9 @@ MATH_ATTRIBUTE = "data-webshot-math"
 #: markup alone does not say whether the page draws the two as one word: a
 #: date line's `<span>Article</span><span>•</span><span>12 Oct</span>` is
 #: drawn with a gap at each edge by the spans' margins. So the snapshot
-#: measures each such edge (`TOUCH_ATTRIBUTE`).
+#: measures each such edge (`TOUCH_ATTRIBUTE`). It measures the edges of the
+#: elements the backend formats or links as well (P70-11); the two kinds
+#: differ in what a missing attribute means.
 MEASURED_INLINE_TAGS = frozenset(
     {
         "abbr",
@@ -326,16 +328,23 @@ MEASURED_INLINE_TAGS = frozenset(
     }
 )
 
-#: Set on an element of `MEASURED_INLINE_TAGS` to `before`, `after` or both:
-#: the edges where its text touches the text beside it, with no whitespace
-#: between, and the page draws no gap between the two characters. On one line
-#: that is measured between the two glyphs' boxes; where the line wraps
-#: between them, it is the margins, paddings and borders of the boxes that end
-#: or start there, with no generated content. Either way the gap must be under
+#: Set on an element of `INLINE_TAGS` to `before`, `after` or both: the edges
+#: where its text touches the text beside it, with no whitespace between, and
+#: the page draws no gap between the two characters. On one line that is
+#: measured between the two glyphs' boxes; where the line wraps between them,
+#: it is the margins, paddings and borders of the boxes that end or start
+#: there, with no generated content. Either way the gap must be at most
 #: `TOUCH_TOLERANCE_EM` of the smaller of their font sizes. The bridge joins
-#: such an element's text to its neighbour's only at an edge named here, so a
-#: snapshot that records none, as every one before docs/09 P70 does, keeps
-#: docling's space. Always WebShot's: the snapshot removes a page's own.
+#: an element's text to its neighbour's only at an edge named here.
+#:
+#: A missing attribute means what it meant before the snapshot measured each
+#: kind. On an element of `MEASURED_INLINE_TAGS` it names no edge, so a
+#: snapshot from before docs/09 P70 keeps docling's space. On an element the
+#: backend formats or links it says nothing was measured, and the bridge joins
+#: wherever the markup touches, P48's rule, so a snapshot from before P70-11
+#: reads as it did. So the snapshot writes the attribute on such an element
+#: wherever the markup touches at either edge, empty where neither is drawn
+#: touching. Always WebShot's: the snapshot removes a page's own.
 TOUCH_ATTRIBUTE = "data-webshot-touches"
 
 #: The widest gap between two characters that still counts as touching, in
@@ -971,18 +980,20 @@ async def extract_semantic_content(
                 if (!figure.querySelector('img')) figure.replaceWith(...figure.childNodes);
             }
 
-            // Where an element whose text docling merges with its neighbours'
-            // touches the text beside it, whether the page draws the two as
-            // one word (docs/09 P70). The markup cannot say: a date line's
+            // Where an inline element touches the text beside it, whether the
+            // page draws the two as one word (docs/09 P70). The markup cannot
+            // say: a date line's
             // `<span>Article</span><span>•</span><span>12 Oct 2026</span>`
             // read "Article•12 Oct 2026" once the bridge joined spans, where
             // the spans' margins draw a gap at each edge and the PDF prints
-            // "Article • 12 Oct 2026". So each such edge is measured, on the
-            // live glyphs either side of it. The pass runs on the finished
-            // copy and reads a run as the bridge reads one: an element outside
-            // `INLINE_TAGS`, or one that is a box or a formula, ends it. So
-            // each edge measured is one the bridge sees, between the same two
-            // characters.
+            // "Article • 12 Oct 2026". Bold, code and links are the same
+            // (P70-11): a link's icon or a padded code span is drawn apart
+            // from the word it touches in the markup. So each such edge is
+            // measured, on the live glyphs either side of it. The pass runs
+            // on the finished copy and reads a run as the bridge reads one:
+            // an element outside `INLINE_TAGS`, or one that is a box or a
+            // formula, ends it. So each edge measured is one the bridge sees,
+            // between the same two characters.
             const spaces = new Set(__PYTHON_WHITESPACE__);
             const measuredTags = new Set(__MEASURED_INLINE_TAGS__);
             const fontSizes = new Map();
@@ -1068,12 +1079,27 @@ async def extract_semantic_content(
                 return em > 0 && gap <= __TOUCH_TOLERANCE_EM__ * em;
             };
             const touches = new Map();
-            const touch = (element, edge) => {
+            const recorded = element => {
                 if (!touches.has(element)) touches.set(element, new Set());
-                touches.get(element).add(edge);
+                return touches.get(element);
+            };
+            // Without the attribute the bridge reads a span as drawn apart,
+            // and an element it formats or links as drawn touching, which is
+            // P48's rule for a snapshot from before P70-11. So an element of
+            // the second kind carries the attribute wherever the markup runs
+            // it into the text beside it, empty where no edge is drawn
+            // touching, and the absence keeps the meaning it had.
+            const measure = (element, edge, left, right) => {
+                const touching = drawnTouching(left, right);
+                if (touching) recorded(element).add(edge);
+                else if (
+                    !measuredTags.has(element.localName)
+                    && !spaces.has(lastCharacter(left.data))
+                    && !spaces.has(firstCharacter(right.data))
+                ) recorded(element);
             };
             let lastText = null;  // the run's last text so far; null after a separator
-            let ended = [];       // measured elements whose text has ended, until the next text
+            let ended = [];       // inline elements whose text has ended, until the next text
             const open = [];
             const separate = () => {
                 lastText = null;
@@ -1083,9 +1109,7 @@ async def extract_semantic_content(
             const readRun = node => {
                 if (node.nodeType === Node.TEXT_NODE) {
                     if (!node.data) return;
-                    for (const element of ended) {
-                        if (drawnTouching(element.last, node)) touch(element.copy, 'after');
-                    }
+                    for (const element of ended) measure(element.copy, 'after', element.last, node);
                     ended = [];
                     for (const element of open) element.first ??= node;
                     lastText = node;
@@ -1110,8 +1134,8 @@ async def extract_semantic_content(
                     separate();
                     return;
                 }
-                if (!element.first || !measuredTags.has(tag)) return;
-                if (element.before && drawnTouching(element.before, element.first)) touch(node, 'before');
+                if (!element.first) return;
+                if (element.before) measure(node, 'before', element.before, element.first);
                 if (lastText) ended.push({copy: node, last: lastText});
             };
             for (const child of [...clone.childNodes]) readRun(child);

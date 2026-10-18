@@ -12605,6 +12605,18 @@ item, stays out whole too. Against master's bridge (with P50), 18 of the 22 fail
 that pass guard what must not change (the aside and footer, the text after
 the first heading, and the doctags).
 
+A last test takes P45's item with no text of its own, holding only a list,
+before a heading: as content it reads as on a page with no heading, and in a
+nav every node of the menu stays on furniture. It was written on a branch
+that built P53 on top of P45, and was left behind when the two merged
+separately. It was brought over on 2026-10-18, when master already passed it. The
+menu half was held already, by `test_a_nav_menu_item_stays_out_of_the_body`
+in `tests/test_item_holding_a_list.py`. The content half was not: with the
+empty item left out of its block and the loop that moves an empty item after
+its items turned off, this test fails, and all 1,049 tests in 16 extraction
+test files (the bridge's own, and those on list items, furniture, chrome, line
+breaks and office formats) pass.
+
 ## P54: a page's own U+FDD0 written as a reference was removed as a join marker (2026-10-11)
 
 P14-56 marks where a sub/superscript touches its neighbours with U+FDD0 and
@@ -16338,7 +16350,7 @@ On a32181a, with P48 and without P56, it fails on U+E000 in content.json. On
 the batch it passes. Its checks for hidden words pass on all three, as they
 should: the two tests above already hold that hidden text never reaches
 content.html.
-## P70: a word with a part in a span was split on every text surface but the PDF (2026-10-12, reworked 2026-10-17)
+## P70: a word with a part in a span was split on every text surface but the PDF (2026-10-12, reworked 2026-10-17, extended 2026-10-18)
 
 P48-7 recorded it: an element of `INLINE_TAGS` that docling's HTML backend
 neither formats nor links (`span`, `mark`, `small`, `abbr`, `cite`, `q`,
@@ -16355,7 +16367,9 @@ runs it into the text beside it. Over the owner's saved captures it joined
 words the PDF prints apart (P70-5). The rule that ships joins one only where
 the snapshot measured the page drawing the two with no gap (P70-6). P70-5 to
 P70-8 are measured on master 247dbea with that branch's head, 6c8fe22, merged
-in, and with docling-core 2.99.0 and docling-slim 2.132.0.
+in, and with docling-core 2.99.0 and docling-slim 2.132.0. P70-11 to P70-15
+extend the measurement to the elements P48 joins on the markup alone: bold,
+code, links and the rest of `_JOINED_TAGS`.
 
 ### P70-1: where the space came from
 
@@ -16683,7 +16697,8 @@ without the evidence (P70-10).
 - **P48's elements still join on the markup.** Bold or a link with a margin
   or a padding joins the word it touches, as the selection does (P48-7). An
   edge a formatted element shares with a span joins by P48's rule, whatever
-  the span measured.
+  the span measured. P70-11 measures them too, so since then this holds only
+  for a snapshot taken before it.
 - **Elements outside `INLINE_TAGS`** that a page lays out inline, an
   `acronym` or a `div` made `inline`, still separate, as P48-7 recorded.
 - **`font` and `big`** lose their tags in the sanitizer, so their text joins
@@ -16713,7 +16728,8 @@ before, the spans keep docling's space, and P48's parts still join.
 - Each element of `MEASURED_INLINE_TAGS` joins only at an edge
   `data-webshot-touches` names. No attribute, an empty one, or a value the
   snapshot never writes joins nothing.
-- An element of `_JOINED_TAGS` joins with or without one.
+- An element of `_JOINED_TAGS` joins with or without one. Since P70-11 it
+  joins without one, and with one only at the edges it names (P70-15).
 - Every whitespace character at either edge of a span, a mark and a small
   leaves the page unmarked, the attribute or not.
 - A box, a `<br>` and a formula's holder keep two apart, while a box's own
@@ -16739,7 +16755,212 @@ one with a margin at the wrap must not, with the PDF showing that both wrap.
 `tests/test_inline_joins.py` pins `_JOINED_TAGS` to the backend again and
 `MEASURED_INLINE_TAGS` to the rest of `INLINE_TAGS`. Its fixture's
 page-marked span now carries the snapshot's `after`, where it touches a bold
-word.
+word. P70-15 gives the count and the formatted elements' checks as they stand
+since P70-11.
+
+### P70-11: bold, code and links, measured too (2026-10-18)
+
+P70-9 left it open. An element the backend formats or links (`_JOINED_TAGS`:
+`a`, `b`, `strong`, `i`, `em`, `code`, `kbd`, `samp`, `var`, `sub`, `sup`,
+`s`, `del`, `u`, `ins`) still joined the text it touches wherever the markup
+runs the two together, by P48's rule. P48-3 had counted 827 of 3,463 such
+edges on 34 live pages drawn more than 0.1 em apart, by inline code's padding
+and a link's icon, which the selection text does not read as a space. Where
+the PDF prints such a pair apart, the bundle still read it as one word.
+Measured on master 4fe0624 with this change, docling-core 2.99.0,
+docling-slim 2.132.0 and Chromium 141.
+
+The snapshot now measures each edge of every element of `INLINE_TAGS` with
+an end tag as P70-6 measures a span's: the same run reading, the same glyph
+boxes, the same reading of a wrap, and the same tolerance, 0.1 em of the
+smaller font size. Inline code padded by 1 px, 0.065 em at the Python
+tutorial's size, is still drawn touching (P70-6), and joins.
+
+The two kinds differ in what a missing attribute says. On a span it names no
+edge, so a snapshot from before P70 keeps docling's space. On a formatted
+element it says nothing was measured, and the bridge joins wherever the
+markup touches, P48's rule, so a snapshot from before this change reads as
+it did. So the snapshot writes the attribute on a formatted element wherever
+the markup runs its text into the text beside it, at either edge, and names
+the edges drawn touching; where it draws neither, the attribute is empty:
+`co<code data-webshot-touches="">zib</code>wort`. The bridge joins such an
+element at a named edge and nowhere else. A page's own attribute is removed
+before the snapshot decides, as before.
+
+The evidence travels on each element rather than once for the page. A page
+whose formatted elements touch no text reaches `content.html` byte for byte
+as before, and the bridge reads every edge from the element it belongs to.
+For that to hold, the snapshot's run reading and the bridge's must agree on
+which edges the markup runs together: an edge the bridge saw and the
+snapshot did not would join by P48's rule in a fresh capture. On P70-12's 25
+captures none did. The bridge placed no marker for a formatted element
+without the attribute.
+
+**The gaps.** P70-6's probe, at formatted elements' edges, on P70-12's 25
+pages under print media. It reads the live DOM and does not enter shadow
+roots or frames, which the snapshot does. Of 4,386 edges:
+
+- 2,831 on one line were drawn within 0.01 em.
+- 53 were 0.065 em apart: the Python tutorial's inline code, 1 px of
+  padding. These are P70-6's 53.
+- Nothing measured fell between 0.065 em and 0.156 em.
+- 6 were 0.156 to 0.223 em apart, the Python tutorial's `¶` heading anchors,
+  which the snapshot drops, and 1 was 0.25 em, MDN's linked code before a
+  full stop.
+- 26 were 0.299 em apart, the Rust book's inline code, and 21 were 0.4 em,
+  GitHub's.
+- 216 were more than 0.5 em apart.
+- 10 wrapped with nothing drawn between, and 347 wrapped with generated
+  content between.
+- 875 had no glyph box, 577 of them on one page.
+
+422 of the edges stood between two letters or digits. Each was drawn within
+0.01 em or had no glyph box. Every gap over 0.1 em was beside punctuation.
+
+**The cost.** The whole snapshot, `extract_semantic_content`, was timed on
+the two heaviest pages, three fresh loads each, with the one-minute load
+average between 10 and 14. A Wikipedia article took 337 to 358 ms on master
+and 341 to 355 ms with this change; an incident database's list took 1,247
+to 1,426 ms and 1,261 to 1,399 ms. The two do not differ by more than the
+runs do. In `content.html`, 3,472 formatted elements carry the attribute on
+20 of the 25 captures, 413 of them empty: 103,668 bytes, 4.0% of the 25
+files' 2,584,117.
+
+### P70-12: fresh captures
+
+P70-7's 25 public pages were captured again with this change on
+2026-10-18. Every capture completed. Three bridges read each capture's
+`content.html`: master's, this change's, and the backend with no join at all
+(the bridge with its marking turned off), against which every join is
+counted. The comparison is P70-7's, changed in three ways:
+
+- It reads `content.txt`, which has no Markdown beside a space.
+- Each removed space is classed by the two characters either side: between
+  words where both are letters or digits, beside punctuation otherwise.
+  P70-7 left punctuation out, and punctuation is where this change acts.
+- Each is looked up in the capture's own PDF with 12 characters of context
+  either side, matched across any whitespace, since a pair as common as
+  "Analysis" and "." is in a reference list many times. Where that context
+  is not in the PDF (`content.txt`'s list syntax, a formula), it falls back
+  to P70-7's one token either side. Beside joined, apart and both there is a
+  fourth verdict: the PDF prints a link's address between the two. The print
+  stylesheets of Wikipedia, python.org and two of the course pages write one
+  after a link.
+
+The results:
+
+- **What this change declines** (master joins, this change does not): 9
+  pages, 250 lines of `content.md`, 610 spaces of `content.txt`, every one
+  beside punctuation and none between two words. By the element whose edge
+  it is: a link's end 542, inline code's end 37 and start 11, italic's end
+  20, strong's 2. That is 612 markers; two of them place no space.
+  - 559: the PDF prints the link's address between the two (Wikipedia 529,
+    python.org 24, and 3 on each course page).
+  - 39 apart in the PDF: the Rust book's inline code 26, GitHub's 12, and
+    MDN's linked code 1.
+  - 10 joined in the PDF. 9 are the opening edge of GitHub's code after a
+    parenthesis, `(<code>.odt</code>)`, which the PDF reads `(.odt )`: the
+    closing edge of the same code, drawn at the same 0.4 em, is apart there.
+    The 10th is a pair the lookup found elsewhere on the page; where it
+    stands, the PDF prints an address between.
+  - 2 not found, both links whose printed address pypdf breaks mid-word.
+- **The joins this change makes** (against no join): 22 pages, 1,139 lines
+  of `content.md`, 4,641 spaces of `content.txt`.
+  - Between two words, 677: 663 joined in the PDF, 11 both, 3 not found, and
+    none apart. The 11 are subscripts such as `C<sub>4</sub>` and
+    `H<sub>2</sub>O`, which pypdf reads joined at one place on the page and spaced at another,
+    and P70-7's "November16". The 3 are `Δμ<sub>H+</sub>`.
+  - Beside punctuation, 3,964: 3,892 joined in the PDF, 12 apart and 60 not
+    found. Of the 12, 9 are P70-7's Wikipedia page ranges and 2 are words
+    joined after a hyphen, `non-<a>carbon-fixing</a>` and
+    `Cytochrom-<i>b</i>`. All 11 are drawn on one line in the snapshot and
+    wrap after the dash in the PDF. The 12th is an emoji before a link on
+    GitHub, drawn within 0.1 em of it, after which pypdf reads a space.
+- **What this change joins that master does not:** nothing. Read from
+  master's output to this change's, no space is removed.
+
+### P70-13: saved snapshots, fixtures and the golden corpus
+
+P70-5's 265 saved snapshots were read by master's bridge and this change's.
+Every surface is master's, byte for byte: `content.md`, `content.txt`, the
+chunks, `content.json`, the doctags, the tables, the warnings and the
+counts. None of the 265 carries `data-webshot-touches` on any element.
+
+The two bridges were also run over every HTML fixture and every golden
+case's `content.html`, re-recorded ones included: 124 distinct files. Every
+surface is master's, byte for byte. `list_numbering.html` fails to parse in
+both, as on master. The one fixture that carries the attribute on a
+formatted element, read as a file, is `formatted_joins.html`, whose bold
+claims both edges; both bridges join it.
+
+Two golden cases moved, `lms-module` and `lms-module-videos`, and every
+changed line is one of these:
+
+- In `content.html`, the link before a full stop gains
+  `data-webshot-touches="after"`. The page draws the link's text against the
+  full stop, so it joins as before, and no text surface changed.
+- `content.json`'s `origin.binary_hash`, a hash of `content.html`, moved with
+  it.
+- In the manifest, `content.html`'s bytes (1,721 to 1,750) and digest
+  followed, and so did `content.json`'s digest. Its size is unchanged.
+
+No other case's output changed.
+
+### P70-14: what this does not cover
+
+- **A link whose address the print stylesheet writes after it** keeps
+  docling's space before the punctuation that follows: `[44708120](…) .` in
+  `content.md` and "44708120 ." in `content.txt`, where the PDF prints
+  "44708120 (https://…).". The address is generated content, which
+  `content.html` does not carry, so no surface holds it.
+- **The PDF's text is not the measure for a gap narrower than a space.**
+  pypdf joins two runs drawn closer than its estimate of a space's width,
+  and it read the two edges of the same padded code differently: `(.odt )`
+  on GitHub at 0.4 em, and "cozib wort" in `inline_joins.html` at 0.2 em.
+  The drawn gap is what the snapshot measures.
+- **P70-9's other limits stand** for a formatted element: generated content
+  at an edge keeps the parts apart, a character with no glyph box touches
+  nothing, and a box or a formula's holder separates.
+- **A snapshot taken before this change** records no evidence on a formatted
+  element, so its bold, code and links join on the markup, and nothing says
+  so.
+
+### P70-15: the tests
+
+`tests/test_formatted_joins.py` reads `tests/fixtures/formatted_joins.html`,
+whose words are made up. In it, bold, a link whose text runs into a word, a
+subscript, and inline code padded by 1 px touch their neighbours. Code padded
+by 0.4 em, a link with an icon in generated content before its text, a link
+with an icon in its padding before a comma, a link holding an icon image, and
+bold with margins that claims both its edges are drawn apart.
+
+- Each element of `_JOINED_TAGS` joins at the edges its attribute names,
+  nowhere with an empty attribute or tokens the snapshot never writes, and
+  at both edges without one.
+- The fixture as the capture records it, read with no browser: every part
+  drawn touching is one word in `content.txt`, in `content.md` once its
+  Markdown is taken out, and in the chunk texts; every part drawn apart keeps
+  docling's space.
+- The fixture with no attribute, as a snapshot from before this change, joins
+  every part the markup runs together, as master does.
+- Captured end to end: `content.html` carries exactly the recorded
+  attributes, with the page's claim on its bold replaced by an empty one; the
+  text surfaces read the page as drawn; and the PDF prints each word whole
+  and each pair apart.
+
+On master, 63 of its 95 tests fail. The 32 that pass hold there by
+construction: no attribute and both edges named, where master joins both
+edges too, the read without the evidence, and the PDF.
+
+`tests/test_inline_joins.py`'s capture of `inline_joins.html`, whose inline
+code has 0.2 em of padding, now keeps `co zib wort`, `( zubrel )` and
+`gram pel osh` apart. Its reads without a browser, which carry no evidence,
+join them as before. A new check reads the recorded attributes in
+`content.html`. `tests/test_span_joins.py` counts 42 attributes in its
+capture, 3 of them on formatted elements (`<b>` with `before after` and with
+`after`, `<a>` with `after`), and its test of a formatted element now has an
+empty attribute keep the parts apart. Those checks, five tests in the two
+files, fail on master.
 
 ## P52: a list item whose only content was a picture or a table lost it (2026-10-11)
 

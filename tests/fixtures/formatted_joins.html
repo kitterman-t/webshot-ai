@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Formatted joins</title>
+<!-- docs/09 P70-11. Every word here is made up, so each can be searched for
+     whole. Bold, a link, a subscript and code each touch the text beside
+     them in the markup. Where the page draws the two with no gap they are
+     one word: bold, a link whose text runs into a word, a subscript, and
+     code padded by 1 px, which is 0.0625 em here. Where it draws a gap they
+     are two: a link with an icon in generated content before its text, a
+     link with an icon in its padding before a comma, a link holding an icon
+     image, code padded by 0.4 em, and bold with margins that names its own
+     edges as touching, which the snapshot does not believe. -->
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 2rem; max-width: 40rem; }
+  .tight code { padding: 0 1px; background: #eef; }
+  .padded code { padding: .1em .4em; background: #eef; border-radius: 3px; }
+  a.lead::before { content: ""; display: inline-block; width: .8em; height: .8em; margin-right: .3em; background: #36c; }
+  a.trail { padding-right: 1em; background: linear-gradient(#36c, #36c) right center / .7em .7em no-repeat; }
+  a.held img { margin-right: .3em; vertical-align: middle; }
+  .claimed { margin: 0 .5em; }
+</style>
+</head>
+<body>
+<h1>Notes on the Dre<b>val</b>ish</h1>
+<p>Touching: a sel<b>vor</b>ic arc, a <strong>quen</strong>dral line, a <a href="#later">brask</a>ovan word, the
+cor<sub>2</sub>vel mark and a <a href="#later">telvo</a>, with its comma.</p>
+<p class="tight">Tight code: call vin<code>tor</code>esk and (<code>mardel</code>).</p>
+<p class="padded">Padded code: call sko<code>lim</code>ber and (<code>parvesh</code>).</p>
+<p>Icons: see<a class="lead" href="#later">Holdren</a> once, then <a class="trail" href="#later">Grevik</a>, twice, and
+hal<a class="held" href="#later"><img width="14" height="14" alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==">Tamsel</a> last.</p>
+<p>So tor<b class="claimed" data-webshot-touches="before after">mel</b>ask claimed.</p>
+<h2 id="later">Later</h2>
+<p>End of the notes.</p>
+</body>
+</html>
