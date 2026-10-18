@@ -4,8 +4,9 @@ Two things are worth pinning. The metadata must not *invent* provenance —
 Trafilatura's date comes from htmldate, which guesses one from the text, the
 URL or a heading when the page declares none, and a capture tool that records
 a guessed date is lying about the record (docs/09 P3-3, P82). Its author can
-come from a byline's text and its site name from the URL's host, so those
-are read from the page's declarations too (P88). And the strategy
+come from a byline's text and its site name from the URL's host, and its
+title from a heading or one side of the `<title>`, so those are read from
+the page's declarations too (P88, P93). And the strategy
 that chose the content region has to be the one the manifest names, in all
 four of its outcomes, because that is the only way a reader can tell an
 isolated region from a whole page.
@@ -14,10 +15,13 @@ isolated region from a whole page.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
+import trafilatura
+import trafilatura.metadata
 from playwright.async_api import async_playwright
 
 from webshot.acquire.adapters import materialize_source
@@ -27,6 +31,7 @@ from webshot.capture.discover import (
     declared_author,
     declared_date,
     declared_sitename,
+    declared_title,
     main_content_text,
     read_metadata,
     read_page,
@@ -44,6 +49,7 @@ ARTICLE = REPO_ROOT / "tests" / "fixtures" / "professional_page.html"
 DATES = REPO_ROOT / "tests" / "fixtures" / "declared_dates"
 AUTHORS = REPO_ROOT / "tests" / "fixtures" / "declared_authors"
 SITENAMES = REPO_ROOT / "tests" / "fixtures" / "declared_sitenames"
+TITLES = REPO_ROOT / "tests" / "fixtures" / "declared_titles"
 NOTES = REPO_ROOT / "tests" / "fixtures" / "sample_notes.txt"
 
 DECLARED = """<!doctype html><html><head>
@@ -67,7 +73,7 @@ def test_declared_metadata_is_read() -> None:
     """The author as the page writes it (Trafilatura made it "R Chen"), and
     no site name: the page declares none, and the URL's host is not one
     (docs/09 P88)."""
-    metadata = read_metadata(DECLARED, url="https://example.com/notes")
+    metadata = read_metadata(DECLARED)
     assert metadata.title == "Field Notes"
     assert metadata.date == "2024-03-05"
     assert metadata.author == "R. Chen"
@@ -76,12 +82,22 @@ def test_declared_metadata_is_read() -> None:
 
 def test_an_undeclared_date_is_not_invented() -> None:
     """Trafilatura's default `extensive` pass guesses one (P3-3)."""
-    assert read_metadata(UNDECLARED, url="https://example.com/notes").date == ""
+    assert read_metadata(UNDECLARED).date == ""
 
 
-def _dated(name: str, url: str = "https://example.com/notes") -> str:
+def test_the_address_is_never_read() -> None:
+    """htmldate read a date from the URL's path ahead of the page's own
+    `<meta>`, answering `meta_date_and_body_date.html` at `/2015/04/03/notice`
+    with 2015-04-03 (P82), and Trafilatura gave a page that names no site the
+    URL's host (P88). Nothing the readers record can come from an address
+    they are never given."""
+    for reader in (read_page, read_metadata):
+        assert list(inspect.signature(reader).parameters) == ["html"]
+
+
+def _dated(name: str) -> str:
     html = (DATES / name).read_text(encoding="utf-8")
-    return read_metadata(html, url=url).date
+    return read_metadata(html).date
 
 
 def test_a_bare_date_in_the_text_is_not_a_declared_date() -> None:
@@ -101,18 +117,11 @@ def test_the_text_notes_golden_input_has_no_declared_date() -> None:
     finally:
         materialized.cleanup()
     assert "2026-07-16" in page, "the page must still hold the date it tests"
-    assert read_metadata(page, url=materialized.browser_url).date == ""
+    assert read_metadata(page).date == ""
 
 
 def test_a_declared_date_beats_a_different_date_in_the_text() -> None:
     assert _dated("meta_date_and_body_date.html") == "2024-03-05"
-
-
-def test_a_declared_date_beats_a_date_in_the_url() -> None:
-    """htmldate reads the URL's path before any `<meta>`, and answers this
-    page with 2015-04-03 on 1.10 and 1.11 alike."""
-    url = "https://example.com/2015/04/03/notice"
-    assert _dated("meta_date_and_body_date.html", url) == "2024-03-05"
 
 
 def test_json_ld_declares_the_outermost_objects_date() -> None:
@@ -131,14 +140,12 @@ def test_a_heading_date_does_not_hide_a_declared_time() -> None:
     assert _dated("time_behind_heading_date.html") == "2022-11-30"
 
 
-@pytest.mark.parametrize(
-    "url", ["https://example.com/2015/04/03/audit", "https://example.com/audit"]
-)
-def test_dates_htmldate_reads_from_undeclared_cues_are_not_recorded(url: str) -> None:
-    """A URL path, a heading, an element classed `post-date` and a copyright
-    year: htmldate's fast search reads a date from each, and answers this page
-    with the URL's 2015-04-03, or without it the year made 2017-01-01 (P82)."""
-    assert _dated("undeclared_cues.html", url) == ""
+def test_dates_htmldate_reads_from_undeclared_cues_are_not_recorded() -> None:
+    """A heading, an element classed `post-date` and a copyright year:
+    htmldate's fast search reads a date from each, and answers this page with
+    the year made 2017-01-01, or at `/2015/04/03/audit` with the URL's
+    2015-04-03 (P82)."""
+    assert _dated("undeclared_cues.html") == ""
 
 
 def test_a_publication_beats_a_modification_that_comes_first() -> None:
@@ -213,14 +220,14 @@ def test_what_counts_as_a_declared_date(markup: str, expected: str) -> None:
     assert declared_date(markup) == expected
 
 
-def _authored(name: str, url: str = "https://example.com/notes") -> str:
+def _authored(name: str) -> str:
     html = (AUTHORS / name).read_text(encoding="utf-8")
-    return read_metadata(html, url=url).author
+    return read_metadata(html).author
 
 
-def _sited(name: str, url: str = "https://harbor-lane.example/visiting") -> str:
+def _sited(name: str) -> str:
     html = (SITENAMES / name).read_text(encoding="utf-8")
-    return read_metadata(html, url=url).sitename
+    return read_metadata(html).sitename
 
 
 def test_a_byline_is_not_a_declared_author() -> None:
@@ -258,7 +265,8 @@ def test_authors_of_listed_posts_are_not_the_pages() -> None:
 
 
 def test_a_page_without_a_site_name_does_not_get_the_host() -> None:
-    """Trafilatura answered "harbor-lane.example", the URL's host."""
+    """Trafilatura answered "harbor-lane.example", the URL's host, at
+    `https://harbor-lane.example/visiting`."""
     assert _sited("no_site_name.html") == ""
 
 
@@ -452,57 +460,195 @@ def test_what_counts_as_a_declared_sitename(markup: str, expected: str) -> None:
     assert declared_sitename(markup) == expected
 
 
-def test_trafilaturas_author_and_sitename_are_never_recorded(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Whatever Trafilatura infers, only the title is taken from it."""
+def _titled(name: str) -> str:
+    html = (TITLES / name).read_text(encoding="utf-8")
+    return read_metadata(html).title
 
-    class _Reading:
-        title = "Field Notes"
-        author = "Inferred Byline"
-        date = None
-        sitename = "example.com"
 
-    monkeypatch.setattr(discover, "extract_metadata", lambda *_a, **_k: _Reading())
-    assert read_metadata("<html><body><p>hi</p></body></html>") == (
-        DiscoveredMetadata(title="Field Notes")
+def test_a_heading_is_not_a_declared_title() -> None:
+    """No `<title>` and no title declaration: Trafilatura gave the text of
+    the page's one `<h1>`, "Reading Room Rules" (docs/09 P93)."""
+    assert _titled("heading_only.html") == ""
+
+
+def test_a_title_element_is_kept_whole() -> None:
+    """Trafilatura gave "Visiting Hours", one side of the separator. The
+    site's name stays, though the page declares it: which side of which
+    separator is the title would be a guess."""
+    assert _titled("title_with_site_name.html") == (
+        "Visiting Hours | Harbor Lane Archive"
     )
-    assert read_metadata(DECLARED).author == "R. Chen"
 
 
-def test_trafilaturas_date_is_never_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Whatever date the installed htmldate finds, it is not the one written.
-
-    The property behind every case above, held without depending on which
-    htmldate is installed: a stand-in for Trafilatura that answers a date the
-    page does not declare changes nothing.
-    """
-
-    class _Reading:
-        title = "Field Notes"
-        author = None
-        date = "1999-09-09"
-        sitename = None
-
-    monkeypatch.setattr(discover, "extract_metadata", lambda *_a, **_k: _Reading())
-    assert read_metadata(UNDECLARED).date == ""
-    assert read_metadata(DECLARED).date == "2024-03-05"
-    assert read_metadata(DECLARED).title == "Field Notes"
+def test_open_graph_declares_the_title() -> None:
+    """Over the card's title and the `<title>`, and read though the page
+    writes it with `name=`: Trafilatura reads `og:title` only as a property,
+    and gave the card's "Tide Tables for the Harbor, 1890 to 1940"."""
+    assert _titled("og_title.html") == "Tide Tables"
 
 
-def test_declarations_survive_trafilatura_failing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The date and the author never came from Trafilatura, so its failure
-    cannot take them."""
+def test_json_ld_declares_the_title_at_the_top_of_a_block() -> None:
+    """The NewsArticle at the top of a graph, and not the headline of a post
+    nested in the blog's block before it. Not the `<h1>` either."""
+    assert _titled("json_ld_title.html") == "Tide Tables Return to the Reading Room"
 
-    def _raise(*_args: object, **_kwargs: object) -> None:
-        raise RuntimeError("parser exploded")
 
-    monkeypatch.setattr(discover, "extract_metadata", _raise)
+def test_citation_title_declares_the_title() -> None:
+    """Over `DC.title` and the `<title>`, which adds the series."""
+    assert _titled("citation_title.html") == "Notes on the Harbor Lane Tide Gauges"
+
+
+@pytest.mark.parametrize(
+    ("markup", "expected"),
+    [
+        ('<meta property="og:title" content="Field Notes">', "Field Notes"),
+        ('<meta name="og:title" content="Field Notes">', "Field Notes"),
+        ('<meta name="twitter:title" content="Field Notes">', "Field Notes"),
+        ('<meta property="twitter:title" content="Field Notes">', "Field Notes"),
+        ('<meta name="citation_title" content="Field Notes">', "Field Notes"),
+        ('<meta name="DC.title" content="Field Notes">', "Field Notes"),
+        ('<meta name="dc:title" content="Field Notes">', "Field Notes"),
+        ('<meta name="DCTERMS.title" content="Field Notes">', "Field Notes"),
+        # The first kind present is the title, wherever it sits.
+        (
+            '<meta name="twitter:title" content="Field Notes, Volume 2">'
+            '<meta property="og:title" content="Field Notes">',
+            "Field Notes",
+        ),
+        (
+            _json_ld('{"@type": "Article", "headline": "Field Notes, Volume 2"}')
+            + '<meta name="twitter:title" content="Field Notes">',
+            "Field Notes",
+        ),
+        (
+            '<meta name="citation_title" content="Field Notes, Volume 2">'
+            + _json_ld('{"@type": "Article", "headline": "Field Notes"}'),
+            "Field Notes",
+        ),
+        (
+            '<meta name="DC.title" content="Field notes">'
+            '<meta name="citation_title" content="Field Notes">',
+            "Field Notes",
+        ),
+        (
+            "<title>Field Notes | Harbor Lane</title>"
+            '<meta name="DC.title" content="Field Notes">',
+            "Field Notes",
+        ),
+        # An empty value does not make its kind present.
+        (
+            '<meta property="og:title" content=" "><title>Field Notes</title>',
+            "Field Notes",
+        ),
+        # JSON-LD: an Article's or a WebPage's name, else its headline.
+        (
+            _json_ld(
+                '{"@type": "Article", "name": "Field Notes",'
+                ' "headline": "Notes kept on the harbor walls"}'
+            ),
+            "Field Notes",
+        ),
+        (
+            _json_ld('{"@type": "NewsArticle", "headline": "Field Notes"}'),
+            "Field Notes",
+        ),
+        (
+            _json_ld(
+                '{"@type": "BlogPosting", "name": " ", "headline": "Field Notes"}'
+            ),
+            "Field Notes",
+        ),
+        (_json_ld('{"@type": ["WebPage"], "name": "Field Notes"}'), "Field Notes"),
+        (_json_ld('{"@type": "schema:FAQPage", "name": "Field Notes"}'), "Field Notes"),
+        (
+            _json_ld(
+                '[{"@type": "WebSite", "name": "Harbor Lane"},'
+                ' {"@type": "Article", "headline": "Field Notes"}]'
+            ),
+            "Field Notes",
+        ),
+        (
+            _json_ld('{"@graph": {"@type": "Article", "headline": "Field Notes"}}'),
+            "Field Notes",
+        ),
+        # A site's, an organization's or a product's name is not the page's
+        # title, and an article nested one level down is not the page's.
+        (_json_ld('{"@type": "WebSite", "name": "Harbor Lane"}'), ""),
+        (_json_ld('{"@type": "Product", "name": "Tide Clock"}'), ""),
+        (
+            _json_ld(
+                '{"@type": "WebPage", "mainEntity":'
+                ' {"@type": "Article", "headline": "Field Notes, Volume 2"}}'
+            )
+            + "<title>Field Notes</title>",
+            "Field Notes",
+        ),
+        (
+            _json_ld(
+                '{"@type": "ItemList", "itemListElement":'
+                ' [{"@type": "ListItem", "item":'
+                ' {"@type": "Article", "headline": "Another Page"}}]}'
+            ),
+            "",
+        ),
+        # Not JSON: its structure would have to be guessed at.
+        (_json_ld('{"@type": "Article", "headline": "Field Notes",}'), ""),
+        # Not read: HTML has no `title` meta, the vendors' keys, microdata
+        # and headings.
+        ('<meta name="title" content="Field Notes">', ""),
+        ('<meta name="parsely-title" content="Field Notes">', ""),
+        ('<meta itemprop="headline" content="Field Notes">', ""),
+        ("<h1>Field Notes</h1>", ""),
+        ('<h1 class="entry-title">Field Notes</h1><h1>Index</h1>', ""),
+        # The <title> as written, its white space made one space, not split.
+        ("<title> Field\n  Notes | Harbor  Lane </title>", "Field Notes | Harbor Lane"),
+        (
+            "<title>Field &amp; Notes \u2014 Volume 2</title>",
+            "Field & Notes \u2014 Volume 2",
+        ),
+        (
+            "<title>https://harbor-lane.example/notes</title>",
+            "https://harbor-lane.example/notes",
+        ),
+        # The first <title> is the page's, even an empty one; an SVG's or
+        # MathML's is the drawing's or the formula's.
+        ("<title></title><title>Field Notes</title>", ""),
+        (
+            "<head><title>Field Notes</title></head>"
+            "<body><svg><title>Close</title></svg></body>",
+            "Field Notes",
+        ),
+        ("<body><svg><g><title>Close</title></g></svg><p>x</p></body>", ""),
+        ("<body><math><title>x squared</title></math></body>", ""),
+        (
+            "<body><svg><title>Close</title></svg></body><title>Field Notes</title>",
+            "Field Notes",
+        ),
+        # A <title> the page never closed still said its title.
+        ("<title>Field Notes", "Field Notes"),
+        ("", ""),
+    ],
+)
+def test_what_counts_as_a_declared_title(markup: str, expected: str) -> None:
+    assert declared_title(markup) == expected
+
+
+def test_trafilaturas_metadata_is_never_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The title, date, author and site name are all the page's declarations
+    (docs/09 P82, P88, P93), so Trafilatura is not asked for its metadata at
+    all: whatever it or the installed htmldate would infer cannot reach the
+    record, and its failure cannot take a declaration with it."""
+
+    def _refuse(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Trafilatura's metadata was read")
+
+    monkeypatch.setattr(trafilatura, "extract_metadata", _refuse)
+    monkeypatch.setattr(trafilatura.metadata, "extract_metadata", _refuse)
+    assert not hasattr(discover, "extract_metadata")
     assert read_metadata(DECLARED) == DiscoveredMetadata(
-        author="R. Chen", date="2024-03-05"
+        title="Field Notes", author="R. Chen", date="2024-03-05"
     )
+    assert read_metadata(UNDECLARED).date == ""
 
 
 def test_a_page_that_declares_nothing_yields_empty_strings_not_nulls() -> None:
@@ -528,7 +674,7 @@ def test_an_article_reports_its_text() -> None:
 
 def test_one_reading_answers_both_questions() -> None:
     """Both come from parsing the same HTML, so they are read together."""
-    reading = read_page(DECLARED, url="https://example.com/notes")
+    reading = read_page(DECLARED)
     assert reading.metadata.title == "Field Notes"
     assert reading.article and "paragraph with enough substance" in reading.article
 

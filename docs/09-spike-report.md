@@ -18219,7 +18219,9 @@ move recorded dates, and it is not this entry's.
   the 48 pages it came from a declaration (`og:title`, a title `<meta>` or a
   JSON-LD headline) on 39 and from the whole `<title>` on 3. On 4 it was the
   text of the page's one `<h1>`, and on 2 a part of the `<title>`, both read
-  from the page rather than declared.
+  from the page rather than declared. *Closed by P93:* the title is read
+  from the page's declarations too, and the 39 and 3 are 40 and 2 when
+  Trafilatura's stages are replayed one at a time (P93-2).
 
 ### P88-6: the tests
 
@@ -18799,3 +18801,222 @@ the 153 that failed, the 16 that had errored at setup, and the 14 new ones.
 One more skipped, the overview delivery of P92-4, which had errored at
 setup. The log names no failed test, so P91's cases did not fail; it does
 not list passes one by one.
+
+## P93: a title the page never declared, read by Trafilatura (2026-10-18)
+
+P88 left the title Trafilatura's (P88-5). On 6 of the 48 pages P88-2 read,
+that title was not one the page declared. On 4 it was the text of the
+page's one `<h1>`, and on 2 one side of a "Title | Site" `<title>`. A capture
+tool may not invent a title any more than a date or a name, and the owner
+approved the change on 2026-10-18. `capture/discover.py` now reads the title
+the page declares, in the same parse as P88's author and site name, so no
+field of `discovered_metadata` is Trafilatura's.
+
+### P93-1: where Trafilatura's title comes from
+
+`extract_metadata` in trafilatura 2.3.1, the pin on master, works in this
+order:
+
+1. **`<meta>`.** `og:title` read as a `property`, never as a `name`. Then
+   the first of eleven `name` keys: `title`, `headline`, `twitter:title`,
+   `citation_title`, `dc.title`, `dcterms.title`, and the vendors'
+   `fb_title`, `parsely-title`, `sailthru.title`, `shareaholic:title` and
+   `rbtitle`. Then `itemprop="headline"`.
+2. **JSON-LD**, when no `<meta>` gave a title. An object whose type is one
+   of ten article types gives its `name` when the type is `Article` and it
+   has one, and its `headline` otherwise.
+3. **`extract_title`**, when neither did. The text of the page's `<h1>` when
+   it has exactly one. Then a heading, or an element classed `entry-title`
+   or `post-title`, whose class, id or `itemprop` names a title or a
+   headline. Then the `<title>`, cut at its last separator with spaces
+   around it (` | `, ` - `, ` — `, ` : ` and thirteen others): the left side
+   when it holds no full stop, else the right side, else the whole. Then
+   the first `<h1>` with text, then the first `<h2>`.
+
+So a page with no title `<meta>` and one `<h1>` got the heading's text, and
+its `<title>` was never read. A page with no `<h1>` got one side of its
+`<title>`, and the side depended on where a full stop fell.
+
+The fixtures in `tests/fixtures/declared_titles/`:
+
+| fixture | the page declares | master (Trafilatura) | now |
+|---|---|---|---|
+| `heading_only.html` | no title: no `<title>`, one `<h1>` | Reading Room Rules | "" |
+| `title_with_site_name.html` | the `<title>` "Visiting Hours \| Harbor Lane Archive", and `og:site_name` | Visiting Hours | Visiting Hours \| Harbor Lane Archive |
+| `og_title.html` | `og:title` written with `name=`, and a longer `twitter:title` | Tide Tables for the Harbor, 1890 to 1940 | Tide Tables |
+| `json_ld_title.html` | a NewsArticle's `headline` at the top of a graph, after a blog's block with a post nested in it | Tide Tables Return to the Reading Room | the same |
+| `citation_title.html` | `citation_title`, a `DC.title` cased differently, and a `<title>` adding the series | Notes on the Harbor Lane Tide Gauges | the same |
+
+### P93-2: what that recorded on real pages
+
+The 48 pages P88-2 lists, read from the HTML saved on 2026-10-17, so the
+"before" is master's reading of the same markup P88-5 counted. Trafilatura's
+stages were replayed one at a time to see which one gave each title.
+
+| Trafilatura's title came from | pages | now |
+|---|---|---|
+| `og:title` | 39 | the same `og:title` |
+| `citation_title` | 1 | the same |
+| the whole `<title>` | 2 | the same, from the `<title>` |
+| the page's one `<h1>`, whose text is also the whole `<title>` | 1 | the same text, from the `<title>` |
+| the page's one `<h1>`, on a page declaring `og:title` with `name=` | 1 | the `og:title` |
+| the page's one `<h1>`, on a refusal page | 2 | the `<title>` |
+| one side of the `<title>` | 2 | the whole `<title>` |
+
+43 titles are unchanged. The 5 that moved all went from an inferred title to
+a declared one, and no title moved from one declaration to another. No
+author, date or site name moved on any page.
+
+P88-5 counted 39 declared and 3 whole `<title>`s by comparing values. One
+page's `og:title` holds no-break spaces that Trafilatura's output turns into
+spaces, so its title matched the `<title>` and not the declaration.
+Replaying the stages puts it under `og:title`: 40 and 2. The 4 headings and
+the 2 parts are the same pages in both counts.
+
+
+Which kind decided: `og:title` on 40 pages, `citation_title` on 1, the
+`<title>` on 7. `twitter:title` (on 24 pages), JSON-LD (19) and `DC.title`
+(3) decided none, because every page carrying one also declares `og:title`
+or `citation_title`.
+
+The declared title differs from the `<title>` on 23 of the 48. Of the 41
+whose title is now a `<meta>` declaration, the `<title>` is the same text on
+18. On another 18 it is the declared title with a separator and more after
+it, the site's name or a section's. On 5 it is something else: other wording
+on the code host's blog index and on an event page, an identifier before the
+title on the preprint server, the series in brackets after it on the
+philosophy encyclopedia, and `|` where the journal's `og:title` has `-`. `page_metadata.title` keeps the `<title>` as
+the browser shows it, so a consumer has both.
+
+On the six largest pages, 1.0 to 1.9 MB, `read_metadata` took 9 to 68 ms
+where master's took 17 to 215 ms, best of three at load 8. It no longer
+asks Trafilatura for anything (P93-4), so it parses the page once.
+
+### P93-3: what counts as a declaration
+
+The first of these the page uses, in this order, and the first value of
+that kind:
+
+1. `og:title`;
+2. `twitter:title`;
+3. JSON-LD: the `name`, or else the `headline`, of a schema.org Article or
+   WebPage, or a type schema.org defines beneath one of them
+   (`_JSON_LD_TITLED_TYPES`, 34 types), at the top of a block;
+4. `citation_title`, the Highwire Press tag;
+5. `DC.title` or `DCTERMS.title`, with `dc:` and `dcterms:` read as the same
+   keys;
+6. the `<title>`, the first one outside an `<svg>` or `<math>`.
+
+A `<meta>` is read whether it names its key with `property` or `name`. The
+documentation site writes `<meta name="og:title">`, which Trafilatura did not
+read, so it got the `<h1>`. A value is kept as the page writes it, each run
+of white space made one space. An empty value does not make its kind
+present. A web address is kept, unlike an author's or a site's: a title
+written as an address is still the page's title.
+
+The decisions:
+
+- **`twitter:title` is read.** It is markup the page writes to declare the
+  title its card shows. It comes after `og:title`, which each of the 24
+  pages carrying it also declares. The two say the same on 22 of them. On
+  the other two they differ by a label: the business magazine's card title
+  puts a column's name before the title, and the journal's `og:title` puts
+  the journal's name after it.
+- **JSON-LD comes after the cards.** On 7 of the 19 pages with a titled
+  JSON-LD object, its title differs from `og:title`. On four of them it is
+  the `<title>` again, with the site's name after it; on three it is
+  shorter than `og:title`.
+- **`name` before `headline`.** Four objects on the 48 pages state both.
+  The encyclopedia's Article, on both of its pages, gives the article's
+  title as the `name` and a one-line description as the `headline`. The
+  other two state the same text twice.
+- **Only the top of a block.** The block's own object, the items of an
+  array, and the nodes of a top-level `@graph`. An article one level down
+  is seldom the page's: a Blog's post, an ItemList's entry, or a part of a
+  collection, and its headline is another page's title. The date, author
+  and site name readers go down level by level to the first that states
+  one (P82-4, P88-3). For a title that would pass a top level holding only
+  a Blog or a list and reach the listed posts'.
+- **The first `<title>`, even an empty one.** It is the one a browser uses
+  for `document.title`. A `<title>` inside an `<svg>` labels an icon: 22 of
+  the 48 pages hold some, all of them after the page's own.
+- **The site's name is not cut off the `<title>`.** Of the 48 `<title>`s, 38
+  hold a separator with spaces around it, and 22 end with one and the
+  declared site name. Of the 7
+  titles now read from a `<title>`, 3 hold a separator: the newspaper's
+  two, ending in a name neither page declares as its site's, and a refusal
+  page's. Cutting a declared site name off the end would change none of
+  those 7, since none has one to cut. It would change 7 other titles, every
+  one an `og:title` the page wrote with its site's name in it. Cutting at
+  the last separator, as Trafilatura does, would change 22 titles. On 18 of
+  the 19 among them whose page declares a title in a `<meta>`, the result is
+  text no title `<meta>` on the page holds: the code host's name alone for a
+  repository page, the news site's name alone for its front page, the first
+  word of a documentation page's title. Either cut decides which part of
+  the page's own text is the title, which is the inference this entry
+  removes. The title is kept whole.
+
+Not read, by decision:
+
+- **`<meta name="title">` and `name="headline"`** are not HTML's keys,
+  though Trafilatura reads both.
+- **Vendors' keys**, `parsely-title` and `sailthru.title`, name whatever the
+  vendor was told. On the startup news site's front page `parsely-title` is
+  the site's name alone.
+- **Microdata `itemprop="headline"`** and `name`. No page among the 48
+  declares a headline this way; following an item's `name` would need P88-4's
+  scope rules for a field none of them uses.
+- **Headings**, by class, id or count. That is the inference this entry
+  removes.
+
+### P93-4: Trafilatura is not asked, and the address is not passed
+
+With the title declared, `read_metadata` no longer calls `extract_metadata`,
+and `discover.py` no longer imports it. Trafilatura still reads the main
+content's text for `--auto-selector`. `read_page` and `read_metadata` no
+longer take a `url`: Trafilatura was the only reader of it, the one that took
+a date from its path (P82-2) and a site name from its host (P88-1).
+
+### P93-5: what this does not cover
+
+- **A placeholder is a declaration.** The two refusal pages record their
+  `<title>`s, "Just a moment..." and a block page's, where Trafilatura
+  recorded their headings. A capture of either ends with exit 4, as any 401
+  or 403 does. They were read here only to measure.
+- **A sharing title is the page's word.** `og:title` is often shorter than
+  the `<title>`, and on the code host's blog index and the event page it is
+  other wording. It is what the page declares, and `page_metadata.title`
+  keeps the `<title>`.
+- **Nested JSON-LD.** A title stated only one level down, as the journal's
+  WebPage states its ScholarlyArticle's `headline` inside `mainEntity`, is
+  not read. The journal declares `og:title`, so its title is unchanged.
+- **White space.** Any run of white space becomes one space, a no-break
+  space included. The browser's `document.title` collapses only ASCII white
+  space, so the two can differ by a no-break space.
+- **HTML inside SVG.** A `<title>` inside an `<svg>`'s `<foreignObject>` is
+  HTML's, but it is read here as the drawing's. No page among the 48 has one.
+
+### P93-6: the tests
+
+`tests/test_discovery.py` reads the five fixtures above, and holds the
+reading rules on 41 inline cases. Against master's `discover.py`, three of
+the five fixtures read differently. The other two read the same, and hold
+that a nested post's headline is not read and that `citation_title` beats
+`DC.title`. Trafilatura's `extract_metadata`, replaced by a stand-in that
+fails the test, is never called, and `discover.py` no longer holds it.
+`test_the_address_is_never_read` replaces the date test that passed a URL
+with a date in its path, since no URL can reach the readers now, and the
+test of undeclared cues, which ran at two URLs, runs once.
+
+Four golden lines move, one in each of four manifests, and nothing else
+in any case. Each fixture has one `<h1>` and declares no title but its
+`<title>`, so Trafilatura gave the heading and the `<title>` is now recorded
+whole. Each now matches the manifest's own `title` and
+`page_metadata.title`, which come from the same `<title>`.
+
+| case | fixture | `discovered_metadata.title` before | after |
+|---|---|---|---|
+| `lms-module` | `lms_page.html` | Getting Started with Projects | Getting Started with Projects — Learning Journey |
+| `lms-module-videos` | `lms_page.html`, through the Guidde stand-in | Getting Started with Projects | Getting Started with Projects — Learning Journey |
+| `clamped-text` | `clamped_page.html` | Portfolio Planning — Release Notes | Release Notes — Portfolio Planning |
+| `clamped-noise` | `clamped_noise.html` | The Real Article | The noise element is itself clamped |

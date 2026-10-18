@@ -582,9 +582,7 @@ async def capture_open_page(
         # (docs/05 task 3.4), before anything is isolated or hidden: the
         # page's declared metadata and its main region are properties of
         # the page as it loaded, not of what capture kept.
-        reading = await asyncio.to_thread(
-            read_page, await page.content(), url=final_url
-        )
+        reading = await asyncio.to_thread(read_page, await page.content())
         discovered = reading.metadata
         selection = await select_main_content(
             page, options.selector, reading.article, auto=options.auto_selector

@@ -759,15 +759,19 @@ class DiscoveredMetadata(_Contract):
 
     Deliberately separate from `page_metadata`, which is the DOM's own
     declarations as the snapshot recorded them: a consumer that needs to know
-    where a value came from can tell the two apart. `title` is Trafilatura's
-    reading. The other three are what the page declares in its markup, and
-    each is empty when it declares none WebShot reads. `date` is a date
-    `<meta>`, a schema.org date in JSON-LD or microdata, or a `<time>`, as
-    `YYYY-MM-DD`; never a date found in the text, the URL or a heading
-    (docs/09 P3-3, P82). `author` is the names one kind of declaration gives
-    — a schema.org `author` in JSON-LD or microdata, `<meta name="author">`,
-    `citation_author`, `article:author` or `DC.creator` — as the page writes
-    them, joined with "; "; never a byline's text. `sitename` is
+    where a value came from can tell the two apart. All four are what the
+    page declares in its markup, and each is empty when it declares none
+    WebShot reads. `title` is the page's `og:title`, `twitter:title`, the
+    `name` or `headline` of a schema.org Article or WebPage at the top of a
+    JSON-LD block, `citation_title`, `DC.title`, or else its whole `<title>`,
+    as written; never a heading's text or a part of the `<title>` (docs/09
+    P93). `date` is a date `<meta>`, a schema.org date in JSON-LD or
+    microdata, or a `<time>`, as `YYYY-MM-DD`; never a date found in the
+    text, the URL or a heading (docs/09 P3-3, P82). `author` is the names
+    one kind of declaration gives — a schema.org `author` in JSON-LD or
+    microdata, `<meta name="author">`, `citation_author`, `article:author`
+    or `DC.creator` — as the page writes them, joined with "; "; never a
+    byline's text. `sitename` is
     `og:site_name`, a JSON-LD `WebSite` or `publisher` name, or
     `application-name`; never a part of the `<title>` or the URL's host
     (docs/09 P88).

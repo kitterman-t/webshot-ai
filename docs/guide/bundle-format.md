@@ -220,10 +220,15 @@ Five fields are worth knowing about:
   `explicit`, `trafilatura`, `static-selectors`, or `full-page` — so a
   surprising capture can be explained rather than guessed at.
 - **`page_metadata`** is what the DOM snapshot recorded; **`discovered_metadata`**
-  is Trafilatura's `title` and the `date`, `author` and `sitename` the page
-  declares. They are kept apart so a consumer can tell where a value came from.
-  Each of the three declared fields is empty when the page declares none in a
-  form WebShot reads; WebShot never infers one. The `date` is a date the page
+  is the `title`, `date`, `author` and `sitename` the page declares. They are
+  kept apart so a consumer can tell where a value came from. Each of the four
+  fields is empty when the page declares none in a form WebShot reads;
+  WebShot never infers one. The `title` is the first of `og:title`,
+  `twitter:title`, the `name` or `headline` of a schema.org Article or
+  WebPage at the top of a JSON-LD block, `citation_title` and `DC.title`, and
+  else the page's whole `<title>`, as written. It is never a heading's text,
+  and a `<title>` such as "Field Notes | Harbor Lane" is kept whole: the
+  site's name is not cut off it. The `date` is a date the page
   declares in its markup (a date `<meta>` such as `article:published_time`, a
   schema.org `datePublished`, `dateCreated` or `dateModified` in JSON-LD or
   microdata, or a `<time>`), written `YYYY-MM-DD`, and never a date from the

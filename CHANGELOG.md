@@ -416,6 +416,19 @@ which records the measurements behind each change.
   ones, as written; 4 declared authors Trafilatura dropped are now recorded;
   and 7 authors and 34 site names are unchanged. Only the title is still
   Trafilatura's. See docs/09 P88.
+- **`discovered_metadata.title` is the title the page declares, or nothing.**
+  It was Trafilatura's. A page with no title `<meta>` and one `<h1>` got the
+  heading's text, and a page with no `<h1>` got one side of a "Title | Site"
+  `<title>`; a page with no `<title>` got its heading. WebShot now reads the
+  title from `og:title`, `twitter:title`, the `name` or `headline` of a
+  schema.org Article or WebPage in JSON-LD, `citation_title` and `DC.title`,
+  and else takes the whole `<title>` as written, the site's name included.
+  `og:title` is read when a page writes it with `name=` too. On the 48
+  public pages P88 measured, 43 titles are unchanged and 5 that the pages
+  did not declare are now declared ones; on 4 golden cases the title is
+  now the fixture's `<title>` instead of its `<h1>`. Trafilatura is no
+  longer asked for metadata: on the six largest of those pages, reading it
+  took 9 to 68 ms where it took 17 to 215 ms. See docs/09 P93.
 - **A bot check's page served with HTTP 200 fails the capture.** A site behind
   DataDome answered 200, the check drew its block page over the article, and
   the capture printed "We detected unusual activity…" under the article's

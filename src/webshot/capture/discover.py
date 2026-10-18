@@ -9,10 +9,10 @@ DOM and isolates the element that holds it.  The v2 static selector list stays
 as the fallback, and the manifest records which one won — a capture that
 silently changed how it chose its content region would be unauditable.
 
-**What does the page say about itself?**  The title as Trafilatura reads
-it, and the date, author and site name the page declares.  This runs on every
-capture, and it is strictly additive: nothing WebShot already recorded
-changes shape because of it.
+**What does the page say about itself?**  The title, date, author and site
+name the page declares.  This runs on every capture, and it is strictly
+additive: nothing WebShot already recorded changes shape because of it.  None
+of the four is Trafilatura's, so only the first question is still asked of it.
 
 The date is not Trafilatura's (docs/09 P82).  Trafilatura gets it from
 htmldate, and htmldate guesses.  With `extensive=True`, the default, it gave
@@ -32,6 +32,12 @@ takes a part of the `<title>`, or the URL's host.  And it rewrites the names
 it does read: it splits them at commas and "and", drops what follows a
 digit, title-cases a lowercase one.  `declared_author` and
 `declared_sitename` read each from the page's own declarations, as written.
+
+Nor is the title (docs/09 P93).  When a page has one `<h1>`, Trafilatura
+takes its text ahead of the `<title>`; with none it can take one side of a
+"Title | Site" `<title>`.  `declared_title` reads the title the page
+declares, and with no title `<meta>` or JSON-LD that is the whole of its
+`<title>`, as written.
 """
 
 from __future__ import annotations
@@ -41,10 +47,10 @@ import json
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from html.parser import HTMLParser
 
-from trafilatura import extract, extract_metadata
+from trafilatura import extract
 
 LOGGER = logging.getLogger("webshot")
 
@@ -148,6 +154,56 @@ _META_SITENAME_KEYS = {
     "application-name": _APPLICATION_NAME,
 }
 
+#: The kinds of declaration a title is read from, in the order they are
+#: preferred.  A page has one title, so the first value of the first kind the
+#: page uses is it.  The `<title>` comes last: of 41 real pages that also
+#: declare a title in a `<meta>`, 18 wrote that title into the `<title>` with
+#: a separator and the site's or a section's name after it (docs/09 P93).
+(
+    _OG_TITLE,
+    _TWITTER_TITLE,
+    _JSON_LD_TITLE,
+    _CITATION_TITLE,
+    _DC_TITLE,
+    _TITLE_ELEMENT,
+) = range(6)
+
+#: The `<meta>` keys read as a title, by the `name` or `property` that
+#: carries them, spelled as `_meta_key` spells them.  `<meta name="title">`
+#: and the vendors' keys (`parsely-title`, `sailthru.title`) are not in it.
+_META_TITLE_KEYS = {
+    # Open Graph: the title of the page as a shared link shows it.
+    "og:title": _OG_TITLE,
+    # X's (Twitter's) cards: the title of the content a card shows.
+    "twitter:title": _TWITTER_TITLE,
+    # Highwire Press, which Google Scholar reads.
+    "citation_title": _CITATION_TITLE,
+    # Dublin Core in HTML.
+    "dc.title": _DC_TITLE,
+    "dcterms.title": _DC_TITLE,
+}
+
+#: The schema.org types whose `name`, or else `headline`, is a title: Article
+#: and WebPage, and every type schema.org defines beneath them.  A Product's,
+#: an Event's or an Organization's name names the thing, not the page.
+_JSON_LD_TITLED_TYPES = frozenset(
+    (
+        "Article AdvertiserContentArticle NewsArticle AnalysisNewsArticle "
+        "AskPublicNewsArticle BackgroundNewsArticle OpinionNewsArticle "
+        "ReportageNewsArticle ReviewNewsArticle Report SatiricalArticle "
+        "ScholarlyArticle MedicalScholarlyArticle SocialMediaPosting "
+        "BlogPosting LiveBlogPosting DiscussionForumPosting TechArticle "
+        "APIReference "
+        "WebPage AboutPage CheckoutPage CollectionPage MediaGallery "
+        "ImageGallery VideoGallery ContactPage FAQPage ItemPage "
+        "MedicalWebPage ProfilePage QAPage RealEstateListing SearchResultsPage"
+    ).split()
+)
+
+#: Elements whose content is not HTML: a `<title>` inside one is an SVG or a
+#: MathML element (an icon's label, on many pages), not the document's title.
+_FOREIGN_ELEMENTS = frozenset(("svg", "math"))
+
 #: Authors are joined with this, which is also how Trafilatura joined them.
 #: Not a comma: a name can hold one ("Doe, Jane").
 AUTHOR_SEPARATOR = "; "
@@ -203,16 +259,18 @@ class PageReading:
 
 @dataclass(frozen=True, slots=True)
 class DiscoveredMetadata:
-    """What the page says about itself: the title as Trafilatura reads it,
-    and the date, author and site name the page declares (`declared_date`,
-    `declared_author`, `declared_sitename`).
+    """What the page says about itself: the title, date, author and site name
+    it declares (`declared_title`, `declared_date`, `declared_author`,
+    `declared_sitename`).
 
     Empty strings rather than nulls, matching the `page_metadata` record the
-    DOM side already publishes: a consumer reads one shape for both.  For the
-    three declared fields, empty means the page declares none that WebShot
-    reads.
+    DOM side already publishes: a consumer reads one shape for both.  Empty
+    means the page declares none that WebShot reads.
     """
 
+    #: The title the page declares, as it writes it, the whole of its
+    #: `<title>` when it declares none in a `<meta>` or JSON-LD.  Never a
+    #: heading's text or a part of the `<title>` (docs/09 P93).
     title: str = ""
     #: The names the page declares, as it writes them, joined with
     #: `AUTHOR_SEPARATOR`.  Never a byline's text (docs/09 P88).
@@ -226,30 +284,53 @@ class DiscoveredMetadata:
     sitename: str = ""
 
 
-def read_page(html: str, *, url: str | None = None) -> PageReading:
+def read_page(html: str) -> PageReading:
     """Both readings of one page, in one blocking call."""
-    return PageReading(
-        metadata=read_metadata(html, url=url), article=main_content_text(html)
-    )
+    return PageReading(metadata=read_metadata(html), article=main_content_text(html))
 
 
-def read_metadata(html: str, *, url: str | None = None) -> DiscoveredMetadata:
-    """Read the page's metadata: Trafilatura's title, and the date, author
-    and site name the page declares."""
+def read_metadata(html: str) -> DiscoveredMetadata:
+    """Read the title, date, author and site name the page declares.
+
+    Only the markup is read.  There is no address to read: a URL's path is
+    where htmldate found a date and its host where Trafilatura found a site
+    name (docs/09 P82, P88), and neither is a declaration.
+    """
     reader = _read_declarations(html)
-    declared = DiscoveredMetadata(
-        author=_author(reader), date=_date(reader), sitename=_sitename(reader)
+    return DiscoveredMetadata(
+        title=_title(reader),
+        author=_author(reader),
+        date=_date(reader),
+        sitename=_sitename(reader),
     )
-    try:
-        # Only the title is Trafilatura's (docs/09 P82, P88), so the fast
-        # date search is the cheaper one to throw away.
-        document = extract_metadata(html, default_url=url, extensive=False)
-    except Exception as exc:  # a capture must never fail over its metadata
-        LOGGER.debug("Metadata extraction failed: %s", exc)
-        return declared
-    if document is None:
-        return declared
-    return replace(declared, title=document.title or "")
+
+
+def declared_title(html: str) -> str:
+    """The title the page declares for itself, or "".
+
+    The first of these the page declares, in this order:
+
+    1. `<meta property="og:title">`;
+    2. `<meta name="twitter:title">`;
+    3. the `name`, or else the `headline`, of a schema.org Article or WebPage
+       (`_JSON_LD_TITLED_TYPES`) at the top of a JSON-LD block: the block
+       itself, an item of a top-level array, or a node of a top-level
+       `@graph`;
+    4. `<meta name="citation_title">`;
+    5. `<meta name="DC.title">` or `DCTERMS.title`;
+    6. the `<title>`: the first one outside an `<svg>` or `<math>`, which is
+       the one a browser shows.
+
+    Among values of one kind the first in the document wins, and a `<meta>`
+    is read whether it names its key with `property` or `name`.  The value is
+    kept as the page writes it, with each run of white space made one space,
+    so a `<title>` of "Field Notes | Harbor Lane" is recorded whole: cutting
+    the site's name off would mean guessing which side of which separator is
+    the title.  A web address is kept too: unlike an author's, a title given
+    as an address is still the page's title.  Never the text of a heading,
+    which is where Trafilatura's title came from when a page had one `<h1>`.
+    """
+    return _title(_read_declarations(html))
 
 
 def declared_date(html: str) -> str:
@@ -367,13 +448,26 @@ def _sitename(reader: _Declarations | None) -> str:
     return names[0] if names else ""
 
 
-def _first_kind(declarations: list[tuple[int, str]]) -> list[str]:
+def _title(reader: _Declarations | None) -> str:
+    if reader is None:
+        return ""
+    titles = _first_kind(reader.titles, addresses=True)
+    return titles[0] if titles else ""
+
+
+def _first_kind(
+    declarations: list[tuple[int, str]], *, addresses: bool = False
+) -> list[str]:
     """The readable values of the most preferred kind present, in order and
-    once each.  A kind whose every value is unreadable is not present."""
+    once each.  A kind whose every value is unreadable is not present.
+
+    A web address is unreadable unless `addresses` says it is a value: it
+    says where a person or a site is described, not what they are called.
+    """
     kinds: dict[int, list[str]] = {}
     for kind, value in declarations:
         value = " ".join(value.split())
-        if value and not _WEB_ADDRESS.match(value):
+        if value and (addresses or not _WEB_ADDRESS.match(value)):
             values = kinds.setdefault(kind, [])
             if value not in values:
                 values.append(value)
@@ -426,8 +520,8 @@ class _Element:
 
 
 class _Declarations(HTMLParser):
-    """Every date, author and site name declaration in a page, in document
-    order, each with its tier or kind.
+    """Every title, date, author and site name declaration in a page, in
+    document order, each with its tier or kind.
 
     The standard library's parser rather than Trafilatura's tree, so that what
     counts as a declaration is this module's rule and no upstream's: the point
@@ -453,8 +547,13 @@ class _Declarations(HTMLParser):
         #: value), the value "" for one stated in a form that is not a name.
         self.microdata_authors: list[tuple[int, int, str]] = []
         self.sitenames: list[tuple[int, str]] = []
+        self.titles: list[tuple[int, str]] = []
         #: The open `<time>` whose text is its value, and that text so far.
         self._time: tuple[int, list[str]] | None = None
+        #: The document's `<title>` while it is open, and its text so far.
+        self._title: list[str] | None = None
+        #: The document's `<title>` has opened: only the first is the page's.
+        self._titled = False
         #: The open JSON-LD block's text so far.
         self._json_ld: list[str] | None = None
         self._open: list[_Element] = []
@@ -477,7 +576,16 @@ class _Declarations(HTMLParser):
                     self.sitenames.append(
                         (_META_SITENAME_KEYS[key], attributes["content"])
                     )
+                if key in _META_TITLE_KEYS:
+                    self.titles.append((_META_TITLE_KEYS[key], attributes["content"]))
+        elif tag == "title" and not self._titled and not self._in_foreign_content():
+            # The first, even when it is empty: it is the one a browser shows.
+            self._titled, self._title = True, []
         self._microdata(tag, attributes)
+
+    def _in_foreign_content(self) -> bool:
+        """An element opening now is SVG's or MathML's, not HTML's."""
+        return any(element.tag in _FOREIGN_ELEMENTS for element in self._open)
 
     def _date_declarations(self, tag: str, attributes: dict[str, str]) -> None:
         itemprop = _ITEMPROP_DATES.get(attributes.get("itemprop", "").lower())
@@ -549,6 +657,8 @@ class _Declarations(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._time is not None:
             self._time[1].append(data)
+        if self._title is not None:
+            self._title.append(data)
         if self._json_ld is not None:
             self._json_ld.append(data)
         for text in self._texts:
@@ -557,6 +667,8 @@ class _Declarations(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag == "time":
             self._end_time()
+        elif tag == "title":
+            self._end_title()
         elif tag == "script" and self._json_ld is not None:
             self._end_json_ld("".join(self._json_ld))
             self._json_ld = None
@@ -571,6 +683,7 @@ class _Declarations(HTMLParser):
     def close(self) -> None:
         super().close()
         self._end_time()  # a <time> the page never closed still said a date
+        self._end_title()  # and a <title> its title
         while self._open:  # nor did an author the page never closed
             self._end_element(self._open.pop())
 
@@ -579,6 +692,11 @@ class _Declarations(HTMLParser):
             tier, parts = self._time
             self.dates.append((tier, "".join(parts)))
             self._time = None
+
+    def _end_title(self) -> None:
+        if self._title is not None:
+            self.titles.append((_TITLE_ELEMENT, "".join(self._title)))
+            self._title = None
 
     def _end_json_ld(self, text: str) -> None:
         data = _json_ld(text)
@@ -592,6 +710,7 @@ class _Declarations(HTMLParser):
         self.sitenames.extend(
             (_JSON_LD_PUBLISHER, name) for name in _outermost(data, _json_ld_publisher)
         )
+        self.titles.extend((_JSON_LD_TITLE, title) for title in _json_ld_titles(data))
 
     def _end_element(self, element: _Element) -> None:
         value = None
@@ -716,14 +835,44 @@ def _json_ld_publisher(node: dict[str, object]) -> list[str] | None:
 
 
 def _json_ld_website(node: dict[str, object]) -> list[str] | None:
-    types = node.get("@type")
-    if not any(
-        isinstance(name, str) and _schema_org_term(name) == "WebSite"
-        for name in (types if isinstance(types, list) else [types])
-    ):
+    if not _is_a(node, frozenset(("WebSite",))):
         return None
     name = node.get("name")
     return [name] if isinstance(name, str) else []
+
+
+def _json_ld_titles(data: list[object]) -> list[str]:
+    """The titles the top of one JSON-LD block declares, in order.
+
+    Only the top: the block's own object, the items of an array it holds, and
+    the nodes of a top-level `@graph`.  An Article one level down is seldom
+    the page's own: it is a Blog's post, an ItemList's entry, or a part of a
+    collection, and its headline is another page's title.
+    """
+    titles: list[str] = []
+    for node in _objects(data):
+        graph = node.get("@graph")
+        nodes = _objects([graph]) if isinstance(graph, (list, dict)) else []
+        for top in [node, *nodes]:
+            if not _is_a(top, _JSON_LD_TITLED_TYPES):
+                continue
+            # `name` first: an encyclopedia's Article gives its title as the
+            # `name` and a one-line description as the `headline`.
+            for key in ("name", "headline"):
+                value = top.get(key)
+                if isinstance(value, str) and value.strip():
+                    titles.append(value)
+                    break
+    return titles
+
+
+def _is_a(node: dict[str, object], types: frozenset[str]) -> bool:
+    """Whether a JSON-LD object's `@type`, or one of them, is in `types`."""
+    stated = node.get("@type")
+    return any(
+        isinstance(name, str) and _schema_org_term(name) in types
+        for name in (stated if isinstance(stated, list) else [stated])
+    )
 
 
 def _schema_org_term(name: str) -> str:
