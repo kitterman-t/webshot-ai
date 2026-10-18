@@ -141,7 +141,7 @@ own.
 
 | Runner | Jobs |
 |---|---|
-| `ubuntu-latest` | lint + types, the Linux legs of `tests`, docs site, license gate, vulnerability scan, perf smoke, veraPDF, both `Claude review` jobs, `release`, and the Pages `docs` workflow |
+| `ubuntu-latest` | lint + types, the Linux legs of `tests`, docs site, license gate, vulnerability scan, perf smoke, veraPDF, the three `Claude review` jobs and its re-judge, `release`, and the Pages `docs` workflow |
 | `macos-latest` | golden corpus, parity, the macOS legs of `tests` |
 | `windows-latest` | windows smoke, weekly |
 
@@ -182,7 +182,9 @@ against code the fork wrote; keep it that way. `Claude review` does need a
 secret, so a gate job in front of it skips forks — and bots, drafts, and any
 run the secret did not reach — and writes the reason to the run summary, so the
 review shows as `skipped` with its cause beside it rather than as a bare skip
-or a green that reviewed nothing.
+or a green that reviewed nothing. Its verdict, `claude review verdict`, passes
+a fork's pull request by policy, because only a person merges one (docs/09
+P89).
 
 ## Dependency updates
 

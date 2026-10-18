@@ -122,6 +122,13 @@ something untrue. This tool's output is evidence, so a claim the code cannot
 support ranks with a logic error, not with style. Formatting is already enforced
 by `ruff`; type errors by `mypy`. Do not spend a finding on either.
 
+A finding from the Claude review holds the merge until it is answered: the
+required check `claude review verdict` fails while a thread Claude started is
+unresolved (docs/09 P89). Fix it and push, or reply in the thread saying why
+it is not a problem; then resolve the thread. A reply re-judges the verdict
+once its thread is resolved; otherwise re-run the failed verdict. Never
+resolve or hide a finding nobody answered.
+
 ## Conventions
 
 - Conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,

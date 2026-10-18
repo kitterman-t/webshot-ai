@@ -206,6 +206,17 @@ which records the measurements behind each change.
   wait, when a pinned action's tag no longer names its commit, or when a
   Dependabot pull request failed, never ran CI, lost its auto-merge or waited
   three days. An input it cannot read fails it too. See docs/09 P84.
+- **A Claude review finding can hold the merge.** The review workflow now
+  reports `claude review verdict` on every head of a pull request that is not
+  a draft. It fails while a thread Claude started is unresolved, while a
+  summary it posted reports something and has not been hidden as resolved or
+  outdated, and while no review has finished on the pull request. Required,
+  it keeps auto-merge from merging a head the review flagged before anyone
+  answered.
+  The review itself still runs once per pull request, and on a push only when
+  none has run yet; the verdict calls no model, and it is re-run after a
+  reply once the thread is resolved. Bots', forks' and the sync's own pull
+  requests pass it without a review. See docs/09 P89.
 
 - **NAT64, IPv4-translated and site-local IPv6 addresses are internal.** The
   private-network check classified `64:ff9b::a9fe:a9fe`, the NAT64 spelling of
