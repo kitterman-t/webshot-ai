@@ -16369,7 +16369,8 @@ the snapshot measured the page drawing the two with no gap (P70-6). P70-5 to
 P70-8 are measured on master 247dbea with that branch's head, 6c8fe22, merged
 in, and with docling-core 2.99.0 and docling-slim 2.132.0. P70-11 to P70-15
 extend the measurement to the elements P48 joins on the markup alone: bold,
-code, links and the rest of `_JOINED_TAGS`.
+code, links and the rest of `_JOINED_TAGS`. P70-16 to P70-18 leave a link's
+printed address out of it.
 
 ### P70-1: where the space came from
 
@@ -16767,8 +16768,9 @@ runs the two together, by P48's rule. P48-3 had counted 827 of 3,463 such
 edges on 34 live pages drawn more than 0.1 em apart, by inline code's padding
 and a link's icon, which the selection text does not read as a space. Where
 the PDF prints such a pair apart, the bundle still read it as one word.
-Measured on master 4fe0624 with this change, docling-core 2.99.0,
-docling-slim 2.132.0 and Chromium 141.
+Measured on master 4fe0624 with this change, docling-core 2.101.1,
+docling-slim 2.137.0 and Chromium 153.0.8010.12, as each capture's manifest
+records (corrected in P70-18).
 
 The snapshot now measures each edge of every element of `INLINE_TAGS` with
 an end tag as P70-6 measures a span's: the same run reading, the same glyph
@@ -16912,7 +16914,8 @@ No other case's output changed.
   docling's space before the punctuation that follows: `[44708120](…) .` in
   `content.md` and "44708120 ." in `content.txt`, where the PDF prints
   "44708120 (https://…).". The address is generated content, which
-  `content.html` does not carry, so no surface holds it.
+  `content.html` does not carry, so no surface holds it. P70-16 leaves an
+  element's own printed address out of the measurement, and the two join.
 - **The PDF's text is not the measure for a gap narrower than a space.**
   pypdf joins two runs drawn closer than its estimate of a space's width,
   and it read the two edges of the same padded code differently: `(.odt )`
@@ -16961,6 +16964,102 @@ capture, 3 of them on formatted elements (`<b>` with `before after` and with
 `after`, `<a>` with `after`), and its test of a formatted element now has an
 empty attribute keep the parts apart. Those checks, five tests in the two
 files, fail on master.
+
+### P70-16: an element's own printed address or title (2026-10-18)
+
+P70-14's first limit. A link whose address the print stylesheet writes
+after it kept docling's space before the punctuation that follows: "44708120
+." in `content.txt` where master had read "44708120.". Only the address is
+drawn between the two, as generated content. `content.md` carries it as the
+link's target and no text surface carries it as text, so on every surface
+the link's text and its full stop are adjacent, and the space was the
+measurement's, not the page's.
+
+What the snapshot can see is the pseudo-element's computed `content`. Under
+print media, in Chromium 153.0.8010.12, `content: " (" attr(href) ")"`
+(HTML5 Boilerplate's rule), the same written `' (' attr( href ) ')'`, and
+`' (https:' attr(href) ')'` on a protocol-relative link each compute to one
+quoted string holding the resolved address: `" (https://example.invalid/a)"`. `attr(title)` on an
+abbreviation computes the same way. A separator the stylesheet writes as a
+string computes to that string (`"›"`, a line break `"\a "`, an icon's
+empty `""`), a counter to `counter(c) ". "`, and `<q>`'s marks to
+`open-quote` and `close-quote`. Under screen media the print rules compute
+to `none`.
+
+So the snapshot leaves out generated content that is one string holding the
+element's own `href` or `title`, with nothing else in it but whitespace,
+brackets and, before an address, a scheme. That content annotates the
+element; it is not a separator. Where such an annotation stands between two
+glyphs drawn apart on one line, or across a wrap, the two are judged by the
+margins, paddings and borders of the boxes between, as a wrap is (P70-6),
+with the annotation left out. A box still draws a gap, so a link padded
+beside its address stays apart. Every other generated content still keeps
+the parts apart, and an edge with no annotation between is measured as
+before. The extra style reads are made only at an edge already drawn apart.
+
+The same pass applies to spans: an abbreviation printed with its title
+joins its full stop.
+
+### P70-17: fresh captures, master's and this change's
+
+P70-12's 25 pages were captured twice on 2026-10-18, once with master
+82c07b7 (#284) and straight after with this change, three pages at a time.
+Every capture completed. For 17 pages the two `content.html` files are the
+same once `data-webshot-touches` is taken out; 8 pages changed between the
+two captures, among them a news front page and a video page. The comparison
+is P70-12's, with its script.
+
+- **Master's evidence, measured again:** on its own fresh captures it
+  declines 610 joins: 559 with an address printed between, 39 apart in the
+  PDF, 10 joined there and 2 not found. Those are P70-12's counts.
+- **This change's evidence:** on its captures it declines 72, all beside
+  punctuation.
+  - 39 apart in the PDF: the same inline code, on the Rust book 26, on
+    GitHub 12, and MDN's linked code 1.
+  - 9 joined in the PDF: P70-12's opening edges of GitHub's code after a
+    parenthesis.
+  - 24 with an address printed between: python.org's tag links, each padded
+    by 4.7 px. With the address left out the padding still stands between,
+    and the PDF prints a space after the address as well: "Django
+    (https://www.djangoproject.com/) , Pyramid".
+- **On the 17 pages the same in both captures**, this change joins 538
+  spaces that master's evidence kept, every one beside punctuation with an
+  address printed between: 535 by the lookup, and the 3 the lookup could
+  not settle in P70-12. Of those 3, one was found elsewhere on its page and
+  two have an address that pypdf breaks; each has an address printed there.
+  559 less python.org's 24 is 535.
+- **What master's evidence joins and this change's does not:** nothing.
+  Read from this change's output to master's, on the same 17 pages, no
+  space is removed.
+- **The attributes.** 671 of them differ between the two captures, on 5
+  pages, and each one names an edge newly touching. 539 are on links with an
+  address; the other 132 are on the spans, italics, strong and underline at
+  the same edges.
+
+### P70-18: the fixture, the tests and the golden corpus
+
+`tests/test_printed_addresses.py` captures
+`tests/fixtures/printed_addresses.html`, whose words are made up and whose
+print stylesheet writes each cited link's address and an abbreviation's
+title after it. A link and its comma, a link and its full stop with a
+parenthesis in its address, a protocol-relative link printed with its
+scheme, a link inside a word and the abbreviation are one run on every text
+surface. A separator written as a string, an icon's empty box before a link,
+and a cited link whose padding draws a gap beside its address keep two
+apart. `content.html` must carry exactly the recorded edges, and the PDF
+must print each address and the title where the bundle joins. On master
+82c07b7, 2 of the 3 tests fail. The PDF's, which holds there by
+construction, passes.
+
+No golden case moved: every case's output, `content.html` included, is what
+#284 recorded. The two cases #284 moved, `lms-module` and
+`lms-module-videos`, keep their link's `after`. That link is drawn
+touching its full stop, with nothing generated between, so this change does
+not reach it.
+
+P70-11's versions were stated wrong, copied from P70's own: its
+measurements, and these, were taken with docling-core 2.101.1, docling-slim
+2.137.0 and Chromium 153.0.8010.12, as each capture's manifest records.
 
 ## P52: a list item whose only content was a picture or a table lost it (2026-10-11)
 

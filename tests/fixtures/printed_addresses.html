@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Printed addresses</title>
+<!-- docs/09 P70-16. Every word here is made up, so each can be searched for
+     whole. In print this page writes each cited link's address after it, and
+     an abbreviation's title, as Wikipedia's and HTML5 Boilerplate's print
+     stylesheets do. That generated text annotates the element and no text
+     surface carries it, so the element's text and the punctuation or word
+     after it are one run there: the comma, the full stop with a parenthesis
+     in the address, a protocol-relative address printed with its scheme, a
+     link inside a word, and the abbreviation. Other generated content and
+     drawn boxes keep two apart: a separator written as a string, an icon's
+     empty box before a link, and a cited link whose own padding draws a gap
+     beside its address. -->
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 2rem; max-width: 40rem; }
+  @media print {
+    a.cite::after { content: " (" attr(href) ")"; }
+    a.proto[href^="//"]::after { content: " (https:" attr(href) ")"; }
+    abbr[title]::after { content: " (" attr(title) ")"; }
+  }
+  a.sep::after { content: " \203A"; }
+  a.lead::before { content: ""; display: inline-block; width: .8em; height: .8em; margin-right: .3em; background: #36c; }
+  a.padded { padding-right: 1em; }
+</style>
+</head>
+<body>
+<h1>Sources for the Morvane</h1>
+<p>Cited: see <a class="cite" href="https://example.invalid/velkor">Velkor</a>, then <a class="cite" href="https://example.invalid/dravis?page=(2)">Dravis</a>. Also <a class="proto" href="//example.invalid/tolmen">Tolmen</a>; the gre<a class="cite" href="https://example.invalid/vash">vash</a>ul stone; and <abbr title="Plinth Office">PO</abbr>.</p>
+<p>Not annotations: <a class="sep" href="#later">Halvor</a>, then see<a class="lead" href="#later">Quessen</a> and <a class="cite padded" href="https://example.invalid/ormask">Ormask</a>.</p>
+<h2 id="later">Later</h2>
+<p>End of the sources.</p>
+</body>
+</html>

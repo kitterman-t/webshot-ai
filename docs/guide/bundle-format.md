@@ -102,7 +102,9 @@ code or linked element whose text the markup runs into its neighbour's, the
 attribute is there even where neither edge is drawn touching, and is then
 empty. Where the page draws a margin, a padding, a border or generated
 content there, as around the bullet in "Article • 12 Oct 2026" or between a
-link and its icon, the parts stay apart. A `content.html` captured before
+link and its icon, the parts stay apart. The one generated content that does
+not count is an element's own address or title, which a print stylesheet
+writes after a link or an abbreviation and no text surface carries. A `content.html` captured before
 WebShot measured this records no such edge: its spans stay apart, and its
 bold, code and linked parts join wherever the markup runs them together.
 
