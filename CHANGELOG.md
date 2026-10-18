@@ -277,11 +277,13 @@ which records the measurements behind each change.
   with its neighbour where the page and the PDF show a gap. The snapshot now
   measures these edges as it measures a span's and records them in
   `content.html` as `data-webshot-touches`, empty where neither edge is drawn
-  touching. Inline code padded by a pixel still joins. On 25 public pages
-  every join this declines was beside punctuation, most of them a link before
-  a full stop where the print stylesheet writes the link's address between
-  the two. A `content.html` captured before this change records no such
-  evidence and reads as before. See docs/09 P70-11.
+  touching. Inline code padded by a pixel still joins. A link's own address
+  or an abbreviation's title that a print stylesheet writes after it does not
+  count as a gap: no text surface carries that text, so a cited link still
+  joins the full stop after it. On 25 public pages every join this declines
+  was beside punctuation, at inline code or a link drawn apart by its padding.
+  A `content.html` captured before this change records no such evidence and
+  reads as before. See docs/09 P70-11 and P70-16.
 - **A picture printed far finer than paper can show is reduced.** Chromium
   embeds a picture at its natural size whatever size it prints at, and a
   think tank's 4-page topic page was 86 MB: its card thumbnails were the

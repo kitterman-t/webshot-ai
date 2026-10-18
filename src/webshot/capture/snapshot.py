@@ -334,8 +334,12 @@ MEASURED_INLINE_TAGS = frozenset(
 #: measured between the two glyphs' boxes; where the line wraps between them,
 #: it is the margins, paddings and borders of the boxes that end or start
 #: there, with no generated content. Either way the gap must be at most
-#: `TOUCH_TOLERANCE_EM` of the smaller of their font sizes. The bridge joins
-#: an element's text to its neighbour's only at an edge named here.
+#: `TOUCH_TOLERANCE_EM` of the smaller of their font sizes. The one generated
+#: content left out is an element's own `href` or `title` in brackets, which
+#: a print stylesheet writes after a link or an abbreviation: it annotates
+#: the element and no text surface carries it, so the two are judged by the
+#: boxes between, as across a wrap (docs/09 P70-16). The bridge joins an
+#: element's text to its neighbour's only at an edge named here.
 #:
 #: A missing attribute means what it meant before the snapshot measured each
 #: kind. On an element of `MEASURED_INLINE_TAGS` it names no edge, so a
@@ -1028,17 +1032,50 @@ async def extract_semantic_content(
                 }
                 return found;
             };
+            // Generated content that prints the element's own address or
+            // title, as a print stylesheet's
+            // `a[href]::after { content: " (" attr(href) ")" }` and
+            // `abbr[title]::after { content: " (" attr(title) ")" }` do.
+            // Chromium computes it to one string, the attribute's value and
+            // the brackets around it. It annotates the element; it does not
+            // separate it from what follows. content.md carries the address
+            // as the link's target, and no text surface carries the printed
+            // copy, so on every surface the element's text and the full stop
+            // after it are adjacent (docs/09 P70-16). Any other generated
+            // content, a separator, a line break, an icon's empty box, a
+            // quotation mark, a counter, is drawn between the two and no
+            // surface holds it, so it keeps them apart.
+            const printedOwnAttribute = (element, content) => {
+                const quoted = /^"((?:[^"\\\\]|\\\\[\\s\\S])*)"$/.exec(content);
+                if (!quoted) return false;
+                const printed = quoted[1].replace(
+                    /\\\\([0-9a-fA-F]{1,6}) ?|\\\\([\\s\\S])/g,
+                    (_, hex, character) => (hex ? String.fromCodePoint(parseInt(hex, 16)) : character));
+                return ['href', 'title'].some(name => {
+                    const value = element.getAttribute(name);
+                    const at = value?.trim() ? printed.indexOf(value) : -1;
+                    if (at < 0) return false;
+                    // A protocol-relative address is printed with its scheme.
+                    const head = printed.slice(0, at);
+                    const rest = (name === 'href' ? head.replace(/https?:$/, '') : head)
+                        + printed.slice(at + value.length);
+                    return /^[\\s()[\\]<>{}]*$/.test(rest);
+                });
+            };
             // What the boxes between two characters draw there: the end of
             // each element the first is in and the second is not, and the
             // start of each the second is in and the first is not. A margin,
             // a padding and a border have a width; generated content draws
-            // whatever it holds, so any at all counts.
+            // whatever it holds, so any at all counts, but for an element's
+            // printed address or title, which is left out and named
+            // (`annotation`).
             const boxesBetween = (before, after) => {
                 const above = ancestors(before);
                 const below = ancestors(after);
                 const inAbove = new Set(above);
                 const inBelow = new Set(below);
                 let extent = 0;
+                let annotation = false;
                 for (const [elements, side, pseudo] of [
                     [above.filter(element => !inBelow.has(element)), 'End', '::after'],
                     [below.filter(element => !inAbove.has(element)), 'Start', '::before'],
@@ -1049,18 +1086,23 @@ async def extract_semantic_content(
                             + parseFloat(style[`paddingInline${side}`])
                             + parseFloat(style[`borderInline${side}Width`]);
                         const content = getComputedStyle(element, pseudo).content;
-                        if (content !== 'none' && content !== 'normal') return Infinity;
+                        if (content === 'none' || content === 'normal') continue;
+                        if (!printedOwnAttribute(element, content)) return {extent: Infinity, annotation};
+                        annotation = true;
                     }
                 }
-                return extent;
+                return {extent, annotation};
             };
             // On one line, the gap is measured between the two glyphs' boxes,
             // as the page draws them. Where the line wraps between the two
             // there is no gap to measure, and the page draws none if the boxes
             // between draw nothing: a page range `<span>123&ndash;</span>165` wraps
             // after its dash at one width and not at another, and is one range
-            // at both. Absent evidence is not evidence: a glyph with no box, or
-            // a copy with no live text, touches nowhere.
+            // at both. A printed address or title is drawn on the line too, so
+            // where one stands between two glyphs drawn apart they are judged
+            // by the boxes between, as across a wrap, the annotation left
+            // out. Absent evidence is not evidence: a glyph with no box, or a
+            // copy with no live text, touches nowhere.
             const drawnTouching = (left, right) => {
                 const before = liveText.get(left);
                 const after = liveText.get(right);
@@ -1073,10 +1115,13 @@ async def extract_semantic_content(
                 if (!a || !b) return false;
                 const em = Math.min(emOf(before), emOf(after));
                 const oneLine = a.top < b.bottom && b.top < a.bottom;
-                const gap = oneLine
-                    ? Math.max(0, b.left - a.right, a.left - b.right)
-                    : boxesBetween(before, after);
-                return em > 0 && gap <= __TOUCH_TOLERANCE_EM__ * em;
+                const tolerance = __TOUCH_TOLERANCE_EM__ * em;
+                let gap = oneLine ? Math.max(0, b.left - a.right, a.left - b.right) : Infinity;
+                if (gap > tolerance) {
+                    const boxes = boxesBetween(before, after);
+                    if (!oneLine || boxes.annotation) gap = boxes.extent;
+                }
+                return em > 0 && gap <= tolerance;
             };
             const touches = new Map();
             const recorded = element => {
