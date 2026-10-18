@@ -351,6 +351,14 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **The PDF/A check reads veraPDF's report as UTF-8, whatever the locale.**
+  It read veraPDF's output in the locale's encoding, cp1252 on an English
+  Windows. veraPDF writes UTF-8, and its report names the file it checked:
+  under cp1252 a capture saved as "Café.pdf" published a `verapdf.json`
+  naming "CafÃ©.pdf", and a name holding "Í" stopped the check with a decode
+  error. A report that is not UTF-8 is now an attempt that failed, named in
+  the check's detail and never rewritten, and the Docker probe no longer
+  decodes `docker info` at all. See docs/09 P91-4.
 - **An HTML file reads the same whatever line endings it was saved with.**
   The reader for an EPUB's chapters and a zip's HTML members kept each `\r`,
   where a browser reads `\r\n` and a lone `\r` as `\n`. So a copy saved with
