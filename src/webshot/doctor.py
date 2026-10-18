@@ -210,18 +210,29 @@ def tool_output(executable: str, *arguments: str) -> str:
     `doctor` exists to describe a damaged environment, so a tool that hangs,
     dies, or prints nothing has to come back as an empty string rather than as
     a traceback.
+
+    Read as UTF-8, with a byte that is not UTF-8 shown as an escape. The
+    locale's encoding read it before: `tesseract --list-langs` names its data
+    directory first, and under cp1252, Windows' encoding on an English
+    install, a UTF-8 "Í" in that path raised `UnicodeDecodeError` out of
+    here (docs/09 P91).
     """
     try:
         completed = subprocess.run(
             [executable, *arguments],
             capture_output=True,
-            text=True,
             timeout=30,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return (completed.stdout or "") + (completed.stderr or "")
+    return "".join(
+        (stream or b"")
+        .decode("utf-8", errors="backslashreplace")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        for stream in (completed.stdout, completed.stderr)
+    )
 
 
 def check_browser() -> CheckResult:

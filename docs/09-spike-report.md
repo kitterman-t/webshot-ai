@@ -18518,7 +18518,7 @@ encoding. That was not measured on Windows. Decoding the same bytes with
 Python's `cp1252` codec, the ANSI code page of an English Windows
 installation, turns `Café` into `CafÃ©` with no error, and fails on `Í`
 (bytes `C3 8D`). Decoding Tesseract's output as UTF-8 would fix both. That
-is a change to recognized text, and it is not made here.
+is a change to recognized text, and it is not made here. P91 makes it.
 
 ### P90-3 — the footprint test names the OpenCV that is installed
 
@@ -18537,7 +18537,9 @@ fixture's second chart, after the engine has started and read the first:
 
 - RapidOCR, through a stand-in recognizer that raises an `Exception`-only
   error wrapping another, as RapidOCR does;
-- Tesseract, through the `UnicodeDecodeError` measured above.
+- Tesseract, through the `UnicodeDecodeError` measured above. Since P91
+  the bridge reads UTF-8, and the stand-in raises the UTF-8 error that bytes
+  which are not UTF-8 still cause.
 
 For each engine it requires one warning naming `asset-002` and the error,
 all three assets saved, the other two read by that engine, and exit 6's
@@ -18553,3 +18555,124 @@ error escaping `capture_visual_assets`. The real-RapidOCR case ends with
 RapidOCR's `ONNXRuntimeError`. The Tesseract case fails because the bridge
 raised a `RuntimeError`, which the stage already caught. That case holds
 the contract; it does not reproduce a crash.
+
+## P91 — Tesseract's output was read in the locale's encoding (2026-10-18)
+
+P90-2 left this open. The bridge ran Tesseract with `text=True` and no
+encoding, so `subprocess` decoded its output with `locale.getencoding()`
+unless Python ran in UTF-8 mode. Tesseract writes UTF-8. On macOS,
+Tesseract 5.5.3 with `eng` read a rendered line of Arial, "Café Índice",
+and printed `Caf\xc3\xa9` in its TSV; it read the second word as `indice`,
+since `eng` has no "Í". The locale's encoding on an English Windows
+installation is cp1252, its ANSI code page.
+
+Measured on macOS against master 2adef95, in a child interpreter run with
+`-X utf8=0` and `locale.getencoding` returning `cp1252`, which is what
+`subprocess` asks: the bridge read that image's page text as `CafÃ©
+indice`, with no error. With the fix it reads `Café indice`. The bytes of
+"Í" in UTF-8 are `C3 8D`, and cp1252 defines no character at `8D`, so a
+recognized "Í" raised `UnicodeDecodeError` instead.
+
+Measured on Windows by windows-smoke run 39104212227: `windows-latest`,
+Python 3.12.10, master 2adef95 plus this entry's test file and nothing else.
+Tesseract is not installed on that runner, so P91-2's stand-in printed the
+bytes. Every case behaved the same with `cp1252` forced and with the
+machine's own encoding. "Café" was read as `CafÃ©`, with no error. "Café Í"
+raised no `UnicodeDecodeError`: on Windows `subprocess` reads each pipe in a
+thread of its own, the decode error stayed in that thread, and stdout came
+back `None`. The bridge's next line raised `AttributeError: 'NoneType'
+object has no attribute 'splitlines'`. Neither P90-2's wrapper nor the
+visual stage's handler names that type, so by P90's reading one such image
+would end a capture; that step was not run on Windows. The same loss on
+stderr turned a failed run's message into an `AttributeError` on `strip`,
+and an "Í" in the header of `--list-langs` turned the language preflight
+into one too.
+
+### P91-1 — the bridge reads UTF-8, by two rules
+
+`recognize_page` and `installed_languages` now capture bytes and decode
+them in `ocr/tesseract.py`.
+
+- **Recognized text** (`_recognized_text`): UTF-8, strict. Bytes that are
+  not UTF-8 raise `UnicodeDecodeError`, in the calling thread on every
+  platform now, and are never replaced: a character Tesseract did not print
+  must not reach the record as recognized text. On the web path P90-2's wrapper
+  turns that into the asset's one warning, `Tesseract's output could not be
+  decoded: 'utf-8' codec can't decode byte 0xff in position ...`. Newlines
+  are translated as `text=True` translated them, so the published
+  `ocr/page-NNN.tsv` is the text it was.
+- **Messages and the language list** (`_diagnostic_text`): UTF-8, with a
+  byte that is not UTF-8 shown as an escape (`\xe9`). stderr is now read
+  only when Tesseract exits non-zero, where it becomes the failure's
+  message. Before, it was decoded on every run, so bytes on stderr could
+  fail a page Tesseract had read on macOS, and were dropped without a word
+  on Windows. `--list-langs` names its data directory before the codes, and
+  under cp1252 a UTF-8 "Í" in that path raised out of
+  `installed_languages`, which catches only `OSError` and
+  `SubprocessError`: `UnicodeDecodeError` on macOS, `AttributeError` on
+  Windows. Whether Tesseract on Windows prints that path, or the image path
+  in an error, in UTF-8 or in the ANSI code page was not measured, which is
+  why these are escaped rather than read either way.
+
+`webshot doctor` reads the same listing through `doctor.tool_output`. On
+macOS under cp1252 that raised the same `UnicodeDecodeError`, past its
+promise to return an empty string rather than a traceback. It decodes by
+the second rule now, for every tool it runs: the `--version` output of
+Tesseract, Ghostscript and veraPDF too, and so the Tesseract version
+recorded in the manifest.
+
+Not changed: the protected path's `recognize_pages` still raises
+`UnicodeDecodeError` for bytes that are not UTF-8, unwrapped, as it did.
+OCRmyPDF runs Tesseract itself for the text layer and reads that output
+its own way; it is not this bridge.
+
+### P91-2 — the tests
+
+`tests/test_tesseract_encoding.py` runs the bridge in a child interpreter
+with `-X utf8=0` and `locale.getencoding` returning `cp1252`, against a
+stand-in Tesseract: a script that prints fixed bytes, behind a shell
+script, or a `.cmd` on Windows. One case replays the TSV real Tesseract
+printed for the image above, `tests/fixtures/tesseract/cafe-indice.tsv`.
+The rest are written for what real Tesseract cannot be made to print:
+bytes that are not UTF-8, and an "Í", which `eng` does not read. Where the
+old decoding got the bytes wrong, the child also decodes them that way and
+the test requires the result to be wrong, a decode error or a lost stream,
+so a child that stops reproducing the old decoding fails the test rather
+than passing it.
+
+On master 2adef95's bridge and doctor, 8 of the 11 cases that run on macOS
+fail: the recorded TSV and the written "Café" (`CafÃ©`), "Café Í"
+(`'charmap' codec can't decode byte 0x8d`), bytes that are not UTF-8 (read
+as `ÿ`, no error), a successful run with `\xff\x8d` on stderr (a decode
+error), a failed run's message (a decode error in its place), and a UTF-8
+"Í" in the language list's header, for the preflight and for `doctor`. The
+three that pass hold behaviour that did not change: CRLF becomes LF, and a
+header byte that cp1252 can decode. With the fix all 11 pass. Two more
+cases use the machine's own encoding with no override, and run only on
+Windows.
+
+Two tests follow the change. The Tesseract case in
+`tests/test_ocr_recognition_errors.py` injects the UTF-8 error the bridge
+can still raise, not the ASCII one this removes, and its expected warning
+moved with it. The thread-limit test in `tests/test_ocr_engines.py` has its
+fake `subprocess.run` return bytes, as the real one now does.
+
+### P91-3 — measured on Windows
+
+`windows-smoke.yml` ran twice on `windows-latest`, with Python 3.12.10.
+Tesseract is not installed on that runner, so its 12 tests that need real
+Tesseract skipped both times. What ran is the stand-in, through the real
+`subprocess` on Windows.
+
+| Run | Tree | Unit tests |
+|---|---|---|
+| 39104212227 | master 2adef95 plus this test file as it then stood (10 cases), nothing else | 161 failed, 4,956 passed, 117 skipped, 17 errors |
+| 39105487616 | this change, 61b135f (13 cases) | 153 failed, 4,967 passed, 117 skipped, 17 errors |
+
+Before the fix, 8 of the 10 cases failed. Both cases that use the
+machine's own encoding were among them, so they ran rather than skipped.
+After it, all 13 passed and none skipped. That is 8 fewer failures and 11
+more passes: the 8, plus the recorded TSV and the two `doctor` cases added
+after the first run. The skip count did not move. The other 153 failures
+and 17 errors are the same tests in both runs, and none is in a file this
+change touches: master's Windows run is red without it.

@@ -44,7 +44,7 @@ this locks the render engine, which is acceptable.
 
 | | |
 |---|---|
-| **ADOPT (done, Phase 1)** | **OCRmyPDF, pinned to the 17.x major** (MPL-2.0; locked at 17.12.1) — `ocrmypdf.ocr()` Python API: positioned invisible text layer, `sidecar=` plain-text, `output_type='pdfa-3'` (A-3 permits embedded files), `skip_text`, multi-core. Replaced the bespoke assembly in `protected_viewer.py`. Pulls **pikepdf, fpdf2, pypdfium2** transitively — tracked in the lockfile/license gate. It is a **core** dependency, not the `pdfa` extra: the text layer is not optional (docs/09 P1-2). It also sets the project's Python floor at **3.11** (docs/09 P1-1) |
+| **ADOPT (done, Phase 1)** | **OCRmyPDF, pinned to the 17.x major** (MPL-2.0; locked at 17.13.0) — `ocrmypdf.ocr()` Python API: positioned invisible text layer, `sidecar=` plain-text, `output_type='pdfa-3'` (A-3 permits embedded files), `skip_text`, multi-core. Replaced the bespoke assembly in `protected_viewer.py`. Pulls **pikepdf, fpdf2, pypdfium2** transitively — tracked in the lockfile/license gate. It is a **core** dependency, not the `pdfa` extra: the text layer is not optional (docs/09 P1-2). It also sets the project's Python floor at **3.11** (docs/09 P1-1) |
 | System deps | Tesseract ≥ 5 (Apache-2.0). Ghostscript (AGPL, external binary, never linked): **no longer strictly required by OCRmyPDF ≥ 17** (pypdfium2 rasterization path), used when present for PDF/A conversion — `doctor` reports its presence *and version* (≥ 10.7; 10.06 has known JPEG bugs). One statement of this reality lives here; 01 and 04 defer to it |
 | Rejected | pdf2pdfocr: smaller, less maintained. Hand-rolled reportlab text layer (v2 status quo): the thing being deleted |
 | Note | Word-coordinate TSVs (`ocr/page-NNN.tsv`) stay on WebShot's own Tesseract subprocess pass — OCRmyPDF doesn't emit TSV directly. Accepted cost: pages are OCR'd twice on the protected path. Optimization (OCRmyPDF plugin hook to reuse its hOCR) is a roadmap item |
@@ -85,7 +85,7 @@ this locks the render engine, which is acceptable.
 
 | | |
 |---|---|
-| **ADOPT (done, Phase 3)** | **MarkItDown** (MIT, Microsoft, locked at 0.1.7) — CSV/JSON/XML/ZIP/EPUB/Office → Markdown, behind `acquire/markitdown_bridge.py`, the one file that imports it. WebShot keeps: format routing (its own table, not a byte sniff), Markdown→HTML via the existing `Markdown` lib, the image→HTML wrapper, `defusedxml` hardening, the 100 MB guard, **archive safety**, and sanitization |
+| **ADOPT (done, Phase 3)** | **MarkItDown** (MIT, Microsoft, locked at 0.1.8) — CSV/JSON/XML/ZIP/EPUB/Office → Markdown, behind `acquire/markitdown_bridge.py`, the one file that imports it. WebShot keeps: format routing (its own table, not a byte sniff), Markdown→HTML via the existing `Markdown` lib, the image→HTML wrapper, `defusedxml` hardening, the 100 MB guard, **archive safety**, and sanitization |
 | Corrections at the seam (docs/09 P3-1) | MarkItDown has no TSV converter — its CSV converter is comma-only — so the bridge re-delimits with the standard library rather than losing the table; and that converter does not escape the Markdown cell delimiter it emits, so a cell containing `\|` or a newline would split its row. Both are fixed on the way in, losslessly. Plain-text formats (JSON/JSONL/XML/YAML/text) come back as the file's own bytes, which is not Markdown, so they are fenced as code rather than reflowed as prose |
 | Bonus capability | This adds DOCX/PPTX/XLSX/EPUB/ZIP inputs nearly for free (route → Markdown → HTML → pipeline). DOCX/PPTX/XLSX ship behind the `webshot[office]` extra; EPUB and ZIP need no extra. Every zip-shaped input — including the OOXML formats, which are zip containers — is checked before any converter opens it: expanded size and member count against the 100 MB policy, no member path escaping an extraction root, no symlink members |
 | Rejected | Pandoc (GPL, huge external binary), bespoke parsers (deleted) |
@@ -94,7 +94,7 @@ this locks the render engine, which is acceptable.
 
 | | |
 |---|---|
-| **ADOPT (done, Phase 3)** | **nh3** (MIT, Rust "ammonia" bindings, locked at 0.3.6) has replaced **bleach**, which is deprecated by its maintainers. ~20× faster; actively maintained. Phase 2 made nh3 the DOM-snapshot sanitizer (the ad-hoc in-browser cleaning JS is gone); Phase 3 ported the source-adapters allowlist and **bleach is gone from the tree and the lock** |
+| **ADOPT (done, Phase 3)** | **nh3** (MIT, Rust "ammonia" bindings, locked at 0.3.7) has replaced **bleach**, which is deprecated by its maintainers. ~20× faster; actively maintained. Phase 2 made nh3 the DOM-snapshot sanitizer (the ad-hoc in-browser cleaning JS is gone); Phase 3 ported the source-adapters allowlist and **bleach is gone from the tree and the lock** |
 | Two allowlists, one importer | The snapshot keeps form and media records for capture fidelity; a rendered local document keeps Markdown's own output. Both live as data in `webshot/sanitize.py`, the only module that imports nh3 (docs/09 P3-8), so spec §6.5's scheme rule — http(s)/data/mailto, one scheme narrower than v2's bleach call, which also allowed `file:` — has one definition rather than one per stage. The hypothesis property tests in `tests/test_sanitizer.py` run against both |
 
 ## 11. MCP server

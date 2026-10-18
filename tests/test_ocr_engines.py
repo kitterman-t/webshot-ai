@@ -323,9 +323,9 @@ def test_every_tesseract_run_is_limited_to_one_openmp_thread(
     OpenMP Tesseract that also starts a thread per core stalls under that."""
     seen: dict[str, str] = {}
 
-    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         seen.update(kwargs["env"])  # type: ignore[arg-type]
-        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+        return subprocess.CompletedProcess(args, 0, stdout=b"", stderr=b"")
 
     monkeypatch.setattr(tesseract_module, "_TESSERACT", "/usr/bin/tesseract")
     monkeypatch.setattr(tesseract_module.subprocess, "run", fake_run)

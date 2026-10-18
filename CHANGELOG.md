@@ -339,6 +339,17 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **Recognized text is read as the UTF-8 Tesseract writes, whatever the
+  locale.** WebShot decoded Tesseract's output with the locale's encoding. On
+  Windows that is the ANSI code page, cp1252 on an English install, so a
+  recognized "Café" was recorded as "CafÃ©" with no error. A recognized "Í"
+  lost the whole output, and the bridge raised an `AttributeError` that no
+  per-image handler catches. The output is now read as UTF-8. Bytes that are
+  not UTF-8 still fail that image and are never replaced. Tesseract's
+  messages and its language list, in `webshot doctor` too, show such a byte
+  as an escape instead of failing. Where Python already read UTF-8, as under
+  a UTF-8 locale on macOS and Linux, recognized text is unchanged. See
+  docs/09 P91.
 - **An image the OCR engine cannot read is one warning, not the end of the
   capture.** When onnxruntime failed while RapidOCR was recognizing an image,
   RapidOCR raised its own `ONNXRuntimeError`. The per-image handler did not

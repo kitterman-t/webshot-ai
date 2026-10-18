@@ -55,11 +55,11 @@ def _run_tesseract_sync(image_path: Path, language: str, psm: int) -> OCRResult:
     try:
         page = recognize_page(1, image_path, language, psm, timeout=ASSET_TIMEOUT_S)
     except UnicodeDecodeError as exc:
-        # subprocess decodes Tesseract's output with the locale's encoding
-        # unless Python runs in UTF-8 mode, and Tesseract writes UTF-8. Under
-        # LC_ALL=C with PYTHONUTF8=0 and PYTHONCOERCECLOCALE=0 that encoding
-        # is ASCII, and a recognized "Café" raised this, a ValueError no
-        # per-asset handler caught (docs/09 P90-2).
+        # Tesseract's output is read as UTF-8 (`_recognized_text`), so bytes
+        # that are not UTF-8 raise this, a ValueError no per-asset handler
+        # caught. Before P91 the locale's encoding read it instead: under
+        # LC_ALL=C with PYTHONUTF8=0 and PYTHONCOERCECLOCALE=0 that is ASCII,
+        # and a recognized "Café" raised this (docs/09 P90-2).
         raise OcrRecognitionError(
             f"Tesseract's output could not be decoded: {exc}"
         ) from exc
@@ -143,6 +143,41 @@ def tesseract_executable() -> str | None:
     return _TESSERACT
 
 
+def _recognized_text(output: bytes) -> str:
+    """Tesseract's recognized text, read as the UTF-8 Tesseract writes.
+
+    The bridge used to run Tesseract with `text=True` and no encoding, so
+    `subprocess` decoded with the locale's encoding unless Python ran in UTF-8
+    mode. On Windows that is the ANSI code page, cp1252 on an English install.
+    There a recognized "Café" became "CafÃ©" with no error, and an "Í" lost
+    the output: `subprocess` decodes each pipe in a thread on Windows, the
+    decode error stayed in that thread, and stdout came back `None`
+    (docs/09 P91). Here, bytes that are not UTF-8 raise `UnicodeDecodeError`
+    rather than being replaced: a character Tesseract did not print must not
+    reach the record as recognized text.
+
+    Newlines are translated as `text=True` translated them, so the TSV a
+    capture publishes is the text it was before.
+    """
+    return output.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _diagnostic_text(output: bytes) -> str:
+    """Tesseract's messages and language list, which no record keeps as text.
+
+    UTF-8 like its recognized text, but a byte that is not UTF-8 is shown as
+    an escape (`\\xe9`) instead of raising. This text is a failure message or a
+    list of language codes after a header naming the data directory, and a
+    decode error in its place would hide the reason Tesseract gave, or the
+    languages it has (docs/09 P91).
+    """
+    return (
+        output.decode("utf-8", errors="backslashreplace")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+    )
+
+
 def recognize_page(
     page_number: int,
     image_path: Path,
@@ -158,6 +193,9 @@ def recognize_page(
             "Tesseract is required to recognize document pages. Run `webshot "
             "doctor` for how to install it."
         )
+    # Bytes, decoded below: stdout is recognized text and stderr only ever a
+    # failure message, so they are read by different rules, and stderr not at
+    # all when Tesseract succeeded.
     completed = subprocess.run(
         [
             executable,
@@ -171,19 +209,20 @@ def recognize_page(
         ],
         check=False,
         capture_output=True,
-        text=True,
         timeout=timeout,
         env=tesseract_environment(),
     )
     if completed.returncode != 0:
         raise RuntimeError(
-            completed.stderr.strip() or f"Tesseract failed on page {page_number}"
+            _diagnostic_text(completed.stderr).strip()
+            or f"Tesseract failed on page {page_number}"
         )
+    tsv = _recognized_text(completed.stdout)
 
     words: list[OCRWord] = []
     lines: dict[tuple[int, int, int, int], list[str]] = {}
     confidences: list[float] = []
-    for row in csv.DictReader(completed.stdout.splitlines(), delimiter="\t"):
+    for row in csv.DictReader(tsv.splitlines(), delimiter="\t"):
         text = (row.get("text") or "").strip()
         if not text:
             continue
@@ -222,7 +261,7 @@ def recognize_page(
         if confidences
         else None,
         words=words,
-        tsv=completed.stdout,
+        tsv=tsv,
     )
 
 
@@ -312,13 +351,13 @@ def installed_languages() -> set[str]:
         completed = subprocess.run(
             [executable, "--list-langs"],
             capture_output=True,
-            text=True,
             timeout=30,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return set()
-    lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    listing = _diagnostic_text(completed.stdout)
+    lines = [line.strip() for line in listing.splitlines() if line.strip()]
     return {line for line in lines if not line.endswith(":") and " " not in line}
 
 
