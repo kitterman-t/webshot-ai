@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Notes on the Boiler</title>
+</head>
+<body>
+  <article itemscope itemtype="https://schema.org/BlogPosting">
+    <h1 itemprop="headline">Notes on the Boiler</h1>
+    <!-- The author is an item: its name is the author, not the link or the
+         job title inside it. -->
+    <span itemprop="author" itemscope itemtype="https://schema.org/Person">
+      <a itemprop="url" href="https://example.org/people/lee">
+        <span itemprop="jobTitle">Facilities</span>
+        <span itemprop="name">Morgan Lee</span>
+      </a>
+    </span>
+    <p itemprop="articleBody">The boiler was serviced on Tuesday. It runs
+    quieter now, and the north radiators finally reach temperature.</p>
+    <!-- A comment's author is one item deeper, and is not the page's. -->
+    <div itemprop="comment" itemscope itemtype="https://schema.org/Comment">
+      <span itemprop="author">Dana Whit</span>
+      <p itemprop="text">The east radiators are still cold.</p>
+    </div>
+  </article>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Line numbers</title>
+<style>
+/* Pygments 2.21's own stylesheet for its line numbers, and the rule Sphinx's
+   basic.css adds, which marks numbers and prompts unselectable alike. */
+span.linenos { padding-left: 5px; padding-right: 5px; }
+td.linenos .normal { padding-left: 5px; padding-right: 5px; }
+table.highlighttable td.linenos,
+span.linenos,
+div.highlight span.gp { user-select: none; -webkit-user-select: none; }
+/* A page using Pygments' stylesheet without Sphinx's rule. */
+.selectable span.linenos { user-select: text; -webkit-user-select: text; }
+/* Chroma 2.20's rules for its line numbers. */
+.chroma .lnt { white-space: pre; -webkit-user-select: none; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em; }
+.chroma .ln { white-space: pre; -webkit-user-select: none; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em; }
+.chroma .line { display: flex; }
+/* The highlight.js line-numbers plugin 2.9 draws each number from an
+   attribute, in a table of rows inside the code. */
+.hljs-ln { border-collapse: collapse; }
+.hljs-ln td { padding: 0px; }
+.hljs-ln-n::before { content: attr(data-line-number); }
+/* Prism 1.30's line-numbers plugin draws its numbers with a counter. */
+pre.line-numbers { position: relative; padding-left: 3.8em; counter-reset: linenumber; }
+.line-numbers .line-numbers-rows { position: absolute; top: 0; left: -3.8em; width: 3em; user-select: none; -webkit-user-select: none; }
+.line-numbers-rows > span { display: block; counter-increment: linenumber; }
+.line-numbers-rows > span::before { content: counter(linenumber); display: block; text-align: right; }
+</style>
+</head>
+<body>
+<h1>Line numbers</h1>
+<!-- Numbers a highlighter writes into the code, marked unselectable. -->
+<h2>Pygments inline</h2>
+<div class="highlight"><pre><span></span><span class="linenos">1</span><span class="k">def</span><span class="w"> </span><span class="nf">area</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
+<span class="linenos">2</span>    <span class="k">return</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">r</span> <span class="o">*</span> <span class="n">r</span>
+<span class="linenos">3</span>
+<span class="linenos">4</span><span class="nb">print</span><span class="p">(</span><span class="n">area</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+</pre></div>
+<h2>Pygments inline from line 9</h2>
+<div class="highlight"><pre><span></span><span class="linenos"> 9</span><span class="k">def</span><span class="w"> </span><span class="nf">area</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
+<span class="linenos">10</span>    <span class="k">return</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">r</span> <span class="o">*</span> <span class="n">r</span>
+<span class="linenos">11</span>
+<span class="linenos">12</span><span class="nb">print</span><span class="p">(</span><span class="n">area</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+</pre></div>
+<h2>Pygments inline with a highlighted line</h2>
+<div class="highlight"><pre><span></span><span class="linenos">1</span><span class="k">def</span><span class="w"> </span><span class="nf">area</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
+<span class="hll"><span class="linenos">2</span>    <span class="k">return</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">r</span> <span class="o">*</span> <span class="n">r</span>
+</span><span class="linenos">3</span>
+<span class="linenos">4</span><span class="nb">print</span><span class="p">(</span><span class="n">area</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+</pre></div>
+<h2>Pygments inline with linked numbers</h2>
+<div class="highlight"><pre><span></span><a id="area-1" name="area-1"></a><a href="#area-1"><span class="linenos">1</span></a><span class="k">def</span><span class="w"> </span><span class="nf">area</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
+<a id="area-2" name="area-2"></a><a href="#area-2"><span class="linenos">2</span></a>    <span class="k">return</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">r</span> <span class="o">*</span> <span class="n">r</span>
+<a id="area-3" name="area-3"></a><a href="#area-3"><span class="linenos">3</span></a>
+<a id="area-4" name="area-4"></a><a href="#area-4"><span class="linenos">4</span></a><span class="nb">print</span><span class="p">(</span><span class="n">area</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+</pre></div>
+<h2>Pygments console with numbers</h2>
+<div class="highlight"><pre><span></span><span class="linenos">1</span><span class="gp">&gt;&gt;&gt; </span><span class="n">area</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="linenos">2</span><span class="go">12</span>
+<span class="linenos">3</span><span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+<span class="linenos">4</span><span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="n">area</span><span class="p">(</span><span class="n">r</span><span class="p">))</span>
+<span class="linenos">5</span><span class="gp">...</span>
+<span class="linenos">6</span><span class="go">3</span>
+<span class="linenos">7</span><span class="go">12</span>
+</pre></div>
+<h2>Chroma inline</h2>
+<pre class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl"><span class="kn">package</span><span class="w"> </span><span class="nx">main</span><span class="w">
+</span></span></span><span class="line"><span class="ln">2</span><span class="cl"><span class="w"></span><span class="w">
+</span></span></span><span class="line"><span class="ln">3</span><span class="cl"><span class="w"></span><span class="kd">func</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="ln">4</span><span class="cl"><span class="w"></span><span class="w">	</span><span class="nb">println</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="ln">5</span><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre>
+<h2>Chroma inline with inline styles</h2>
+<pre style="background-color:#fff;"><code><span style="display:flex;"><span style="white-space:pre;-webkit-user-select:none;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1</span><span><span style="color:#cf222e">package</span><span style="color:#fff"> </span><span style="color:#1f2328">main</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span style="white-space:pre;-webkit-user-select:none;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2</span><span><span style="color:#fff"></span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span style="white-space:pre;-webkit-user-select:none;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3</span><span><span style="color:#fff"></span><span style="color:#cf222e">func</span><span style="color:#fff"> </span><span style="color:#6639ba">main</span><span style="color:#1f2328">(</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span style="white-space:pre;-webkit-user-select:none;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4</span><span><span style="color:#fff"></span><span style="color:#fff">	</span><span style="color:#6639ba">println</span><span style="color:#1f2328">(</span><span style="color:#0550ae">1</span><span style="color:#1f2328">)</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span style="white-space:pre;-webkit-user-select:none;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5</span><span><span style="color:#fff"></span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span></code></pre>
+<h2>Chroma inline with linked numbers</h2>
+<pre class="chroma"><code><span class="line"><span class="ln" id="hl-0-1"><a class="lnlinks" href="#hl-0-1">1</a></span><span class="cl"><span class="kn">package</span><span class="w"> </span><span class="nx">main</span><span class="w">
+</span></span></span><span class="line"><span class="ln" id="hl-0-2"><a class="lnlinks" href="#hl-0-2">2</a></span><span class="cl"><span class="w"></span><span class="w">
+</span></span></span><span class="line"><span class="ln" id="hl-0-3"><a class="lnlinks" href="#hl-0-3">3</a></span><span class="cl"><span class="w"></span><span class="kd">func</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="ln" id="hl-0-4"><a class="lnlinks" href="#hl-0-4">4</a></span><span class="cl"><span class="w"></span><span class="w">	</span><span class="nb">println</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="ln" id="hl-0-5"><a class="lnlinks" href="#hl-0-5">5</a></span><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre>
+<!-- Text that stays: prompts, numbers that are code, numbers a reader can
+     select, a number inside a line, and a column of numbers on its own. -->
+<h2>Pygments console</h2>
+<div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">area</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="go">12</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="n">area</span><span class="p">(</span><span class="n">r</span><span class="p">))</span>
+<span class="gp">...</span>
+<span class="go">3</span>
+<span class="go">12</span>
+</pre></div>
+<h2>Shiki shell prompt</h2>
+<pre class="shiki"><code><span class="line"><span style="user-select:none;-webkit-user-select:none;">$ </span><span>npm</span><span> install</span></span>
+<span class="line"><span style="user-select:none;-webkit-user-select:none;">$ </span><span>npm</span><span> test</span></span></code></pre>
+<h2>Numbers in the code</h2>
+<div class="highlight"><pre><span></span><span class="mi">10</span> <span class="mi">20</span>
+<span class="mi">30</span> <span class="mi">40</span>
+</pre></div>
+<h2>Selectable line numbers</h2>
+<div class="selectable"><div class="highlight"><pre><span></span><span class="linenos">1</span><span class="k">def</span><span class="w"> </span><span class="nf">area</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
+<span class="linenos">2</span>    <span class="k">return</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">r</span> <span class="o">*</span> <span class="n">r</span>
+<span class="linenos">3</span>
+<span class="linenos">4</span><span class="nb">print</span><span class="p">(</span><span class="n">area</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+</pre></div></div>
+<h2>An unselectable number inside a line</h2>
+<pre><code>retries = <span style="user-select:none">3</span>
+delay = 1</code></pre>
+<h2>An unselectable block</h2>
+<pre style="user-select:none"><span class="mi">10</span> 20
+<span class="mi">30</span> 40</pre>
+<h2>Unselectable numbers alone</h2>
+<pre><span style="user-select:none">1</span>
+<span style="user-select:none">2</span></pre>
+<!-- Line numbers in a column of their own, read beside the code by the
+     bridge (docs/09 P55), or drawn without text. -->
+<h2>Pygments table</h2>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
+<span class="normal">2</span>
+<span class="normal">3</span>
+<span class="normal">4</span></pre></div></td><td class="code"><div><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">area</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
+    <span class="k">return</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">r</span> <span class="o">*</span> <span class="n">r</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">area</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+</pre></div></td></tr></table></div>
+<h2>Chroma table</h2>
+<div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></pre></td>
+<td class="lntd">
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="kn">package</span><span class="w"> </span><span class="nx">main</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">func</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="w">	</span><span class="nb">println</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+<h2>Prism line numbers</h2>
+<pre class="language-python line-numbers"><code class="language-python"><span class="token keyword">def</span> <span class="token function">area</span><span class="token punctuation">(</span>r<span class="token punctuation">)</span><span class="token punctuation">:</span>
+    <span class="token keyword">return</span> <span class="token number">3</span> <span class="token operator">*</span> r <span class="token operator">*</span> r
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
+<h2>highlight.js line numbers</h2>
+<pre><code class="language-python hljs" data-highlighted="yes"><table class="hljs-ln"><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number="1"><div class="hljs-ln-n" data-line-number="1"></div></td><td class="hljs-ln-line hljs-ln-code" data-line-number="1"><span class="hljs-keyword">def</span> <span class="hljs-title function_">area</span>(<span class="hljs-params">r</span>):</td></tr><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number="2"><div class="hljs-ln-n" data-line-number="2"></div></td><td class="hljs-ln-line hljs-ln-code" data-line-number="2">    <span class="hljs-keyword">return</span> <span class="hljs-number">3</span> * r * r</td></tr><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number="3"><div class="hljs-ln-n" data-line-number="3"></div></td><td class="hljs-ln-line hljs-ln-code" data-line-number="3"> </td></tr><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number="4"><div class="hljs-ln-n" data-line-number="4"></div></td><td class="hljs-ln-line hljs-ln-code" data-line-number="4"><span class="hljs-built_in">print</span>(area(<span class="hljs-number">2</span>))</td></tr></tbody></table></code></pre>
+</body>
+</html>

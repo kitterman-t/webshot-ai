@@ -3,7 +3,9 @@
 Two things are worth pinning. The metadata must not *invent* provenance —
 Trafilatura's date comes from htmldate, which guesses one from the text, the
 URL or a heading when the page declares none, and a capture tool that records
-a guessed date is lying about the record (docs/09 P3-3, P82). And the strategy
+a guessed date is lying about the record (docs/09 P3-3, P82). Its author can
+come from a byline's text and its site name from the URL's host, so those
+are read from the page's declarations too (P88). And the strategy
 that chose the content region has to be the one the manifest names, in all
 four of its outcomes, because that is the only way a reader can tell an
 isolated region from a whole page.
@@ -22,7 +24,9 @@ from webshot.acquire.adapters import materialize_source
 from webshot.capture import discover
 from webshot.capture.discover import (
     DiscoveredMetadata,
+    declared_author,
     declared_date,
+    declared_sitename,
     main_content_text,
     read_metadata,
     read_page,
@@ -38,6 +42,8 @@ from webshot.netpolicy import file_url_path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ARTICLE = REPO_ROOT / "tests" / "fixtures" / "professional_page.html"
 DATES = REPO_ROOT / "tests" / "fixtures" / "declared_dates"
+AUTHORS = REPO_ROOT / "tests" / "fixtures" / "declared_authors"
+SITENAMES = REPO_ROOT / "tests" / "fixtures" / "declared_sitenames"
 NOTES = REPO_ROOT / "tests" / "fixtures" / "sample_notes.txt"
 
 DECLARED = """<!doctype html><html><head>
@@ -58,11 +64,14 @@ UNDECLARED = DECLARED.replace(
 
 
 def test_declared_metadata_is_read() -> None:
+    """The author as the page writes it (Trafilatura made it "R Chen"), and
+    no site name: the page declares none, and the URL's host is not one
+    (docs/09 P88)."""
     metadata = read_metadata(DECLARED, url="https://example.com/notes")
     assert metadata.title == "Field Notes"
     assert metadata.date == "2024-03-05"
-    assert "Chen" in metadata.author
-    assert metadata.sitename == "example.com"
+    assert metadata.author == "R. Chen"
+    assert metadata.sitename == ""
 
 
 def test_an_undeclared_date_is_not_invented() -> None:
@@ -204,6 +213,263 @@ def test_what_counts_as_a_declared_date(markup: str, expected: str) -> None:
     assert declared_date(markup) == expected
 
 
+def _authored(name: str, url: str = "https://example.com/notes") -> str:
+    html = (AUTHORS / name).read_text(encoding="utf-8")
+    return read_metadata(html, url=url).author
+
+
+def _sited(name: str, url: str = "https://harbor-lane.example/visiting") -> str:
+    html = (SITENAMES / name).read_text(encoding="utf-8")
+    return read_metadata(html, url=url).sitename
+
+
+def test_a_byline_is_not_a_declared_author() -> None:
+    """Trafilatura reads "Jane Doe" from the element classed `byline`
+    (docs/09 P88)."""
+    assert _authored("byline_only.html") == ""
+
+
+def test_a_declared_author_beats_a_different_byline() -> None:
+    """As written: Trafilatura replaced the full stop with a space."""
+    assert _authored("meta_author_beside_byline.html") == "R. Chen"
+
+
+def test_json_ld_declares_every_author_of_the_outermost_object() -> None:
+    """A Person, a name and an Organization, in order and as written but for
+    the doubled space. Not the comment's author one level down, and not the
+    `citation_author`, a less preferred kind naming the first author again.
+    Trafilatura dropped the Organization."""
+    assert _authored("json_ld_authors.html") == (
+        "Priya Raman; Tomas Okafor; Harbor Lane Survey Group"
+    )
+
+
+def test_a_microdata_author_item_declares_its_name() -> None:
+    """Trafilatura took the text of the whole item, "Facilities Morgan Lee",
+    job title and all."""
+    assert _authored("microdata_author.html") == "Morgan Lee"
+
+
+def test_authors_of_listed_posts_are_not_the_pages() -> None:
+    """`rel="author"` links, an account in `twitter:creator`, and a profile
+    URL in `article:author`: Trafilatura answered with the first listed
+    post's author."""
+    assert _authored("listed_posts_authors.html") == ""
+
+
+def test_a_page_without_a_site_name_does_not_get_the_host() -> None:
+    """Trafilatura answered "harbor-lane.example", the URL's host."""
+    assert _sited("no_site_name.html") == ""
+
+
+def test_open_graph_names_the_site() -> None:
+    """Over `application-name` and a JSON-LD WebSite, which Trafilatura
+    preferred for being longer."""
+    assert _sited("og_site_name.html") == "Harbor Lane Archive"
+
+
+def test_a_json_ld_website_names_the_site_over_its_publisher() -> None:
+    """Trafilatura took the organization's longer name."""
+    assert _sited("json_ld_graph.html") == "Harbor Lane Archive"
+
+
+def test_the_outermost_json_ld_publisher_names_the_site() -> None:
+    assert _sited("json_ld_publisher.html") == "Harbor Lane Gazette"
+
+
+def _json_ld(data: str) -> str:
+    return f'<script type="application/ld+json">{data}</script>'
+
+
+@pytest.mark.parametrize(
+    ("markup", "expected"),
+    [
+        ('<meta name="author" content="Jane Doe">', "Jane Doe"),
+        # A single-word author is still declared; Trafilatura dropped it.
+        ('<meta name="author" content="normesta">', "normesta"),
+        # As written: not split at a comma, and white space made one space.
+        (
+            '<meta name="author" content=" Jane  Doe,\n John Roe ">',
+            "Jane Doe, John Roe",
+        ),
+        (
+            '<meta name="author" content="Jane Doe">'
+            '<meta name="author" content="John Roe">'
+            '<meta name="author" content="Jane Doe">',
+            "Jane Doe; John Roe",
+        ),
+        (
+            '<meta name="citation_author" content="Doe, Jane">'
+            '<meta name="citation_author" content="Roe, John">',
+            "Doe, Jane; Roe, John",
+        ),
+        ('<meta property="article:author" content="Jane Doe">', "Jane Doe"),
+        ('<meta name="article:author" content="Jane Doe">', "Jane Doe"),
+        ('<meta name="DC.creator" content="Doe, Jane">', "Doe, Jane"),
+        ('<meta name="dc:creator" content="Doe, Jane">', "Doe, Jane"),
+        ('<meta name="DCTERMS.creator" content="Doe, Jane">', "Doe, Jane"),
+        # The first kind present is the author, and the others are not added.
+        (
+            '<meta name="DC.creator" content="Doe, J.">'
+            '<meta name="author" content="Jane Doe">',
+            "Jane Doe",
+        ),
+        (
+            '<meta name="author" content="J. Doe">'
+            + _json_ld('{"@type": "Article", "author": "Jane Doe"}'),
+            "Jane Doe",
+        ),
+        # An empty value does not make its kind present.
+        (
+            '<meta name="author" content="">'
+            '<meta name="citation_author" content="Roe, John">',
+            "Roe, John",
+        ),
+        # An address, an account, a link and a class are not names.
+        ('<meta property="article:author" content="https://example.org/jane">', ""),
+        ('<meta name="twitter:creator" content="@janedoe">', ""),
+        ('<a rel="author" href="/people/jane">Jane Doe</a>', ""),
+        ('<link rel="author" href="humans.txt">', ""),
+        ('<span class="author">Jane Doe</span>', ""),
+        # JSON-LD: a name, a Person, a list, in a graph.
+        (_json_ld('{"@type": "Article", "author": "Jane Doe"}'), "Jane Doe"),
+        (
+            _json_ld('{"author": {"@type": "Person", "name": "Jane Doe"}}'),
+            "Jane Doe",
+        ),
+        (
+            _json_ld('{"author": [{"name": "Jane Doe"}, {"@id": "#roe"}, "John Roe"]}'),
+            "Jane Doe; John Roe",
+        ),
+        (
+            _json_ld(
+                '{"@graph": [{"@type": "WebSite"},'
+                ' {"@type": "Article", "author": {"name": "Jane Doe"}}]}'
+            ),
+            "Jane Doe",
+        ),
+        (_json_ld('{"author": "https://example.org/jane"}'), ""),
+        # A reference states an author it does not name: the comment's
+        # author below it is not the page's, and the next kind is read.
+        (
+            _json_ld(
+                '{"@type": "Article", "author": {"@id": "#jane"},'
+                ' "comment": [{"author": "Sam Ellery"}]}'
+            ),
+            "",
+        ),
+        (
+            _json_ld('{"author": {"@id": "#jane"}}')
+            + '<meta name="author" content="Jane Doe">',
+            "Jane Doe",
+        ),
+        # Not JSON: its structure would have to be guessed at.
+        (_json_ld('{"author": "Jane Doe",}'), ""),
+        # Microdata: text, content, an item's name.
+        ('<span itemprop="author">Jane Doe</span>', "Jane Doe"),
+        ('<meta itemprop="author" content="Jane Doe">', "Jane Doe"),
+        (
+            '<div itemprop="author" itemscope>'
+            '<meta itemprop="name" content="Jane Doe"></div>',
+            "Jane Doe",
+        ),
+        # The name of an item inside the author is that item's.
+        (
+            '<div itemprop="author" itemscope>'
+            '<div itemprop="worksFor" itemscope><span itemprop="name">Harbor Lane'
+            '</span></div><span itemprop="name">Jane Doe</span></div>',
+            "Jane Doe",
+        ),
+        (
+            '<span itemprop="author">Jane Doe</span> and '
+            '<span itemprop="author">John Roe</span>',
+            "Jane Doe; John Roe",
+        ),
+        # A link's microdata value is its URL, and an author's box with a
+        # biography in it is not a name.
+        ('<a itemprop="author" href="/people/jane">Jane Doe</a>', ""),
+        (
+            '<div itemprop="author"><img src="jane.png" alt="">'
+            "<p>Jane Doe writes about archives.</p></div>",
+            "",
+        ),
+        # A paragraph left open runs into the next one: not a name.
+        ('<p itemprop="author">Jane Doe<p>The next paragraph.', ""),
+        # An item's author, not its comment's, whichever comes first.
+        (
+            '<article itemscope><div itemprop="comment" itemscope>'
+            '<span itemprop="author">Sam Ellery</span></div>'
+            '<span itemprop="author">Jane Doe</span></article>',
+            "Jane Doe",
+        ),
+        ("", ""),
+    ],
+)
+def test_what_counts_as_a_declared_author(markup: str, expected: str) -> None:
+    assert declared_author(markup) == expected
+
+
+@pytest.mark.parametrize(
+    ("markup", "expected"),
+    [
+        ('<meta property="og:site_name" content="Harbor Lane">', "Harbor Lane"),
+        ('<meta name="og:site_name" content="Harbor Lane">', "Harbor Lane"),
+        (
+            '<meta property="og:site_name" content="Harbor Lane">'
+            '<meta property="og:site_name" content="Quay Weekly">',
+            "Harbor Lane",
+        ),
+        ('<meta name="application-name" content="Harbor Reader">', "Harbor Reader"),
+        (
+            '<meta property="og:site_name" content=" ">'
+            '<meta name="application-name" content="Harbor Reader">',
+            "Harbor Reader",
+        ),
+        # A label, an account and a part of the title are not declared names.
+        ('<meta name="apple-mobile-web-app-title" content="Harbor">', ""),
+        ('<meta name="twitter:site" content="@harborlane">', ""),
+        ("<title>Visiting Hours | harbor-lane.example</title>", ""),
+        (_json_ld('{"@type": ["WebSite"], "name": "Harbor Lane"}'), "Harbor Lane"),
+        (_json_ld('{"@type": "schema:WebSite", "name": "Harbor Lane"}'), "Harbor Lane"),
+        (
+            _json_ld(
+                '{"@type": "WebPage", "isPartOf":'
+                ' {"@type": "WebSite", "name": "Harbor Lane"}}'
+            ),
+            "Harbor Lane",
+        ),
+        (_json_ld('{"@type": "Article", "publisher": "Harbor Lane"}'), "Harbor Lane"),
+        (_json_ld('{"publisher": "https://harbor-lane.example/"}'), ""),
+        (
+            _json_ld('{"@type": "Article", "publisher": {"name": "Harbor Lane Trust"}}')
+            + _json_ld('{"@type": "WebSite", "name": "Harbor Lane"}'),
+            "Harbor Lane",
+        ),
+        ("", ""),
+    ],
+)
+def test_what_counts_as_a_declared_sitename(markup: str, expected: str) -> None:
+    assert declared_sitename(markup) == expected
+
+
+def test_trafilaturas_author_and_sitename_are_never_recorded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Whatever Trafilatura infers, only the title is taken from it."""
+
+    class _Reading:
+        title = "Field Notes"
+        author = "Inferred Byline"
+        date = None
+        sitename = "example.com"
+
+    monkeypatch.setattr(discover, "extract_metadata", lambda *_a, **_k: _Reading())
+    assert read_metadata("<html><body><p>hi</p></body></html>") == (
+        DiscoveredMetadata(title="Field Notes")
+    )
+    assert read_metadata(DECLARED).author == "R. Chen"
+
+
 def test_trafilaturas_date_is_never_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
     """Whatever date the installed htmldate finds, it is not the one written.
 
@@ -224,16 +490,19 @@ def test_trafilaturas_date_is_never_recorded(monkeypatch: pytest.MonkeyPatch) ->
     assert read_metadata(DECLARED).title == "Field Notes"
 
 
-def test_a_declared_date_survives_trafilatura_failing(
+def test_declarations_survive_trafilatura_failing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The date never came from Trafilatura, so its failure cannot take it."""
+    """The date and the author never came from Trafilatura, so its failure
+    cannot take them."""
 
     def _raise(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("parser exploded")
 
     monkeypatch.setattr(discover, "extract_metadata", _raise)
-    assert read_metadata(DECLARED) == DiscoveredMetadata(date="2024-03-05")
+    assert read_metadata(DECLARED) == DiscoveredMetadata(
+        author="R. Chen", date="2024-03-05"
+    )
 
 
 def test_a_page_that_declares_nothing_yields_empty_strings_not_nulls() -> None:

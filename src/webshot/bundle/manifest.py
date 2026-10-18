@@ -759,13 +759,18 @@ class DiscoveredMetadata(_Contract):
 
     Deliberately separate from `page_metadata`, which is the DOM's own
     declarations as the snapshot recorded them: a consumer that needs to know
-    where a value came from can tell the two apart. `title`, `author` and
-    `sitename` are Trafilatura's readings. `date` is the date the page
-    declares in its markup — a date `<meta>`, a schema.org date in JSON-LD or
-    microdata, or a `<time>` — as `YYYY-MM-DD`, or empty when it declares
-    none WebShot reads. It is never a date found in the text, the URL or a
-    heading, which is where Trafilatura's own date can come from (docs/09
-    P3-3, P82).
+    where a value came from can tell the two apart. `title` is Trafilatura's
+    reading. The other three are what the page declares in its markup, and
+    each is empty when it declares none WebShot reads. `date` is a date
+    `<meta>`, a schema.org date in JSON-LD or microdata, or a `<time>`, as
+    `YYYY-MM-DD`; never a date found in the text, the URL or a heading
+    (docs/09 P3-3, P82). `author` is the names one kind of declaration gives
+    — a schema.org `author` in JSON-LD or microdata, `<meta name="author">`,
+    `citation_author`, `article:author` or `DC.creator` — as the page writes
+    them, joined with "; "; never a byline's text. `sitename` is
+    `og:site_name`, a JSON-LD `WebSite` or `publisher` name, or
+    `application-name`; never a part of the `<title>` or the URL's host
+    (docs/09 P88).
     """
 
     title: str

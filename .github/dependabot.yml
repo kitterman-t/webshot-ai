@@ -25,7 +25,13 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    # Ten, not Dependabot's default of five. Each package still gets a pull
+    # request of its own, so a bump that fails holds up only itself, and the
+    # dev tools below still arrive as one. With five bumps open that had
+    # failed or never run CI, Dependabot proposed nothing else: Markdown 3.11
+    # waited three weeks and was never proposed (docs/09 P84). Ten leaves
+    # room for new releases while a few bumps wait for a fix.
+    open-pull-requests-limit: 10
     # Patch releases are fixes and should arrive soon; three days outlasts the
     # incidents above. Minor releases add features and with them regressions,
     # which a week usually surfaces. A major release breaks an API on purpose,

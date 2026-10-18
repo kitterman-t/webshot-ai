@@ -426,12 +426,12 @@ SIZE_RE = re.compile(r"\d+(?:\.\d+)? (KB|MB)\b")
 #: URL its walkthrough was actually read from — so it is normalized rather than
 #: removed, the same treatment the working directory gets.
 #:
-#: The scheme is optional because not every leak is a URL: Trafilatura reads a
-#: loopback page's `sitename` as the bare `127.0.0.1:<port>`, and Chromium's
-#: print header puts the same bare host beside the title in `pdf-text.txt`. A
-#: scheme-anchored mask left both, and a golden holding an ephemeral port
-#: cannot pass twice — it would have failed on the next run rather than this
-#: one, which is the worse way to find out.
+#: The scheme is optional because not every leak is a URL: Chromium's print
+#: header puts the bare `127.0.0.1:<port>` beside the title in `pdf-text.txt`,
+#: and until docs/09 P88 Trafilatura gave a loopback page that host as its
+#: `sitename`. A scheme-anchored mask left both, and a golden holding an
+#: ephemeral port cannot pass twice — it would have failed on the next run
+#: rather than this one, which is the worse way to find out.
 STANDIN_RE = re.compile(r"(?:http://)?127\.0\.0\.1:\d+")
 
 

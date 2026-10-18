@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- A second kind of declaration, naming the first author again in another
+       spelling: the JSON-LD is preferred, and the two are not joined. -->
+  <meta name="citation_author" content="Raman, Priya">
+  <title>Survey of the East Wing</title>
+  <!-- Three authors, one each way schema.org allows: a Person, a plain
+       name and an Organization. The comment's author is one level deeper
+       and is not the page's. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Survey of the East Wing",
+    "comment": [{"@type": "Comment", "author": {"@type": "Person", "name": "Sam Ellery"}}],
+    "author": [
+      {"@type": "Person", "name": "Priya Raman"},
+      "Tomas  Okafor",
+      {"@type": "Organization", "name": "Harbor Lane Survey Group"}
+    ]
+  }
+  </script>
+</head>
+<body>
+  <article>
+    <h1>Survey of the East Wing</h1>
+    <div class="byline">By the survey team</div>
+    <p>The east wing was surveyed room by room for damp and for load. The
+    findings are summarised here, and the measurements are attached.</p>
+  </article>
+</body>
+</html>

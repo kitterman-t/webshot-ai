@@ -71,9 +71,18 @@ ONNX_EXCEPTION_CHAIN = ("markitdown", "magika")
 #: Distributions that may only arrive through an extra. Phase 3 added two
 #: extras that carry real weight, and "behind an extra" is a claim the README
 #: and docs/03 make on their behalf — so something has to check it.
+#: OpenCV is named twice because RapidOCR 3.10 changed which build it requires:
+#: `opencv-python` to 3.9, `opencv-python-headless` from 3.10 (docs/09
+#: P10-33). Naming only one would leave the other's leak unseen.
 EXTRA_ONLY_PACKAGES = {
     "office": ("mammoth", "python-pptx", "openpyxl", "xlsxwriter"),
-    "ocr-rapid": ("rapidocr", "opencv-python", "pyclipper", "shapely"),
+    "ocr-rapid": (
+        "rapidocr",
+        "opencv-python",
+        "opencv-python-headless",
+        "pyclipper",
+        "shapely",
+    ),
     "chunk-hybrid": ("transformers",),
 }
 

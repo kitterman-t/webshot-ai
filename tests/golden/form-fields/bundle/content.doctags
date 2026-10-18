@@ -14,6 +14,7 @@
 <checkbox_unselected>Daily digest</checkbox_unselected>
 <text>Daily digest</text>
 <text>Time zone</text>
+<text>UTC+01:00 Berlin</text>
 <text>Signature note</text>
 <text>Sent from the quarterly review workstation.</text>
 <section_header_level_1>Why these settings matter</section_header_level_1>

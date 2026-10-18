@@ -1,6 +1,6 @@
 # Protected-viewer DOM fixtures
 
-These two documents reproduce the **accessibility-tree contract** that
+These documents reproduce the **accessibility-tree contract** that
 `src/webshot/protected/viewer.py` depends on when it captures an authenticated
 Microsoft SharePoint PDF viewer: the scrollable container labelled with the file
 name, one absolutely positioned element per rendered page labelled `Page N.`, the
@@ -32,6 +32,23 @@ The portrait pages also draw colour bands, no two alike, so
 check every stitched page band for band. A segment shot from anywhere but
 where its clip assumes puts a band out of place (docs/09 P42).
 
+Every page element is in the DOM from the start, in every fixture. That is
+how they were authored, not something observed: whether the live viewer
+keeps pages far from the view in the DOM is not recorded. The capture does
+not depend on it. It finds each page by its own `Page N.` label and scrolls
+to where the page begins when its element is missing, and a test runs it
+with a script that keeps only the pages in view (docs/09 P46).
+
+`sharepoint-landscape-mixed.html` is the one fixture whose toolbar works,
+so the landscape capture can be driven end to end: previous and next move
+the current page, the page box and the `Page N of M` counter follow it, and
+the zoom menu switches between "Window size" and 75%. That behaviour is
+authored too. Its viewer puts the current slide's top at the top of the
+view, and draws 75% by scaling each slide about its top centre without
+moving it, so a script that recorded where each slide sits stays right
+after the zoom changes. The capture assumes neither: it measures each slide
+after the toolbar has gone to it (docs/09 P51).
+
 They cannot catch **drift on Microsoft's side**. If the viewer's accessibility
 tree changes, these fixtures keep passing while real captures break. Only a run
 against a live tenant tells you that, and it stays a maintainer task —
@@ -53,4 +70,6 @@ it is not empty so the note cannot quietly disappear. As of Phase 1:
 |---|---|---|
 | `sharepoint-portrait.html` | 3 tall pages in a scrolling container, each drawn as eleven 96px colour bands | page geometry, inter-page step, page count, segmented capture and stitching |
 | `sharepoint-portrait-smooth.html` | the same, with `scroll-behavior: smooth` on the container | every segment shot where the viewer is, not where a scroll animation has got to (docs/09 P42) |
+| `sharepoint-portrait-mixed.html` | 5 pages of different sizes, each drawn as colour bands: Letter, Letter landscape, Legal, a taller appended form, and a short, narrow last page the viewer cannot scroll to its top | each page found, measured and shot as itself, one shot or two as its own height needs (docs/09 P46) |
 | `sharepoint-landscape.html` | 2 wide slides plus the toolbar | the landscape branch's zoom, paging, and page-number controls |
+| `sharepoint-landscape-mixed.html` | 3 slides of different sizes, each drawn as colour bands: 16:9, 4:3, and a portrait page taller than the first, plus a toolbar that works | each slide found, measured and shot as itself at 75%, and the orientation read from page 1 (docs/09 P51) |

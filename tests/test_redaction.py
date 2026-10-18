@@ -213,10 +213,13 @@ def test_the_two_form_surfaces_agree() -> None:
     assert records["recovery_note"] == "live recovery note"
     assert records["recovery_note"] in html
     assert records["notify"] == "true"
-    # The select's live choice reaches the form-value record. It cannot reach
-    # content.html because nh3 strips `<option>` from the snapshot regardless
-    # — pre-existing, unrelated to this fix, recorded as P8-75.
+    # The select's live choice reaches both, content.html as the one option the
+    # closed dropdown draws. P8-75 said nh3 stripped `<option>`; the snapshot's
+    # visibility test had dropped every option first (docs/09 P69).
     assert records["display_mode"] == "Dense"
+    assert '<option value="dense" selected="">Dense</option>' in html
+    assert "Comfortable" not in html, "the markup's default outlived the choice"
+    assert "Compact" not in html, "an option the dropdown never drew"
 
 
 def test_the_live_values_are_not_merely_the_defaults() -> None:

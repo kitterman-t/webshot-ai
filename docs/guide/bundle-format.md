@@ -94,6 +94,14 @@ flex item, a block, an inline-block) keeps two parts apart. `content.html`
 records that last case on the element as `data-webshot-display`, the display
 the browser computed.
 
+A word with a part in a `<span>` or another inline element that is not
+formatting is one word too, where the page draws the parts with no gap
+between them. `content.html` records each such edge on the element as
+`data-webshot-touches` (`before`, `after` or both). Where the page draws a
+margin, a padding, a border or generated content there, as around the bullet
+in "Article • 12 Oct 2026", the parts stay apart, and so do the spans of a
+`content.html` captured before WebShot measured this.
+
 **`chunks.jsonl`** is one JSON object per line, sized for retrieval:
 
 ```json
@@ -211,15 +219,24 @@ Five fields are worth knowing about:
 - **`content_discovery`** records *which* strategy chose the captured region —
   `explicit`, `trafilatura`, `static-selectors`, or `full-page` — so a
   surprising capture can be explained rather than guessed at.
-- **`page_metadata`** is what the DOM declared; **`discovered_metadata`** is what
-  Trafilatura read, except its `date`. They are kept apart so a consumer can tell
-  where a value came from. `discovered_metadata.date` is a date the page
+- **`page_metadata`** is what the DOM snapshot recorded; **`discovered_metadata`**
+  is Trafilatura's `title` and the `date`, `author` and `sitename` the page
+  declares. They are kept apart so a consumer can tell where a value came from.
+  Each of the three declared fields is empty when the page declares none in a
+  form WebShot reads; WebShot never infers one. The `date` is a date the page
   declares in its markup (a date `<meta>` such as `article:published_time`, a
   schema.org `datePublished`, `dateCreated` or `dateModified` in JSON-LD or
-  microdata, or a `<time>`), written `YYYY-MM-DD`, and empty when it declares
-  none in a form WebShot reads. WebShot does not infer one from the text, the
-  URL or a heading. Its `author` and `sitename` are Trafilatura's: an author
-  can come from a byline's text, and a sitename from the URL's host name.
+  microdata, or a `<time>`), written `YYYY-MM-DD`, and never a date from the
+  text, the URL or a heading. The `author` is the names the page declares, as
+  it writes them, joined with `; `. They come from one kind of declaration,
+  the first of these the page uses: a schema.org `author` in JSON-LD (a name,
+  a Person's or an Organization's `name`, or a list), microdata
+  `itemprop="author"`, `<meta name="author">`, `citation_author`,
+  `article:author`, then `DC.creator`. A web address is not a name, and a
+  byline's text, `rel="author"` and `twitter:creator` are not read. The
+  `sitename` is the first of `og:site_name`, a JSON-LD `WebSite`'s `name`, a
+  JSON-LD `publisher`'s name and `<meta name="application-name">`, and never
+  a part of the `<title>` or the URL's host name.
 - **`ocr.engine`** is the engine that actually recognized something, not the one
   that was requested. A capture with nothing to recognize names no engine.
 
