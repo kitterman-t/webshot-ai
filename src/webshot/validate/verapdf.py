@@ -90,10 +90,14 @@ def docker_daemon_available() -> bool:
     if not executable:
         return False
     try:
+        # Only the exit status is read. Decoding what `docker info` printed,
+        # as `text=True` did, in the locale's encoding, raised
+        # UnicodeDecodeError past this handler when the output held a byte
+        # that encoding does not define (docs/09 P91-4).
         probe = subprocess.run(
             [executable, "info"],
-            capture_output=True,
-            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             timeout=PROBE_TIMEOUT_S,
             check=False,
         )
@@ -144,6 +148,39 @@ def declared_flavour(pdf: Path) -> str | None:
     if part is None:
         return None
     return f"{part}{(_matched(PDFA_CONFORMANCE.search(raw)) or 'b').lower()}"
+
+
+def _report_text(output: bytes) -> str:
+    """veraPDF's report, read as the UTF-8 veraPDF writes.
+
+    The gate used to run veraPDF with `text=True` and no encoding, so
+    `subprocess` decoded the report with the locale's encoding unless Python
+    ran in UTF-8 mode: on Windows the ANSI code page, cp1252 on an English
+    install. veraPDF 1.30.0 wrote its report in UTF-8 on macOS even with the
+    JVM's file and stdout encodings set to windows-1252, and the report names
+    the file it validated. Under cp1252 a report naming "Café.pdf" was read
+    as naming "CafÃ©.pdf", and published so, and one naming "Índice.pdf"
+    raised `UnicodeDecodeError` out of `validate` (docs/09 P91-4). Bytes
+    that are not UTF-8 raise that here too, and the caller records it as an
+    attempt that failed; they are never replaced, since the report is
+    published as veraPDF's. Newlines are translated as `text=True`
+    translated them.
+    """
+    return output.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _diagnostic_text(output: bytes) -> str:
+    """veraPDF's messages, which only explain a failure.
+
+    UTF-8 like its report, but a byte that is not UTF-8 is shown as an escape
+    (`\\xe9`) instead of raising: a decode error in its place would hide the
+    reason veraPDF gave (docs/09 P91-4).
+    """
+    return (
+        output.decode("utf-8", errors="backslashreplace")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+    )
 
 
 def _matched(match: re.Match[bytes] | None) -> str | None:
@@ -216,7 +253,6 @@ def validate(pdf: Path, *, report_path: Path | None = None) -> ValidationReport:
             completed = subprocess.run(
                 command,
                 capture_output=True,
-                text=True,
                 timeout=VALIDATION_TIMEOUT_S,
                 check=False,
             )
@@ -230,17 +266,27 @@ def validate(pdf: Path, *, report_path: Path | None = None) -> ValidationReport:
             attempts.append(f"{tool} could not be run: {exc}")
             continue
         try:
-            payload = json.loads(completed.stdout)
+            report = _report_text(completed.stdout)
+        except UnicodeDecodeError as exc:
+            # The report is not what veraPDF writes, so nothing in it is read
+            # or published; the next candidate may still answer.
+            attempts.append(
+                f"{tool} exited {completed.returncode} with a report that is "
+                f"not UTF-8: {exc}"
+            )
+            continue
+        try:
+            payload = json.loads(report)
         except json.JSONDecodeError:
             attempts.append(
                 f"{tool} exited {completed.returncode} without a JSON report: "
-                + (completed.stderr.strip().splitlines() or [""])[-1]
+                + (_diagnostic_text(completed.stderr).strip().splitlines() or [""])[-1]
             )
             continue
         written: str | None = None
         if report_path is not None:
             report_path.parent.mkdir(parents=True, exist_ok=True)
-            report_path.write_text(completed.stdout, encoding="utf-8", newline="\n")
+            report_path.write_text(report, encoding="utf-8", newline="\n")
             written = str(report_path)
         return _summarize(payload, flavour, tool, written)
 

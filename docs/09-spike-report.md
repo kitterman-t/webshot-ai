@@ -18900,6 +18900,97 @@ after the first run. The skip count did not move. The other 153 failures
 and 17 errors are the same tests in both runs, and none is in a file this
 change touches: master's Windows run is red without it.
 
+### P91-4 — veraPDF's report, read the same way (2026-10-18)
+
+The PDF/A gate, `validate/verapdf.py`, ran veraPDF with `text=True` and no
+encoding, as the Tesseract bridge did, and so did the Docker probe beside
+it. Measured on macOS against master 4fe0624, with veraPDF 1.30.0 from
+Homebrew on OpenJDK 26.0.2.1.
+
+**What veraPDF writes.** veraPDF was run with `--format json`, as the gate
+runs it, and with `xml` and `text`, on a blank page claiming PDF/A-3B saved
+as "Café Índice.pdf". Each report names the file by its absolute path, and
+each wrote "é" as `C3 A9` and "Í" as `C3 8D`, which is UTF-8. That held with
+the launcher's own settings, with `LANG=C`, and with the JVM's
+`stdout.encoding` set to windows-1252. It held too with the main class run
+directly, without the launcher's `-Dfile.encoding=UTF8`, first with
+`file.encoding`, `stdout.encoding` and `sun.stdout.encoding` all
+windows-1252, then with `file.encoding=COMPAT` under `LANG=C`. A Windows
+JVM writing to a pipe uses the ANSI code page for `stdout.encoding` unless
+told otherwise, and before Java 18 for `file.encoding` too; on macOS neither
+setting moved the bytes. Where veraPDF could not read the file, a missing
+one or one that is not a PDF, its messages on stderr named the path in UTF-8
+as well, with the launcher's settings and with `stdout.encoding` and
+`stderr.encoding` windows-1252. The title in the file's metadata, `東京`
+included, is in none of the reports. veraPDF on Windows was not run.
+
+**What the gate read.** In a child interpreter with `-X utf8=0` and
+`locale.getencoding` returning `cp1252`, as P91-2 runs one:
+
+- The recorded report, naming "Café Índice.pdf", raised `UnicodeDecodeError`
+  (`'charmap' codec can't decode byte 0x8d`) out of `validate`, which
+  catches `OSError`, `SubprocessError` and `JSONDecodeError` only.
+- A report naming "Café.pdf" was read with no error as naming "CafÃ©.pdf",
+  and published so in `verapdf.json`.
+- A report holding a byte that is not UTF-8, `FF`, was read as "ÿ" and
+  published.
+- An ASCII report with `FF 8D` on stderr raised `UnicodeDecodeError` out of
+  `validate`: stderr was decoded on every run.
+- `docker info` printing "Name: Índice" raised `UnicodeDecodeError` out of
+  `docker_daemon_available`, past its own handler, whether `docker` exited 0
+  or 1. `validate` and `webshot doctor` both call it.
+
+The installed veraPDF gave the same as the recorded report. In the same
+child, with it alone on PATH and no Docker, `validate` on "Café Índice.pdf"
+raised `UnicodeDecodeError` on master (byte `0x8d` at position 443), and
+with this change returned the verdict, rule 6.1.3 failed, with the published
+report naming "Café Índice.pdf".
+
+On Windows `subprocess` reads each pipe in a thread of its own, where a
+decode error leaves the stream `None` rather than raising (P91); that was not
+run for veraPDF.
+
+**The gate now** captures bytes and reads them by P91-1's two rules:
+
+- **The report** (`_report_text`): UTF-8, strict, with newlines translated
+  as `text=True` translated them, so the published report is the text it
+  was. A report that is not UTF-8 is an attempt that failed. Nothing is read
+  from it or published, the next candidate, the `verapdf/cli` container, is
+  tried, and if none answers the report's detail says why: `verapdf exited 1
+  with a report that is not UTF-8: 'utf-8' codec can't decode byte 0xff in
+  position ...`. A run that printed no JSON report already took that path.
+- **Messages** (`_diagnostic_text`): UTF-8, with a byte that is not UTF-8
+  shown as an escape (`\xe9`), and read only when veraPDF printed no report,
+  for the detail's last line.
+
+The Docker probe reads only `docker info`'s exit status now, and sends its
+output to `DEVNULL` undecoded.
+
+### P91-5 — the tests
+
+`tests/test_verapdf_encoding.py` is P91-2's harness for veraPDF: a stand-in
+`verapdf`, or `docker`, alone on the child's PATH, printing fixed bytes. One
+case replays the report veraPDF 1.30.0 printed for "Café Índice.pdf",
+`tests/fixtures/verapdf/cafe-indice.json`. The file's directory in it is
+written `/data/`, the directory the container is given, in place of the
+recording machine's, and nothing else is changed. Where the old decoding got
+the bytes wrong, the child decodes them that way too, and the test requires
+that result to be wrong.
+
+On master 4fe0624, 8 of the 9 cases that run on macOS fail:
+
+- the recorded report and "Café Í", a decode error;
+- "Café", published as `CafÃ©`;
+- a report holding `FF`, published with `ÿ`;
+- `FF 8D` on stderr beside an ASCII report, a decode error;
+- a run with no report whose message holds a UTF-8 "Í", a decode error in
+  place of the message;
+- the Docker probe, exiting 0 and exiting 1, a decode error.
+
+The one that passes holds behaviour that did not change: CRLF becomes LF.
+With the fix all 9 pass. Two more cases use the machine's own encoding with
+no override and run only on Windows, which this entry did not run.
+
 ## P92 — master's Windows run: line endings, link targets and path spellings (2026-10-18)
 
 `windows-smoke.yml` last ran on master by its schedule on 2026-10-05: run
