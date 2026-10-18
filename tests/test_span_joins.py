@@ -259,12 +259,19 @@ def test_a_measured_element_joins_only_at_an_edge_the_snapshot_named(
 
 
 def test_an_element_docling_formats_joins_without_the_evidence() -> None:
-    """P48's rule is unchanged: the markup is the evidence for bold, a link
-    and the rest of `_JOINED_TAGS`, and an attribute on one changes nothing."""
+    """Without the attribute, the markup is the evidence for bold, a link and
+    the rest of `_JOINED_TAGS`, as P48 made it, so a snapshot taken before
+    the snapshot measured them reads as it did. One the snapshot measured
+    joins only where it names an edge (docs/09 P70-11,
+    `tests/test_formatted_joins.py`): an empty attribute is two edges drawn
+    apart."""
     for tag in sorted(_JOINED_TAGS):
-        for attribute in ("", f' {TOUCH_ATTRIBUTE}=""'):
+        for attribute, line in (
+            ("", "x unbreakable y"),
+            (f' {TOUCH_ATTRIBUTE}=""', "x un break able y"),
+        ):
             body = f"<p>x un<{tag}{attribute}>break</{tag}>able y</p>"
-            assert _line(body) == "x unbreakable y", (tag, attribute)
+            assert _line(body) == line, (tag, attribute)
 
 
 def test_a_merged_string_is_joined_in_place() -> None:
@@ -568,14 +575,17 @@ def test_the_snapshot_records_each_edge_drawn_touching(
 ) -> None:
     """The snapshot names an edge where the page draws the two glyphs on one
     line with no gap, and no other: not one drawn apart, not one beside
-    whitespace, not a box's, not an element docling formats, and not the
-    edges a page claimed for itself."""
+    whitespace, not a box's, and not the edges a page claimed for itself.
+    An element docling formats or links is measured too (docs/09 P70-11):
+    the bold in a span, the bold before one and the link before one."""
     html = captured["content.html"]
     for written in (
         f"ka<span {_TOUCHING}>lin</span>dric",
         f"kel<span {_TOUCHING}><span {_TOUCHING}>mo</span>ra</span>vine",
-        f"sto<span {_TOUCHING}>r<b>un</b>d</span>el",
-        f'<b>quel</b><span {TOUCH_ATTRIBUTE}="before">dros</span>',
+        f"sto<span {_TOUCHING}>r<b {_TOUCHING}>un</b>d</span>el",
+        f'<b {TOUCH_ATTRIBUTE}="after">quel</b><span {TOUCH_ATTRIBUTE}="before">dros</span>',
+        f'<a href="#later" {TOUCH_ATTRIBUTE}="after" rel="noopener noreferrer">brem</a>'
+        f"<span {_TOUCHING}>dale</span>,",
         f'the <span {TOUCH_ATTRIBUTE}="after">Varlin</span>,',
         f"(<span {_TOUCHING}>prenik</span>)",
         f"<caption>Tab<span {_TOUCHING}>rel</span>wick</caption>",
@@ -589,9 +599,13 @@ def test_the_snapshot_records_each_edge_drawn_touching(
         "So plin<span>dor</span>vesk",
     ):
         assert written in html, written
-    assert html.count(TOUCH_ATTRIBUTE) == 39
-    for tag in _JOINED_TAGS:
-        assert not re.search(rf"<{tag}\s[^>]*{TOUCH_ATTRIBUTE}", html), tag
+    assert html.count(TOUCH_ATTRIBUTE) == 42
+    formatted = [
+        match.group(1)
+        for tag in _JOINED_TAGS
+        for match in re.finditer(rf"<{tag}\s[^>]*{TOUCH_ATTRIBUTE}=\"([^\"]*)\"", html)
+    ]
+    assert sorted(formatted) == ["after", "after", "before after"]
     assert not re.search(rf"{DISPLAY_ATTRIBUTE}[^>]*{TOUCH_ATTRIBUTE}", html)
     assert not re.search(rf"{TOUCH_ATTRIBUTE}[^>]*{DISPLAY_ATTRIBUTE}", html)
 

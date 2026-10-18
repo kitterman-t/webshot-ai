@@ -296,3 +296,21 @@ def test_chrome_is_compared_as_the_backend_cleans_text() -> None:
     assert facts.is_chrome_text("What\N{RIGHT SINGLE QUOTATION MARK}s new")
     assert not facts.is_chrome_text("Body")
     assert not facts.is_chrome_text("")
+
+
+def test_an_item_holding_only_a_list_follows_its_block() -> None:
+    """P45's empty item has no text to judge; above the first heading it goes
+    where its list goes, in content and in a menu alike."""
+    held = "<ul><li><ul><li>Gorvane</li></ul></li><li>Istrel</li></ul>"
+    content = extract(_page(f"{held}<h1>{HEADING}</h1>"), [])
+    alone = extract(_page(held), [])
+    assert content.markdown == f"{alone.markdown}\n# {HEADING}\n"
+    assert content.markdown.startswith("-   - Gorvane\n- Istrel\n")
+
+    menu = extract(_page(f"<nav>{held}</nav><h1>{HEADING}</h1>"), [])
+    assert menu.markdown == f"# {HEADING}\n"
+    assert {
+        node["content_layer"]
+        for node in _nodes(menu.document_json)
+        if node.get("text") != HEADING
+    } == {"furniture"}

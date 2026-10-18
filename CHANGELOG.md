@@ -270,6 +270,18 @@ which records the measurements behind each change.
 
 ### Changed
 
+- **Bold, code and links join the word they touch only where the page draws
+  them touching.** A part docling formats or links was joined to the text
+  beside it wherever the markup ran the two together, so a link drawn with an
+  icon before its text, or inline code with a wide padding, read as one word
+  with its neighbour where the page and the PDF show a gap. The snapshot now
+  measures these edges as it measures a span's and records them in
+  `content.html` as `data-webshot-touches`, empty where neither edge is drawn
+  touching. Inline code padded by a pixel still joins. On 25 public pages
+  every join this declines was beside punctuation, most of them a link before
+  a full stop where the print stylesheet writes the link's address between
+  the two. A `content.html` captured before this change records no such
+  evidence and reads as before. See docs/09 P70-11.
 - **A picture printed far finer than paper can show is reduced.** Chromium
   embeds a picture at its natural size whatever size it prints at, and a
   think tank's 4-page topic page was 86 MB: its card thumbnails were the

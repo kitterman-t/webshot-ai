@@ -9,7 +9,11 @@ through the backend as two marker characters; P48 does the same for every
 element the backend formats or links, and leaves apart what the page keeps
 apart: whitespace of any kind, a line break, and an element the page's CSS
 lays out as a box of its own, which the snapshot records as
-`data-webshot-display`.
+`data-webshot-display`. A capture also measures each edge where such an
+element touches the text beside it, and joins only the ones the page draws
+with no gap (docs/09 P70-11): the fixture's inline code is padded by 0.2 em,
+which keeps it apart from the words it runs into in a capture, while the
+markup alone, as a snapshot from before that change reads, joins it.
 
 `tests/fixtures/inline_joins.html` uses made-up words, so each can be
 searched for whole. The browser tests capture it end to end; the rest call
@@ -79,6 +83,18 @@ SPACED = (
 BROKEN = (("quor", "daz"), ("skel", "vona"), ("vrin", "tosk"))
 #: Pairs only the page's CSS keeps apart: an inline-block, flex items, a block.
 BOXED = (("zorbel", "quintar"), ("krev", "moltan"), ("Hessel", "Wiki"))
+#: The words and punctuation the fixture's inline code runs into, which its
+#: 0.2 em padding draws apart. Joined on the markup alone; apart in a capture,
+#: which measures the gap (docs/09 P70-11).
+PADDED = ("cozibwort", "grampelosh", "(zubrel)")
+PADDED_APART = (
+    ("co", "zib"),
+    ("zib", "wort"),
+    ("gram", "pel"),
+    ("pel", "osh"),
+    ("(", "zubrel"),
+    ("zubrel", ")"),
+)
 
 
 def _page(body: str) -> str:
@@ -312,14 +328,22 @@ def captured(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]:
 
 @pytest.mark.browser
 def test_every_text_surface_reads_each_word_whole(captured: dict[str, str]) -> None:
+    """Each word the page draws whole, and each pair it draws apart: the
+    padded code too, which the markup alone joins."""
     for name in ("content.md", "content.txt", "chunks.jsonl"):
         surface = _plain(captured[name])
         words = _words(surface)
         for word in (*JOINED, *PUNCTUATED, "yarbistle"):
+            if word in PADDED:
+                continue
             assert word in words, (name, word)
-        for left, right in (*SPACED, *BROKEN, *BOXED):
+        for left, right in (*SPACED, *BROKEN, *BOXED, *PADDED_APART):
             assert f"{left}{right}" not in surface, (name, left, right)
-            assert re.search(rf"{left}\s+{right}", surface), (name, left, right)
+            assert re.search(rf"{re.escape(left)}\s+{re.escape(right)}", surface), (
+                name,
+                left,
+                right,
+            )
     assert "data-webshot-display" not in captured["warnings"]
 
 
@@ -363,9 +387,30 @@ def test_the_snapshot_records_where_css_made_a_box(captured: dict[str, str]) -> 
             text,
         )
     # The span touches the bold "bistle" and is drawn against it, which the
-    # snapshot records as well (docs/09 P70).
-    assert '<span data-webshot-touches="after">yar</span>' in html
+    # snapshot records on both (docs/09 P70, P70-11).
+    assert (
+        '<span data-webshot-touches="after">yar</span>'
+        '<b data-webshot-touches="before">bistle</b>'
+    ) in html
     assert html.count(DISPLAY_ATTRIBUTE) == 5
+
+
+@pytest.mark.browser
+def test_the_snapshot_records_each_formatted_edge(captured: dict[str, str]) -> None:
+    """Each formatted element whose text the markup runs into its neighbour's
+    carries the edges the page draws touching, and the padded code an empty
+    attribute: both its edges are drawn apart (docs/09 P70-11)."""
+    html = captured["content.html"]
+    for written in (
+        'vel<b data-webshot-touches="before after">moran</b>tic',
+        'co<code data-webshot-touches="">zib</code>wort',
+        '(<code data-webshot-touches="">zubrel</code>)',
+        'gram<code data-webshot-touches="">pel</code>osh',
+        'tre<kbd data-webshot-touches="before after">vak</kbd>ul',
+        '<b data-webshot-touches="after">bran</b><i data-webshot-touches="before">dovic</i>',
+        "before <b>spaced</b> after",
+    ):
+        assert written in html, written
 
 
 @pytest.mark.browser
