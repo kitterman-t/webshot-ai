@@ -30,6 +30,7 @@ EXPRESSION_TOKENS = {"${{", "}}", "matrix.os", "==", "&&", "||"}
 EXPECTED = {
     "ci.yml",
     "claude-review.yml",
+    "claude-review-rejudge.yml",
     "dependabot-auto-merge.yml",
     "dependency-watch.yml",
     "docs.yml",
@@ -92,7 +93,7 @@ def test_no_trigger_runs_a_forks_code_with_this_repositorys_secrets() -> None:
 
 def test_the_reviewer_runs_only_when_the_gate_says_so_and_says_why() -> None:
     code = _workflows()["claude-review.yml"]
-    review = code[code.index("\n  review:") :]
+    review = code[code.index("\n  review:") : code.index("\n  verdict:")]
     assert "needs: gate" in review
     assert "if: needs.gate.outputs.review == 'true'" in review
     gate = code[code.index("\n  gate:") : code.index("\n  review:")]
@@ -101,7 +102,9 @@ def test_the_reviewer_runs_only_when_the_gate_says_so_and_says_why() -> None:
     assert "github.event.pull_request.head.repo.full_name" in gate
     assert "head.repo.fork" not in code
     assert "secrets.CLAUDE_CODE_OAUTH_TOKEN != ''" in gate
-    assert gate.count('>> "$GITHUB_STEP_SUMMARY"') >= 2, "both branches report"
+    # The decision, and the run summary each branch writes, are the script's;
+    # tests/test_review_verdict.py holds them.
+    assert '"$RUNNER_TEMP/review_verdict.py" gate' in gate
     assert "show_full_output: false" in review
 
 

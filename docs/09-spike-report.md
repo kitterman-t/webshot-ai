@@ -18231,3 +18231,215 @@ publisher fixture reads the same, and holds that a nested publisher is not
 the page's. The `captions-read` golden served its page over loopback and
 recorded the host, `127.0.0.1:<port>` (masked as `<STANDIN>`), as its
 sitename. It now records `""`, the only golden line this change moves.
+
+## P89 — the review was not a gate, so a flagged head merged (2026-10-18)
+
+On 2026-10-17 #248 had auto-merge armed at 20:14:11Z. Its Claude review
+posted one inline finding on 562f857d at 20:17:34Z: a hold that was still
+needed could be reported as unneeded. CI passed, and GitHub merged 562f857d at
+20:37:22Z, twenty minutes after the finding and before anyone had answered
+it. The fix came afterwards, in #252. Nothing waited for the review because
+the review was not a required check, and as it stood it could not have been
+one.
+
+- **It reported on one head per pull request.** `claude-review.yml` ran on
+  `opened`, `ready_for_review` and `reopened`, never on a push. A required
+  check that no later head reports blocks every pull request that is pushed
+  to after it opens.
+- **Its result said nothing about findings.** The job passes when the review
+  read the diff and left a comment (P10-18). A review that found a bug and a
+  review that found nothing both end green.
+
+Some pull requests got no review at all. #257 opened at 21:53:52Z. GitHub
+started no workflow run for that event, and the first run of any workflow on
+it was CI, on a push, at 22:06:58Z. The review does not run on a push, so
+#257 gathered 57 commits with auto-merge armed and no review run, and GitHub
+merged it at 00:55:13Z on 2026-10-18 without one. #258 merged two seconds
+later, 36 commits after the one head its review had read.
+
+
+### P89-1 — what the verdict says
+
+`tools/ci/review_verdict.py` judges a pull request's head and
+`claude-review.yml` runs it as the job `claude review verdict`, the required
+check. It calls no model. It answers one question: has Claude's review left a
+finding nobody has addressed?
+
+It fails when
+
+- a review thread Claude started is unresolved. An outdated thread counts:
+  the line moved, and the finding may not have;
+- a summary Claude posted, as a pull request comment or a review body, is
+  neither the review's "No issues found" nor a stop notice, and has not been
+  hidden as resolved or outdated. This is fail-closed. A summary in any other
+  words counts as a report. #61's "One more finding that doesn't anchor to a
+  changed line" is one, and so is the old free-form stop notice "Review
+  skipped: ...";
+- no review has finished on the pull request. That is three cases: none has
+  run, one is still running, or the latest one failed its own guard.
+
+It passes when the latest review finished and every thread it left is
+resolved and every summary is clean or hidden. A false positive is handled
+like a fixed finding: a reply in its thread saying why, then the thread
+resolved. There is no switch that waives the check.
+
+The review now writes its stop notice with a fixed opening, `Claude review
+stopped:`, so the verdict can tell a deliberate stop from a report.
+
+The verdict claims only what it measured. The review reads one head. When the
+pull request has moved past it, the summary says "Reviewed 0f4b848308da; the
+36 commit(s) since were not reviewed". That is #258's verdict, read on
+2026-10-18 while it was open.
+
+Which runs were a pull request's review is read from the runs on its branch
+since it opened, not from a run's `pull_requests` field alone. GitHub fills
+that field when it is read, not when the run starts. #258's review run named
+#258 while #258 was open, 36 commits past the run's head, and named nothing
+once #258 had merged. A run that names a different pull request is left to
+that one.
+
+Three kinds of pull request pass without a review, by policy, and the summary
+names which one:
+
+- a bot's. The action refuses a run a bot starts, and the golden corpus and
+  parity are what prove a dependency bump;
+- a fork's. Its run gets no secret to review with, and only a person merges
+  it;
+- the sync's own `sync/` branches. What they carry was reviewed where it was
+  first merged. The review had been stopping on them by itself: #253's and
+  #259's reviews each called the pull request an automated sync PR and
+  stopped.
+
+
+A pull request that edits `claude-review.yml` passes unreviewed, with a
+warning that says to read the diff by hand. The action refuses to run a
+workflow file that differs from the default branch's, and P10-18's guard has
+always passed that case.
+
+### P89-2 — a verdict on every head, never skipped
+
+The workflow now runs on `synchronize` too. Every run has three jobs.
+
+- `gate` decides whether this event reviews. The review events always do. A
+  push does only while no review has been attempted on the pull request, so a
+  pull request opened while it conflicted, as #257 was, gets its first review
+  on its next push. Cancelled and skipped runs do not
+  count as attempts, and a failed one does: a broken reviewer is not retried
+  on every push.
+- `review` is the review and P10-18's guard, unchanged except for the stop
+  notice. Its concurrency group cancels a running review only for a newer
+  review event. A push never does, or the first push after opening would
+  cancel the review it was waiting for. The workflow-wide group is gone: with
+  pushes added to the triggers, it would have done exactly that.
+- `verdict` runs with `if: always()` and nothing else. GitHub counts a job
+  skipped by its condition as a passed check, so a skip here would merge a
+  head nobody judged. The policy exemptions pass inside the script, where the
+  run summary records the reason.
+
+A draft gets no verdict. On a draft the job takes another name, `claude
+review verdict (draft, not judged)`, and judges nothing, so the head carries
+no required check. GitHub cannot merge a draft, and a required check that is
+absent is waiting, not passed. Both other answers were wrong. A green verdict
+would still stand after the pull request is marked ready on the same head,
+because GitHub creates a job only once the jobs it needs have finished. In
+webshot-ai's run 39084611846 the run began at 00:56:17Z and its `review` job
+was created at 00:56:25Z, the moment its gate finished. A verdict needs the
+review, so for as long as the review ran the old green would be the head's
+only verdict, and auto-merge is armed the moment a draft is marked ready. A
+red verdict on every draft push would wake the draft's Auto-fix session each
+time.
+
+### P89-3 — re-judging without calling a model
+
+GitHub starts no workflow when a review thread is resolved.
+`pull_request_review_thread` is a webhook event, but it is not in GitHub's
+list of events that trigger workflows (read 2026-10-18). So something else has
+to notice a finding being addressed.
+
+The verdict is re-run, never created a second time. GitHub keeps every
+same-named check run on a commit, one per workflow run. Commit 2c8a87a7 holds
+two `review` runs, cancelled (114606181518) and passed (114611225140), and
+the check-runs API's `filter=latest` returns both, one for each check suite.
+GitHub's documentation does not say which of two such runs a required check
+reads. A re-run replaces a job's result inside its own run, so re-running
+leaves no second answer to choose between. Where a head does carry two
+verdicts, for example one that judged a review still running and the one that
+ran when the review finished, the verdict that passes re-runs the red ones on
+its head. All verdicts on a head then agree.
+
+`rejudge` re-runs every failed verdict on a head. It is called
+
+- by `claude-review-rejudge.yml` after a reply in one of Claude's threads. A
+  reply and its resolution come from one session seconds apart, so it waits
+  for the thread to be resolved, polling every 15 s for up to five minutes;
+- by the verdict itself, for the new head when the pull request has moved on.
+  That head's verdict may have judged a review that was still running;
+- by hand: `python tools/ci/review_verdict.py rejudge --repo OWNER/REPO --pr N`,
+  or `gh run rerun <run id> --failed`, which every failing verdict prints.
+
+
+### P89-4 — what it costs
+
+The review runs as often as it did: once per pull request, on the events it
+always ran on. The only new reviews are first reviews on a push for pull
+requests that never had one. Every other run is the gate and the verdict,
+two jobs of seconds that call no model, plus the re-judge job on a reply.
+
+Reviewing every push was not chosen. It would multiply the spend by the
+number of pushes, and Auto-fix pushes several times on a pull request with
+findings. It would also review nothing new. The code-review plugin's first
+step stops when Claude has already commented, so each push would have cost a
+session that only posted a stop notice.
+
+
+### P89-6 — a sparse checkout on a reused workspace
+
+The first version of the gate, the verdict and the re-judge job checked out
+only their script, sparsely. On a runner that reuses one workspace for every
+job, that handed the next jobs on the same commit a tree holding little more
+than that file, and `uv sync` found no `pyproject.toml`. The jobs now check
+nothing out. Each reads the script from the commit under test through the
+contents API, into its own temporary directory, and leaves the workspace as
+it found it.
+
+
+### P89-7 — what this does not cover
+
+- **Commits after the review.** They are judged against what the review
+  found, not read. The summary gives their number.
+- **A thread resolved with no reply.** Its verdict stays red until something
+  re-runs it: a later reply, a verdict that passes on the same head, or a
+  person.
+- **A pull request that edits the reviewer.** It passes with a warning and no
+  review.
+- **Which of two same-named check runs GitHub reads.** This was not measured.
+  The design avoids depending on it, as P89-3 says.
+- **The live run.** The verdict was run read-only, while they were open,
+  against #258 (passes, reviewed 36 commits ago), #257 (fails, no review) and
+  #259 (exempt, a sync branch). The gate, read the same way, would have
+  reviewed #257 on its next push and not #258. The feedback reader was run
+  against #61 (two unresolved threads and a summary that reports a finding),
+  #63 (five unresolved threads), #248 and #249 (one resolved thread each) and
+  #253 (an old stop notice, read as a report). The re-run paths have not run
+  on GitHub yet. A pull request that edits `claude-review.yml` is never
+  reviewed by it, so the first pull request after this one is the
+  measurement.
+
+### P89-8 — the tests
+
+`tests/test_review_verdict.py` holds the rule and the workflow to each other
+in both repositories:
+
+- every head gets a verdict whose only condition is `always()`, and a draft
+  gets none under the required name;
+- the verdict's jobs check nothing out and read their script from the commit
+  under test;
+- a push never cancels a review;
+- the stop notice the reviewer is told to write is the one the verdict reads;
+- the re-judge workflow re-runs verdicts and never reports one under the
+  verdict's name.
+
+It covers each verdict, exemption and gate branch, and the re-run paths
+against a fake `gh`. Among those cases are a read that fails, which fails the
+verdict, and a reply whose thread is resolved only on the third look.
+

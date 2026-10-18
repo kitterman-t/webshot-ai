@@ -1,0 +1,72 @@
+name: Claude review re-judge
+
+# GitHub runs no workflow when a review thread is resolved, so nothing would
+# notice a finding being addressed, and `claude review verdict` would stay red
+# on a head whose findings are all answered. This re-runs the failed verdicts
+# on a pull request's head when their answer may have changed
+# (tools/ci/review_verdict.py, `rejudge`):
+#
+# - after a reply in one of Claude's review threads, once that thread is
+#   resolved. A reply and its resolution come from one session seconds apart,
+#   so it waits for the resolution, up to five minutes;
+# - by hand otherwise: a thread resolved without a reply needs its verdict
+#   re-run (`gh run rerun <run id> --failed`).
+#
+# It only re-runs verdicts, never creates one: a re-run replaces a job's
+# result in place, where a second verdict on the same head would leave GitHub
+# two answers to choose between (docs/09 P89).
+on:
+  pull_request_review_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  rejudge:
+    name: re-judge the claude review verdict
+    # A reply by anyone but the reviewer, on a pull request from this
+    # repository. Claude's own comments arrive here too, one per finding,
+    # while its review is still running. A fork's run gets a read-only token,
+    # which cannot re-run anything.
+    if: >-
+      github.event.comment.in_reply_to_id
+      && github.event.comment.user.login != 'claude[bot]'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # One at a time per head, so two replies do not re-run one verdict twice.
+    concurrency:
+      group: claude-review-rejudge-${{ github.event.pull_request.head.sha }}
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      # The verdicts on a head are check runs, read through the Checks API.
+      checks: read
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # No checkout. The job reads its one script from the commit under test
+      # into its own temporary directory and leaves the workspace as it found
+      # it. A runner that reuses its workspace, as a self-hosted one does,
+      # otherwise hands the next job whatever this one checked out: a sparse
+      # checkout of this script left the next jobs on the same commit a tree
+      # with no pyproject.toml (docs/09 P89).
+      - name: Read the verdict script from the commit under test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.sha }}
+        run: >-
+          gh api -H "Accept: application/vnd.github.raw"
+          "repos/$REPO/contents/tools/ci/review_verdict.py?ref=$REF"
+          > "$RUNNER_TEMP/review_verdict.py"
+      - name: Re-run the failed verdicts on the head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: python3 "$RUNNER_TEMP/review_verdict.py" rejudge --repo "$REPO" --pr "$PR" --after-comment "$COMMENT_ID"

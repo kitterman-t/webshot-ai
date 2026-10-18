@@ -75,7 +75,9 @@ The *goldens* are the recorded output of the fixture corpus under
 while the goldens were recorded on the author's Mac, so it compares on the
 portable profile — see below.
 The automated Claude review needs a secret, so it runs only for branches in
-this repository and says in its run summary why it skipped any other.
+this repository and says in its run summary why it skipped any other. Its
+verdict, `claude review verdict`, passes a fork's pull request by policy; a
+maintainer reads it and merges it by hand (docs/09 P89).
 [docs/06](docs/06-quality-and-testing.md#runners) says which runner each job
 uses and what it installs there.
 
