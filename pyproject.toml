@@ -61,7 +61,7 @@ dependencies = [
     # give. The covered-text check needs both from the PDF Chromium printed
     # (docs/09 P83). In the tree already through OCRmyPDF; direct because
     # WebShot now calls it, through render/pdfium_bridge.py alone.
-    "pypdfium2>=5.13.0,<6",
+    "pypdfium2>=5.14.0,<6",
     "pydantic>=2.14.0,<3",
     "Markdown>=3.6,<4",
     # Pillow < 12.3 carries 25 known CVEs (pip-audit/OSV, Aug 2026); the
