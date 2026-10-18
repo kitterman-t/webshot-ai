@@ -40,9 +40,9 @@ def _converted(tmp_path: Path, body: str) -> str:
     clean-up included: it strips each line's end and runs of blank lines,
     which a code block's lines go through too."""
     source = tmp_path / "page.html"
-    source.write_text(
-        f"<html><body><p>Top</p>{body}<p>End</p></body></html>", encoding="utf-8"
-    )
+    # The bytes the case is: Windows writes text with each `\n` a `\r\n`,
+    # which is another document where the code holds a `\r` (docs/09 P92).
+    source.write_bytes(f"<html><body><p>Top</p>{body}<p>End</p></body></html>".encode())
     return to_markdown(source, suffix=".html").markdown
 
 

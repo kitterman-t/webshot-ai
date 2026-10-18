@@ -339,6 +339,23 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **An HTML file reads the same whatever line endings it was saved with.**
+  The reader for an EPUB's chapters and a zip's HTML members kept each `\r`,
+  where a browser reads `\r\n` and a lone `\r` as `\n`. So a copy saved with
+  Windows line endings kept a `<pre>`'s blank first and last lines, and a
+  `\r` before a `\r\n` was a line break in a list item's code but not at the
+  top level. Line endings are now read as a browser reads them. See docs/09
+  P92.
+- **A link's target in content.md is the one the page wrote.** docling held
+  a target that is not an absolute URL as a file path, and wrote the path:
+  `docs/` lost its slash and `./notes.txt` its `./`, two adjacent links to
+  `docs/` and `docs` became one, and on Windows `//host/x` was written
+  `//host/x/`. Each target is now written as the page wrote it. See docs/09
+  P92.
+- **`--local-paths relative` finds the source folder written with `/` on
+  Windows.** Its last pass looked for the folder only as Windows writes it,
+  with `\`, so a bundle file that wrote it with `/` was not named. See
+  docs/09 P92.
 - **Recognized text is read as the UTF-8 Tesseract writes, whatever the
   locale.** WebShot decoded Tesseract's output with the locale's encoding. On
   Windows that is the ANSI code page, cp1252 on an English install, so a

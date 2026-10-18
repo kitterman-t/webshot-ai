@@ -154,12 +154,19 @@ class LocalPathRecorder:
         the question the other way round, over every file the bundle holds, so
         a field nobody listed cannot carry the path out unannounced. It reads
         both spellings: a `file:` URL under the directory, and the directory's
-        own filesystem path.
+        own filesystem path, with either separator: Windows reads `/` in a
+        path as it reads `\\`, and on the Windows run the directory written
+        with `/` in content.md was missed, looked for with `\\` alone
+        (docs/09 P92).
         """
         if not self.active or self._directory is None:
             return []
         directory = str(self._directory)
-        spellings = {directory, json.dumps(directory)[1:-1]}
+        spellings = {
+            directory,
+            json.dumps(directory)[1:-1],
+            self._directory.as_posix(),
+        }
 
         def names_it(text: str) -> bool:
             if any(spelling in text for spelling in spellings):
