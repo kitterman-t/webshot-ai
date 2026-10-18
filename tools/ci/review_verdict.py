@@ -12,7 +12,15 @@ It fails when
   been hidden as resolved or outdated;
 - no review has finished on the pull request: none has run, one is still
   running, or the latest one failed its own guard, the one that fails a review
-  that did not show it read the diff (docs/09 P10-18).
+  that did not show it read the diff (docs/09 P10-18);
+- the review that finished skipped a check it reports: its session record
+  shows no finished bug agent or no finished CLAUDE.md compliance agent, or it
+  left no such record at all (docs/09 P89-9). `coverage` measures that in the
+  review job, from the action's execution file, and records it on the job as
+  an annotation the verdict reads; `rewrite` replaces the plugin's fixed
+  "Checked for bugs and CLAUDE.md compliance" with what was measured. A check
+  that ran but did not read every changed line passes, with a warning that
+  says how many it read.
 
 It passes when the latest review finished and found nothing, or every thread
 it left is resolved and every summary is clean or hidden. A false positive is
@@ -48,6 +56,7 @@ verdict: an answer the check could not read is not a clean one.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import os
 import re
@@ -82,6 +91,10 @@ NO_ISSUES = re.compile(r"^\W*No issues found\b", re.MULTILINE)
 #: the plugin's first step on purpose (closed, draft, nothing to review, or
 #: already reviewed). Any other summary counts as reporting something.
 STOPPED = re.compile(r"^\W*Claude review stopped:", re.MULTILINE)
+#: The first line `rewrite` gives a "No issues found" summary whose review did
+#: not cover the pull request. It is not a finding to address: the verdict
+#: fails on the review's coverage record instead, and re-reviewing clears it.
+INCOMPLETE = re.compile(r"^\W*Claude review incomplete:", re.MULTILINE)
 #: Why a hidden summary counts as addressed. GitHub's other reasons (spam,
 #: abuse, off-topic, duplicate, low quality) say nothing about the finding.
 ADDRESSED_REASONS = frozenset({"resolved", "outdated"})
@@ -150,6 +163,8 @@ class Attempt:
     started_at: str
     status: str
     conclusion: str | None
+    #: The job's id, which is its check run's: where its coverage record is.
+    job_id: int = 0
 
 
 @dataclass(frozen=True)
@@ -187,12 +202,14 @@ def is_reviewer(author: Mapping[str, Any] | None) -> bool:
 
 
 def classify(summary: Summary) -> str:
-    """ "hidden", "stopped", "no issues" or "unaddressed"."""
+    """ "hidden", "stopped", "incomplete", "no issues" or "unaddressed"."""
     reason = (summary.hidden_as or "").strip().lower().replace("_", "-")
     if summary.hidden_as is not None and reason in ADDRESSED_REASONS:
         return "hidden"
     if STOPPED.search(summary.body):
         return "stopped"
+    if INCOMPLETE.search(summary.body):
+        return "incomplete"
     if NO_ISSUES.search(summary.body):
         return "no issues"
     return "unaddressed"
@@ -280,6 +297,7 @@ def review_attempts(
                     ),
                     status=str(job.get("status") or "unknown"),
                     conclusion=job.get("conclusion"),
+                    job_id=int(job.get("id") or 0),
                 )
             )
     return attempts
@@ -413,6 +431,635 @@ def commits_since(repo: str, base: str, head: str) -> int:
 
 
 # --------------------------------------------------------------------------
+# What the review read (docs/09 P89-9)
+#
+# The code-review plugin ends a clean review with a fixed sentence, "No issues
+# found. Checked for bugs and CLAUDE.md compliance.", whatever ran. Of the 23
+# reviews that posted it from 2026-10-11 to 10-18, 20 started no review agent,
+# and none had both passes read every changed line. So the sentence is
+# replaced with what the session's own record shows. A review that skipped a
+# pass does not pass the verdict; one whose passes read part of the diff
+# passes with a warning, by the owner's choice on 2026-10-18.
+
+#: The tool that starts a subagent: "Agent" in every session measured (Claude
+#: Code 2.1.295 and 2.1.300), and "Task", the older name the workflow's
+#: --allowedTools still lists.
+AGENT_TOOLS = frozenset({"Agent", "Task"})
+#: The passes the plugin's summary claims, by the key the record uses.
+PASSES = {"bugs": "Bugs", "claude_md": "CLAUDE.md compliance"}
+#: The annotation the review job leaves its record in, and the verdict reads.
+COVERAGE_TITLE = "Claude review coverage"
+COVERAGE_VERSION = 1
+#: How many consecutive lines of the diff, or of a file the diff changes, must
+#: reach the model together for a changed line among them to count as read.
+#: One line alone would count "+" and "}" read wherever any diff showed them.
+WINDOW = 3
+#: The line numbers the Read tool and `cat -n` put in front of each line.
+_NUMBERED = re.compile(r"^\s*\d+(?:\t|\N{RIGHTWARDS ARROW})")
+_HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
+_CLAUDE_MD = re.compile(r"CLAUDE\.md|AGENTS\.md")
+_COMPLIANCE = re.compile(r"complian|adheren|violat|audit", re.IGNORECASE)
+_BUGS = re.compile(r"\bbugs?\b|\blogic\b|\bsecurity\b|\bcorrectness\b", re.IGNORECASE)
+#: An agent described as one of the plugin's other steps (is the pull request
+#: eligible, where are the CLAUDE.md files, what does it change, is this issue
+#: real) is not a pass, whatever words its prompt uses.
+_NOT_A_PASS = re.compile(
+    r"eligib|status|summar|\bfind\b|\blist\b|\blocate\b|validat|verif|confirm",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class Diff:
+    """A unified diff: its lines, its files' changed lines, and its hunks."""
+
+    #: Every line, trailing whitespace removed.
+    lines: tuple[str, ...]
+    #: Each file's path and the indexes of the lines it adds or removes.
+    files: tuple[tuple[str, tuple[int, ...]], ...]
+    #: Each hunk's new text and old text, as indexes into `lines`: its context
+    #: and added lines, and its context and removed lines.
+    images: tuple[tuple[int, ...], ...]
+
+    def changed(self) -> list[int]:
+        return [i for _, lines in self.files for i in lines]
+
+
+def _diff_path(header: str) -> str:
+    rest = header[len("diff --git ") :]
+    if rest.startswith("a/") and " b/" in rest:
+        return rest.rsplit(" b/", 1)[1]
+    return rest
+
+
+def parse_diff(text: str) -> Diff:
+    """Read a unified diff as `git diff` and GitHub's diff media type write it.
+
+    A hunk's lines are counted from its header, so a removed line that begins
+    "--" or an added one that begins "++" is a line of the hunk, not a header.
+    """
+    lines = [line.rstrip() for line in text.split("\n")]
+    if lines and lines[-1] == "":
+        lines.pop()
+    files: list[tuple[str, list[int]]] = []
+    images: list[tuple[int, ...]] = []
+    new_text: list[int] = []
+    old_text: list[int] = []
+    old = new = 0
+
+    def close() -> None:
+        for image in (new_text, old_text):
+            if image:
+                images.append(tuple(image))
+            image.clear()
+
+    for i, line in enumerate(lines):
+        if old > 0 or new > 0:
+            mark = line[:1]
+            if mark == "\\":  # "\ No newline at end of file"
+                continue
+            if mark == "+":
+                new -= 1
+                new_text.append(i)
+                files[-1][1].append(i)
+            elif mark == "-":
+                old -= 1
+                old_text.append(i)
+                files[-1][1].append(i)
+            else:  # context; an empty one is "" once trailing space is gone
+                old -= 1
+                new -= 1
+                new_text.append(i)
+                old_text.append(i)
+            if old <= 0 and new <= 0:
+                close()
+            continue
+        if line.startswith("diff --git "):
+            close()
+            files.append((_diff_path(line), []))
+        elif line.startswith("+++ b/") and files:
+            files[-1] = (line[len("+++ b/") :], files[-1][1])
+        elif (found := _HUNK.match(line)) and files:
+            close()
+            old = int(found.group(1)) if found.group(1) is not None else 1
+            new = int(found.group(2)) if found.group(2) is not None else 1
+    close()
+    return Diff(
+        lines=tuple(lines),
+        files=tuple((path, tuple(changed)) for path, changed in files),
+        images=tuple(images),
+    )
+
+
+def read_stream(raw: str) -> list[Json]:
+    """The action's execution file: a JSON array, or JSON values concatenated.
+
+    The P10-18 guard reads it the same way. Anything left that is not JSON
+    raises: a record cut short could hide what an agent read.
+    """
+    records: list[Any] = []
+    index, decoder = 0, json.JSONDecoder()
+    while index < len(raw):
+        while index < len(raw) and raw[index] in " \t\r\n":
+            index += 1
+        if index >= len(raw):
+            break
+        value, index = decoder.raw_decode(raw, index)
+        records.append(value)
+    if len(records) == 1 and isinstance(records[0], list):
+        records = records[0]
+    return [r for r in records if isinstance(r, dict)]
+
+
+def agent_passes(description: str, prompt: str) -> frozenset[str]:
+    """The passes an agent was started for, from what it was told.
+
+    Its description is the model's label for it and decides first; the prompt
+    decides only an agent whose description names nothing.
+    """
+    for text, is_label in ((description, True), (prompt, False)):
+        found = set()
+        if _CLAUDE_MD.search(text) and _COMPLIANCE.search(text):
+            found.add("claude_md")
+        if _BUGS.search(text):
+            found.add("bugs")
+        if found:
+            return frozenset(found)
+        if is_label and _NOT_A_PASS.search(text):
+            return frozenset()
+    return frozenset()
+
+
+@dataclass
+class Reader:
+    """The session, or one agent it started, and what reached its context."""
+
+    key: str
+    parent: str | None
+    description: str
+    model: str
+    passes: frozenset[str]
+    finished: bool
+    #: Each tool result, and the agent's prompt: (text, from the Read tool).
+    texts: list[tuple[str, bool]] = field(default_factory=list)
+
+
+SESSION = "session"
+
+
+def _blocks(record: Mapping[str, Any]) -> list[Json]:
+    content = (record.get("message") or {}).get("content")
+    return (
+        [b for b in content if isinstance(b, dict)] if isinstance(content, list) else []
+    )
+
+
+def _text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            str(b.get("text") or "")
+            for b in content
+            if isinstance(b, dict) and b.get("type") == "text"
+        )
+    return ""
+
+
+def readers(records: Sequence[Mapping[str, Any]]) -> dict[str, Reader]:
+    """The session and each agent it started, with what each one read.
+
+    What a reader read is what reached the model: a tool result's `content`,
+    not the `tool_use_result` beside it. When a Bash output is long, Claude
+    Code saves it to a file and shows the model 2 KB of it; `content` holds
+    those 2 KB, and `tool_use_result.stdout` holds all of it.
+    """
+    found = {SESSION: Reader(SESSION, None, "the session", "", frozenset(), True)}
+    tools: dict[str, str] = {}
+    for record in records:
+        if record.get("type") != "assistant":
+            continue
+        owner = str(record.get("parent_tool_use_id") or SESSION)
+        for block in _blocks(record):
+            if block.get("type") != "tool_use":
+                continue
+            key, name = str(block.get("id")), str(block.get("name"))
+            tools[key] = name
+            if name in AGENT_TOOLS:
+                given = block.get("input") or {}
+                description = str(given.get("description") or "")
+                prompt = str(given.get("prompt") or "")
+                reader = Reader(
+                    key,
+                    owner,
+                    description,
+                    str(given.get("model") or given.get("subagent_type") or ""),
+                    agent_passes(description, prompt),
+                    False,
+                )
+                reader.texts.append((prompt, False))
+                found[key] = reader
+    for record in records:
+        if record.get("type") != "user":
+            continue
+        owner = str(record.get("parent_tool_use_id") or SESSION)
+        outcome = record.get("tool_use_result")
+        for block in _blocks(record):
+            if block.get("type") != "tool_result":
+                continue
+            key = str(block.get("tool_use_id"))
+            name = tools.get(key, "")
+            reader = found.setdefault(
+                owner,
+                Reader(owner, SESSION, "an agent never started", "", frozenset(), True),
+            )
+            reader.texts.append((_text(block.get("content")), name == "Read"))
+            if name in AGENT_TOOLS and key in found:
+                status = outcome.get("status") if isinstance(outcome, dict) else None
+                found[key].finished = not block.get("is_error") and status in (
+                    None,
+                    "completed",
+                )
+    return found
+
+
+Windows = tuple[set[str], set[tuple[str, str]], set[tuple[str, str, str]]]
+
+
+def windows(texts: Sequence[tuple[str, bool]]) -> Windows:
+    """Every run of one, two and three consecutive lines in *texts*.
+
+    A Read result's line numbers are removed; so are `cat -n`'s, from a text
+    whose lines mostly carry them.
+    """
+    ones: set[str] = set()
+    twos: set[tuple[str, str]] = set()
+    threes: set[tuple[str, str, str]] = set()
+    for text, from_read in texts:
+        raw = text.split("\n")
+        numbered = sum(1 for line in raw if _NUMBERED.match(line))
+        variants = []
+        if not from_read:
+            variants.append([line.rstrip() for line in raw])
+        if from_read or (raw and numbered * 2 >= len(raw)):
+            variants.append([_NUMBERED.sub("", line, count=1).rstrip() for line in raw])
+        for lines in variants:
+            ones.update(lines)
+            twos.update(itertools.pairwise(lines))
+            threes.update(zip(lines, lines[1:], lines[2:], strict=False))
+    return ones, twos, threes
+
+
+def _substantive(line: str) -> bool:
+    """Whether a line says something: "+    )" and "+" alone do not."""
+    return sum(1 for ch in line if ch.isalnum()) >= 2
+
+
+def _anchored(matched: Sequence[tuple[int, int, bool]]) -> set[int]:
+    """Positions covered by matched runs that touch a substantive one.
+
+    *matched* holds (start, length, substantive) for each run that reached the
+    model. Overlapping and adjacent runs join; a joined stretch counts only if
+    one of its runs holds a line that says something. Three lines that say
+    nothing ("+    )", "+", "+") match in any Python diff, so on their own
+    they prove nothing about which file was read; inside a stretch the model
+    demonstrably read, they were read with it.
+    """
+    covered: dict[int, bool] = {}
+    for start, length, strong in matched:
+        for position in range(start, start + length):
+            covered[position] = covered.get(position, False) or strong
+    out: set[int] = set()
+    stretch: list[int] = []
+    anchored = False
+    for position in sorted(covered):
+        if stretch and position != stretch[-1] + 1:
+            if anchored:
+                out.update(stretch)
+            stretch, anchored = [], False
+        stretch.append(position)
+        anchored = anchored or covered[position]
+    if anchored:
+        out.update(stretch)
+    return out
+
+
+def lines_read(diff: Diff, seen: Windows) -> set[int]:
+    """The changed lines of *diff* that reached the model in a run of WINDOW.
+
+    A run counts as the diff's own text (`gh pr diff`, `git diff`, a file the
+    diff was saved to), or as a file's text around the line (a file read at the
+    reviewed head shows its added lines, one read at the base its removed
+    ones). A hunk shorter than WINDOW on its side is matched whole. Runs of
+    lines that say nothing count only beside a run that does (`_anchored`).
+    """
+    ones, twos, threes = seen
+    lines, count = diff.lines, len(diff.lines)
+    changed = set(diff.changed())
+    matched = [
+        (start, WINDOW, any(_substantive(line) for line in run))
+        for start in range(count - WINDOW + 1)
+        if (run := lines[start : start + WINDOW]) in threes
+    ]
+    read = _anchored(matched) & changed
+    for image in diff.images:
+        text = [lines[k][1:] for k in image]
+        size = min(WINDOW, len(text))
+        runs = []
+        for start in range(len(text) - size + 1):
+            run = tuple(text[start : start + size])
+            if (
+                (size == 3 and run in threes)
+                or (size == 2 and run in twos)
+                or (size == 1 and run[0] in ones)
+            ):
+                runs.append((start, size, any(_substantive(line) for line in run)))
+        read |= {image[p] for p in _anchored(runs)} & changed
+    return read
+
+
+def _lineage(found: Mapping[str, Reader], key: str) -> list[str]:
+    """*key* and every finished agent started under it, at any depth."""
+    out, queue = [key], [key]
+    while queue:
+        parent = queue.pop()
+        for child in found.values():
+            if child.parent == parent and child.key != parent and child.finished:
+                out.append(child.key)
+                queue.append(child.key)
+    return out
+
+
+def _coverage_of(diff: Diff, read: set[int]) -> Json:
+    unread = [
+        [path, sum(1 for i in changed if i in read), len(changed)]
+        for path, changed in diff.files
+        if changed and not all(i in read for i in changed)
+    ]
+    return {
+        "lines": len(read.intersection(diff.changed())),
+        "files_read": sum(1 for _, changed in diff.files if changed) - len(unread),
+        "unread": unread,
+    }
+
+
+def measure(records: Sequence[Mapping[str, Any]], diff: Diff) -> Json:
+    """What the session read of *diff*, as a whole and pass by pass."""
+    found = readers(records)
+    read = {key: lines_read(diff, windows(r.texts)) for key, r in found.items()}
+    everything: set[int] = set().union(*read.values())
+    passes: Json = {}
+    for key in PASSES:
+        started = [r for r in found.values() if key in r.passes]
+        covered: set[int] = set()
+        for reader in started:
+            if reader.finished:
+                for member in _lineage(found, reader.key):
+                    covered |= read[member]
+        passes[key] = {
+            "agents": sum(1 for r in started if r.finished),
+            "unfinished": sum(1 for r in started if not r.finished),
+            "names": [r.description for r in started if r.finished],
+            **_coverage_of(diff, covered),
+        }
+    return {
+        "version": COVERAGE_VERSION,
+        "changed_lines": len(diff.changed()),
+        "files": sum(1 for _, changed in diff.files if changed),
+        "unchanged_files": sum(1 for _, changed in diff.files if not changed),
+        "session": _coverage_of(diff, everything),
+        "passes": passes,
+        "readers": [
+            {
+                "description": r.description,
+                "model": r.model,
+                "passes": sorted(r.passes),
+                "finished": r.finished,
+                "lines": len(read[r.key]),
+            }
+            for r in found.values()
+        ],
+    }
+
+
+def compact(record: Mapping[str, Any]) -> Json:
+    """The record without its lists: what the annotation carries."""
+
+    def counts(part: Mapping[str, Any]) -> Json:
+        return {
+            k: v
+            for k, v in part.items()
+            if k in ("agents", "unfinished", "lines", "files_read")
+        }
+
+    return {
+        **{
+            k: record[k]
+            for k in ("version", "head", "stopped", "changed_lines", "files")
+            if k in record
+        },
+        "session": counts(record["session"]),
+        "passes": {key: counts(record["passes"][key]) for key in PASSES},
+    }
+
+
+def coverage_gaps(record: Mapping[str, Any]) -> list[str]:
+    """Why the record cannot vouch that both passes ran; empty when they did.
+
+    This is what fails the verdict: a pass that no agent finished, or a
+    record this version cannot read, which is a gap, not a pass. How much of
+    the diff a pass read is `coverage_shortfalls`, and only reported.
+    """
+    try:
+        if record.get("version") != COVERAGE_VERSION:
+            return [
+                f"its coverage record is version {record.get('version')!r}, "
+                f"not {COVERAGE_VERSION}"
+            ]
+        int(record["changed_lines"])
+        gaps = []
+        for key, name in PASSES.items():
+            part = record["passes"][key]
+            int(part["lines"])
+            if int(part["agents"]) < 1:
+                gaps.append(f"{name}: not checked; no agent finished that pass")
+        return gaps
+    except (KeyError, TypeError, ValueError, AttributeError) as error:
+        return [f"its coverage record is unreadable ({error!r})"]
+
+
+def coverage_shortfalls(record: Mapping[str, Any]) -> list[str]:
+    """Each pass that ran and read fewer than all the changed lines.
+
+    Reported in the summary and as a warning on the verdict, never failed: the
+    owner chose on 2026-10-18 to block on a skipped pass and to show partial
+    reading (docs/09 P89-9). The counts stay in the record, so the rule can be
+    tightened later without measuring anything again.
+    """
+    if record.get("version") != COVERAGE_VERSION:
+        return []  # coverage_gaps reports it
+    try:
+        total = int(record["changed_lines"])
+        return [
+            f"{name}: {int(part['lines'])} of {total} changed lines read"
+            for key, name in PASSES.items()
+            if int((part := record["passes"][key])["agents"]) >= 1
+            and int(part["lines"]) < total
+        ]
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return []  # coverage_gaps reports the unreadable record
+
+
+def coverage_state(record: Mapping[str, Any]) -> str:
+    """ "incomplete" (a pass skipped), "partial" (lines unread) or "complete"."""
+    if coverage_gaps(record):
+        return "incomplete"
+    return "partial" if coverage_shortfalls(record) else "complete"
+
+
+def _files_phrase(part: Mapping[str, Any], files: int) -> str:
+    return f"{part['files_read']} of {files} file(s) in full"
+
+
+def _unread_phrase(part: Mapping[str, Any], limit: int = 12) -> str:
+    unread = part.get("unread") or []
+    shown = ", ".join(
+        f"`{path}` ({read} of {total})" for path, read, total in unread[:limit]
+    )
+    more = f", and {len(unread) - limit} more" if len(unread) > limit else ""
+    return f" Not read in full: {shown}{more}." if unread else ""
+
+
+def summary_body(record: Mapping[str, Any], *, run_url: str, rerun: str = "") -> str:
+    """The summary comment, rewritten to say what the review measurably did.
+
+    It says "No issues found" only when both passes ran, and then says how
+    much of the diff they read; over a pass that did not run it never does.
+    """
+    total, files = record["changed_lines"], record["files"]
+    state = coverage_state(record)
+    lines = ["## Code review", ""]
+    if state == "incomplete":
+        lines += [
+            "**Claude review incomplete:** Claude reported no issues, but this "
+            "review skipped a check it reports, so that is not a clean result.",
+            "",
+        ]
+    elif state == "partial":
+        lines += [
+            "No issues found in what was read. Both checks ran, but they did not "
+            "read every changed line of the diff; a line no agent read was not "
+            "checked.",
+            "",
+        ]
+    else:
+        lines += ["No issues found.", ""]
+    lines += [
+        "What ran, as the session's own record shows (counted by the workflow, "
+        "not reported by Claude):",
+        "",
+    ]
+    for key, name in PASSES.items():
+        part = record["passes"][key]
+        if part["agents"] < 1:
+            lines.append(
+                f"- **{name}:** not checked: no agent for this pass finished"
+                + (
+                    f" ({part['unfinished']} started and did not)."
+                    if part.get("unfinished")
+                    else "."
+                )
+            )
+            continue
+        names = "; ".join(part.get("names") or [])
+        lines.append(
+            f"- **{name}:** {part['agents']} agent(s)"
+            + (f" ({names})" if names else "")
+            + f", which between them read {part['lines']} of the {total} changed "
+            f"lines, {_files_phrase(part, files)}." + _unread_phrase(part)
+        )
+    session = record["session"]
+    lines.append(
+        f"- **The session as a whole** read {session['lines']} of the {total} "
+        f"changed lines, {_files_phrase(session, files)}." + _unread_phrase(session)
+    )
+    if record.get("unchanged_files"):
+        lines.append(
+            f"- {record['unchanged_files']} file(s) change no line of text "
+            "(binary, renamed or mode only) and are not counted."
+        )
+    lines += [
+        "",
+        f"A changed line counts as read when it reached a model inside a run of "
+        f"{WINDOW} consecutive lines of the diff, or of the file around it. "
+        f"Measured against the diff at {str(record.get('head') or '?')[:12]}, in "
+        f"[the review's run]({run_url}).",
+    ]
+    if state == "incomplete":
+        lines += [
+            "",
+            "`claude review verdict` fails until a review runs both checks. "
+            "Re-running the failed review job reviews the pull request again; "
+            "on a re-run, Claude's earlier comments do not stop it."
+            + (f" To re-run it: `{rerun}`" if rerun else ""),
+        ]
+    elif state == "partial":
+        lines += [
+            "",
+            "`claude review verdict` passes this with a warning naming the lines "
+            "each check did not read.",
+        ]
+    return "\n".join(lines) + "\n"
+
+
+def coverage_markdown(record: Mapping[str, Any]) -> str:
+    """The run summary: the record, and every reader the session had."""
+    out = [
+        f"## Claude review coverage: {coverage_state(record)}",
+        "",
+        "| Reader | Model | Passes | Finished | Changed lines read |",
+        "|---|---|---|---|---|",
+    ]
+    for r in record.get("readers") or []:
+        out.append(
+            f"| {r['description'] or '?'} | {r['model'] or '-'} | "
+            f"{', '.join(r['passes']) or '-'} | {'yes' if r['finished'] else 'no'} | "
+            f"{r['lines']} of {record['changed_lines']} |"
+        )
+    out.append("")
+    out += [f"- {gap} (fails the verdict)" for gap in coverage_gaps(record)]
+    out += [f"- {short} (a warning)" for short in coverage_shortfalls(record)]
+    if out[-1] == "":
+        out.append("- Both passes ran and read every changed line.")
+    return "\n".join(out) + "\n"
+
+
+def read_coverage(repo: str, attempt: Attempt) -> tuple[Json | None, str]:
+    """The coverage record a review job left, or None and why there is none."""
+    if not attempt.job_id:
+        return None, "its job id is unknown, so its record cannot be read"
+    found = gh_json(
+        "api", f"repos/{repo}/check-runs/{attempt.job_id}/annotations?per_page=100"
+    )
+    if not isinstance(found, list):
+        raise GhError(f"the annotations of job {attempt.job_id} are not a list")
+    records = [
+        a for a in found if isinstance(a, dict) and a.get("title") == COVERAGE_TITLE
+    ]
+    if not records:
+        return None, "it left no coverage record"
+    if len(records) > 1:
+        return None, f"it left {len(records)} coverage records, not one"
+    try:
+        record = json.loads(str(records[0].get("message") or ""))
+    except json.JSONDecodeError as error:
+        return None, f"its coverage record is not JSON ({error})"
+    if not isinstance(record, dict):
+        return None, "its coverage record is not an object"
+    return record, "read"
+
+
+# --------------------------------------------------------------------------
 # The verdict
 
 
@@ -458,6 +1105,102 @@ ADDRESS = (
 )
 
 
+@dataclass(frozen=True)
+class Covered:
+    """The review whose coverage record decides, and that record.
+
+    `attempt` is None when no review that read the pull request finished;
+    `record` is None when that review left no record, and `note` says why.
+    """
+
+    attempt: Attempt | None
+    record: Json | None
+    note: str = ""
+
+
+def find_coverage(
+    repo: str, attempts: Sequence[Attempt], state: str, attempt: Attempt | None
+) -> Covered:
+    """The coverage record that decides the verdict.
+
+    A failed review is its own. Otherwise the latest review that finished
+    decides, passing over one that stopped at the plugin's first step on
+    purpose (closed, draft, already reviewed): it read nothing by design, and
+    an earlier review may have read it all.
+    """
+    if state == "failed" and attempt is not None:
+        record, why = read_coverage(repo, attempt)
+        return Covered(attempt, record, why)
+    if state != "reviewed":
+        return Covered(None, None, f"the review state is {state}")
+    stopped: list[str] = []
+    for each in sorted(attempts, key=lambda a: (a.started_at, a.run_id), reverse=True):
+        if each.status != "completed" or each.conclusion in (
+            None,
+            "skipped",
+            "cancelled",
+        ):
+            continue
+        record, why = read_coverage(repo, each)
+        if record is not None and record.get("stopped") is True:
+            stopped.append(each.url)
+            continue
+        if each.conclusion != "success":
+            return Covered(each, None, f"it ended {each.conclusion}; its log says why")
+        passed_over = (
+            f"; {len(stopped)} later review(s) stopped at the plugin's first step"
+            if stopped
+            else ""
+        )
+        return Covered(each, record, why + passed_over)
+    if stopped:
+        return Covered(
+            None,
+            None,
+            f"every review on it stopped at the plugin's first step ({', '.join(stopped)})",
+        )
+    return Covered(None, None, "no review on it finished")
+
+
+def _coverage_problem(covered: Covered) -> str | None:
+    """Why the review that decides cannot pass, or None.
+
+    A skipped pass and a missing record fail; a pass that read part of the
+    diff does not (`coverage_shortfalls`, reported as a warning).
+    """
+    if covered.attempt is None:
+        return f"No review read this pull request: {covered.note}."
+    where = f"{covered.attempt.url} on {covered.attempt.head_sha[:12]}"
+    if covered.record is None:
+        return (
+            f"The review ({where}) left no record of what it read: {covered.note}. "
+            "Whether it ran its checks over the diff is unknown, and unknown is "
+            "not covered."
+        )
+    gaps = coverage_gaps(covered.record)
+    if gaps:
+        return f"The review ({where}) skipped a check it reports: {'; '.join(gaps)}."
+    return None
+
+
+def _rereview(attempt: Attempt | None) -> str:
+    if attempt is None:
+        return (
+            "A review that reads it is needed: its next push starts one while no "
+            "review has been attempted, and marking it draft and then ready for "
+            "review starts one in any case."
+        )
+    command = (
+        f"gh run rerun {attempt.run_id} --job {attempt.job_id}"
+        if attempt.job_id
+        else f"gh run rerun {attempt.run_id}"
+    )
+    return (
+        f"Review it again: `{command}` re-runs that review and its verdict. On a "
+        "re-run, Claude's earlier comments do not stop the review."
+    )
+
+
 def decide(
     pr: Mapping[str, Any],
     state: str,
@@ -466,6 +1209,7 @@ def decide(
     *,
     self_edit: bool,
     since: int,
+    coverage: Covered,
 ) -> Verdict:
     """The verdict on *pr*'s head, from what was read about it. Pure."""
     unresolved = [t for t in feedback.threads if not t.resolved]
@@ -489,12 +1233,23 @@ def decide(
             remedy="When it ends, its own verdict re-runs this one.",
         )
     if state == "failed":
+        gaps = (
+            coverage_gaps(coverage.record)
+            if coverage.record is not None and coverage.attempt == attempt
+            else []
+        )
+        why = (
+            f"it skipped a check it reports: {'; '.join(gaps)}."
+            if gaps
+            else "it did not show that it read the diff."
+        )
         return Verdict(
             False,
             f"The latest review failed ({where}, {attempt.conclusion if attempt else '?'}): "
-            "it did not show that it read the diff.",
+            + why,
             remedy=(
-                "Read that job's log. Re-running its failed jobs reviews again; a "
+                "Read that job's log. Re-running its failed jobs reviews again, and "
+                "on a re-run Claude's earlier comments do not stop the review; a "
                 "run the log calls stale needs a fresh event instead (mark the "
                 "pull request draft, then ready for review)."
             ),
@@ -502,14 +1257,37 @@ def decide(
     commented = bool(feedback.threads or feedback.summaries)
     head = str((pr.get("head") or {}).get("sha") or "")
     if state == "reviewed" and commented:
+        problem = _coverage_problem(coverage)
+        if problem:
+            return Verdict(
+                False, problem, remedy=_rereview(coverage.attempt or attempt)
+            )
+        reviewed = coverage.attempt or attempt
         scope = (
             "this head"
-            if attempt is None or attempt.head_sha == head
-            else f"{attempt.head_sha[:12]}; the "
+            if reviewed is None or reviewed.head_sha == head
+            else f"{reviewed.head_sha[:12]}; the "
             f"{since if since >= 0 else 'unknown number of'} commit(s) since were "
             "not reviewed"
         )
-        return Verdict(True, f"Reviewed {scope}. No finding is left unaddressed.")
+        record = coverage.record or {}
+        short = coverage_shortfalls(record)
+        if short:
+            return Verdict(
+                True,
+                f"Reviewed {scope}. Its bug and CLAUDE.md compliance agents ran, "
+                "but did not read every changed line. No finding is left "
+                "unaddressed.",
+                warnings=[
+                    f"{line}; a line no agent read was not checked." for line in short
+                ],
+            )
+        return Verdict(
+            True,
+            f"Reviewed {scope}. Its bug and CLAUDE.md compliance agents read all "
+            f"{record.get('changed_lines', '?')} changed lines. No finding is left "
+            "unaddressed.",
+        )
     if self_edit:
         return Verdict(
             True,
@@ -591,20 +1369,39 @@ def judge(repo: str, pr: Mapping[str, Any]) -> tuple[Verdict, list[str]]:
     ]
     self_edit = edits_reviewer(repo, number)
     seen.append(f"edits {WORKFLOW}: {self_edit}")
+    coverage = find_coverage(repo, attempts, state, attempt)
+    seen.append(
+        f"coverage from {coverage.attempt.url if coverage.attempt else 'no review'}: "
+        + (
+            json.dumps(coverage.record, sort_keys=True)
+            if coverage.record is not None
+            else f"none ({coverage.note})"
+        )
+    )
+    reviewed = coverage.attempt or attempt
     since = 0
     if (
         state == "reviewed"
-        and attempt is not None
-        and attempt.head_sha not in ("", head)
+        and reviewed is not None
+        and reviewed.head_sha not in ("", head)
     ):
         # Only the count in the summary depends on this, not the verdict, so a
         # head that a force-push made unreachable costs the number, not the check.
         try:
-            since = commits_since(repo, attempt.head_sha, head)
+            since = commits_since(repo, reviewed.head_sha, head)
         except GhError as error:
             seen.append(f"commits since the reviewed head: unknown ({error})")
             since = -1
-    return decide(pr, state, attempt, feedback, self_edit=self_edit, since=since), seen
+    verdict = decide(
+        pr,
+        state,
+        attempt,
+        feedback,
+        self_edit=self_edit,
+        since=since,
+        coverage=coverage,
+    )
+    return verdict, seen
 
 
 def summary_markdown(verdict: Verdict) -> str:
@@ -894,6 +1691,218 @@ def cmd_judge(args: argparse.Namespace) -> int:
     return 0 if verdict.passed else 1
 
 
+def _listing(path: str) -> list[Json]:
+    """Every item of a paged REST list, page by page."""
+    out: list[Json] = []
+    for page in range(1, 31):
+        found = gh_json(
+            "api", f"{path}{'&' if '?' in path else '?'}per_page=100&page={page}"
+        )
+        if not isinstance(found, list):
+            raise GhError(f"{path} is not a list: {found!r:.300}")
+        out += [item for item in found if isinstance(item, dict)]
+        if len(found) < 100:
+            return out
+    raise GhError(f"{path} lists more items than this reads")
+
+
+def runs_comments(repo: str, number: int, since: str) -> tuple[list[Json], list[Json]]:
+    """The reviewer's issue comments and inline comments created since *since*."""
+
+    def mine(item: Mapping[str, Any]) -> bool:
+        return (item.get("user") or {}).get("login") == REVIEWER_LOGIN and str(
+            item.get("created_at") or ""
+        ) >= since
+
+    issue = [c for c in _listing(f"repos/{repo}/issues/{number}/comments") if mine(c)]
+    inline = [c for c in _listing(f"repos/{repo}/pulls/{number}/comments") if mine(c)]
+    return issue, inline
+
+
+def pull_diff(repo: str, number: int) -> tuple[str, str]:
+    """The pull request's diff as `gh pr diff` reads it, and the head it is of.
+
+    Read when the review has just ended, because that is the diff the reviewer
+    was given: #208's review sat queued for an hour while the pull request
+    moved, and its session read the later head, not the event's.
+    """
+    for _ in range(3):
+        before = str(
+            (gh_json("api", f"repos/{repo}/pulls/{number}").get("head") or {}).get(
+                "sha"
+            )
+            or ""
+        )
+        text = gh(
+            "api",
+            "-H",
+            "Accept: application/vnd.github.diff",
+            f"repos/{repo}/pulls/{number}",
+        )
+        after = str(
+            (gh_json("api", f"repos/{repo}/pulls/{number}").get("head") or {}).get(
+                "sha"
+            )
+            or ""
+        )
+        if before and before == after:
+            return text, before
+    raise GhError(f"#{number}'s head kept moving while its diff was read")
+
+
+def _annotation(text: str) -> str:
+    """A workflow command's message, escaped as the runner unescapes it."""
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def cmd_coverage(args: argparse.Namespace) -> int:
+    """Measure what the review read; record it on the job; fail an incomplete one."""
+    print(
+        f"execution_file={args.execution_file or 'none'} self_modified={args.self_modified} "
+        f"event head={args.head[:12] or 'none'} since={args.since}"
+    )
+    if not args.execution_file:
+        if args.self_modified == "true":
+            print(
+                "No session to measure: the action refuses to run a workflow file "
+                "that differs from the default branch's. The verdict passes this "
+                "pull request unreviewed, with a warning."
+            )
+            return 0
+        print(
+            "::error::The review step left no execution file, so what it read cannot be measured."
+        )
+        return 1
+    if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", args.since or ""):
+        print(
+            f"::error::--since is {args.since!r}, so this run's comments cannot be told from older ones."
+        )
+        return 1
+    try:
+        with open(args.execution_file, encoding="utf-8") as handle:
+            records = read_stream(handle.read())
+        diff_text, measured_head = pull_diff(args.repo, args.pr)
+        issue, inline = runs_comments(args.repo, args.pr, args.since)
+    except (OSError, ValueError, GhError) as error:
+        print(f"::error::Could not measure what the review read: {error}")
+        return 1
+    diff = parse_diff(diff_text)
+    record = measure(records, diff)
+    stops = [c for c in issue if STOPPED.search(str(c.get("body") or ""))]
+    summaries = [
+        c
+        for c in issue
+        if NO_ISSUES.search(str(c.get("body") or ""))
+        and not STOPPED.search(str(c.get("body") or ""))
+    ]
+    record["head"] = measured_head
+    record["stopped"] = bool(stops) and len(stops) == len(issue) and not inline
+    if args.head and measured_head != args.head:
+        print(
+            f"::warning::The pull request moved from {args.head[:12]} to "
+            f"{measured_head[:12]} after this run's event; coverage is measured "
+            "against the diff at the later head, which is the one `gh pr diff` "
+            "gives once the review has ended."
+        )
+    print(
+        f"records={len(records)} diff at {measured_head[:12]}: {len(diff.lines)} lines, "
+        f"{record['changed_lines']} changed, in {record['files']} file(s); this run's "
+        f"comments: issue={len(issue)} (summaries={len(summaries)}, stops={len(stops)}) "
+        f"inline={len(inline)}"
+    )
+    for reader in record["readers"]:
+        print(
+            f"reader: {reader['description'] or '?'} model={reader['model'] or '-'} "
+            f"passes={','.join(reader['passes']) or '-'} finished={reader['finished']} "
+            f"read={reader['lines']}/{record['changed_lines']}"
+        )
+    for key, name in PASSES.items():
+        part = record["passes"][key]
+        print(
+            f"pass {name}: agents={part['agents']} unfinished={part['unfinished']} "
+            f"read={part['lines']}/{record['changed_lines']} files={part['files_read']}/{record['files']}"
+        )
+    _append("GITHUB_STEP_SUMMARY", coverage_markdown(record))
+    print(
+        f"::notice title={COVERAGE_TITLE}::{_annotation(json.dumps(compact(record)))}"
+    )
+    full = {k: v for k, v in record.items() if k != "readers"}
+    _append("GITHUB_OUTPUT", f"coverage={json.dumps(full)}\n")
+    _append("GITHUB_OUTPUT", f"summaries={','.join(str(c['id']) for c in summaries)}\n")
+    gaps, short = coverage_gaps(record), coverage_shortfalls(record)
+    if record["stopped"]:
+        print(
+            "The review stopped at the plugin's first step and says why; it read "
+            "nothing by design. The verdict looks for an earlier review that did."
+        )
+        print(f"coverage=stopped gaps={len(gaps)} shortfalls={len(short)}")
+        return 0
+    # A skipped pass fails the review; a pass that read part of the diff is
+    # reported and does not (the owner's rule, docs/09 P89-9).
+    for gap in gaps:
+        print(f"::error::{gap}")
+    for line in short:
+        print(f"::warning::{line}; a line no agent read was not checked.")
+    print(f"coverage={coverage_state(record)} gaps={len(gaps)} shortfalls={len(short)}")
+    return 1 if gaps else 0
+
+
+def cmd_rewrite(args: argparse.Namespace) -> int:
+    """Replace each "No issues found" summary of this run with what was measured."""
+    try:
+        record = json.loads(os.environ.get("COVERAGE") or "")
+    except json.JSONDecodeError as error:
+        print(f"::error::COVERAGE is not the coverage step's record: {error}")
+        return 1
+    if not isinstance(record, dict) or "passes" not in record:
+        print(f"::error::COVERAGE has no passes: {str(record)[:300]}")
+        return 1
+    run_url = (
+        f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{args.repo}"
+        f"/actions/runs/{args.run_id}"
+    )
+    body = summary_body(
+        record, run_url=run_url, rerun=f"gh run rerun {args.run_id} --failed"
+    )
+    failed = 0
+    for raw in args.comments.split(","):
+        if not raw.strip():
+            continue
+        path = f"repos/{args.repo}/issues/comments/{int(raw)}"
+        try:
+            before = gh_json("api", path)
+            author = (before.get("user") or {}).get("login")
+            old = str(before.get("body") or "")
+            if (
+                author != REVIEWER_LOGIN
+                or not NO_ISSUES.search(old)
+                or STOPPED.search(old)
+            ):
+                print(
+                    f"::error::{before.get('html_url')} is by {author} and is not a "
+                    f"'No issues found' summary; it is left alone. It reads: {old[:200]!r}"
+                )
+                failed += 1
+                continue
+            gh("api", "-X", "PATCH", path, "-f", f"body={body}")
+            after = str(gh_json("api", path).get("body") or "")
+        except GhError as error:
+            print(f"::error::could not rewrite comment {raw}: {error}")
+            failed += 1
+            continue
+        if after.replace("\r\n", "\n").strip() != body.strip():
+            print(
+                f"::error::{before.get('html_url')} reads back other than written: {after[:300]!r}"
+            )
+            failed += 1
+            continue
+        print(
+            f"rewrote {before.get('html_url')}; it said: {' '.join(old.split())[:300]}"
+        )
+        print(f"it now begins: {' '.join(after.split())[:300]}")
+    return 1 if failed else 0
+
+
 def cmd_rejudge(args: argparse.Namespace) -> int:
     try:
         heads: list[tuple[int, str]] = []
@@ -971,11 +1980,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="with --pr: a reply in one of Claude's threads; wait for that thread to be resolved",
     )
     rejudge.add_argument("--wait", type=float, default=REPLY_WAIT_SECONDS)
+    coverage = sub.add_parser(
+        "coverage", help="measure what the review read, in the review job"
+    )
+    coverage.add_argument("--repo", required=True)
+    coverage.add_argument("--pr", type=int, required=True)
+    coverage.add_argument("--head", default="", help="the event's head, to compare")
+    coverage.add_argument("--execution-file", default="")
+    coverage.add_argument("--self-modified", default="")
+    coverage.add_argument("--since", default="", help="when the review step began")
+    rewrite = sub.add_parser(
+        "rewrite", help="rewrite this run's summaries with the measured coverage"
+    )
+    rewrite.add_argument("--repo", required=True)
+    rewrite.add_argument(
+        "--comments", required=True, help="comma-separated comment ids"
+    )
+    rewrite.add_argument("--run-id", type=int, required=True)
     args = parser.parse_args(argv)
     if args.command == "gate":
         return cmd_gate(args)
     if args.command == "judge":
         return cmd_judge(args)
+    if args.command == "coverage":
+        return cmd_coverage(args)
+    if args.command == "rewrite":
+        return cmd_rewrite(args)
     if args.after_comment and not args.pr:
         parser.error("--after-comment needs --pr")
     return cmd_rejudge(args)

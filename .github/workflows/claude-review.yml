@@ -13,8 +13,11 @@ name: Claude review
 #
 # The verdict (`verdict`, the required check `claude review verdict`) runs on
 # every head and calls no model. It fails while Claude's review has left a
-# finding nobody has addressed, or while no review has finished on the pull
-# request, so neither a flagged head nor an unreviewed one merges by accident:
+# finding nobody has addressed, while no review has finished on the pull
+# request, or while the review that finished skipped its bug or CLAUDE.md
+# compliance check (docs/09 P89-9), so neither a flagged head nor an
+# unreviewed one merges by accident. A check that ran but read part of the
+# diff passes, with a warning that says how much it read:
 # on 2026-10-17 a pull request merged at the very commit its review had
 # just flagged (docs/09 P89). tools/ci/review_verdict.py holds the rules.
 #
@@ -129,6 +132,10 @@ jobs:
       pull-requests: read
       issues: read
       id-token: write
+    # What the review read, for the job that rewrites its summary.
+    outputs:
+      coverage: ${{ steps.coverage.outputs.coverage }}
+      summaries: ${{ steps.coverage.outputs.summaries }}
     steps:
       # Pinned by commit, like every other workflow here. This is the file that
       # carries CLAUDE_CODE_OAUTH_TOKEN and `id-token: write`, and it was the
@@ -258,11 +265,25 @@ jobs:
           # sentence here is what tells the two apart. Its fixed opening,
           # "Claude review stopped:", is what tells the verdict that a summary
           # is a stop notice and not a report of findings.
+          #
+          # From 2026-10-11 to 10-18, 20 of the 23 reviews that posted
+          # "Checked for bugs and CLAUDE.md compliance" ran no agent for either
+          # check, and none read every changed line with both (docs/09
+          # P89-9). The coverage step below now fails a skipped check and
+          # reports how much each check read, so the reviewer is told what is
+          # measured, to run every agent, to read a long output's saved file to
+          # its end, and that "does not need review" is no longer a reason to
+          # stop: a stop runs no check, and the verdict passes only a review
+          # that ran both.
+          # A re-run is how a failed review is redone, and the plugin stops on
+          # Claude's earlier comment, so a re-run is told that comment does not
+          # count. That is decided here from the run's attempt number, not left
+          # to the model to infer.
           claude_args: >-
             --allowedTools
             "Read,Grep,Glob,Bash,Skill,Task,TodoWrite,WebFetch,NotebookRead,mcp__github_inline_comment__create_inline_comment"
             --append-system-prompt
-            "If the code review stops at its first step because the pull request is closed, is a draft, does not need review, or already has a comment from Claude, post one pull request comment with gh pr comment whose first line begins 'Claude review stopped:' and names the condition, then stop. A run that leaves no comment on the pull request is reported as a failed review."
+            "Run every step and every agent the code review describes, however small the pull request, and have each review agent read the whole diff: when a command's output is too long and is saved to a file, read that file to its end. The workflow measures from this session's record which agents finished and which diff lines each one read, rewrites the summary to say so, and fails a review that skipped a check. Stop at the first step only when the pull request is closed, is a draft, or already has a comment from Claude. If the code review stops at its first step, post one pull request comment with gh pr comment whose first line begins 'Claude review stopped:' and names the condition, then stop. A run that leaves no comment on the pull request is reported as a failed review.${{ github.run_attempt > 1 && ' This run re-runs a review that failed, so a comment Claude left on the pull request before does not stop it: review the pull request in full.' || '' }}"
         id: review
       # A reviewer that cannot read still exits `success`, which is how the
       # broken configuration above survived eight pull requests. `is_error` was
@@ -514,6 +535,104 @@ jobs:
               print("::error::" + f)
           sys.exit(1 if failures else 0)
           PYEOF
+      # The guard above asks whether the review finished and posted. It
+      # cannot tell a review that ran its agents over the whole diff from one
+      # that read a third of it alone and posted the plugin's fixed "Checked
+      # for bugs and CLAUDE.md compliance" (docs/09 P89-9). This measures that
+      # from the same execution file: which agents finished for each pass, and
+      # which changed lines of the diff reached each one. It leaves the
+      # measurement on this job as an annotation, which is what the verdict
+      # reads on every later head. It fails a review that skipped a check, and
+      # warns, without failing, when a check that ran read part of the diff:
+      # the owner's rule of 2026-10-18 is to block on the first and show the
+      # second.
+      #
+      # The script is read from the commit under test into this job's own
+      # temporary directory after the review, not run from the workspace the
+      # review could write to.
+      - name: Read the coverage script from the commit under test
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.sha }}
+        run: >-
+          gh api -H "Accept: application/vnd.github.raw"
+          "repos/$REPO/contents/tools/ci/review_verdict.py?ref=$REF"
+          > "$RUNNER_TEMP/review_verdict.py"
+      # The diff is the pull request's own, read through the API when the
+      # review has ended: that is what `gh pr diff` gave the reviewer, even
+      # when the pull request moved while the run sat queued (#208's did).
+      #
+      # `coverage=complete|partial|incomplete|stopped gaps=N shortfalls=M`
+      # prints on every run that measured a review, so its absence means
+      # nothing was measured.
+      - name: The review must run both checks, and says how much each read
+        id: coverage
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+          SELF_MODIFIED: ${{ steps.selfmod.outputs.changed }}
+          REVIEW_STARTED_AT: ${{ steps.started.outputs.at }}
+        run: >-
+          python3 "$RUNNER_TEMP/review_verdict.py" coverage
+          --repo "$REPO" --pr "$PR_NUMBER" --head "$HEAD_SHA"
+          --execution-file "$EXECUTION_FILE" --self-modified "$SELF_MODIFIED"
+          --since "$REVIEW_STARTED_AT"
+
+  # The plugin's clean summary is a fixed sentence, "No issues found. Checked
+  # for bugs and CLAUDE.md compliance.", posted whatever ran. This job writes
+  # what the coverage step measured over each such summary the review just
+  # posted: the agents each pass had and how much of the diff they read, and,
+  # when a check was skipped, "Claude review incomplete:" in place of "No
+  # issues found" (docs/09 P89-9). The verdict does not depend on it: it reads
+  # the review job's own record.
+  #
+  # A job of its own because editing a comment needs write access, and the
+  # review job, which runs the model with a shell, has none and should get
+  # none. The action's app token, which posted the comment, is revoked when
+  # the action ends. This job runs no model and checks nothing out.
+  summary:
+    name: say what the review read
+    needs: review
+    if: always() && needs.review.outputs.summaries != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # A pull request's conversation comment is an issue comment. GitHub's
+      # documentation accepts either permission for editing one; which it
+      # checks for a pull request was not measured, so both are here.
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # No checkout, as for the gate and the verdict (docs/09 P89-6).
+      - name: Read the verdict script from the commit under test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.sha }}
+        run: >-
+          gh api -H "Accept: application/vnd.github.raw"
+          "repos/$REPO/contents/tools/ci/review_verdict.py?ref=$REF"
+          > "$RUNNER_TEMP/review_verdict.py"
+      - name: Rewrite the review's summary with what was measured
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          COMMENTS: ${{ needs.review.outputs.summaries }}
+          COVERAGE: ${{ needs.review.outputs.coverage }}
+        run: >-
+          python3 "$RUNNER_TEMP/review_verdict.py" rewrite --repo "$REPO"
+          --comments "$COMMENTS" --run-id "$RUN_ID"
 
   # The required check. It runs on every head, after the review when there is
   # one, and calls no model: it reads what the review left on the pull request
@@ -539,7 +658,9 @@ jobs:
   # passes while an older verdict on the same head is red.
   verdict:
     name: ${{ github.event.pull_request.draft && 'claude review verdict (draft, not judged)' || 'claude review verdict' }}
-    needs: [gate, review]
+    # After the summary is rewritten, so the first verdict's log shows the
+    # comment as it stays; the verdict itself reads the review job's record.
+    needs: [gate, review, summary]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

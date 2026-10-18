@@ -129,6 +129,14 @@ it is not a problem; then resolve the thread. A reply re-judges the verdict
 once its thread is resolved; otherwise re-run the failed verdict. Never
 resolve or hide a finding nobody answered.
 
+The verdict also fails while the review skipped its bug or CLAUDE.md
+compliance check: its job records which agents finished and how much of the
+diff each read, and a summary that begins "Claude review incomplete:" names
+the check it skipped (docs/09 P89-9). Nothing in the code fixes that. Re-run
+the review with the command the verdict prints; never edit or hide that
+summary. A check that read only part of the diff passes, with a warning
+giving the count; tell the owner rather than treat the count as covered.
+
 ## Conventions
 
 - Conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,
