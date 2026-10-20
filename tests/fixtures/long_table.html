@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Readings by station</title>
+<style>
+body { font: 14px/1.4 Helvetica, Arial, sans-serif; margin: 24px; }
+table { border-collapse: collapse; margin: 24px 0; }
+th, td { border: 1px solid #999; padding: 4px 8px; text-align: left; }
+</style>
+</head>
+<body>
+<h1>Readings by station</h1>
+<p>A table with every part a split must carry: a caption, column groups, a
+header with an id, two bodies, a cell spanning three rows across where a
+five-row piece would end, a table nested in a cell, and a footer. The tests
+divide it into five-row pieces; at WebShot's real limits it prints whole.</p>
+<table id="readings" class="data">
+<caption>Hourly readings</caption>
+<colgroup><col class="station"><col span="2"><col></colgroup>
+<thead><tr><th id="h-station">Station</th><th>Hour</th><th>Reading</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>North</td><td>R01</td><td>12.1</td><td>steady</td></tr>
+<tr><td>North</td><td>R02</td><td>12.4</td><td>steady</td></tr>
+<tr><td>North</td><td>R03</td><td>12.0</td><td>steady</td></tr>
+<tr><td rowspan="3">East</td><td>R04</td><td>11.8</td><td>gauge reset</td></tr>
+<tr><td>R05</td><td>11.9</td><td>after reset</td></tr>
+<tr><td>R06</td><td>12.2</td><td>after reset</td></tr>
+<tr><td>East</td><td>R07</td><td>12.3</td><td>steady</td></tr>
+<tr><td>South</td><td>R08</td><td>13.0</td><td>steady</td></tr>
+<tr><td>South</td><td>R09</td><td>13.1</td><td>steady</td></tr>
+<tr><td>South</td><td>R10</td><td>13.4</td><td>rising</td></tr>
+<tr><td>South</td><td>R11</td><td>13.6</td><td>rising</td></tr>
+<tr><td>South</td><td>R12</td><td>13.5</td><td>steady</td></tr>
+</tbody>
+<tbody class="second">
+<tr><td>West</td><td>R13</td><td>10.2</td><td>steady</td></tr>
+<tr><td>West</td><td>R14</td><td>10.1</td><td>steady</td></tr>
+<tr><td>West</td><td>R15</td><td>10.4</td><td><table class="inner"><tr><td>min 9.8</td><td>max 10.9</td></tr></table></td></tr>
+<tr><td>West</td><td>R16</td><td>10.6</td><td>steady</td></tr>
+<tr><td>West</td><td>R17</td><td>10.5</td><td>steady</td></tr>
+<tr><td>Coast</td><td>R18</td><td>14.0</td><td>steady</td></tr>
+<tr><td>Coast</td><td>R19</td><td>14.2</td><td>steady</td></tr>
+<tr><td>Coast</td><td>R20</td><td>14.1</td><td>steady</td></tr>
+<tr><td>Coast</td><td>R21</td><td>14.3</td><td>steady</td></tr>
+<tr><td>Coast</td><td>R22</td><td>14.6</td><td>falling</td></tr>
+<tr><td>Coast</td><td>R23</td><td>14.4</td><td>falling</td></tr>
+<tr><td>Coast</td><td>R24</td><td>14.2</td><td>steady</td></tr>
+</tbody>
+<tfoot><tr><td colspan="3">Stations reporting</td><td>FOOTERSENTINEL</td></tr></tfoot>
+</table>
+<table id="short"><tr><td>alpha</td><td>beta</td></tr><tr><td>gamma</td><td>delta</td></tr></table>
+</body>
+</html>
