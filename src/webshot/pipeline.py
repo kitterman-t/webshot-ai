@@ -22,7 +22,7 @@ import shutil
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -105,6 +105,7 @@ from .render.ligatures import (
     ligature_warning,
     suppress_ligatures,
 )
+from .render.long_tables import SplitTable, split_long_tables, split_tables_warning
 from .render.pdf import is_tagged, render_pdf, validate_pdf
 from .render.video_appendix import append_video_appendix
 from .validate.verapdf import validate as verapdf_validate
@@ -405,7 +406,10 @@ def _manifest_checksum(bundle_directory: Path) -> str | None:
 
 
 def renderer_crash_message(
-    step: str, lazy: LazyLoadPass | None, max_scrolls: int | None
+    step: str,
+    lazy: LazyLoadPass | None,
+    max_scrolls: int | None,
+    split: Sequence[SplitTable] = (),
 ) -> str:
     """What to say when the page's renderer crashed mid-capture (docs/09 P23-8).
 
@@ -415,6 +419,8 @@ def renderer_crash_message(
     try. What WebShot knows is the step, and how much of the page the
     lazy-load pass had loaded if it finished; why the renderer crashed it
     cannot see. `max_scrolls` is None when the capture did not scroll.
+    `split` names a long table the capture divided for print, whose rows the
+    renderer still holds (docs/09 P94).
     """
     loaded = ""
     if lazy is not None:
@@ -433,6 +439,12 @@ def renderer_crash_message(
         if len(smaller) > 1
         else smaller[0]
     )
+    if split:
+        longest = max(split, key=lambda table: table.rows)
+        loaded += (
+            f" It held a table of {longest.rows:,} rows, which the capture had "
+            f"divided into {longest.pieces} tables to print."
+        )
     return (
         f"The browser's process for this page crashed while {step}, so nothing "
         "was captured. WebShot cannot see why; on a long page the usual cause "
@@ -536,6 +548,7 @@ async def capture_open_page(
     enrichment = VideoEnrichment()
     crash = CrashWatch(page)
     lazy: LazyLoadPass | None = None
+    split: list[SplitTable] = []
     try:
         if options.scroll:
             crash.step = "loading the page's lazy content"
@@ -775,6 +788,17 @@ async def capture_open_page(
         if options.debug_screenshot:
             options.debug_screenshot.parent.mkdir(parents=True, exist_ok=True)
             await page.screenshot(path=str(options.debug_screenshot), full_page=True)
+
+        # Last before the render, and after the bundle, which keeps every
+        # table whole: the render and the two checks that print the page
+        # again all print the pieces (docs/09 P94).
+        crash.step = "dividing long tables for print"
+        split = await split_long_tables(page, options)
+        split_message = split_tables_warning(split, tagged=options.tagged)
+        if split_message:
+            warnings.append(split_message)
+            if ai_result:
+                ai_result.warnings.append(split_message)
 
         crash.step = "rendering the PDF"
 
@@ -1067,7 +1091,7 @@ async def capture_open_page(
         if isinstance(found, PlaywrightError) and crash.caused(found):
             step = crash.crashed_in or crash.step
             message = renderer_crash_message(
-                step, lazy, options.max_scrolls if options.scroll else None
+                step, lazy, options.max_scrolls if options.scroll else None, split
             )
             # A crash while printing is still a render failure (docs/09 P8-59).
             if step == "rendering the PDF":

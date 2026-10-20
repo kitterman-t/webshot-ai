@@ -10636,7 +10636,8 @@ ones. A 299 × 75 survey export (22,425 cells) took 4.38 s on the branch with
 end to end. The largest, 54,832 × 3 (164,496 cells), finished its bundle,
 extraction included, and reached the PDF step 661 s into the capture. There
 Chromium's renderer crashed on a page 1,864,558 px tall and the run exited 7,
-a long-page limit this change does not touch. By the square, master would have
+a long-page limit this change does not touch (*found and fixed in P94:* the
+table, not the page's length). By the square, master would have
 spent about 26 hours of CPU building grids for it. An 875 × 85 survey export
 (74,375 cells) was stopped after 24 minutes in the lazy-load pass, under the
 load above, before it reached extraction.
@@ -20153,3 +20154,188 @@ before this. Over the real files of P38-4, the 553 pages are still
 byte-identical with master's and the 3 refusals the same. Decoding the 390
 text files took 7.0 ms against 3.4 ms for a plain UTF-8 decode, best of
 five, with the machine's load at 139.
+
+## P94: a table too long to print whole ran Chromium out of memory (2026-10-20)
+
+P41-4's 54,832 × 3 CSV (164,496 cells) got through extraction and then ended
+in the print: Chromium's renderer crashed on a page 1,864,558 px tall, exit 7.
+The message blamed the lazy-load pass and offered `--max-scrolls`,
+`--no-scroll` and `--selector`, none of which shrink a table. Measured with
+Chromium 153.0.8010.12 (Playwright 1.63.0) on an Apple-silicon Mac with
+64 GB, half of it free. Footprints are GiB.
+
+### P94-1: what fails
+
+The CSV's converted page, loaded alone and printed with a capture's settings
+(Letter, 0.6in margins, scale 0.9, tagged, outlined, header and footer), with
+the renderer's `phys_footprint` sampled every 250 ms from another process (the
+P23-8 method). The page loaded in 12 to 20 s, and the renderer then grew
+about 2 GiB a second from the moment the print began, until Chromium answered
+`Page.printToPDF: Printing failed` at 12.4 to 13.8 GiB, or the renderer
+crashed. Tagging off, and outline, header and footer off, each failed the same
+way. So did 40,000 rows tagged, at 14.5 GiB; untagged they printed, peaking at
+13.8 and 14.0 GiB in two runs. Page 1 alone of those 40,000 rows still peaked
+at 13.8 GiB:
+Chromium paginates the whole document for any page range, so the clipping
+check's probe and the covered-text check's second print (P83) pay the same.
+
+The table is what costs, not the page's length. The same rows printed
+untagged, as a table and as blocks (`display: block` on the table, its
+sections and rows, `inline-block` on the cells):
+
+| Rows | Table: pages, renderer peak | Blocks: pages, renderer peak |
+| ---: | ---: | ---: |
+| 10,000 | 346, 1.17 GiB | 715, 0.55 GiB |
+| 20,000 | 690, 4.09 GiB | |
+| 40,000 | 1,380, 13.99 GiB | 2,858, 1.82 GiB |
+
+As a table, twice the rows cost 3.3 to 3.5 times the memory; as blocks, four
+times the rows cost 3.3 times. Collapsed borders were not the cause:
+`border-collapse: separate`, no borders, and a header that does not repeat
+each peaked within 0.25 GiB of the plain table at 10,000 rows.
+
+### P94-2: why
+
+Chromium's table layout keeps a break token for every page a table breaks
+across, and `TableBreakTokenData`
+(`third_party/blink/renderer/core/layout/table/table_break_token_data.h`)
+stores by value a copy of the table's `rows`, `cell_block_constraints` and
+`sections` vectors, data its own comment calls "the same for all fragments".
+A row and a cell constraint are about 32 bytes each, so at 54,832 rows and
+164,496 cells each page holds about 6.7 MiB of copies, and the table's 1,893
+pages about 12.4 GiB, where the prints failed. At 10,000 and 40,000 rows the
+table's peak exceeded the same rows' as blocks by 1.5 and 1.85 times this
+one-copy estimate; what the rest is was not found. Other
+projects have hit it as `Printing failed` on large single-table PDFs, one
+reporting a table-heavy report that printed on Chromium 104 and failed on 116.
+Not reported to Chromium: its tracker needs the owner's account.
+
+### P94-3: the fix
+
+`render/long_tables.py` divides a table that would cost too much into a run
+of tables, in the page as it is about to print: after the bundle, which keeps
+every table whole, and before the render, so the render and both checks that
+print the page again print the pieces.
+
+- **Which tables.** The estimate is the table's rows and cells, times its
+  pages (its height as laid out, over the paper's height less its margins at
+  the print scale), times 64 bytes, P94-2's factor rounded up. A table past
+  512 MiB is split, which leaves a 3-column table of one-line rows whole up
+  to about 8,000 rows.
+- **How big a piece is.** A piece of r rows costs r rows' entries times r
+  rows' pages, so the rows that hold a piece near 32 MiB are a square root,
+  at most 1,000. One-line rows of 3 columns come out at the 1,000; rows of
+  long text that wrap get fewer. 1,000-row pieces of a 2,260-row sheet whose
+  rows wrap over many lines still took the renderer to 7.1 GiB; sized this
+  way it was 11 pieces and 4.2 GiB (P94-4).
+- **What a piece carries.** The original table keeps its first rows, its
+  caption, its id and its attributes. Each piece after it is a copy of the
+  table element without its id, holding a copy of the table's `<thead>`
+  where it has one and of its column groups, and its rows moved in order,
+  each body's rows in a copy of their body, so a body's styles still reach
+  them. A header row written into the body is a body row and is not copied,
+  so a table without a `<thead>` is split with no header repeated; all three
+  real tables below have one. The footer moves to the last
+  piece. A piece never starts at a row a cell above it spans into; it starts
+  at the next row that one does not.
+- **Each piece lays its own columns out.** Fixing every piece's columns to
+  the widths the table had on screen was the first version, and it changed
+  the print: the screen is wider than the paper, so the text wrapped
+  differently, and that 2,260-row sheet printed in 3,287 pages instead of
+  its 3,576. Left to Chromium, the pieces printed in 3,581, five more for the
+  repeated headers. Pieces of rows alike get the same widths; where the rows
+  differ, a column can shift at a piece's first row, under its header. The
+  pieces meet with no margin between them, by a stylesheet keyed on
+  `data-webshot-split` and `data-webshot-piece`, never by a `style`
+  attribute, which a page's own rules can read (P83-4). A table in an open
+  shadow root gets the stylesheet in its root. A table in a frame is not
+  split: each frame was grown to its document's height before the bundle
+  (P16-16), and a split inside it would lengthen the document past that box,
+  so the PDF would lose its last rows without a word (found in review).
+- **It says so.** A manifest warning names the table, its rows and pieces,
+  whether each piece repeats a header, in a tagged PDF that each is a table of
+  its own in the structure, and the estimate. If the renderer still crashes, the crash message names the
+  split table as well as the lazy-load pass.
+
+### P94-4: what it costs, and the real files
+
+The probe of P94-1, through `split_long_tables`, with a capture's settings:
+
+| Table | Whole: pages, renderer | Split: tables, pages, renderer |
+| --- | ---: | ---: |
+| 40,000 × 3 | failed at 14.5 GiB | 40, 1,381, 2.87 GiB |
+| 54,831 × 3 | failed at 12.4 to 13.8 GiB | 55, 1,893, 3.95 GiB |
+
+The split itself took 0.32 and 0.45 s, and the 54,831 rows printed in 28.0 s,
+a 65.8 MB file. Untagged, the 40,000 rows printed whole in 1,380 pages, so
+the pieces cost one page.
+
+Over every CSV in the folder of P41-4, 19 distinct files now, the split
+divides three: P41-4's largest, and two whose rows wrap over many lines that
+were not in that folder then or were stopped before printing.
+
+- **A sheet of 2,260 incident reports in 19 columns** (1,316,277 px tall)
+  printed whole
+  in 3,576 pages with the renderer at 12.43 GiB, just short of failing. Split
+  into 11 tables it printed in 3,581 pages at 4.18 GiB.
+- **The 875 × 85 survey export** that P41-4 stopped in the lazy-load pass
+  (874 rows under its header, 1,240,512 px tall) failed whole: `Printing failed` at 11.35 GiB. Split into
+  14 tables it printed in 965 pages at 5.72 GiB.
+
+The other 16, up to 1,075 × 10, are left as they were. Neither of the two was
+estimated anywhere near its true cost: the estimate reads the height on a
+screen wider than the paper, and the incident sheet printed 2.8 times the
+pages the estimate counted. They were still past the limit by seven and ten
+times.
+
+End to end, `webshot` on the 54,832-row CSV with `--no-ocr` now exits 0:
+1,893 pages and a 225 MB file with its bundle embedded, in 406 s (4 s to
+acquire, 54 to capture, 244 to build the bundle, 103 to render and check the
+print), with the warning in the manifest and the report. Without the split
+the same capture exited 7 at the print (P41-4).
+
+The cost is a header row wherever a piece begins, 54 more for the 54,831
+rows, and a tagged PDF with a table per piece where the page had one. Rows
+keep their order and each prints once. The bundle does not change at all,
+since it is written before the split, and no golden case comes near the
+limit, so no golden moves.
+
+### P94-5: what this does not cover
+
+- Splitting makes the print's memory linear, not small: 55,000 short rows
+  still peak near 4 GiB, so a table ten times as long would need tens of GiB
+  however it is divided. The crash message now names it.
+- The estimate reads the table's height on screen, which is wider than the
+  paper, so it undercounts the pages of rows that wrap; a page's own `@page`
+  size is not read either. A table between the limit and twice it could be
+  left whole when splitting it would have helped.
+- Chromium failed at 11.35 GiB on one table and 14.5 on another, so the
+  ceiling is not one number; what sets it was not found.
+- Two steps print a probe of the page before the bundle, and so before the
+  split: fitting the frames (P16-16), on a page with a frame the page can
+  script, and releasing a table from a sideways scroller (P16-11). Chromium
+  paginates the whole page even for one page (P94-1), so on such a page a
+  long table costs the probe what it costs the print, and the capture can
+  still fail there. A long table inside a frame is not split for the same
+  reason.
+- The lazy-load pass still scrolls a static local page of this length to its
+  100-step limit (P41-4); that is the pass's to fix.
+
+### P94-6: the tests
+
+`tests/fixtures/long_table.html` holds a table with a caption, column groups,
+a header with an id, two bodies, a cell spanning three rows where a five-row
+piece would end, a nested table, and a footer, and a short table beside it.
+`tests/test_long_tables.py` turns the limits down to five-row pieces and
+holds the split's rules: the rows' order and partition (the piece that would
+start inside the spanning cell starts after it), what each piece carries and
+does not, no width or table layout of the split's own and no `style`
+attribute, the margins gone only between pieces, a table whose header is a
+body row split with nothing copied and a warning that says so, a table in a
+frame left whole, a table in a shadow root
+split and styled in its root, and the short and nested tables untouched. At
+the real limits the fixture prints as it was, 2,000 generated rows stay whole
+and 10,000 are split. End to end, the warning reaches the manifest, the report
+and `capture.json`, the PDF's text has every row in order, the footer only
+from the last piece on, and `content.md` has one table. The real sizes cannot
+be tests: the failures need 11 to 14 GiB.

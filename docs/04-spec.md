@@ -505,6 +505,18 @@ there with its reason, and the run's job summary lists every skip.
     measurement that could not be made, or a box that could not be marked
     for it, is itself a warning. WebShot does not move or hide such a box;
     `--exclude` is the remedy (docs/09 P83).
+17. **A table too long to print whole:** Chromium's memory for printing one
+    table grows with its rows and cells times its pages, and it fails at 11
+    to 14 GiB. Before the render, and after the bundle, which keeps every
+    table whole, a capture MUST divide each table in the page's own document
+    (not in a frame, which item 6's fitting has already sized) whose
+    estimated cost passes a limit into consecutive tables of the same element and attributes (the
+    first keeps its id and caption), each with a copy of the table's
+    `<thead>` where it has one and of its column groups, the footer on the
+    last, and no piece starting inside a cell that spans rows. It MUST record
+    a manifest warning naming the table's rows and pieces, whether a header
+    repeats, and, in a tagged PDF, the extra tables in its structure. A table
+    under the limit prints as it was (docs/09 P94).
 
 ## 6. Security requirements (carried forward and new; all MUST)
 

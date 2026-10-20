@@ -353,6 +353,17 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **A table too long to print whole no longer fails the capture.** Chromium
+  copies a table's row and cell data into every page the table breaks
+  across, so printing one table took memory growing with the square of its
+  length: a 54,831-row CSV failed at 13.8 GiB with exit 7, an 875-row survey
+  of 85 columns at 11.4 GiB, and a 2,260-row sheet of long text printed only
+  at 12.4 GiB. A table whose estimated print cost passes 512 MiB is now
+  printed as consecutive tables, each repeating the table's `<thead>` where it
+  has one, and the three print at 4.0, 5.7 and 4.2 GiB. The manifest says
+  which table was divided and how, and whether a header repeats; the bundle
+  keeps it whole, and smaller tables print as before. A
+  crash while printing names the divided table. See docs/09 P94.
 - **Markdown updates can reach WebShot again.** The requirement was written
   `Markdown>=3.6,<4`, and Dependabot, setting out each day to update markdown
   from 3.10.3 to 3.11, found nothing to change and opened no pull request, so
