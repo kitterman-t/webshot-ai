@@ -47,12 +47,15 @@ LATE_MEMBERS = (
 #: and text, which it named, and whose mark MarkItDown then put on the page.
 MARKED = "data/marked.yaml"
 MARKED_TEXT = "notes/marked.txt"
-#: A Windows-1252 CSV, which WebShot reads only as UTF-8.
+#: A Windows-1252 CSV, which WebShot read as UTF-8 until docs/09 P38, and
+#: now reads as the windows-1252 it guesses, and says so.
 WINDOWS = "data/windows.csv"
 WINDOWS_WARNING = (
-    f"{WINDOWS}: The file is not UTF-8, the one encoding WebShot reads a CSV "
-    "or TSV file in, so the page shows U+FFFD (\N{REPLACEMENT CHARACTER}) "
-    "where its bytes are not UTF-8 (docs/09 P35)."
+    f"{WINDOWS}: The file is not UTF-8 and does not say which encoding it is "
+    "in, so WebShot read it as windows-1252, which Windows wrote such text in "
+    "for Western European languages and which browsers assume for it; if it "
+    "is in another encoding, its 2 characters outside ASCII are wrong "
+    "(docs/09 P38)."
 )
 
 
@@ -146,13 +149,14 @@ def test_a_byte_order_mark_does_not_reach_the_page() -> None:
         assert "\N{ZERO WIDTH NO-BREAK SPACE}" not in sections[name], name
 
 
-def test_a_csv_that_is_not_utf8_says_what_it_lost() -> None:
-    """Read as UTF-8 regardless; before P35 with no word, and garbled twice:
-    MarkItDown took WebShot's own UTF-8 for another encoding."""
+def test_a_csv_that_is_not_utf8_is_read_as_its_guess() -> None:
+    """Read as UTF-8 regardless before P38, with U+FFFD for each letter, and
+    before P35 garbled twice: MarkItDown took WebShot's own UTF-8 for another
+    encoding."""
     sections = _sections(to_markdown(LATE_ARCHIVE, suffix=".zip").markdown)
 
-    assert "\N{REPLACEMENT CHARACTER}" in sections[WINDOWS]
-    assert LATE_WORDS not in sections[WINDOWS]
+    assert "\N{REPLACEMENT CHARACTER}" not in sections[WINDOWS]
+    assert LATE_WORDS in sections[WINDOWS]
 
 
 @pytest.mark.parametrize(

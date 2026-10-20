@@ -367,6 +367,19 @@ which records the measurements behind each change.
   "CLAUDE.md compliance: 230 of 769 changed lines read". Re-running the
   review is the remedy, and a re-run is no longer stopped by Claude's earlier
   comment. See docs/09 P89-9.
+- **A Claude review gate that failed no longer passes a review it skipped.**
+  `claude review verdict` never read the gate job's result. When the gate
+  failed on a pull request marked ready for review to be reviewed again, the
+  review never ran, and the verdict passed on the earlier review without
+  saying anything had been skipped. A pull request that edits the reviewer
+  passed the same way. The verdict now reads the gate's result and the event,
+  and fails when the gate cost a review that no later run has attempted, or
+  when no result reached it. A gate that failed on a push after a review was
+  attempted cost nothing, since such a push is not reviewed, and the verdict
+  passes with a warning that says so. Reads GitHub answers with a 5xx are
+  asked again twice before they fail. A failing verdict now prints, after the
+  re-run command, what to do when the re-run ends in `startup_failure`: mark
+  the pull request draft and then ready for review. See docs/09 P89-11.
 - **The PDF/A check reads veraPDF's report as UTF-8, whatever the locale.**
   It read veraPDF's output in the locale's encoding, cp1252 on an English
   Windows. veraPDF writes UTF-8, and its report names the file it checked:
@@ -774,6 +787,21 @@ which records the measurements behind each change.
   UTF-8 is still read as UTF-8, but the manifest now says so: its accented
   letters had become U+FFFD, or other characters entirely, without a word.
   See docs/09 P35.
+- **Local text that is not UTF-8 is read in its own encoding, and a guess is
+  named.** A Windows-1252 CSV from Excel showed U+FFFD for every accented
+  letter, the euro sign and the curly quotes, and so did a Markdown file
+  saved as "ANSI", without a word. Plain text, JSON, YAML and XML were left
+  to MarkItDown's guess from their first 64 KB, which read `Crème brûlée` as
+  `Crčme brűlée` and said nothing, or failed: a file whose first accented
+  letter came after 64 KB ended the capture with exit 2. WebShot now decides:
+  a byte order mark, then UTF-8, then the encoding a page or an XML file
+  declares, and otherwise windows-1252, the encoding browsers assume for such
+  text, unless it does not read as text, when charset-normalizer chooses. A
+  guess is named in the manifest's warnings with the encoding it chose, for a
+  file, a zip member or an EPUB chapter. A CSV or Markdown file in UTF-16
+  behind a byte order mark is read too, where the CSV had ended the capture
+  with exit 2. An empty YAML or XML file, which ended it the same way, is an
+  empty page. See docs/09 P38.
 - **A list nested in a converted document stays nested.** markdownify
   indented a sub-list by the width of its parent's marker, two or three
   spaces, and Python-Markdown nests at four. So in a Word file, an EPUB or an

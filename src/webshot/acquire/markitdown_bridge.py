@@ -60,7 +60,10 @@ each damages content WebShot promises to preserve (docs/09 P3-1):
    reader failed: on its own the capture ended with exit 2, and in a zip the
    member was left out (docs/09 P35).  The encoding of bytes WebShot wrote,
    and of any text that is UTF-8 to its last byte, is stated instead
-   (`_declared_charset`).
+   (`_declared_charset`).  Text that is not UTF-8 had the guess and nothing
+   said so, so Windows-1252 was read as Central European; WebShot's plain-text
+   and HTML readers decode it by `text_encoding` instead, and a guess is named
+   in the manifest (docs/09 P38).
 7. **It writes a list nested in an item at its parent's level.**  markdownify
    indents what belongs to an item by the width of the item's marker, two
    spaces under `* ` and three under `1. `, and Python-Markdown nests at four:
@@ -144,6 +147,7 @@ from xml.etree.ElementTree import Element
 
 from bs4 import BeautifulSoup, Comment, Doctype, NavigableString, Tag
 from bs4.builder._htmlparser import HTMLParserTreeBuilder
+from bs4.dammit import EncodingDetector
 from markitdown import (
     DocumentConverterResult,
     FileConversionException,
@@ -158,6 +162,7 @@ from markitdown.converters import (
     DocxConverter,
     EpubConverter,
     HtmlConverter,
+    PlainTextConverter,
     PptxConverter,
     XlsxConverter,
     ZipConverter,
@@ -171,6 +176,7 @@ from markitdown.converters._markdownify import _CustomMarkdownify
 from ..errors import UsageError
 from . import ooxml
 from .adapters import CODE_LINES_CLASS, FORMATS
+from .text_encoding import decode_text
 
 #: Characters Python-Markdown (with `extra`) reads wherever they stand:
 #: emphasis, code, links and images (`!` too, since text ending in one turns
@@ -467,22 +473,12 @@ def _as_escaped_csv(
     doing them together means TSV is not parsed and re-serialized twice, and
     that a fix to quoting or encoding cannot reach one path and miss the other.
     The bytes returned are UTF-8, whatever the file's were, and the warnings
-    say when that cost characters.
+    say when their encoding was a guess: read as UTF-8 whatever it was, a
+    Windows-1252 export from Excel lost every accented letter (docs/09 P38).
     """
-    try:
-        text = data.decode("utf-8-sig")
-        conversion_warnings: list[str] = []
-    except UnicodeDecodeError:
-        # Read as UTF-8 regardless, as it always was; what is new is saying
-        # so, since a Windows-1252 export lost every accented letter without
-        # a word (docs/09 P35-1).
-        text = data.decode("utf-8-sig", errors="replace")
-        conversion_warnings = [
-            "The file is not UTF-8, the one encoding WebShot reads a CSV or "
-            "TSV file in, so the page shows U+FFFD (\N{REPLACEMENT CHARACTER}) "
-            "where its bytes are not UTF-8 (docs/09 P35)."
-        ]
-    rows = csv.reader(io.StringIO(text), delimiter=delimiter)
+    decoded = decode_text(data)
+    conversion_warnings = [] if decoded.warning is None else [decoded.warning]
+    rows = csv.reader(io.StringIO(decoded.text), delimiter=delimiter)
     buffer = io.StringIO()
     try:
         csv.writer(buffer, lineterminator="\n").writerows(
@@ -517,9 +513,10 @@ def _declared_charset(data: bytes) -> str | None:
     dropped it only where Magika could not name the file, and otherwise put
     it at the start of the page as U+FEFF (docs/09 P35-2).
 
-    Everything else is left to MarkItDown, as before: ASCII, which its guess
-    (`ascii`, or `utf-8`) decodes as itself, and text that is not UTF-8, whose
-    encoding WebShot cannot know (docs/09 P35-3 records what the guess does).
+    Nothing is declared for ASCII, which MarkItDown's guess (`ascii`, or
+    `utf-8`) decodes as itself, or for text that is not UTF-8, whose encoding
+    is not known: WebShot's plain-text and HTML readers decode that by
+    `text_encoding`, whatever MarkItDown guessed (docs/09 P38).
     """
     if data.isascii() or b"\x00" in data:
         return None
@@ -1671,17 +1668,65 @@ class _HtmlLineEndings(HTMLParserTreeBuilder):
             yield (_LINE_BREAK_RE.sub("\n", text), *rest)  # type: ignore[misc]
 
 
+#: The formats WebShot presents as text, which the plain-text reader takes by
+#: suffix whatever Magika made of them.
+TEXT_SUFFIXES = frozenset(
+    suffix for suffix, kind in FORMATS.items() if kind.presentation == "verbatim"
+)
+
+
+class _TextPlainTextConverter(PlainTextConverter):
+    """MarkItDown's plain-text reader, decoding by `text_encoding`.
+
+    Upstream decodes by the encoding MarkItDown guessed from 64 KB, or, with
+    none, by charset-normalizer's guess from all of it, else as UTF-8 with
+    every other byte dropped — and says nothing either way.  The bytes are
+    decoded here by WebShot's rule instead, whatever the stream was told, and
+    a guess comes back as a warning (docs/09 P38).  For UTF-8 and ASCII the
+    rule and the declaration agree.  An XML declaration counts as the text's
+    own word on its encoding.
+
+    It also takes every format WebShot itself presents as text by its
+    suffix: YAML has no MIME type in Python 3.12's `mimetypes`, and XML's is
+    `text/` only where the platform has no MIME table of its own (macOS's
+    says `application/xml`), so where Magika could not name such a file, as
+    when it is empty, upstream took it for a format no reader has (docs/09
+    P38-10).
+    """
+
+    def accepts(
+        self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
+    ) -> bool:
+        extension = (stream_info.extension or "").lower()
+        if extension in TEXT_SUFFIXES:
+            return True
+        accepted: bool = super().accepts(file_stream, stream_info, **kwargs)
+        return accepted
+
+    def convert(
+        self, file_stream: BinaryIO, stream_info: StreamInfo, **kwargs: Any
+    ) -> DocumentConverterResult:
+        data = file_stream.read()
+        decoded = decode_text(
+            data, declared=EncodingDetector.find_declared_encoding(data)
+        )
+        return _WarnedResult(
+            decoded.text, () if decoded.warning is None else (decoded.warning,)
+        )
+
+
 class _TextHtmlConverter(HtmlConverter):
     """MarkItDown's HTML reader, writing through `_TextMarkdownify`.
 
     `convert` is MarkItDown 0.1.8's `HtmlConverter.convert`, because upstream
     names its writer inside that method rather than taking it as a parameter;
     `test_the_text_html_converter_is_upstreams_on_plain_text` holds the copy to
-    the original.  It differs in seven places: the file's line endings are
-    read as a browser reads them (`_HtmlLineEndings`, docs/09 P92), a Word
-    file's lists are numbered as Word numbers them, when the Word reader hands
-    over their numbers as `word_lists` (docs/09 P31); pictures are drawn from
-    their own bytes or said to be missing (docs/09 P36), the attributes
+    the original.  It differs in eight places: the document is decoded by
+    `text_encoding` (docs/09 P38), its line endings are read as a browser
+    reads them (`_HtmlLineEndings`, docs/09 P92), a Word file's lists are
+    numbered as Word numbers them, when the Word reader hands over their
+    numbers as `word_lists` (docs/09 P31); pictures are drawn from their own
+    bytes or said to be missing (docs/09 P36), the attributes
     markdownify writes are made safe, the writer is `_TextMarkdownify`, the
     text the too-deeply-nested fallback returns is encoded, where upstream
     writes it into Markdown raw, and two lists, quotations or definition lists
@@ -1690,6 +1735,12 @@ class _TextHtmlConverter(HtmlConverter):
     `list_seams` is for a reader that joins several documents' Markdown, as
     EPUB joins its chapters: their lists are left marked, and it resolves them
     once they are joined.  Without it each document is resolved on its own.
+
+    Upstream decodes by the stream's charset, which for a zip member is
+    MarkItDown's guess from 64 KB: a Windows-1252 page that did not say so
+    was read as cp1250 (docs/09 P38).  One whose `meta` said so was read
+    right, but only because charset-normalizer favours an encoding it finds
+    named in the bytes; here a declaration is read as one.
     """
 
     def __init__(self, list_seams: _ListSeams | None = None) -> None:
@@ -1705,10 +1756,13 @@ class _TextHtmlConverter(HtmlConverter):
     ) -> DocumentConverterResult:
         strict: bool = kwargs.pop("strict", False)
         word_lists: ooxml.WordListNumbers | None = kwargs.pop("word_lists", None)
-        encoding = "utf-8" if stream_info.charset is None else stream_info.charset
-        soup = BeautifulSoup(
-            file_stream, builder=_HtmlLineEndings(), from_encoding=encoding
+        data = file_stream.read()
+        decoded = decode_text(
+            data,
+            declared=EncodingDetector.find_declared_encoding(data, is_html=True),
+            html=True,
         )
+        soup = BeautifulSoup(decoded.text, builder=_HtmlLineEndings())
         for script in soup(["script", "style"]):
             script.extract()
         # First, while the lists are as mammoth wrote them and every mark is
@@ -1718,11 +1772,15 @@ class _TextHtmlConverter(HtmlConverter):
         # Before the attributes are encoded: a placeholder quotes the alt text
         # as text, which markdownify then encodes once.
         chapter = getattr(file_stream, "name", None) if self.book else None
-        picture_warnings = _pictures_as_data(
+        said = [] if decoded.warning is None else [decoded.warning]
+        said += _pictures_as_data(
             soup, self.book, chapter if isinstance(chapter, str) else None
         )
+        # MarkItDown's EPUB reader keeps only each chapter's Markdown, so a
+        # chapter says what it could not carry through the book, by its name:
+        # a chapter whose encoding was guessed is named there (docs/09 P38).
         if self.book is not None:
-            self.book.warnings += [f"{chapter}: {w}" for w in picture_warnings]
+            self.book.warnings += [f"{chapter}: {w}" for w in said]
         _attributes_as_text(soup)
         body = soup.find("body")
         target = body if body else soup
@@ -1745,7 +1803,7 @@ class _TextHtmlConverter(HtmlConverter):
         return _WarnedResult(
             markdown.strip(),
             title=None if soup.title is None else soup.title.string,
-            warnings=tuple(picture_warnings),
+            warnings=tuple(said),
         )
 
 
@@ -1802,7 +1860,9 @@ class _TextEpubConverter(EpubConverter):
     MarkItDown joins the chapters with a blank line, so a chapter that ends
     with a list and one that begins with a list of the same kind made one list
     too; their lists are resolved once the book is joined (docs/09 P32), and
-    their quotations and definition lists with them (docs/09 P63).
+    their quotations and definition lists with them (docs/09 P63).  A
+    chapter whose encoding was guessed is named in the book's warnings
+    (docs/09 P38).
     """
 
     def __init__(self) -> None:
@@ -2248,6 +2308,7 @@ def _markitdown() -> MarkItDown:
         DocxConverter: _TextDocxConverter,
         EpubConverter: _TextEpubConverter,
         HtmlConverter: _TextHtmlConverter,
+        PlainTextConverter: _TextPlainTextConverter,
         PptxConverter: _TextPptxConverter,
         XlsxConverter: _TextXlsxConverter,
         ZipConverter: lambda: _TextZipConverter(markitdown=markitdown),

@@ -48,6 +48,7 @@ from markdown.treeprocessors import Treeprocessor  # type: ignore[import-untyped
 
 from ..netpolicy import file_url_path
 from ..sanitize import Policy, sanitize
+from .text_encoding import decode_text
 
 MAX_LOCAL_SOURCE_BYTES = 100 * 1024 * 1024
 #: An archive may not claim to expand past the same limit a plain file is held
@@ -534,7 +535,13 @@ def _render_local_file(path: Path) -> tuple[str, str, list[str]]:
     fallback_title = path.name
     warnings: list[str] = []
     if source_format.presentation == "native":
-        source_markdown = path.read_text(encoding="utf-8", errors="replace")
+        # Read as UTF-8 with U+FFFD for every other byte, a Markdown file
+        # written in Windows-1252 lost each accented letter and said nothing
+        # (docs/09 P38).  The newlines are translated as `read_text` did.
+        decoded = decode_text(path.read_bytes())
+        source_markdown = decoded.text.replace("\r\n", "\n").replace("\r", "\n")
+        if decoded.warning is not None:
+            warnings.append(decoded.warning)
     else:
         # Imported here, in the one branch that reads through MarkItDown, and
         # not at module scope: markitdown imports magika, and magika imports

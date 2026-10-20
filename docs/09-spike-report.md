@@ -18958,6 +18958,135 @@ each one failed. The breaks were: credit lines that say nothing, count
 `stdout` instead of what reached the model, ignore the gaps, and ignore
 nested agents.
 
+### P89-11 — a gate that failed was never read
+
+On 2026-10-19 a push of c39ca4ed to #291 started run 39277566091. Its gate,
+"should this pull request be reviewed?" (job 118145785511), failed while
+reading another run's jobs: `gh api
+repos/…/actions/runs/39268825960/jobs?filter=latest&per_page=100 exited 1:
+gh: Server Error (HTTP 502)`. The review job and "say what the review read"
+were skipped. The verdict (job 118148997097) passed. Its log lists three
+review runs and judges the one in run 39270402064, on 6ee2abda, whose bug
+agents read all 2,983 changed lines and whose compliance agents read 1,119.
+It prints "this run's review job: skipped". Nothing in it mentions the gate.
+`judge` was never given the gate's result, and it read no job but `review`
+from any run.
+
+On #291 that was the right answer. The gate reviews a push only while no
+review has been attempted, and one had been, so a gate that worked would
+have skipped the review as well. The question was whether the same blindness
+passes a head nobody reviewed. Master's `review_verdict.py` was run against
+the test suite's fake `gh` for each case. It does not read the event, so a
+push and a ready-for-review with the same runs get the same verdict:
+
+| This run's gate | Reviews on the pull request | Verdict before | Verdict now |
+|---|---|---|---|
+| succeeded | any | judged on the reviews | unchanged |
+| did not succeed, on a push | none attempted | fails: "No review has run on this pull request" | fails: this push was the first chance at one |
+| did not succeed, on an open, reopen or ready for review | none attempted | fails, the same | fails: that event is always reviewed |
+| did not succeed, any event | none attempted, and the pull request edits the reviewer | **passes**: "Not reviewed: this pull request edits the reviewer's workflow" | fails |
+| did not succeed, on a push | one attempted earlier (#291) | judged on it | judged on it, with a warning that the gate failed and cost nothing |
+| did not succeed, on an open, reopen or ready for review | one attempted, before this event | **passes on it**, and says nothing | fails: the review the event asked for never ran |
+| did not succeed, on an open, reopen or ready for review | one attempted by a later run | judged on it | judged on it, with a warning |
+| no result passed, or a word that is not a result | any | (no such input) | fails |
+
+So the first-run case failed already, but only by absence: no review job had
+run anywhere, so the review state read "none". No test held it. Two rows
+passed what they should not have. Marking a pull request draft and then
+ready for review is how this repository asks for a fresh review. If that
+run's gate failed, the review it asked for never ran, and the verdict passed
+on the review it was meant to replace without a word. A pull request that
+edits the reviewer passed although the gate had decided nothing about it.
+
+**The rule now.** The verdict job passes `needs.gate.result` and
+`github.event.action`. `gate_outcome` applies the gate's own rule to the
+runs the verdict has already read:
+
+- A gate that succeeded leaves nothing to judge.
+- A gate that ended `failure`, `cancelled` or `skipped` on a push cost a
+  review only if no other run has attempted one. The gate reviews a push only
+  while none has been, and `attempted` is the one predicate both read. If
+  another run has attempted one, the verdict judges the reviews as before and
+  warns that the gate failed.
+- The same on an open, a reopen or a ready for review cost a review unless a
+  later run has attempted one. Those events are always reviewed. A review
+  from before the event does not count, since it is the one the event asked
+  to replace.
+- Any other value fails, and so does an empty one or none: whether the run
+  should have reviewed is unknown. The test is the value's presence in the
+  set of results, not its truthiness.
+
+A lost review fails after unaddressed findings and before the review state,
+because an earlier review decides that state.
+`test_a_failed_gate_is_worked_out_by_the_gates_own_rule` holds the two
+halves of the pair together. For every way a run of the review job can
+stand, a push the gate would review is one whose failed gate costs a review.
+
+**#291's case passes, with a warning.** A gate that fails on a push after a
+review was attempted would have decided nothing the rule had not already
+decided. Failing the verdict there would only ask for a re-run, and on #291
+the re-run would not start (below). The warning names the gate's conclusion
+and the review that made the failure harmless.
+
+**Why `needs`, not the API.** The verdict already reads every run's jobs,
+but its own run's are not there in time. #291's verdict listed three review
+runs and not its own. Run 39277566091's skipped review job is 118153691857,
+a higher id than the verdict's 118148997097, so GitHub created it after the
+verdict had started. `needs` is what GitHub hands the job, and it survives a
+verdict re-run on its own, which is how re-judging works. Run 39149746190's
+attempt 2 re-ran only the verdict, at 18:16Z on 2026-10-18, and its
+`needs.review.result` still read `failure`, from the review that ended at
+18:04Z.
+
+**A 5xx is asked again.** `gh()` asks a read again when GitHub answers with
+an HTTP 5xx, after 5 s and then after 15 s. If the third try fails too, it
+raises as before. A read is a GET or a GraphQL query. A re-run (POST), a
+comment edit (PATCH) and a GraphQL mutation are never retried, because asking
+twice could do them twice. Not covered: the shell step that opens each job
+and downloads `review_verdict.py` with `gh api`. A 5xx there still fails the
+gate, and the verdict now fails with it.
+
+**Re-running.** Every failing verdict printed `gh run rerun <run id>
+--failed`. On #291, re-runs of 39277566091 at 16:07Z and 17:58Z both ended in
+`startup_failure` with no jobs; the run's attempt 2 reads `startup_failure`.
+The merge commit still existed and master had not moved. The new attempt
+replaced the run's checks, so the pull request had no `claude review verdict`
+at all and sat blocked with every CI check green. Marking it draft and then
+ready for review at 17:59Z started a fresh run, which passed, and #291 merged
+at 18:01Z. Why the re-runs would not start was not found. Every failing
+verdict now prints the toggle (`gh pr ready N --undo`, then `gh pr ready N`)
+after the re-run command, and CLAUDE.md says the same.
+
+**Not verified until this merges.** The pull request that brought this in
+edits `claude-review.yml`, so the review action refuses to run on it
+(P10-18), no review reads it, and its verdict passes with the reviewer-edit
+warning. Its gate and its verdict do run the new code, from the merge
+commit, but only with a gate that succeeded; a gate that fails cannot be
+made to happen on purpose. The first review after it merges is the
+measurement, and its verdict's log should show `this run's gate: 'success',
+event '…'`.
+
+`tests/test_review_verdict.py` covers:
+
+- the rule for each result and event, including #291's push, a ready for
+  review whose review came before it, and one a later run made up for;
+- a result that never reached the verdict: none, empty, or an unknown word;
+- the gate and the verdict agreeing on every way a review run can stand;
+- the order in `decide`: findings first, then a lost review, even on a pull
+  request that edits the reviewer;
+- `judge` against a fake `gh`: a first run whose gate failed fails and prints
+  the gate's result, the review runs it found, the re-run and the toggle;
+  #291's push passes with the warning; a ready for review fails until a later
+  run reviews; a missing result fails after a clean review;
+- the retry: two 5xx answers then success, three 5xx answers then the error,
+  and no retry for a 404 or a POST, or for anything `is_read` refuses;
+- the verdict step's `GATE_RESULT`, `EVENT` and arguments in the workflow.
+
+Six of the new tests' targets were broken on purpose, one at a time, and the
+suite failed each time. The breaks were: ignore a lost review; let a missing
+result through; let an empty result through by truthiness; let an earlier
+review answer a review event; retry nothing; and retry a POST.
+
 ## P90 — one image the OCR engine could not read ended the capture (2026-10-18)
 
 P10-33 left one thing open. An error RapidOCR raises during recognition,
@@ -19622,3 +19751,373 @@ whole. Each now matches the manifest's own `title` and
 | `lms-module-videos` | `lms_page.html`, through the Guidde stand-in | Getting Started with Projects | Getting Started with Projects — Learning Journey |
 | `clamped-text` | `clamped_page.html` | Portfolio Planning — Release Notes | Release Notes — Portfolio Planning |
 | `clamped-noise` | `clamped_noise.html` | The Real Article | The noise element is itself clamped |
+
+## P38: local text that is not UTF-8 was read by a guess nobody named (2026-10-11, re-measured 2026-10-18)
+
+P35-3 recorded what MarkItDown's guess did to text that is not UTF-8, and left
+the choice of an encoding for it as a decision of its own. This is that
+decision. It was first measured on P35's branch before it merged, with
+charset-normalizer 3.5.1, and the branch then waited a week. Every number
+below was measured again on 2026-10-18, once master (9a56941b) was merged in:
+"before" is master's tree, "after" is this one, with MarkItDown 0.1.8, Magika
+0.6.2, charset-normalizer 3.5.2 and Beautiful Soup 4.15.0, under Python
+3.12.14 on macOS with the CI extras. Each count came out as it had on
+2026-10-11; the costs did not, and P38-7 says why. Measuring again also
+found the defect in P38-8. The fixtures are in
+`tests/fixtures/encodings/`, written by `tools/fixtures/encodings.py`.
+
+### P38-1: what each reader did
+
+| Fixture | Before | After |
+|---|---|---|
+| `windows_1252.csv`, as Excel's "CSV (Comma delimited)" writes it | every letter outside ASCII, the euro sign and the curly quotes U+FFFD, and P35's warning | read; the warning names windows-1252 |
+| `windows_1252.md`, saved as "ANSI" | every letter outside ASCII U+FFFD, and no warning | read; the warning names windows-1252 |
+| `windows_1252_late.txt`, first letter outside ASCII at 80 KB | exit 2: guessed ASCII from 64 KB, `UnicodeDecodeError` | read; the warning names windows-1252 |
+| `empty.yaml`, `empty.yml`, `empty.xml` | exit 2: "No converter attempted a conversion"; on Linux, the XML file read (P38-10) | an empty page |
+| in `legacy_archive.zip`: a note, a JSON file, an undeclared page | read as cp1250: `Crčme brűlée`, `ŕ la carte` | read; each named, as windows-1252 |
+| the same, a YAML file | read as cp775: `CrĶme br¹lķe`, `Ć7` for `€7` | read; named, as windows-1252 |
+| the same, Russian in Windows-1251 | read as cp1251, and nothing said | read as cp1251; named, as charset-normalizer's guess |
+| the same, Japanese in seven-bit ISO-2022-JP | read right, and nothing said | read right; named, as charset-normalizer's guess |
+| the same, a page with `meta charset="windows-1252"`, a feed with `encoding="ISO-8859-1"` | read right | read right, and not named: declared |
+| the same, UTF-16 behind a byte order mark, as Excel's "Unicode Text" | read right | read right |
+| the same, an empty YAML file | left out: "WebShot has no reader for it" | an empty section |
+| `legacy_book.epub`, a chapter in Windows-1252 that does not say so | read as windows-1250, `Crčme brűlée`, and nothing said | read; the warning names `OEBPS/chapter.xhtml` |
+
+ISO-2022-JP is ASCII byte by byte, its kana and kanji written as escapes and
+pairs of ASCII letters. A first version of the rule took it for UTF-8, which
+every ASCII file is, and put `ESC $ B` and the letters on the page where
+MarkItDown's guess had read it right. Seven-bit text with an ISO 2022
+designation escape now goes to the guess instead; a terminal log, whose colour
+codes are not designations and whose `ESC ( B` the guess reads as ASCII, does
+not change and is not named.
+
+A chapter is named by its path in the book, as master names a chapter whose
+picture is missing (P36): MarkItDown's EPUB reader keeps only each chapter's
+Markdown, and both warnings reach the manifest the same way.
+
+The declared members were read right before only because charset-normalizer
+prefers an encoding it finds named in the bytes (`preemptive_behaviour`); it
+weighs the name and does not take it for granted. The EPUB chapter went
+through WebShot's HTML reader, which told Beautiful Soup the bytes were UTF-8;
+when they were not, Beautiful Soup asked charset-normalizer, which said
+windows-1250.
+
+A scratch matrix of 29 files and 12 zip members in the same encodings found
+the rest of P35-3 in practice: a `.txt`, `.json`, `.yaml`, `.yml` and an
+undeclared `.xml` in Windows-1252 read in another code page with no word
+(`Zoë's café` became `Zoļ's cafķ`), a UTF-16 CSV, read as UTF-8, ended the
+run with exit 2 on its rows, and in a `.log` or `.json` whose letters came
+late, `naïve` became `naďve`. A `.py`, `.ini`, `.sql` and a file with no
+suffix, in a zip, were read right by the guess, and said nothing either.
+
+### P38-2: the options, measured
+
+The corpus is 317 synthetic files: generic prose in 17 languages, a
+three-row CSV of names and cities, and one short line, in 33 legacy encodings,
+in seven shapes: the paragraph; the CSV; the line on its own; the line after
+1 KB, after 70 KB and eight times over, in 80 KB of English; and the CSV with
+4,000 ASCII rows below it. Every combination an encoding can hold; 26 it
+cannot were left out, Vietnamese among them, which cp1258 holds only as
+combining marks. ISO-2022-JP was left out too: it is seven-bit, so ASCII to
+WebShot. A file is right when it decodes to the text it was written from,
+every character.
+
+| Rule | Western European, 58 (windows-1252 28, Latin-1 21, Latin-9 9) | Other, 259 |
+|---|---|---|
+| (a) charset-normalizer over all the bytes, MarkItDown's own fallback | 21 | 107 |
+| (b) windows-1252, as the Encoding Standard defines it | 56 | 0 |
+| (c) windows-1252 unless it reads as mess, else charset-normalizer over the lines outside ASCII | 56 | 145 |
+| charset-normalizer over the lines outside ASCII alone | 21 | 151 |
+
+(a) fails the common case. charset-normalizer measures five 512-byte stretches
+of what it is given (`steps=5`, `chunk_size=512`), so in a file of mostly
+ASCII it reads ASCII, every single-byte code page scores alike, and the tie
+goes elsewhere: French `è` became `č` in cp1250, an English CSV became cp775,
+a Spanish line became Big5. With the line 70 KB in, it was right for 4 of 45
+files. (b) is right for every windows-1252 and Latin-1 file, and for 7 of 9
+in Latin-9, whose `€` it reads as `¤`; for anything else it is wrong. (c)
+keeps (b) for Western European text and recovers most of (a) elsewhere: right
+for 83 files (a) got wrong, and wrong for 10 it got right: Czech and Polish
+in cp1250 (5), Turkish (2), French in DOS cp850, a German CSV in Mac Roman,
+and an EUC-JP CSV.
+
+The mess test asks charset-normalizer, on the lines holding a byte outside
+ASCII, to read them as cp1252 alone (`cp_isolation`) with a threshold of 0.1.
+Every Western European file scored 0.057 or less; Cyrillic, Greek, Hebrew,
+Arabic, Thai and CJK text scored over 1.0 or held a byte windows-1252 leaves
+undefined. A threshold of 0.1 or 0.15 gave the same results; 0.05 lost 8
+Western European files, and 0.2 or 0.3 lost 3 others. Turkish and the Central
+European and Mac Roman text it passes as windows-1252 score below 0.1: their
+letters decode as plausible Latin ones.
+
+A Mac Roman rule was tried: rank windows-1252 against mac_roman by the same
+measure and take the less messy. It got 9 more Mac Roman files right and 8
+fewer DOS cp850 ones, so it was not adopted.
+
+Cost, best of three, of the rule as `decode_text` ships it and of (a): a
+40 MB ASCII log with an accented line every 1,000, 0.12 s and 0.16 s; 40 MB of
+French, 0.07 s and 0.18 s; 40 MB of Russian, 0.16 s and 0.08 s; 90 MB of
+French, 0.15 s and 0.37 s. Text that is UTF-8 never reaches either. The
+figures first recorded here were a prototype's, not the module's (P38-7).
+
+### P38-3: the rule
+
+`acquire/text_encoding.py`, the one module that imports charset-normalizer,
+decides every local text WebShot reads, in this order:
+
+1. A byte order mark: UTF-8, or UTF-16 in either order. Not part of the text;
+   if the rest does not decode, U+FFFD and a warning.
+2. UTF-8 to the last byte (P35), unless it is seven-bit text with an ISO 2022
+   designation escape, or holds a NUL byte (P38-12).
+3. A declaration in the document, where its format has one and it decodes the
+   bytes: an XML declaration, and an HTML `meta`, whose `iso-8859-1` and
+   `us-ascii` mean windows-1252 as the Encoding Standard has it. Not a label
+   that names no codec for text (P38-9), nor one naming UTF-16, UTF-32 or
+   EBCDIC, which the declaration was not written in (P38-12).
+4. Windows-1252 unless it reads as mess; then charset-normalizer's choice for
+   the lines outside ASCII, or holding an escape; then windows-1252 if it has
+   none. Every byte decodes: Python's cp1252 refuses five, which the Encoding
+   Standard reads as C1 controls, and so does WebShot. Text holding a NUL is
+   charset-normalizer's choice from all of it (P38-12). A guess that decodes
+   the bytes as UTF-8 does is not named, as it changed nothing.
+
+Its readers are the CSV and TSV reader, the Markdown reader in `adapters.py`,
+and two of MarkItDown's replaced in place: the plain-text reader, which reads
+`.txt`, `.log`, JSON, JSON Lines, XML, YAML and any zip member MarkItDown takes
+for text, and the HTML reader, which reads a page in a zip and an EPUB's
+chapters. Each ignores the encoding MarkItDown guessed. The plain-text reader
+also takes every format WebShot presents as text by its suffix, which is what
+reads an empty YAML or XML file: YAML has no MIME type in Python 3.12, XML's is
+`application/xml` on macOS (P38-10), and Magika cannot name an empty stream.
+
+Steps 3 and 4 are named in the manifest, step 4 always:
+
+- `The file is not UTF-8 and does not say which encoding it is in, so WebShot
+  read it as windows-1252, which Windows wrote such text in for Western
+  European languages and which browsers assume for it; if it is in another
+  encoding, its 19 characters outside ASCII are wrong (docs/09 P38).`
+- `…, and as windows-1252 it does not read as text, so WebShot read it as
+  cp1251, charset-normalizer's guess; …`, which for seven-bit text opens
+  `The file holds ISO 2022 escapes and does not say which encoding it is in`.
+- `…, and no encoding WebShot tried reads it as text, so it was read as
+  windows-1252: its 512 characters outside ASCII are probably wrong …`
+- A declaration that does not decode the bytes opens the warning instead:
+  `The file says it is in utf-8, but it is not, …`, and one that names no
+  codec for text `The file says it is in hex, which is not a text encoding
+  WebShot knows, …` (P38-9).
+
+A zip names the member, an EPUB the chapter by its path in the book. A CSV's
+guess replaces P35's
+U+FFFD warning, since no character is replaced any more.
+
+### P38-4: real files
+
+Every file in the real folder of P35-4 in a format WebShot reads, 556 of them
+on 2026-10-18: 390 text files (211 `.txt`, 83 Markdown, 74 CSVs, 17 JSON, two
+XML, two YAML and a 41.5 MB log), 120 Word files, 25 decks, 15 workbooks, five
+zips and one EPUB. The Word files and workbooks are in because the HTML
+reader that now decodes by the rule also reads what MarkItDown makes of them;
+the decks, whose tables go through upstream's own HTML reader, as a control.
+None of the text files or zip members is in a legacy encoding. The only text
+that is not UTF-8 or ASCII is 70 UTF-16 members behind a byte order mark, in a
+zip WebShot refuses for a symbolic link. Read through `_render_local_file` by
+master's tree and by this one, 553 pages are byte-identical with identical
+warnings, and 3 are refused the same way by both: that symbolic link, the
+dataset zip's 674 MB, and a deck that expands to 222 MB. So the change is
+measured on synthetic files alone (P38-2), and the real ones show what it
+leaves alone.
+One empty Word file made master's tree log BeautifulSoup's "Some characters
+could not be decoded" for the empty bytes it was handed; this tree hands it
+an empty string, and the page is the same empty page.
+
+Decoding the 390 text files, 53.9 MB, took 5.9 ms by the rule and 3.2 ms as
+master's CSV reader does it, best of five. In three alternating rounds of
+whole conversions, master's tree then this one, no format but the log moved
+by more than 0.2 s in any round: the CSVs took 13.69 s and 13.53 s, 13.61 s
+and 13.49 s, 13.46 s and 13.47 s; the Word files 17.10 s and 17.13 s, 17.05 s
+and 16.99 s, 16.96 s and 16.94 s; the workbooks 26.69 s and 26.60 s, 26.38 s
+and 26.34 s, 26.42 s and 26.29 s; the decks 9.75 s and 9.73 s, 9.75 s and
+9.94 s, 9.87 s and 9.83 s. The log took 3.07 s and 1.95 s, 3.08 s and 1.93 s,
+3.05 s and 1.93 s. It is ASCII, so MarkItDown is told no encoding for it, and
+its plain-text reader then asks charset-normalizer about all 41.5 MB: 1.08 s
+in `from_bytes`, profiled. The rule reads it as UTF-8 and asks nothing.
+
+### P38-5: what this does not cover
+
+- Text the rule takes for windows-1252 and is not: in the corpus, Mac Roman
+  German and Spanish (Mac Roman right in 11 of 28), Turkish (0 of 14), Polish
+  and Czech (ISO-8859-2 0 of 14, cp1250 7 of 14), and Latin-9's `€`. Each
+  carries the warning that names windows-1252, so the page is not trusted for
+  more than it is.
+- charset-normalizer's choice is a guess too: a French line in Mac Roman read
+  right as `mac_greek`, which agrees with Mac Roman on those letters, and the
+  warning names `mac_greek`.
+- UTF-16 or UTF-32 with no byte order mark is charset-normalizer's guess
+  from all of the bytes (P38-12), right for each file measured there, and
+  named; nothing tells it from a single-byte file with a NUL in it.
+- A notebook is read by MarkItDown's notebook reader, which decodes by the
+  stream's encoding, a guess for one that is not UTF-8. JSON is UTF-8 by
+  definition, and none was measured.
+- A Python file's `coding:` line is not read as a declaration.
+- An HTML file on its own is read by Chromium, which decides its encoding.
+- A member Magika cannot name, whose suffix no reader takes, is still left out
+  and named (P33).
+
+### P38-6: the tests
+
+`tests/test_text_encoding.py` first holds the premise: MarkItDown on its own,
+given what the bridge gives it, fails the late text and the three empty files,
+reads the note, the JSON, the undeclared page and the EPUB as cp1250 and the
+YAML as something else, and reads the ISO-2022-JP note right. Then the rule: a
+byte order mark, UTF-8 and ASCII with no warning; a wrong mark's U+FFFD; a
+declaration read as its format means it, and one that does not decode named;
+windows-1252 after 50,000 ASCII lines; a 64 KB ASCII line sampled within 2 s
+(P38-7); every byte read as the Encoding Standard's windows-1252 has it; one
+character counted as one; the
+Russian note as cp1251; ISO-2022-JP as itself, named, and a terminal log's
+escapes as ASCII, not named; and the 128 bytes outside ASCII, four times over,
+which no encoding reads, as windows-1252, said to be. Then each reader: the
+CSV, with its warning in full; the late text; the Markdown file; the empty
+files; every member of the archive and which are named; the EPUB's chapter,
+by its path; and that the plain-text reader's suffixes are the formats WebShot presents as
+text. End to end, each fixture is captured and its sentinel found in
+`content.md`, `content.txt` and `chunks.jsonl`, and its warnings in the
+manifest. P35's two tests of `data/windows.csv` now expect it read, with this
+warning.
+
+### P38-7: the cost first recorded was a prototype's
+
+The costs P38-2 first gave, 0.05 s for the 40 MB log and 0.18 s for 90 MB of
+French, came from the scratch script that compared the options, which picked
+the lines outside ASCII with `bytes.split` and `isascii()`. The module that
+shipped picked them with a pattern, `[^\n]*[\x1b\x80-\xff][^\n]*`, and read
+windows-1252 by `str.translate` over the Latin-1 decoding. Timed on
+2026-10-18, that took 12.25 s for the log, 1.46 s for 40 MB of French and
+3.31 s for 90 MB: no test or measurement had run the module on a large file.
+
+The pattern is tried at each position of an ASCII line, runs to its end, and
+backtracks across all of it before failing, so a line costs the square of its
+length: 10.8 s of the log's 12.25, and 13.2 s for one ASCII line of 64 KB.
+`str.translate` with a table costs 1.4 s per 40 MB. The module now splits the
+lines as the script did, keeping one that is not `isascii()` or holds an
+escape, which gave the same sample for both files, and decodes windows-1252
+with `codecs.charmap_decode` and a 256-character table, which reads all 256
+bytes as the translation did. All 317 synthetic files decode as before, and the
+costs in P38-2 are the module's. `test_a_long_ascii_line_is_sampled_in_linear_time`
+fails on the pattern, at 13.2 s against its 2 s.
+
+### P38-8: UTF-8 with an escape was taken for ISO 2022
+
+P38-3's step 2 sends seven-bit text with an ISO 2022 designation to the guess.
+The module tested for the designation and not for seven bits, so any UTF-8
+text holding `ESC (`, `ESC $` and the rest went there. A line of a terminal
+log, `ESC ( B Zoë`, was read as windows-1252, `ZoÃ«`, and named as a guess;
+with more letters outside ASCII, charset-normalizer happened to choose UTF-8,
+which is why no fixture showed it. The test now asks for ASCII first, and for
+an escape before it runs the pattern. That also stopped the pattern running
+over every UTF-8 file: decoding the 390 real text files of P38-4 took 17.1 ms
+with it and takes 5.9 ms. `test_utf8_with_an_escape_is_utf8` fails on the old
+test.
+
+### P38-9: a declared label that names no codec for text ended the reader
+
+Found by the Claude review of #291. A declaration is the document's own word,
+and `codecs.lookup` resolves labels that are not encodings of text: `hex`,
+`base64`, `zlib`, `bz2`, `uu`, `quopri` and `rot13` are codecs from bytes to
+bytes, which `bytes.decode` refuses with LookupError. Python's `undefined` and
+`punycode` raise UnicodeError, which is not the UnicodeDecodeError the decoder
+caught, and a label holding a NUL makes `codecs.lookup` itself raise
+ValueError. Every label in Python's alias table, and a dozen more, went
+through the decoder's lookup as XML and as HTML read it, on three samples;
+those were all the ways out. Each ended the reader, so in `declared_labels.zip`, written by
+`tools/fixtures/encodings.py`, four of the five members were left out of the
+page ("its reader failed (LookupError: 'hex' is not a text encoding …)"). The
+page whose `meta` says `base64` was read by the plain-text reader as its
+markup, once the HTML reader had failed. Master put all five on the page, read
+by MarkItDown's guess, and said nothing.
+
+A label is now a declaration only if it names a codec for text, and one that
+does not goes to the guess: `The file says it is in hex, which is not a text
+encoding WebShot knows, so WebShot read it as windows-1252, …`. A character in
+the label that does not print is shown as an escape, as the NUL is. All five
+members are read and named. The tests of each label and of the archive fail
+on the old decoder.
+
+A lone XML file with such a declaration still ends the capture, with exit 5,
+on master as on this branch: `guard_xml` parses it through defusedxml first,
+expat asks Python for the codec, and the LookupError is not the ParseError it
+catches. That is master's, and left to a change of its own.
+
+### P38-10: an empty XML file is read on Linux
+
+CI's Linux legs failed the premise test in its loop over the empty files,
+which pass on macOS. Upstream takes an empty file Magika cannot name by its
+MIME type, from Python's `mimetypes`, which reads the platform's own tables:
+macOS has `/etc/apache2/mime.types`, which says `application/xml`, which
+upstream does not take for text. The Linux runner's image (Ubuntu 24.04) has
+none of the files `mimetypes` reads, so Python's default, `text/xml`, stands.
+Python 3.11, 3.12 and 3.13 have the same defaults, and none of them gives
+YAML a type. With `mimetypes` given no tables on macOS, as on the runner,
+MarkItDown refused the two empty YAML files and read the empty XML one, which
+is the iteration that fails. The test now expects what the platform's table
+implies, and asks that YAML has no type, so WebShot's own reading of the
+empty YAML file stays the case it covers.
+
+### P38-11: the review's coverage step could not read this diff
+
+The first Claude review of #291 finished, posted its finding, and still
+failed: the coverage step of `tools/ci/review_verdict.py` (P89-9) stopped
+with `'utf-8' codec can't decode byte 0xe8 in position 53355`. A diff carries
+each file's own bytes, and byte 53,355 of #291's is inside
+`windows_1252.csv`, a fixture that is Windows-1252 on purpose. `gh()` read
+gh's output with `text=True`, strict UTF-8, so the step left no coverage
+record, and the verdict reported none. It now decodes with
+`errors="replace"`. A byte that is not UTF-8 becomes U+FFFD, which keeps each
+line in its place for the hunk counts the coverage is measured by, and
+GitHub's JSON is UTF-8 throughout. `test_gh_output_that_is_not_utf8_is_read`
+runs a stand-in `gh` that prints such a byte, and fails on the old call with
+the same error. The workflow reads the script from the pull request's own
+merge commit, so this fix applies to #291's next review.
+
+### P38-12: text with NUL bytes, and declarations no ASCII file can mean
+
+Two more findings of the Claude review of #291, each a page the rule read as
+known and was wrong about, with nothing in the manifest.
+
+**UTF-16 with no byte order mark.** NUL is valid UTF-8, so UTF-16 that is all
+ASCII is UTF-8 to its last byte, with a NUL beside every letter: step 2 took
+it as UTF-8 and named nothing. Master read the same `.txt` and `.json`
+members right, in either byte order, because `_declared_charset` leaves text
+with a NUL to MarkItDown, whose charset-normalizer said `utf_16_le` or
+`utf_16_be`; WebShot's plain-text reader no longer asks MarkItDown. A
+BOM-less UTF-16 CSV was wrong in both: master put U+FFFD and NULs on the
+page, this branch NULs. Text holding a NUL now goes past step 2 to a guess of
+its own: charset-normalizer over all of its bytes, since the windows-1252
+reading and the lines outside ASCII mean nothing when every letter has a NUL
+beside it. Measured: French, Russian and Japanese prose in UTF-16 and UTF-32
+of either byte order, English in the tests, a one-line file and a two-letter
+one, all read right and named; 40 MB of French in UTF-16 in 0.04 s; a UTF-8 log padded
+with NULs, and `find -print0` output, still UTF-8 and unnamed, since a guess
+that reads the bytes as UTF-8 does is not one. The 317 files of P38-2 hold no
+NUL and decode as before.
+
+**A declaration naming an encoding it is not written in.** A declaration is
+found by reading the bytes as ASCII, so one that names UTF-16 was read in an
+encoding it does not name: a real UTF-16 file has no ASCII-readable
+declaration. Decoded by it, an even-length Windows-1252 page whose `meta`
+says `utf-16`, or a feed whose declaration does, read as CJK, and nothing
+said so. The Encoding Standard reads a `meta` naming UTF-16 as UTF-8 for this
+reason. The rule asks of every declared codec that it read a declaration's
+own characters (ASCII letters, digits, whitespace and `<>?!/=\"'-_.:;`) as
+themselves. Over every label in Python's alias table, that turns away
+exactly UTF-16, UTF-32 and the six EBCDIC code pages, and keeps `shift_jis`,
+`iso2022_jp` and the rest; a stricter test, all of printable ASCII, would also
+have turned away `shift_jis_2004` and `cp864`, which differ only at `\`, `~`
+or `%`. Such a declaration now goes to the guess: `The file says it is in
+utf-16, but it is not, …`.
+
+`wide_text.zip` holds each case, and 13 of the tests fail on the decoder
+before this. Over the real files of P38-4, the 553 pages are still
+byte-identical with master's and the 3 refusals the same. Decoding the 390
+text files took 7.0 ms against 3.4 ms for a plain UTF-8 decode, best of
+five, with the machine's load at 139.

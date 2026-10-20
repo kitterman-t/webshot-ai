@@ -701,6 +701,12 @@ jobs:
           echo "::notice::A draft gets no claude review verdict; marking it ready for review starts the review."
       # `verdict=pass|fail findings=N` prints on every run that reaches a
       # verdict, so the line's absence means this step did not execute.
+      #
+      # The gate's result and the event are passed because a gate that failed
+      # skipped the review whatever the event called for, and only this run
+      # knows it did: the verdict fails when that cost a review, and when the
+      # result is missing (docs/09 P89-11). `needs` keeps the gate's result
+      # when the verdict is re-run alone, as re-judging does.
       - name: No unaddressed review finding on this head
         if: ${{ !github.event.pull_request.draft }}
         env:
@@ -710,6 +716,9 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           RUN_HEAD: ${{ github.event.pull_request.head.sha }}
           REVIEW_RESULT: ${{ needs.review.result }}
+          GATE_RESULT: ${{ needs.gate.result }}
+          EVENT: ${{ github.event.action }}
         run: >-
           python3 "$RUNNER_TEMP/review_verdict.py" judge --repo "$REPO" --pr "$PR"
           --run-id "$RUN_ID" --run-head "$RUN_HEAD" --review-result "$REVIEW_RESULT"
+          --gate-result "$GATE_RESULT" --event "$EVENT"

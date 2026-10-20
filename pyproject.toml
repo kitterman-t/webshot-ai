@@ -93,6 +93,11 @@ dependencies = [
     # reads the captured post-JS HTML for --auto-selector. Page metadata is
     # the page's own declarations, not Trafilatura's (docs/09 P82, P88, P93).
     "markitdown>=0.1.7,<0.2",
+    # Direct because WebShot asks it a question of its own: what local text
+    # that is not UTF-8 is in, once windows-1252 does not read as text (docs/09
+    # P38). MarkItDown already depends on it, so no package is added; only
+    # `acquire/text_encoding.py` imports it.
+    "charset-normalizer>=3.5.1,<4",
     "trafilatura>=2.3.1,<3",
     # Direct because spec §6.6 makes it WebShot's own guarantee, not an
     # inherited one: every byte of untrusted XML is parsed here before any
@@ -174,6 +179,9 @@ filterwarnings = ["error::DeprecationWarning:webshot.*"]
 [tool.ruff]
 target-version = "py311"
 src = ["src", "tests", "tools"]
+# Markdown in a legacy encoding, on purpose (docs/09 P38): ruff formats
+# Markdown too, reads it as UTF-8, and fails the check at its first byte.
+extend-exclude = ["tests/fixtures/encodings/*.md"]
 
 [tool.ruff.lint]
 select = [

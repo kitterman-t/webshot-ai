@@ -13,6 +13,12 @@ It fails when
 - no review has finished on the pull request: none has run, one is still
   running, or the latest one failed its own guard, the one that fails a review
   that did not show it read the diff (docs/09 P10-18);
+- this run's gate did not succeed, and so skipped a review the event called
+  for that no other run has attempted: a push while no review has been
+  attempted, or an open, reopen or ready-for-review with no later attempt; or
+  the workflow passed no gate result at all (docs/09 P89-11). A gate that
+  failed on a push after a review was attempted cost nothing, since the gate
+  skips such a push anyway, and the verdict says so in a warning;
 - the review that finished skipped a check it reports: its session record
   shows no finished bug agent or no finished CLAUDE.md compliance agent, or it
   left no such record at all (docs/09 P89-9). `coverage` measures that in the
@@ -47,10 +53,14 @@ By hand:
 
     python tools/ci/review_verdict.py rejudge --repo OWNER/REPO --pr 123
 
-or re-run the failed job (`gh run rerun <run id> --failed`).
+or re-run the failed job (`gh run rerun <run id> --failed`). A re-run can end
+in startup_failure with no jobs, again and again, and leave the pull request
+with no review check at all; a fresh event (draft, then ready for review)
+starts a new run instead, and every failing verdict prints both (P89-11).
 
-Everything here reads GitHub through `gh`. A read that fails fails the
-verdict: an answer the check could not read is not a clean one.
+Everything here reads GitHub through `gh`. A read that GitHub answers with a
+5xx is asked again twice, a few seconds apart; a read that still fails fails
+the verdict: an answer the check could not read is not a clean one.
 """
 
 from __future__ import annotations
@@ -112,20 +122,73 @@ class GhError(RuntimeError):
     pass
 
 
+#: How long to wait before each retry of a read that GitHub answered with a
+#: 5xx. One HTTP 502 ended #291's gate, and a gate that ends that way skips
+#: the review after it (docs/09 P89-11). After the last retry the error is
+#: raised as it always was: a read that keeps failing has failed.
+RETRY_DELAYS: tuple[float, ...] = (5.0, 15.0)
+_SERVER_ERROR = re.compile(r"\bHTTP 5\d\d\b")
+_FIELDS = frozenset({"-f", "-F", "--field", "--raw-field", "--input"})
+
+
+def is_read(args: Sequence[str]) -> bool:
+    """Whether a gh call only reads, so that asking again does nothing twice.
+
+    A GraphQL query is a POST that reads; a mutation is not. A REST call that
+    sends fields is a POST unless it names another method.
+    """
+    method = None
+    for flag in ("-X", "--method"):
+        if flag in args[:-1]:
+            method = args[list(args).index(flag) + 1].upper()
+    if tuple(args[:2]) == ("api", "graphql"):
+        return method in (None, "POST") and not any(
+            re.match(r"query=\s*mutation\b", a) for a in args
+        )
+    return method == "GET" or (method is None and not _FIELDS.intersection(args))
+
+
 def gh(*args: str) -> str:
-    """Run gh and return its stdout; GhError, with gh's stderr, if it fails."""
-    try:
-        result = subprocess.run(
-            ["gh", *args], capture_output=True, text=True, check=False
+    """Run gh and return its stdout; GhError, with gh's stderr, if it fails.
+
+    A diff carries each file's own bytes, and a fixture in a legacy encoding is
+    not UTF-8: read strictly, #291's Windows-1252 CSV ended the coverage step
+    with a UnicodeDecodeError, and the review job failed having reviewed the
+    whole diff (docs/09 P38-11).  A byte that is not UTF-8 becomes U+FFFD,
+    which keeps every line where it was; GitHub's JSON is UTF-8 throughout.
+
+    A read that GitHub answers with a 5xx is asked again, after each of
+    `RETRY_DELAYS`; anything else fails at once.
+    """
+    delays = RETRY_DELAYS if is_read(args) else ()
+    for tries, delay in enumerate((*delays, None), start=1):
+        try:
+            result = subprocess.run(
+                ["gh", *args],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+        except FileNotFoundError as error:
+            raise GhError("gh is not on PATH") from error
+        if result.returncode == 0:
+            return result.stdout
+        stderr = result.stderr.strip()
+        server = _SERVER_ERROR.search(stderr)
+        if delay is None or server is None:
+            after = f" after {tries} tries" if tries > 1 else ""
+            raise GhError(
+                f"gh {' '.join(args[:3])} exited {result.returncode}{after}: "
+                f"{stderr[:600]}"
+            )
+        print(
+            f"gh {' '.join(args[:3])} answered {server.group(0)} "
+            f"(try {tries}); asking again in {delay:g} s",
+            file=sys.stderr,
         )
-    except FileNotFoundError as error:
-        raise GhError("gh is not on PATH") from error
-    if result.returncode != 0:
-        raise GhError(
-            f"gh {' '.join(args[:3])} exited {result.returncode}: "
-            f"{result.stderr.strip()[:600]}"
-        )
-    return result.stdout
+        time.sleep(delay)
+    raise AssertionError("unreachable: the last try raises or returns")
 
 
 def gh_json(*args: str) -> Any:
@@ -213,6 +276,21 @@ def classify(summary: Summary) -> str:
     if NO_ISSUES.search(summary.body):
         return "no issues"
     return "unaddressed"
+
+
+def attempted(attempt: Attempt) -> bool:
+    """Whether a run of the review job was a review attempted: still going, or
+    ended other than skipped or cancelled.
+
+    The gate reviews a push only while no review has been attempted, and the
+    verdict works out from the same rule what a gate that failed would have
+    decided (docs/09 P89-11), so both read it here.
+    """
+    return attempt.status != "completed" or attempt.conclusion not in (
+        None,
+        "skipped",
+        "cancelled",
+    )
 
 
 def review_state(attempts: Sequence[Attempt]) -> tuple[str, Attempt | None]:
@@ -1183,6 +1261,22 @@ def _coverage_problem(covered: Covered) -> str | None:
     return None
 
 
+def if_rerun_fails(number: object) -> str:
+    """What to do when a re-run will not start (docs/09 P89-11).
+
+    A re-run can end in startup_failure with no jobs, over and over, and the
+    attempt it starts replaces the run's checks: the pull request is left with
+    no review check at all, which blocks it as surely as a red one. A fresh
+    event starts a new run instead.
+    """
+    return (
+        "If that re-run ends in startup_failure with no jobs, it leaves the pull "
+        "request with no review checks at all (docs/09 P89-11): mark it draft and "
+        f"then ready for review instead (`gh pr ready {number} --undo`, then "
+        f"`gh pr ready {number}`), which starts a fresh run."
+    )
+
+
 def _rereview(attempt: Attempt | None) -> str:
     if attempt is None:
         return (
@@ -1201,6 +1295,116 @@ def _rereview(attempt: Attempt | None) -> str:
     )
 
 
+#: What `needs.gate.result` can read. Anything else, an empty value included,
+#: means the gate's result did not reach the verdict.
+GATE_RESULTS = frozenset({"success", "failure", "cancelled", "skipped"})
+
+
+@dataclass(frozen=True)
+class Gate:
+    """This run's gate: how it ended, and what that cost (docs/09 P89-11).
+
+    `result` is `needs.gate.result` as the workflow passed it, None when it
+    passed nothing. `lost` says why a review this run should have started did
+    not run, or that nobody can tell; `note`, why a gate that did not succeed
+    cost no review. A gate that succeeded has neither.
+    """
+
+    result: str | None
+    event: str | None = None
+    lost: str = ""
+    note: str = ""
+
+
+def gate_outcome(
+    result: str | None,
+    event: str | None,
+    run_id: int,
+    attempts: Sequence[Attempt],
+) -> Gate:
+    """What this run's gate ending as *result* cost the pull request.
+
+    A gate that did not succeed decided nothing, and the review job after it
+    was skipped whatever the event called for. The review state cannot show
+    that: an earlier review still decides it, so a pull request marked ready
+    for review to be reviewed again, whose gate then failed, passed on the
+    review it asked to replace. So the gate's own rule is applied here to the
+    runs the verdict read: a push is reviewed only while no review has been
+    attempted, and a review event always is, so what makes up for its loss is
+    a review attempted by a later run.
+    """
+    if result not in GATE_RESULTS:
+        given = "no gate result" if result is None else f"the gate result {result!r}"
+        return Gate(
+            result,
+            event,
+            lost=(
+                f"The workflow passed this verdict {given}, so whether this run "
+                "should have reviewed the pull request is unknown, and a review "
+                "nobody knows was due is not one that ran."
+            ),
+        )
+    if result == "success":
+        return Gate(result, event)
+    ended = f"This run's gate ended {result}, so the review job after it was skipped"
+    others = sorted(
+        (a for a in attempts if a.run_id != run_id and attempted(a)),
+        key=lambda a: (a.started_at, a.run_id),
+        reverse=True,
+    )
+    if event == "synchronize":
+        if others:
+            return Gate(
+                result,
+                event,
+                note=(
+                    f"{ended}. That cost no review: a push after a review was "
+                    f"attempted ({others[0].url}) is not reviewed again."
+                ),
+            )
+        return Gate(
+            result,
+            event,
+            lost=(
+                f"{ended}, and this push was the pull request's first chance at "
+                "one: no review has been attempted on it."
+            ),
+        )
+    if event is not None and event in REVIEW_EVENTS:
+        named = event.replace("_", " ")
+        later = [a for a in others if a.run_id > run_id]
+        if later:
+            return Gate(
+                result,
+                event,
+                note=(
+                    f"{ended}. A later run attempted the review this {named} "
+                    f"event called for ({later[0].url})."
+                ),
+            )
+        earlier = (
+            f" The latest review attempted ({others[0].url}) came before this event."
+            if others
+            else " No review has been attempted on it."
+        )
+        return Gate(
+            result,
+            event,
+            lost=(
+                f"{ended}, and a pull request {named} is always reviewed: no run "
+                f"since this one has attempted a review.{earlier}"
+            ),
+        )
+    return Gate(
+        result,
+        event,
+        lost=(
+            f"{ended}, on a {event or 'missing'} event, which is not one the gate "
+            "decides, so whether this run should have reviewed is unknown."
+        ),
+    )
+
+
 def decide(
     pr: Mapping[str, Any],
     state: str,
@@ -1210,8 +1414,39 @@ def decide(
     self_edit: bool,
     since: int,
     coverage: Covered,
+    gate: Gate,
 ) -> Verdict:
-    """The verdict on *pr*'s head, from what was read about it. Pure."""
+    """The verdict on *pr*'s head, from what was read about it. Pure.
+
+    A gate that did not succeed is reported on every verdict: as the reason
+    when it cost a review, as a warning when it cost none.
+    """
+    verdict = _decide(
+        pr,
+        state,
+        attempt,
+        feedback,
+        self_edit=self_edit,
+        since=since,
+        coverage=coverage,
+        gate=gate,
+    )
+    if gate.note:
+        verdict.warnings.insert(0, gate.note)
+    return verdict
+
+
+def _decide(
+    pr: Mapping[str, Any],
+    state: str,
+    attempt: Attempt | None,
+    feedback: Feedback,
+    *,
+    self_edit: bool,
+    since: int,
+    coverage: Covered,
+    gate: Gate,
+) -> Verdict:
     unresolved = [t for t in feedback.threads if not t.resolved]
     open_summaries = [s for s in feedback.summaries if classify(s) == "unaddressed"]
     findings = [
@@ -1224,6 +1459,21 @@ def decide(
             f"Claude's review left {len(findings)} finding(s) nobody has addressed.",
             findings=findings,
             remedy=ADDRESS,
+        )
+    # Before the review state, which an earlier review decides: the review this
+    # run should have started may be the one that would have found something.
+    if gate.lost:
+        return Verdict(
+            False,
+            gate.lost,
+            remedy=(
+                "Re-running this run's failed jobs runs the gate again, then the "
+                "review it decides and this verdict after them."
+                if gate.result in GATE_RESULTS
+                else f"The verdict step in {WORKFLOW} passes `needs.gate.result` "
+                "as --gate-result; a run whose workflow does not is judged by a "
+                "fresh event, not by a re-run of the same file."
+            ),
         )
     where = f"{attempt.url} on {attempt.head_sha[:12]}" if attempt else ""
     if state == "running":
@@ -1326,8 +1576,19 @@ def decide(
     )
 
 
-def judge(repo: str, pr: Mapping[str, Any]) -> tuple[Verdict, list[str]]:
-    """Read everything the verdict depends on, then decide. Returns what was seen."""
+def judge(
+    repo: str,
+    pr: Mapping[str, Any],
+    *,
+    gate_result: str | None,
+    event: str | None,
+    run_id: int,
+) -> tuple[Verdict, list[str]]:
+    """Read everything the verdict depends on, then decide. Returns what was seen.
+
+    *gate_result* and *event* are this run's `needs.gate.result` and
+    `github.event.action`, None when the workflow passed none.
+    """
     number = int(pr["number"])
     head = str(pr["head"]["sha"])
     seen = [
@@ -1356,6 +1617,11 @@ def judge(repo: str, pr: Mapping[str, Any]) -> tuple[Verdict, list[str]]:
         for a in attempts
     ] or ["review: no run of the review job on this pull request"]
     seen.append(f"review state: {state}")
+    gate = gate_outcome(gate_result, event, run_id, attempts)
+    seen.append(
+        f"this run's gate: {gate_result!r}, event {event!r}"
+        + (f": {gate.lost or gate.note}" if gate.lost or gate.note else "")
+    )
     feedback = fetch_feedback(repo, number)
     seen += [
         f"thread {'resolved' if t.resolved else 'UNRESOLVED'}"
@@ -1400,6 +1666,7 @@ def judge(repo: str, pr: Mapping[str, Any]) -> tuple[Verdict, list[str]]:
         self_edit=self_edit,
         since=since,
         coverage=coverage,
+        gate=gate,
     )
     return verdict, seen
 
@@ -1571,12 +1838,7 @@ def gate_decision(
             f"a {action or 'missing'} event does not start a review.",
         )
     tried = sorted(
-        (
-            a
-            for a in attempts()
-            if a.status != "completed"
-            or a.conclusion not in (None, "skipped", "cancelled")
-        ),
+        (a for a in attempts() if attempted(a)),
         key=lambda a: (a.started_at, a.run_id),
         reverse=True,
     )
@@ -1646,15 +1908,20 @@ def cmd_judge(args: argparse.Namespace) -> int:
         pr = gh_json("api", f"repos/{args.repo}/pulls/{args.pr}")
         if not isinstance(pr, dict):
             raise GhError(f"#{args.pr} answered {pr!r:.200}")
-        verdict, seen = judge(args.repo, pr)
+        verdict, seen = judge(
+            args.repo,
+            pr,
+            gate_result=args.gate_result,
+            event=args.event,
+            run_id=args.run_id,
+        )
     except (GhError, KeyError, TypeError, ValueError) as error:
         verdict = Verdict(
             False,
             f"The verdict could not read what it judges: {error}",
             remedy="An answer this check could not read is not a clean one.",
         )
-    if args.review_result:
-        seen.append(f"this run's review job: {args.review_result}")
+    seen.append(f"this run's review job: {args.review_result!r}")
     for line in seen:
         print(line)
     for warning in verdict.warnings:
@@ -1664,8 +1931,8 @@ def cmd_judge(args: argparse.Namespace) -> int:
     print(("" if verdict.passed else "::error::") + verdict.reason)
     if not verdict.passed:
         verdict.remedy = (
-            f"{verdict.remedy} To re-judge at once, re-run this job: "
-            f"gh run rerun {args.run_id} --failed"
+            f"{verdict.remedy} To re-judge at once, re-run this run's failed "
+            f"jobs: gh run rerun {args.run_id} --failed. {if_rerun_fails(args.pr)}"
         ).strip()
     if verdict.remedy:
         print(verdict.remedy)
@@ -1968,7 +2235,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     judge_cmd.add_argument("--pr", type=int, required=True)
     judge_cmd.add_argument("--run-id", type=int, required=True)
     judge_cmd.add_argument("--run-head", required=True)
-    judge_cmd.add_argument("--review-result", default="")
+    judge_cmd.add_argument("--review-result")
+    # No default that reads as an answer: a gate result or an event the
+    # workflow did not pass is None, and the verdict fails on it (P89-11).
+    judge_cmd.add_argument("--gate-result", help="this run's needs.gate.result")
+    judge_cmd.add_argument("--event", help="this run's github.event.action")
     rejudge = sub.add_parser("rejudge", help="re-run the failed verdicts on a head")
     rejudge.add_argument("--repo", required=True)
     which = rejudge.add_mutually_exclusive_group(required=True)
