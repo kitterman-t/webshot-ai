@@ -8894,6 +8894,38 @@ and `test_a_hold_on_an_action_pinned_two_ways_is_still_needed` failed on
 whether it is behind, and `run_watch` decides once per name, after every pin
 is judged, that a hold is unneeded when none of its pins is behind.
 
+### P84-5 — a requirement Dependabot could not rewrite: `Markdown` (2026-10-20)
+
+The pull-request limit was not all that held markdown back. On 2026-10-20 the
+dependency watch still reported markdown 3.10.3, 24 days behind 3.11 with 21
+allowed, although webshot-ai's uv limit had been ten since 2026-10-18.
+Dependabot's own log for webshot-ai on 2026-10-19 (run 39232403915) shows it
+trying:
+
+- `Updating markdown from 3.10.3 to 3.11`, with the strategy `bump_versions`;
+- 0.4 s later, `dependency_file_content_not_changed` ("Content did not
+  change!"), with no uv command run in between.
+
+So it opened no pull request. The run's summary lists markdown under
+"Dependencies failed to update", and nothing else reported it until the watch
+opened webshot-ai#48. uv was not the obstacle: `uv lock --upgrade-package
+markdown` resolves 3.11.2 against the rest of the tree with no conflict.
+
+The requirement was written `Markdown>=3.6,<4`. Every other requirement but
+`Pillow>=12.3,<13` is written as PyPI normalizes its name, and Dependabot
+rewrote those. The likely cause is that its updater looks for the line under
+the normalized name `markdown` and does not find `Markdown`. That is inferred
+from the log, not read in Dependabot's code, and it is confirmed only when
+Dependabot's first run after this change reaches webshot-ai and proposes
+markdown. Pillow has had no newer release, so its log line ("No update needed
+for pillow 12.3.0") says nothing either way.
+
+Both names are now written in normalized form (`markdown`, `pillow`); uv.lock
+already recorded them so and does not change. `tests/test_dependency_names.py`
+fails on any requirement in pyproject.toml whose name is not in normalized
+form, and on a missing dependency table. Against the pyproject.toml it
+replaces, it names exactly `Markdown` and `Pillow`.
+
 ## P27: what MarkItDown's Office readers pass over (2026-10-11)
 
 A slide-text file made from a lecture deck said one slide held only its

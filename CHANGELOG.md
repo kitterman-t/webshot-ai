@@ -353,6 +353,12 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **Markdown updates can reach WebShot again.** The requirement was written
+  `Markdown>=3.6,<4`, and Dependabot, setting out each day to update markdown
+  from 3.10.3 to 3.11, found nothing to change and opened no pull request, so
+  markdown fell 24 days behind. `markdown` and `pillow` are now written as
+  PyPI normalizes them, and a test fails on any requirement that is not
+  (docs/09 P84-5). The resolved versions do not change.
 - **A Claude review that skipped its checks no longer passes as one.** The
   review plugin ends a clean review with a fixed sentence, "No issues found.
   Checked for bugs and CLAUDE.md compliance.", whatever ran. Of 23 reviews
