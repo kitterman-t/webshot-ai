@@ -138,6 +138,13 @@ than left out without a word. So is a member of a ZIP that WebShot cannot read.
 The `__MACOSX/` metadata the Finder adds to a ZIP is left out of the page, since
 it can hold the address a file was downloaded from.
 
+Text is read as UTF-8, or as the encoding a byte order mark, a page's `meta`
+or an XML declaration names. Text that is none of those, such as a CSV that
+Excel saved on Windows, is read as windows-1252 unless it does not read as
+text, when another encoding is guessed; either way the manifest's `warnings`
+names the encoding WebShot chose, so a page whose accented letters look wrong
+says why.
+
 ## A protected document
 
 For a document that only exists inside an authenticated viewer:

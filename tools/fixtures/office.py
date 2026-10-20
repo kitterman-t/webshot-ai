@@ -1446,7 +1446,8 @@ def write_late_utf8_archive(path: Path) -> None:
     files behind a byte order mark, it found no reader for the YAML one, whose
     content Magika could not name, and put the mark on the page as U+FEFF for
     the text one, which Magika named.  `windows.csv` is Windows-1252, which
-    WebShot reads only as UTF-8, and says so.  Every word is made up.
+    WebShot read only as UTF-8 until docs/09 P38, and now reads as the
+    windows-1252 it guesses, and says so.  Every word is made up.
     """
     module = (
         '"""Generated values."""\n\n\n'

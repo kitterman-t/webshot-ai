@@ -17,7 +17,10 @@ tests/test_review_coverage_replay_private.py replays real ones.
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -80,6 +83,11 @@ def test_every_head_gets_a_verdict_that_is_never_skipped() -> None:
     run = verdict["steps"][-1]
     assert '"$RUNNER_TEMP/review_verdict.py" judge' in run["run"]
     assert run["env"]["RUN_HEAD"] == "${{ github.event.pull_request.head.sha }}"
+    # The gate's own result, which `needs` keeps when the verdict is re-run
+    # alone, and the event it decided (docs/09 P89-11).
+    assert run["env"]["GATE_RESULT"] == "${{ needs.gate.result }}"
+    assert run["env"]["EVENT"] == "${{ github.event.action }}"
+    assert '--gate-result "$GATE_RESULT" --event "$EVENT"' in run["run"]
     assert verdict["permissions"] == {
         "actions": "write",
         "checks": "read",
@@ -288,9 +296,11 @@ def decide(
     reviewed: str = HEAD,
     since: int = 0,
     coverage: rv.Covered | None = None,
+    gate: rv.Gate | None = None,
     **pr_overrides: Any,
 ) -> rv.Verdict:
-    """The rule, with a review that covered the diff unless *coverage* says not."""
+    """The rule, with a review that covered the diff unless *coverage* says not,
+    after a gate that succeeded unless *gate* says not."""
     who = None if state == "none" else attempt(9, "completed", "success", "t", reviewed)
     if coverage is None:
         coverage = rv.Covered(who, record() if state == "reviewed" else None, "read")
@@ -302,6 +312,7 @@ def decide(
         self_edit=self_edit,
         since=since,
         coverage=coverage,
+        gate=gate or rv.Gate("success", "opened"),
     )
 
 
@@ -440,6 +451,78 @@ def test_the_gate_reviews_a_push_only_while_no_review_has_been_attempted() -> No
     ):
         review, _, reason = rv.gate_decision(push, lambda t=tried: [*superseded, t])
         assert not review and tried.url in reason
+
+
+# --------------------------------------------------------------------------
+# A gate that did not decide (docs/09 P89-11)
+
+
+def test_a_gate_that_failed_costs_the_review_its_event_called_for() -> None:
+    earlier = attempt(2, "completed", "success", "2026-10-17T12:00:00Z")
+    here = attempt(3, "completed", "skipped", "2026-10-17T13:00:00Z")
+    later = attempt(5, "completed", "success", "2026-10-17T15:00:00Z")
+    ok = rv.gate_outcome("success", "synchronize", 3, [])
+    assert (ok.lost, ok.note) == ("", "")
+    for result in ("failure", "cancelled", "skipped"):
+        # #291: a push after a review was attempted, which the gate skips anyway.
+        push = rv.gate_outcome(result, "synchronize", 3, [earlier, here])
+        assert not push.lost and result in push.note and earlier.url in push.note
+        # A push that was the pull request's first chance at a review.
+        first = rv.gate_outcome(result, "synchronize", 3, [here])
+        assert "first chance" in first.lost and not first.note
+        for event in sorted(rv.REVIEW_EVENTS):
+            # The event asked for a review; one from before it does not answer.
+            asked = rv.gate_outcome(result, event, 3, [earlier, here])
+            assert "is always reviewed" in asked.lost and earlier.url in asked.lost
+            # A review a later run attempted does.
+            made_up = rv.gate_outcome(result, event, 3, [earlier, here, later])
+            assert not made_up.lost and later.url in made_up.note
+        assert "missing event" in rv.gate_outcome(result, None, 3, [earlier]).lost
+
+
+def test_a_gate_result_that_did_not_reach_the_verdict_is_no_answer() -> None:
+    covered = [attempt(2, "completed", "success", "t")]
+    # Presence, not truthiness: none passed, an empty one and an unknown word.
+    for result in (None, "", "neutral", "SUCCESS"):
+        gate = rv.gate_outcome(result, "synchronize", 3, covered)
+        assert "is unknown" in gate.lost and not gate.note, result
+
+
+def test_a_failed_gate_is_worked_out_by_the_gates_own_rule() -> None:
+    """A push the gate would review is one whose failed gate cost a review,
+    for every way a run of the review job can stand."""
+    push = gate_env(ACTION="synchronize")
+    for status, conclusion in [
+        *(("completed", c) for c in ("success", "failure", "timed_out")),
+        *(("completed", c) for c in ("cancelled", "skipped", None)),
+        ("in_progress", None),
+        ("queued", None),
+    ]:
+        other = attempt(2, status, conclusion, "t2")
+        reviews = rv.gate_decision(push, lambda o=other: [o])[0]
+        lost = rv.gate_outcome("failure", "synchronize", 3, [other]).lost
+        assert reviews == bool(lost), (status, conclusion)
+
+
+def test_a_gate_that_cost_a_review_fails_ahead_of_the_review_it_replaced() -> None:
+    lost = rv.gate_outcome(
+        "failure", "ready_for_review", 3, [attempt(2, "completed", "success", "t")]
+    )
+    # The earlier review covered the diff and left nothing open, and still the
+    # review this event asked for never ran.
+    verdict = decide(summaries=[summary("No issues found.")], gate=lost)
+    assert not verdict.passed and verdict.reason == lost.lost
+    assert "runs the gate again" in verdict.remedy
+    # Editing the reviewer passes a review that could not run, not one the
+    # gate never decided.
+    assert not decide("none", self_edit=True, gate=lost).passed
+    # An unaddressed finding still comes first.
+    assert decide(threads=[thread(resolved=False)], gate=lost).findings
+    cost_none = rv.gate_outcome(
+        "failure", "synchronize", 3, [attempt(2, "completed", "success", "t")]
+    )
+    clean = decide(summaries=[summary("No issues found.")], gate=cost_none)
+    assert clean.passed and clean.warnings == [cost_none.note]
 
 
 # --------------------------------------------------------------------------
@@ -613,7 +696,11 @@ def use(monkeypatch: pytest.MonkeyPatch, fake: FakeGh) -> FakeGh:
     return fake
 
 
-def judge(*extra: str) -> int:
+#: A gate that succeeded, as the workflow passes it.
+GATE_OK = ("--gate-result", "success", "--event", "opened")
+
+
+def judge(*extra: str, run_id: str = "1", gate: tuple[str, ...] = GATE_OK) -> int:
     return rv.main(
         [
             "judge",
@@ -622,9 +709,10 @@ def judge(*extra: str) -> int:
             "--pr",
             "7",
             "--run-id",
-            "1",
+            run_id,
             "--run-head",
             HEAD,
+            *gate,
             *extra,
         ]
     )
@@ -695,7 +783,18 @@ def test_a_verdict_on_an_old_head_re_runs_the_new_heads(
     )
     assert (
         rv.main(
-            ["judge", "--repo", REPO, "--pr", "7", "--run-id", "1", "--run-head", OLD]
+            [
+                "judge",
+                "--repo",
+                REPO,
+                "--pr",
+                "7",
+                "--run-id",
+                "1",
+                "--run-head",
+                OLD,
+                *GATE_OK,
+            ]
         )
         == 1
     )
@@ -741,6 +840,94 @@ def test_no_review_run_at_all_fails(
     use(monkeypatch, FakeGh())
     assert judge() == 1
     assert "No review has run on this pull request" in capsys.readouterr().out
+
+
+def test_a_gate_that_failed_before_any_review_fails_and_says_so(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The pull request's first run: its gate failed, its review job was
+    skipped, and no review has ever finished (docs/09 P89-11)."""
+    here, here_jobs = review_run(3, "skipped")
+    for event in ("opened", "synchronize"):
+        for files in (["src/x.py"], [rv.WORKFLOW]):
+            use(monkeypatch, FakeGh(runs=[here], jobs={3: here_jobs}, files=files))
+            gate = ("--gate-result", "failure", "--event", event)
+            assert judge(run_id="3", gate=gate) == 1, (event, files)
+            out = capsys.readouterr().out
+            assert f"this run's gate: 'failure', event '{event}'" in out
+            assert "review u/run/3: completed/skipped" in out
+            assert "::error::This run's gate ended failure" in out
+            assert "verdict=fail" in out
+            # The re-run, and what to do when the re-run will not start.
+            assert "gh run rerun 3 --failed" in out
+            assert "`gh pr ready 7 --undo`, then `gh pr ready 7`" in out
+
+
+def test_a_gate_that_failed_after_a_finished_review_passes_only_on_a_push(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#291: the gate failed on a push, after a review that covered the diff
+    and whose findings were all resolved. The gate skips such a push anyway,
+    so its failure cost nothing; the verdict passes and says what it saw."""
+    reviewed, reviewed_jobs = review_run(2, "success", sha=OLD)
+    here, here_jobs = review_run(3, "skipped")
+    state = {
+        "runs": [reviewed, here],
+        "jobs": {2: reviewed_jobs, 3: here_jobs},
+        "threads": [[claude_thread(True)]],
+        "annotations": {20: [coverage_annotation(record())]},
+    }
+    use(monkeypatch, FakeGh(**state))
+    push = ("--gate-result", "failure", "--event", "synchronize")
+    assert judge(run_id="3", gate=push) == 0
+    out = capsys.readouterr().out
+    assert "::warning::This run's gate ended failure" in out
+    assert "a push after a review was attempted (u/run/2)" in out
+    assert "verdict=pass" in out
+    # Marked ready for review to be reviewed again: the review that was asked
+    # for never ran, and the one it was to replace does not pass the head.
+    use(monkeypatch, FakeGh(**state))
+    ready = ("--gate-result", "failure", "--event", "ready_for_review")
+    assert judge(run_id="3", gate=ready) == 1
+    out = capsys.readouterr().out
+    assert "a pull request ready for review is always reviewed" in out
+    assert "came before this event" in out and "verdict=fail" in out
+    # Re-judged once a later run has reviewed it, the same verdict passes.
+    again, again_jobs = review_run(4, "success")
+    state["runs"] = [reviewed, here, again]
+    state["jobs"] = {2: reviewed_jobs, 3: here_jobs, 4: again_jobs}
+    state["annotations"] = {40: [coverage_annotation(record())]}
+    use(monkeypatch, FakeGh(**state))
+    assert judge(run_id="3", gate=ready) == 0
+    assert "A later run attempted the review" in capsys.readouterr().out
+
+
+def test_a_verdict_given_no_gate_result_fails_even_after_a_clean_review(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    reviewed, reviewed_jobs = review_run(2, "success")
+    state = {
+        "runs": [reviewed],
+        "jobs": {2: reviewed_jobs},
+        "threads": [[claude_thread(True)]],
+        "annotations": {20: [coverage_annotation(record())]},
+    }
+    use(monkeypatch, FakeGh(**state))
+    assert judge(run_id="3") == 0  # the control: the gate succeeded
+    capsys.readouterr()
+    for gate in (
+        (),
+        ("--event", "synchronize"),
+        ("--gate-result", "", "--event", "synchronize"),
+        ("--gate-result", "neutral", "--event", "synchronize"),
+    ):
+        use(monkeypatch, FakeGh(**state))
+        assert judge(run_id="3", gate=gate) == 1, gate
+        out = capsys.readouterr().out
+        assert "this run's gate: " in out and "is unknown" in out, gate
+        assert "verdict=fail" in out, gate
+        # A re-run of the same workflow file passes nothing again.
+        assert "passes `needs.gate.result` as --gate-result" in out, gate
 
 
 def test_an_exempt_pull_request_passes_without_reading_its_review(
@@ -816,6 +1003,62 @@ def test_a_finished_ci_run_re_judges_the_pull_requests_with_that_head(
 def test_a_rejudge_that_cannot_read_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     use(monkeypatch, FakeGh(fail="check-runs"))
     assert rv.main(["rejudge", "--repo", REPO, "--pr", "7"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("args", "read"),
+    [
+        (("api", f"repos/{REPO}/pulls/7"), True),
+        (
+            ("api", "-H", "Accept: application/vnd.github.diff", "repos/o/r/pulls/7"),
+            True,
+        ),
+        (("api", "graphql", "-f", "query=\nquery($n: Int!) { x }", "-F", "n=7"), True),
+        (("api", "graphql", "-f", "query=mutation { resolveReviewThread }"), False),
+        (("api", "-X", "POST", "repos/o/r/actions/jobs/1/rerun"), False),
+        (("api", "-X", "PATCH", "repos/o/r/issues/comments/1", "-f", "body=x"), False),
+        (("api", "--method", "GET", "repos/o/r/search/issues", "-f", "q=x"), True),
+        (("api", "repos/o/r/issues/7/comments", "-f", "body=x"), False),
+    ],
+)
+def test_only_a_read_is_asked_again(args: tuple[str, ...], read: bool) -> None:
+    assert rv.is_read(args) is read
+
+
+def test_a_read_github_answers_with_a_5xx_is_asked_again_a_bounded_number_of_times(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One HTTP 502 ended #291's gate and skipped its review (docs/09 P89-11)."""
+    answers: list[tuple[int, str, str]] = []
+    slept: list[float] = []
+
+    def run(argv: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        code, out, err = answers.pop(0)
+        return subprocess.CompletedProcess(argv, code, out, err)
+
+    monkeypatch.setattr(rv.subprocess, "run", run)
+    monkeypatch.setattr(rv.time, "sleep", slept.append)
+    bad_gateway = (1, "", "gh: Server Error (HTTP 502)")
+    answers[:] = [bad_gateway, (1, "", "gh: HTTP 503"), (0, "ok", "")]
+    assert rv.gh("api", f"repos/{REPO}/actions/runs/1/jobs") == "ok"
+    assert slept == list(rv.RETRY_DELAYS) and answers == []
+    assert "answered HTTP 502 (try 1); asking again in 5 s" in capsys.readouterr().err
+    # Still failing after the last retry: the error, never an answer.
+    answers[:] = [bad_gateway] * (len(rv.RETRY_DELAYS) + 1)
+    with pytest.raises(rv.GhError, match=r"exited 1 after 3 tries: .*HTTP 502"):
+        rv.gh("api", f"repos/{REPO}/pulls/7")
+    assert answers == []
+    slept.clear()
+    # Not a server error, or not a read: no second try.
+    for args, answer in (
+        (("api", f"repos/{REPO}/pulls/7"), (1, "", "gh: Not Found (HTTP 404)")),
+        (("api", "-X", "POST", f"repos/{REPO}/actions/jobs/1/rerun"), bad_gateway),
+    ):
+        answers[:] = [answer]
+        with pytest.raises(rv.GhError, match=r"exited 1: gh: "):
+            rv.gh(*args)
+        assert answers == []
+    assert slept == []
 
 
 # --------------------------------------------------------------------------
@@ -944,6 +1187,20 @@ class Session:
 
 def numbered(text: str) -> str:
     return "\n".join(f"{n}\t{line}" for n, line in enumerate(text.splitlines(), 1))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="a stand-in gh is a shell script")
+def test_gh_output_that_is_not_utf8_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A diff holds a legacy-encoded fixture's own bytes; read strictly, #291's
+    ended the coverage step (docs/09 P38-11)."""
+    stand_in = tmp_path / "gh"
+    stand_in.write_text("#!/bin/sh\nprintf '+caf\\350\\n+ok\\n'\n")
+    stand_in.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+
+    assert rv.gh("api", "repos/o/r/pulls/1") == "+caf\N{REPLACEMENT CHARACTER}\n+ok\n"
 
 
 def test_a_diff_is_read_by_its_hunk_counts() -> None:

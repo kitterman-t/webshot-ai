@@ -4142,6 +4142,7 @@ wheels = [
 name = "webshot"
 source = { editable = "." }
 dependencies = [
+    { name = "charset-normalizer" },
     { name = "chonkie" },
     { name = "defusedxml" },
     { name = "docling-slim", extra = ["format-html"] },
@@ -4194,6 +4195,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "charset-normalizer", specifier = ">=3.5.1,<4" },
     { name = "chonkie", specifier = ">=1.7.0" },
     { name = "defusedxml", specifier = ">=0.7.1,<0.8" },
     { name = "docling-core", extras = ["chunking"], marker = "extra == 'chunk-hybrid'", specifier = ">=2.101.1" },

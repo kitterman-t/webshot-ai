@@ -137,6 +137,14 @@ the review with the command the verdict prints; never edit or hide that
 summary. A check that read only part of the diff passes, with a warning
 giving the count; tell the owner rather than treat the count as covered.
 
+It fails, too, when the run's gate ("should this pull request be reviewed?")
+failed and so skipped a review the event called for (docs/09 P89-11); the fix
+is the same re-run. A re-run can end in `startup_failure` with no jobs, more
+than once, and that takes both review checks off the pull request and leaves
+it blocked. Then use the fallback the verdict prints: mark the pull request
+draft and then ready for review (`gh pr ready N --undo`, then `gh pr ready N`),
+which starts a fresh run.
+
 ## Conventions
 
 - Conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,
