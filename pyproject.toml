@@ -63,10 +63,13 @@ dependencies = [
     # WebShot now calls it, through render/pdfium_bridge.py alone.
     "pypdfium2>=5.14.0,<6",
     "pydantic>=2.14.1,<3",
-    "Markdown>=3.6,<4",
+    # Every name here is written as PyPI normalizes it. Written `Markdown`,
+    # Dependabot found nothing to rewrite and never proposed 3.11 (docs/09
+    # P84-5); tests/test_dependency_names.py holds the rule.
+    "markdown>=3.6,<4",
     # Pillow < 12.3 carries 25 known CVEs (pip-audit/OSV, Aug 2026); the
     # protected path feeds it page images, so the floor is the fixed release.
-    "Pillow>=12.3,<13",
+    "pillow>=12.3,<13",
     # The protected path's searchable PDF: img2pdf packs the captured pages
     # losslessly and OCRmyPDF adds the invisible text layer. Core rather than an
     # extra, because that text layer is not optional (docs/09 P1-2); OCRmyPDF
