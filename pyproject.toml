@@ -69,7 +69,7 @@ dependencies = [
     "markdown>=3.6,<4",
     # Pillow < 12.3 carries 25 known CVEs (pip-audit/OSV, Aug 2026); the
     # protected path feeds it page images, so the floor is the fixed release.
-    "pillow>=12.3,<13",
+    "pillow>=13.0.0,<14",
     # The protected path's searchable PDF: img2pdf packs the captured pages
     # losslessly and OCRmyPDF adds the invisible text layer. Core rather than an
     # extra, because that text layer is not optional (docs/09 P1-2); OCRmyPDF
