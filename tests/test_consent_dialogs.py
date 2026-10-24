@@ -6,8 +6,9 @@ content.md between the article's ("…the security foundation that"marketing"
 will makecookies it trustworthy…"), in faithful and clean mode alike. Clean
 mode's overlay rule wants a box nearly half the window wide, and the dialog
 was narrower. tests/fixtures/consent_dialog_page.html holds a dialog of that
-shape, a closed OneTrust banner and a Usercentrics banner in a shadow root,
-beside article text that names the vendors. All of its text is invented.
+shape, a closed OneTrust banner, a Usercentrics banner in a shadow root and an
+Osano banner in its zero-height window (P97-4), beside article text that names
+the vendors. All of its text is invented.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ DIALOGS = (
     "This website uses cookies",
     "Accept all cookies",
     "Usercentrics privacy settings banner",
+    "utilizes technologies such as cookies",
 )
 ARTICLE = (
     "Cookiebot and Usercentrics among them",
@@ -61,7 +63,8 @@ def test_a_consent_dialog_is_hidden_and_named(tmp_path: Path, mode: str) -> None
     consent = [w for w in manifest["warnings"] if "consent manager" in w]
     assert consent == [
         "Hid the consent manager dialogs on screen: Cookiebot's "
-        "(#CybotCookiebotDialog), Usercentrics' (#usercentrics-root). A consent "
+        "(#CybotCookiebotDialog), Usercentrics' (#usercentrics-root), Osano's "
+        "(.osano-cm-window). A consent "
         "dialog is fixed to the window, so it would have printed over the page's "
         "text on every page, and its words would have been read into the bundle "
         "between the page's. It is the browser's session asking, not the page, so "

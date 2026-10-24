@@ -10,6 +10,11 @@
   #CybotCookiebotDialog { position: fixed; bottom: 1rem; left: 1rem; width: 22rem;
     padding: 1rem; background: #fff; border: 1px solid #333; z-index: 2147483000; }
   #onetrust-banner-sdk { position: fixed; bottom: 0; left: 0; right: 0; display: none; }
+  /* Osano's window is a zero-height box; its dialog, fixed to the window's
+     foot, is what shows (docs/09 P97-4). */
+  .osano-cm-window { position: absolute; top: 0; left: 0; right: 0; height: 0; }
+  .osano-cm-dialog { position: fixed; bottom: 0; left: 6rem; right: 6rem;
+    padding: 1rem; background: #fff; border: 1px solid #333; }
 </style>
 </head>
 <body>
@@ -32,6 +37,9 @@
 <!-- A manager whose container is on every page and whose banner was already
      closed: hidden, and not named, because hiding it changes nothing. -->
 <div id="onetrust-consent-sdk"><div id="onetrust-banner-sdk">OneTrust banner text</div></div>
+<div class="osano-cm-window"><div class="osano-cm-window__dialog osano-cm-dialog"
+  role="dialog" aria-label="Cookie Consent Banner">This harbor site utilizes
+  technologies such as cookies to enable essential site functionality.</div></div>
 <!-- Usercentrics draws its banner inside an open shadow root on a host that
      has no box of its own. -->
 <div id="usercentrics-root"></div>
