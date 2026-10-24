@@ -1060,6 +1060,33 @@ def drop_lone_line_breaks(html: str) -> str:
     return "".join(pieces)
 
 
+def _kept_line_break_marks(text: str) -> str:
+    """What the backend made of a one-paragraph text before docling-slim
+    2.140: the text stripped, its `<br>` characters left in."""
+    return text.strip()
+
+
+@cache
+def _keep_line_break_marks() -> None:
+    """Have the backend leave its character for each `<br>` in a heading's,
+    caption's or list item's text, for `_write_document_line_breaks`.
+
+    docling-slim 2.140 writes each run of them in such a text as a line
+    break itself (`_resolve_line_breaks`), where before it left them in.
+    Past that point a `<br>` is no longer told apart from the text, so
+    `<li>Jask<br>ov</li>` was written "Jask\\nov", over two lines in
+    content.txt, where the bridge writes a space as a browser reads that
+    text onto one line, and a part of an item's line that held only `<br>`s
+    was skipped where the bridge takes it out with its group (docs/09 P56,
+    P96). The bridge is the only module that imports docling, so the swap
+    reaches nothing else; a backend without the function is left as it is.
+    """
+    from docling.backend import html_backend
+
+    if hasattr(html_backend, "_resolve_line_breaks"):
+        html_backend._resolve_line_breaks = _kept_line_break_marks
+
+
 def _write_document_line_breaks(document: Any) -> None:
     """Every line break the backend left in `document`'s texts, written out.
 
@@ -2661,6 +2688,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         # beside its lists was `<br>`s holds only its lists (docs/09 P45, P56).
         if items_markable:
             parsed = mark_empty_items(parsed)
+        _keep_line_break_marks()
         document: DoclingDocument = backend(
             in_doc=in_doc, path_or_stream=BytesIO(parsed.encode("utf-8"))
         ).convert()

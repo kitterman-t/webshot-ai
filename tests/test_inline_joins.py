@@ -171,8 +171,11 @@ def test_markdown_wraps_each_part_where_it_touches() -> None:
             "| sko*val*der | a test |",
         ):
             assert written in surface, written
-    # A flattened heading carries the join as well.
-    assert "## **Fendralix**" in result.markdown
+    # A flattened heading carries the join as well. It keeps no formatting:
+    # since docling-slim 2.139 a heading flattened to one text keeps only a
+    # formatting all of its runs share, where before the first run's bold
+    # made the whole word bold (docs/09 P96-2).
+    assert "## Fendralix" in result.markdown.splitlines()
     assert "Fendralix" in result.text.splitlines()
 
 
