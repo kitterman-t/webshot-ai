@@ -55,7 +55,9 @@ dependencies = [
     "playwright>=1.63.0,<2",
     # >=6 is required: the AF-embedding code already uses the EmbeddedFile API,
     # which the previous >=4.2 floor did not guarantee (docs/05 task 0.1).
-    "pypdf>=6.20.1,<7",
+    # 6.21.2 is the floor because it fixes 7 advisories against 6.20.1
+    # (pip-audit/OSV, Oct 2026).
+    "pypdf>=6.21.2,<7",
     # Reads a PDF as a viewer draws it: every object in paint order with its
     # bounds and colour, and every character's box, which pypdf does not
     # give. The covered-text check needs both from the PDF Chromium printed
@@ -67,9 +69,10 @@ dependencies = [
     # Dependabot found nothing to rewrite and never proposed 3.11 (docs/09
     # P84-5); tests/test_dependency_names.py holds the rule.
     "markdown>=3.6,<4",
-    # Pillow < 12.3 carries 25 known CVEs (pip-audit/OSV, Aug 2026); the
-    # protected path feeds it page images, so the floor is the fixed release.
-    "pillow>=12.3,<13",
+    # Pillow 12.3 carries 41 known advisories, fixed in 13.0.0 (pip-audit/OSV,
+    # Oct 2026); the protected path feeds it page images, so the floor is the
+    # fixed release. 13 needs docling-core 2.104, the first to support it.
+    "pillow>=13.0.0,<14",
     # The protected path's searchable PDF: img2pdf packs the captured pages
     # losslessly and OCRmyPDF adds the invisible text layer. Core rather than an
     # extra, because that text layer is not optional (docs/09 P1-2); OCRmyPDF

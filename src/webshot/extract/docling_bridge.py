@@ -1815,61 +1815,34 @@ def _captions_missing(
     return missing
 
 
-@cache
-def _grid_built_once() -> Any:
-    """docling-core's `TableData`, with `grid` the one built up front.
+def _check_total_table_cells(document: Any) -> None:
+    """Refuse a document whose tables declare more grid cells in total than
+    docling-core allows, as docling-core itself would, but here.
 
-    Defined on first use, so importing the bridge still imports no docling.
+    Since 2.103.1 docling-core bounds each table's grid (a table past
+    `max_table_cells` fails as the backend makes it, inside the bridge's
+    parse) and the sum over a document (`max_total_table_cells`). The sum is
+    checked only when a model holding the document is validated, which the
+    chunker's serializer is first to do, outside the parse: a page past it
+    ended the capture in a raw ValidationError rather than the bridge's
+    error (docs/09 P95-2). A docling-core without the setting has no limit.
     """
-    from docling_core.types.doc.document import TableData
-
-    class GridBuiltOnce(TableData):
-        # pydantic makes an underscore attribute private: never a field, so
-        # never validated or dumped. Set as each copy is made.
-        _grid: list[Any]
-
-        @property
-        def grid(self) -> list[Any]:
-            return self._grid
-
-    return GridBuiltOnce
-
-
-@contextmanager
-def _grids_built_once(tables: Sequence[Any]) -> Iterator[None]:
-    """Each table's grid built once, not once per cell, inside the block.
-
-    `TableData.grid` is a computed property that builds the whole grid on
-    every read, and docling-core's `TableItem.export_to_otsl`, which writes
-    each table into `export_to_doctags()`, reads `self.data.grid[i][j]` for
-    every cell. A table of n cells therefore built n grids and n² cells: a
-    1,000-row, 2-column CSV built four million, and the time a capture took
-    grew with the square of its rows (docs/09 P41). The grid is a function of
-    the cells and the table's size, which an export does not change, so each
-    table's `data` is swapped for a copy that shares its cells and answers
-    every read with one grid, and put back on the way out. A `data` of any
-    other type than `TableData` is left as it is, since the copy would drop
-    whatever it adds.
-    """
-    from docling_core.types.doc.document import TableData
-
-    built_once = _grid_built_once()
-    swapped: list[tuple[Any, Any]] = []
     try:
-        for table in tables:
-            data = table.data
-            if type(data) is not TableData:
-                continue
-            copy = built_once.model_construct(
-                _fields_set=data.model_fields_set, **dict(data)
-            )
-            copy._grid = data.grid
-            table.data = copy
-            swapped.append((table, data))
-        yield
-    finally:
-        for table, data in swapped:
-            table.data = data
+        from docling_core.utils.settings import settings
+    except ImportError:
+        return
+    limit = getattr(settings, "max_total_table_cells", None)
+    if limit is None:
+        return
+    total = sum(
+        max(table.data.num_rows, 0) * max(table.data.num_cols, 0)
+        for table in document.tables
+    )
+    if total > limit:
+        raise ValueError(
+            f"the page's tables declare {total} cells in total, past "
+            f"docling-core's limit of {limit} (max_total_table_cells)"
+        )
 
 
 #: The elements the backend makes a list item of and then walks for nested
@@ -2691,6 +2664,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         document: DoclingDocument = backend(
             in_doc=in_doc, path_or_stream=BytesIO(parsed.encode("utf-8"))
         ).convert()
+        _check_total_table_cells(document)
     except Exception as exc:
         raise BundleBuildError(f"docling could not parse the snapshot: {exc}") from exc
 
@@ -3302,8 +3276,8 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         (CodeLanguageLabel.JSON exists; `<_JSON_>` is not a valid token), and
         the serializer raises on them.  Those items are downgraded to
         `unknown` for this export only — content.json keeps the detected
-        language.  Each table's grid is built once for it, not once per
-        cell (`_grids_built_once`, docs/09 P41).
+        language.  docling-core reads each table's grid once since 2.103.1,
+        not once per cell (docs/09 P41, P95-3).
         """
         from docling_core.types.doc.labels import CodeLanguageLabel
         from docling_core.types.doc.tokens import DocumentToken
@@ -3319,8 +3293,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 downgraded.append((item, language))
                 item.code_language = CodeLanguageLabel.UNKNOWN
         try:
-            with _grids_built_once(document.tables):
-                exported: str = document.export_to_doctags()
+            exported: str = document.export_to_doctags()
             return exported
         finally:
             for item, language in downgraded:

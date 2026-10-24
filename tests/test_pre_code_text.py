@@ -61,6 +61,11 @@ _LAYOUT_JS = """() => {
 
 #: The table of two cells whose numbers do not count the code's lines.
 NOT_A_GUTTER = "A table of two cells that is not a line-number table"
+#: The sections docling lays out on its own. Since docling-core 2.103.1 it
+#: fences code with more backticks than any run inside it (docling-core #867),
+#: and this section's `<pre>` holds nothing else the bridge reads for it
+#: (docs/09 P95-1).
+DOCLING_READS_IT = {"A run of four backticks"}
 
 
 def _laid_out() -> dict[str, Any]:
@@ -267,19 +272,20 @@ def _as_docling_reads_it(
         return extract(source, [])
 
 
-def test_docling_alone_reads_none_of_it_as_the_page_lays_it_out(
+def test_docling_alone_reads_only_a_backtick_run_as_the_page_lays_it_out(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The fixture holds the defect: docling's own backend and serializers
-    write no section's code as the page lays it out. Should a release start
-    to, this says which, and the bridge's reading of it can go."""
+    write no section's code as the page lays it out but those in
+    `DOCLING_READS_IT`. Should a release lay out another, this says which,
+    and the bridge's reading of it can go; should one stop, this says so."""
     written = _blocks(_as_docling_reads_it(monkeypatch, FIXTURE.read_text()).markdown)
     expected = _expected()
-    assert [
+    assert {
         section
         for section in expected
         if section != NOT_A_GUTTER and written.get(section, []) == expected[section]
-    ] == []
+    } == DOCLING_READS_IT
 
 
 def test_one_line_of_code_with_a_link_of_its_own_stays_a_link(

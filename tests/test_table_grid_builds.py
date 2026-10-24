@@ -3,17 +3,17 @@
 docling-core's `TableData.grid` builds the whole grid on every read, and its
 DocTags writer read it once per cell, so a table of n cells built n² cells: a
 1,000-row, 2-column CSV built four million, and a capture's time grew with the
-square of its rows. The bridge now hands that writer a grid built once.
+square of its rows. The bridge handed that writer a grid built once until
+docling-core 2.103.1 began reading it once itself (docling-core #899); the
+bridge's copy went with the bump to 2.104.0 (docs/09 P95-3).
 
 Wall time would make a flaky test of it, so this one counts grid builds:
 `spanning_table.html` and the same table with its last body ten times as long
-must build the same number. The fixture holds every shape a snapshot's table
-can take, so the second test can hold the DocTags to docling-core's own bytes.
+must build the same number, whichever side keeps the count fixed.
 """
 
 from __future__ import annotations
 
-import contextlib
 from pathlib import Path
 
 import pytest
@@ -60,48 +60,3 @@ def test_a_longer_table_builds_its_grid_no_more_often(
     # Before the fix: 8 x 6 + 2 x 2 cells read through DocTags alone.
     assert 0 < builds < 8 * 6 + 2 * 2
     assert _grid_builds(monkeypatch, longer) == builds
-
-
-def test_doctags_are_docling_cores_own_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
-    html = FIXTURE.read_text("utf-8")
-    built_once = docling_bridge.extract(html, [])
-    monkeypatch.setattr(
-        docling_bridge, "_grids_built_once", lambda tables: contextlib.nullcontext()
-    )
-    upstream = docling_bridge.extract(html, [])
-
-    assert built_once.doctags == upstream.doctags
-    assert built_once.document_json == upstream.document_json
-    assert built_once.markdown == upstream.markdown
-    assert built_once.tables == upstream.tables
-    # Every token a snapshot's table cells can be written as, so the
-    # comparison covers each path through docling-core's OTSL writer but
-    # `srow`, which needs a class attribute the sanitizer removes.
-    for token in ("ched", "rhed", "fcel", "ecel", "lcel", "ucel", "xcel", "nl"):
-        assert f"<{token}>" in built_once.doctags, token
-    assert built_once.doctags.count("<otsl>") == 2  # the nested table too
-
-
-def test_each_table_gets_its_own_data_back() -> None:
-    from docling_core.types.doc.document import DoclingDocument, TableCell, TableData
-
-    document = DoclingDocument(name="t")
-    cell = TableCell(
-        text="a",
-        start_row_offset_idx=0,
-        end_row_offset_idx=1,
-        start_col_offset_idx=0,
-        end_col_offset_idx=1,
-    )
-    table = document.add_table(
-        data=TableData(num_rows=2, num_cols=1, table_cells=[cell])
-    )
-    original = table.data
-
-    with pytest.raises(RuntimeError), docling_bridge._grids_built_once([table]):
-        assert table.data is not original
-        assert table.data.table_cells is original.table_cells
-        assert table.data.grid is table.data.grid
-        assert [[c.text for c in row] for row in table.data.grid] == [["a"], [""]]
-        raise RuntimeError
-    assert table.data is original
