@@ -20475,3 +20475,176 @@ them. The cap on `docling.backend.html_backend` stays as a guard for that
 warning. The probe now logs a record of its own on that logger, which still
 shows the cap applies to it, and no longer claims docling's own warning
 reaches it.
+
+## P97: what the PDF did not show, and three ways the covered-text check missed it (2026-10-24)
+
+A run of captures of linked news and legal pages turned up four PDFs that
+showed less of the page than the page, or than their own bundle, with nothing
+said or the wrong remedy offered.
+
+
+### P97-1 — a registration wall: exit 0, and a PDF without the article
+
+A news site's article captured in faithful mode exited 0 with a ten-page PDF.
+Page 1 printed the headline, the byline and the first sentence; every page
+after it printed only the site's registration box ("Create a free … account.
+Sign in with your email address and you can read more stories for free each
+month…", with Register and Subscribe Now). `content.md` held the whole
+article, 2,227 words. The PDF carries that bundle as its record, so the file
+contradicted itself, and nothing said so: the warnings named three fixed boxes
+and a box with text hidden in it, and each suggested `--exclude`, which would
+take the wall down and bring back nothing, because the site hides the article
+under it. The box carried the class Mg2's ConneXt script gives its own,
+`Mg2-connext`.
+
+Two things now say it. After the render, the bundle's text is compared with
+the PDF's text layer (P97-2), and a PDF holding under half of it is a
+manifest warning with both counts. When the page also showed an access wall
+WebShot knows by its vendor's markup (`ACCESS_WALLS` in `capture/landing.py`:
+Mg2 ConneXt, measured here, and Piano's `.tp-modal`/`.tp-backdrop`, from its
+documented markup and not met in a capture), the warning names the wall and
+gives the save-it-yourself advice, and the covered-text warnings on that page
+drop the `--exclude` remedy. A wall only changes the wording: whether the
+article was lost is what the comparison measures, so a wall over a page that
+printed its text says nothing new. The capture still exits 0, as a partial
+capture does. With the change, the live article's PDF holds 406 of its
+bundle's 7,189 runs (6%), the warning names Mg2 ConneXt, and its three box
+warnings say the box may be part of the wall instead of offering `--exclude`.
+
+### P97-2 — the measure, and where its threshold came from
+
+The comparison takes the bundle's `content.txt` as it was before any video
+walkthrough was inlined (the PDF prints those in an appendix of its own),
+drops its recognized-text blocks, and keeps only letters and digits, case
+folded, on both sides. Line breaks, list markers, table rules, the spaces a
+PDF reader infers, and scripts written without spaces all differ between the
+two layouts of the same text; letters do not. The share is the fraction of
+the bundle's distinct 20-character runs that occur anywhere in the PDF's
+text, its pages joined without a break.
+
+The first version took runs across the bundle's line breaks. A film site's
+page of cards measured 0.14 although every one of its lines was in the PDF:
+it prints its cards side by side, in another order than the bundle lists
+them. Runs are now taken within each line of the bundle, a paragraph, heading
+or item, never across two.
+
+Measured over the run's 23 captures and over 291 earlier WebShot PDFs that
+embed their bundle:
+
+| Share | PDFs | What they were |
+|---|---|---|
+| 0.9 to 1.0 | 278 | articles, documentation, catalog records, course readings, slides |
+| 0.6 to 0.9 | 4 | three news articles and a law firm's article |
+| 0.5 to 0.6 | 0 | |
+| under 0.5 | 9 | five video watch pages whose related-video titles print as blank boxes; a talk page whose description stays collapsed; a book page whose carousels' hidden slides are in the bundle; a topic page whose filter lists are folded (0.496); a chart page (below) |
+
+Each of the first eight PDFs under 0.5 lacks text its bundle holds, so each
+warning would be true. The ninth is a chart's page whose text is axis labels,
+each shorter than a run: it had 60 runs and lost half of them to three
+canvases' accessible names, which no PDF prints. A bundle with fewer than 200
+runs is not compared. The threshold is 0.5. Within the run, the article PDFs
+measured 0.85 to 1.0 and the walled one 0.056.
+
+### P97-3 — an ad slot's inline `!important` beat the marking
+
+On both articles from a technology news site the only box warning was
+"WebShot could not mark 1 fixed or sticky box … `ins#gpt_unit_/6978/anchor_0`
+(… kept background-color rgb(250, 250, 250))". The PDF showed that box at the
+foot of pages 1 to 4, an advertisement over the last four lines of a
+paragraph on page 1 and a blank grey box over three or four lines on each of
+the others, and the text stayed in the text layer, so only looking at the
+pages found it. Read from the live page, the slot's own `style` attribute
+ends `background: rgb(250, 250, 250) !important`, as an ad server's anchor
+unit writes it. An `!important` declaration in a `style` attribute beats every
+sheet, `!important` or not, which P83-4 recorded as the cost of marking
+through a sheet.
+
+The marking now writes, for an element whose colours did not take and only
+for the declarations its attribute already holds as `!important`, the same
+declaration into the attribute, records the attribute's text first, and puts
+that text back exactly when it restores the page, while the sheet's
+transition rule still holds. The layout check stands guard against a page rule
+that reads the attribute, as it does for the sheet. With the change the live
+article's warning is a measurement: the slot prints on all 5 pages and over
+236 characters in 10 lines on pages 1 to 4. A box still not marked, such as
+one held by an `!important` rule in a cascade layer, is named as before, and
+a fixed one is now said to be on every page, which is known without the
+measurement.
+
+### P97-4 — a banner gone between the render and the measuring print
+
+A health-news article printed its consent banner ("This website utilizes
+technologies such as cookies…") across the foot of every page in one of four
+runs, over the article's text, and its text layer interleaved the two. The run
+warned of neither. The banner was Osano's, `div.osano-cm-dialog` in a
+zero-height `div.osano-cm-window`.
+
+Reproduced on the live page, twice in 11 runs. In a run that printed it, the
+covered-text check had found and marked the dialog, and its measuring print
+held no ink of the dialog's colour and none of its words. Watched in a
+browser, the dialog is shown at load and Osano's own script adds
+`osano-cm-dialog--hidden` five seconds later, fading it out over 0.7 s. A
+quick capture rendered it mid-fade, and by the measuring print a moment later
+it was gone, so the check measured a page without it and reported nothing
+covered. The guards held layout and page count; neither is moved by a box
+that fades out.
+
+Two changes:
+
+- **Osano is a consent manager** (P79), hidden in both modes by its window and
+  dialog classes and named in the manifest when shown.
+- **The measurement must be of the page that was printed.** The measuring
+  print now uses the render's running header and footer, so both prints hold
+  the same characters on every page unless the page changed, with one
+  difference by design: a box with a CSS filter prints as a picture in the
+  render and as text when measured, its filter swapped for none (P83-1). So
+  each page is compared as counts of characters, two ways: every character
+  the render printed must be in the measuring print, and every character the
+  measuring print drew outside the marked boxes must be in the render. A
+  page that fails either ends the measurement with a warning naming the page
+  and how many characters. The first version required the two pages' text to
+  be equal, and the review of #306 found that a filtered sticky header with
+  text would then read as a page that changed. And because a box gone by then leaves nothing to mark, the fixed and
+  sticky boxes are counted just before the render: if the render printed one
+  and none is left, the check makes the measuring print anyway, to compare.
+
+With the change, the live article's run hid the dialog and named Osano's in
+the manifest, and its PDF holds none of the banner's words.
+
+### P97-5 — what this does not cover
+
+- **Poool and Zephr walls** are not in `ACCESS_WALLS`: neither was met, and
+  their markup was not checked. A page behind one still gets the comparison's
+  warning, without the wall named.
+- **`--require-content` does not fail a low share.** The capture is partial,
+  not empty, and its bundle holds the article; the warning is the record.
+- **The comparison reads text, not pictures.** A PDF that prints the text as
+  a picture, under a CSS filter for instance, counts as not holding it, and
+  says so; a picture the page failed to print is not measured.
+- **Collapsed content that is not in the document** (a description a button
+  fetches) is in neither the bundle nor the PDF, so the two agree and nothing
+  is said. Content in the document but folded away lowers the share, which is
+  how three of the eight pages in P97-2 were found.
+- **A box written through its `style` attribute** is serialized by the
+  browser, which may spell a shorthand as its longhands while it is marked. A
+  page rule that matches the new text and moves nothing is not caught.
+- **A change between the render and the check that leaves every page's text
+  as it was**, a box that moves without changing what is printed, is not
+  caught by the text comparison.
+
+### P97-6 — the tests
+
+`tests/test_printed_text.py` holds the measure (layout, page breaks, order of
+lines, recognized text, an empty bundle), the threshold and the floor, the
+wall's wording, and two captures of
+`tests/fixtures/printed_text_wall_page.html`: with the wall, which is named
+and offered no `--exclude`, and with `--exclude` on the wall, which brings
+nothing back and still warns. `tests/test_covered_text.py` adds an ad slot
+whose inline `!important` background is now measured
+(`covering_inline_slot_page.html`), a banner its own script hides after the
+first print, which ends the measurement with a warning instead of a clean
+result (`covering_vanishing_banner_page.html`), a filtered box printed as a
+picture, which is measured and not taken for a change
+(`covering_filtered_box_page.html`), the layered `!important`
+case that stays unmarked, the exact restoration of a written attribute, and
+the wall's remedy. `tests/test_consent_dialogs.py` adds an Osano banner.

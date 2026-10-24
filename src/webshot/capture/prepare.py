@@ -89,8 +89,8 @@ NOISE_SELECTORS = [
 #: viewport, so Chromium prints it on every page over the text beneath it, and
 #: its words are read into the bundle between the article's. Cookiebot's was
 #: measured, printed on five of six pages of one article in clean mode as well
-#: as faithful (docs/09 P79); the others follow their vendors' documented
-#: markup and were not met in a capture. Each selector is a name the vendor
+#: as faithful (docs/09 P79), and Osano's on two of three (P97-4); the others
+#: follow their vendors' documented markup and were not met in a capture. Each selector is a name the vendor
 #: gave its own element, so none matches a page's own box the way the noise
 #: list's `[class*='cookie-consent' i]` can, which is why that list stays
 #: clean mode's alone.
@@ -102,6 +102,9 @@ CONSENT_MANAGERS: dict[str, tuple[str, ...]] = {
     "TrustArc": ("#truste-consent-track",),
     "Usercentrics": ("#usercentrics-root", "#usercentrics-cmp-ui"),
     "Sourcepoint": ("[id^='sp_message_container']",),
+    # Measured: its banner shown on load and hidden by its own script five
+    # seconds later, so a quick capture printed it mid-fade (docs/09 P97-4).
+    "Osano": (".osano-cm-window", ".osano-cm-dialog"),
 }
 
 #: The rules that act on `release_clamped_text`'s marks. Part of the page's

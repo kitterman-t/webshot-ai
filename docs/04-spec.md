@@ -343,7 +343,7 @@ there with its reason, and the run's job summary lists every skip.
 5. **Overlay policy (was undocumented in v2):** both modes hide the dialogs
    of the consent managers WebShot knows by the names their vendors give
    them (`CONSENT_MANAGERS`: Cookiebot, OneTrust, Didomi, Quantcast Choice,
-   TrustArc, Usercentrics, Sourcepoint), because a consent dialog is the
+   TrustArc, Usercentrics, Sourcepoint, Osano), because a consent dialog is the
    browser's session asking, not the page, and Chromium prints a fixed
    dialog over the text of every page. A manifest warning names each one
    that was on screen. `clean` mode also hides page chrome and large fixed
@@ -501,10 +501,17 @@ there with its reason, and the run's job summary lists every skip.
     centre later in paint order and at least half opaque, so z-order and
     opacity count and `pointer-events` does not. Text another fixed box draws
     is page chrome and is not counted; the consent dialogs item 5 hides, and
-    anything else the capture hid, have no box and are not measured. A
-    measurement that could not be made, or a box that could not be marked
-    for it, is itself a warning. WebShot does not move or hide such a box;
-    `--exclude` is the remedy (docs/09 P83).
+    anything else the capture hid, have no box and are not measured. The
+    measurement MUST be of the page that was printed: each page of the
+    measuring print MUST hold every character the PDF's page printed, the
+    PDF's page MUST hold every character the measuring print drew outside the
+    marked boxes (a filtered box prints its text only when measured), a box
+    the render printed counts even when it has gone since, and a box whose own `style`
+    attribute holds its colour as `!important` is marked through that
+    attribute and given its text back after. A measurement that could not be
+    made, or a box that could not be marked for it, is itself a warning.
+    WebShot does not move or hide such a box; `--exclude` is the remedy, except
+    on a page that showed an access wall (item 18) (docs/09 P83, P97).
 17. **A table too long to print whole:** Chromium's memory for printing one
     table grows with its rows and cells times its pages, and it fails at 11
     to 14 GiB. Before the render, and after the bundle, which keeps every
@@ -517,6 +524,16 @@ there with its reason, and the run's job summary lists every skip.
     a manifest warning naming the table's rows and pieces, whether a header
     repeats, and, in a tagged PDF, the extra tables in its structure. A table
     under the limit prints as it was (docs/09 P94).
+18. **A PDF that holds much less text than its bundle:** after the render, a
+    capture with a bundle MUST compare the bundle's text, as `content.txt`
+    had it before any video was inlined and without its recognized text,
+    with the PDF's text layer, and record a manifest warning when the PDF
+    holds under half of the bundle text's 20-character runs of letters and
+    digits, each run taken within one line of the bundle, naming both counts.
+    A bundle of fewer than 200 runs is not compared. When the page showed an
+    access wall WebShot knows by its vendor's markup (`ACCESS_WALLS`: Mg2
+    ConneXt, Piano), the warning names it and gives the save-it-yourself
+    advice instead of `--exclude`. The capture still exits 0 (docs/09 P97).
 
 ## 6. Security requirements (carried forward and new; all MUST)
 
