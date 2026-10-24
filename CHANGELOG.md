@@ -158,6 +158,14 @@ which records the measurements behind each change.
 
 ### Security
 
+- **Five dependencies with published advisories are updated.** pillow
+  13.0.0 (41 advisories against 12.3.0), pypdf 6.21.2 (7 against 6.20.1),
+  filelock 4.2.4 (3), certifi 2026.10.23 and opentelemetry-api 1.45.1 (1
+  each); pillow's and pypdf's floors are the fixed releases. Pillow 13
+  needs docling-core 2.104.0, which bounds a table at a million grid cells
+  and a page's tables at five million: a page past either now ends with the
+  bridge's error naming the limit, where one past the total ended in a
+  traceback (docs/09 P95).
 - **A document's text can no longer fetch a URL, or restructure the page.**
   MarkItDown writes what a slide, a Word paragraph, a spreadsheet cell, an EPUB
   chapter or a text file in a zip says into Markdown as if it were Markdown, so

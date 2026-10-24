@@ -20339,3 +20339,78 @@ and 10,000 are split. End to end, the warning reaches the manifest, the report
 and `capture.json`, the PDF's text has every row in order, the footer only
 from the last piece on, and `content.md` has one table. The real sizes cannot
 be tests: the failures need 11 to 14 GiB.
+
+## P95: five vulnerable pins, and what docling-core 2.104 changes for the bridge (2026-10-24)
+
+On 2026-10-23 and 10-24 Dependabot opened three security updates on
+webshot-ai: pillow 13.0.0 (webshot-ai#63), pypdf 6.21.2 (#64) and filelock
+4.2.1 (#65). Each failed its vulnerability scan, because the scan reads the
+whole lock and each update left the others vulnerable. Read from #64's and
+#65's scans:
+
+| Pin | Advisories | Fixed in |
+|---|---|---|
+| pillow 12.3.0 | 41 | 13.0.0 |
+| pypdf 6.20.1 | 7 | 6.21.2 |
+| filelock 3.32.3 | 3 | 4.2.1 |
+| certifi 2026.7.22 | 1 | 2026.10.19 |
+| opentelemetry-api 1.44.0 | 1 | 1.45.1 |
+
+So none of the three updates could pass alone, and master would fail the scan
+the next time its CI ran. This change takes all five, as the lock resolves
+them on 2026-10-24: pillow 13.0.0, pypdf 6.21.2, filelock 4.2.4, certifi
+2026.10.23 and opentelemetry-api 1.45.1. Pillow's and pypdf's floors in
+pyproject.toml are now the fixed releases. WebShot imports filelock nowhere;
+it arrives through other packages. Pillow 13 needs docling-core 2.104.0, the
+first release to support it, so docling-core moves from 2.101.1, and doclang
+from 0.7.3 to 0.8.0. Three of the releases in between change what the bridge
+relies on. The golden corpus, its second path and parity pass unchanged on
+the macOS recording machine, and the vulnerability audit finds nothing.
+
+### P95-1 — docling lays out one section of code on its own
+
+docling-core 2.103.1 fences code with more backticks than any run inside it
+(docling-core #867). `test_pre_code_text.py`'s premise test held that
+docling's own backend and serializers lay out no section of
+`pre_code_text.html` as the page does. On #63 it failed, naming one section,
+"A run of four backticks": a `<pre>` of plain text holding a run of four
+backticks, which docling now fences past. It was the only one. The bridge's
+reading of a `<pre>` stays, since every other section still needs it for its
+indentation, its highlighted tokens or its line-number table. For this one
+section it writes the same fence docling does. The premise test now names
+that section exactly, so it fails if a release lays out another section, or
+stops laying out this one.
+
+### P95-2 — a page past docling-core's table limits
+
+docling-core 2.103.1 also bounds tables (docling-core #899). A table's grid
+may have at most `max_table_cells` (1,000,000) cells, and a document's tables
+at most `max_total_table_cells` (5,000,000) between them. To test this, the
+limits were lowered until a small page crossed them.
+
+- A table past the first limit fails as the backend makes it, inside the
+  bridge's parse. The capture ends with `BundleBuildError`: "docling could not
+  parse the snapshot: … Table of 3x3 cells exceeds the limit of 8 cells".
+- The total is checked only when a model holding the document is validated.
+  The first such model is the chunker's serializer, outside the parse, so a
+  page past the total ended in a raw pydantic `ValidationError` and a
+  traceback instead of the bridge's error and its exit code.
+
+The bridge now checks the total after the parse, against docling-core's own
+setting. A page past it fails the same way, naming both the total and the
+limit. `tests/test_table_cell_limits.py` holds both failures, and a page at
+both limits read whole. The limits stay at docling-core's defaults. A page
+past them fails loudly; raising them is a decision for when a real page needs
+it.
+
+### P95-3 — each grid built once, now upstream
+
+#899 also has docling-core read each table's grid once per export, the defect
+P41 worked around. Until now the bridge handed `export_to_doctags` a copy of
+each table whose grid was built only once (`_grids_built_once`). On
+docling-core 2.104.0, counting `TableData.grid` builds during the capture of
+`spanning_table.html`, and of the same table with its last body ten times as
+long, gives 15 and 15 with the copy and 15 and 15 without it. So the copy is
+gone, along with the tests of the copy itself.
+`test_a_longer_table_builds_its_grid_no_more_often` holds the count either
+way.
