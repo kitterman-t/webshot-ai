@@ -47,6 +47,7 @@ from .bundle.videos import VideoEnrichment, enrich_with_videos
 from .capture.discover import read_page
 from .capture.landing import (
     WallCheck,
+    access_walls,
     bot_check_page,
     bot_check_page_message,
     empty_capture_message,
@@ -96,7 +97,11 @@ from .outputlock import OutputLock
 from .protected.assemble import build_protected_viewer_artifacts
 from .protected.viewer import capture_sharepoint_pdf_viewer
 from .render.clipping import clipping_warnings, find_clipped_text, printed_width
-from .render.covering import covered_text_warnings, find_covered_text
+from .render.covering import (
+    count_printed_boxes,
+    covered_text_warnings,
+    find_covered_text,
+)
 from .render.embed import collect_payloads, embed_bundle
 from .render.frames import fit_frames
 from .render.images import image_reduction_warnings, reduce_oversized_images
@@ -106,7 +111,9 @@ from .render.ligatures import (
     suppress_ligatures,
 )
 from .render.long_tables import SplitTable, split_long_tables, split_tables_warning
-from .render.pdf import is_tagged, render_pdf, validate_pdf
+from .render.pdf import header_footer_options, is_tagged, render_pdf, validate_pdf
+from .render.pdfium_bridge import PdfInkError, page_texts
+from .render.text_layer import printed_share, printed_text_warning
 from .render.video_appendix import append_video_appendix
 from .validate.verapdf import validate as verapdf_validate
 from .version import VERSION as GENERATOR_VERSION
@@ -545,6 +552,7 @@ async def capture_open_page(
     )
     ai_staging_directory: Path | None = None
     ai_result: AIBundleResult | None = None
+    bundle_text: str | None = None
     enrichment = VideoEnrichment()
     crash = CrashWatch(page)
     lazy: LazyLoadPass | None = None
@@ -730,6 +738,11 @@ async def capture_open_page(
             # The bundle's list is now the superset, so replace rather
             # than extend — otherwise the carried-in ones appear twice.
             warnings = list(ai_result.warnings)
+            # Read now, before the videos inline their walkthroughs, which the
+            # PDF prints in an appendix of its own (docs/09 P97-2).
+            bundle_text = (ai_result.staging_directory / "content.txt").read_text(
+                encoding="utf-8"
+            )
             clock.mark("extract")
 
         if ai_result and options.videos:
@@ -800,6 +813,9 @@ async def capture_open_page(
             if ai_result:
                 ai_result.warnings.append(split_message)
 
+        # Just before the render, so the covered-text check knows what it
+        # printed even of a box gone by the time it looks (docs/09 P97-4).
+        boxes_at_render = await count_printed_boxes(page)
         crash.step = "rendering the PDF"
 
         await render_pdf(
@@ -835,6 +851,31 @@ async def capture_open_page(
             warnings.append(failed)
             if ai_result:
                 ai_result.warnings.append(failed)
+        # The PDF as printed, before the appendix, against the bundle's text
+        # from before the videos; first of the checks on the print, so a wall
+        # it names is said before the boxes the wall is made of (docs/09 P97).
+        walls: tuple[str, ...] = ()
+        if ai_result and bundle_text is not None:
+            crash.step = "comparing the printed text with the bundle's"
+            unprinted: str | None
+            try:
+                printed = printed_share(
+                    bundle_text, await asyncio.to_thread(page_texts, temporary_output)
+                )
+            except PdfInkError as exc:
+                unprinted = (
+                    "WebShot could not read the PDF's text to compare it with the "
+                    f"bundle's ({exc}), so whether the PDF shows the page's text "
+                    "was not checked."
+                )
+            else:
+                unprinted = printed_text_warning(printed)
+                if unprinted:
+                    walls = await access_walls(page)
+                    unprinted = printed_text_warning(printed, walls)
+            if unprinted:
+                warnings.append(unprinted)
+                ai_result.warnings.append(unprinted)
         # After the render, which it measures by printing the page again with
         # its fixed and sticky boxes in colours of their own, and first of the
         # checks that follow it: the clipping check narrows the viewport, which
@@ -843,7 +884,19 @@ async def capture_open_page(
         # P83).
         crash.step = "checking the printed page for boxes over its text"
         for covered in covered_text_warnings(
-            await find_covered_text(page, options, temporary_output)
+            await find_covered_text(
+                page,
+                options,
+                temporary_output,
+                header_footer_options(
+                    options,
+                    title=title,
+                    final_url=final_url,
+                    appendix_expected=bool(enrichment.walkthroughs),
+                ),
+                boxes_at_render,
+            ),
+            walls,
         ):
             warnings.append(covered)
             if ai_result:

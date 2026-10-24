@@ -26,6 +26,7 @@ import asyncio
 import json
 import os
 import signal
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -269,13 +270,24 @@ def test_a_browser_that_stops_drawing_is_told_apart_from_the_page(
     stopping the whole browser does not, because the frame comes first when
     it resumes. The page cannot see the GPU process, but it can rule itself
     out, and the warning says so.
+
+    In Chromium 156 the stopped GPU process can hold the page's main thread
+    too, and then the page answers nothing (docs/09 P100). Both happen, from
+    one run to the next; the pass ends at its bound either way, and says only
+    what the page could see.
     """
     monkeypatch.setattr(prepare, "FRAME_TIMEOUT_S", 1.5)
+    monkeypatch.setattr(prepare, "ANSWER_GRACE_S", 2.0)
 
     async def run() -> tuple[LazyLoadPass, int, list[dict[str, Any]]]:
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch()
             stopped: list[int] = []
+
+            def resume() -> None:
+                while stopped:
+                    os.kill(stopped.pop(), signal.SIGCONT)
+
             try:
                 page = await browser.new_page(viewport=DEFAULT_VIEWPORT)
                 await page.goto(f"{FIXTURE.as_uri()}#light")
@@ -292,14 +304,18 @@ def test_a_browser_that_stops_drawing_is_told_apart_from_the_page(
                     stopped.append(pid)
                 # A frame already on its way still reaches the page.
                 await asyncio.sleep(0.5)
-                result = await asyncio.wait_for(
-                    scroll_to_load(page, 100, 0.25, excluded=("#comments",)),
-                    PASS_DEADLINE_S,
-                )
+                try:
+                    result = await asyncio.wait_for(
+                        scroll_to_load(page, 100, 0.25, excluded=("#comments",)),
+                        PASS_DEADLINE_S,
+                    )
+                finally:
+                    resume()
+                # Counted once the GPU process runs again: a page that did not
+                # answer the pass would not answer this either.
                 return result, await page.evaluate(RELATED_COUNT_JS), processes
             finally:
-                for pid in stopped:
-                    os.kill(pid, signal.SIGCONT)
+                resume()
                 await browser.close()
 
     result, related, processes = asyncio.run(run())
@@ -307,8 +323,69 @@ def test_a_browser_that_stops_drawing_is_told_apart_from_the_page(
     assert result.steps == 1
     assert related == 20, "nothing loaded: the page never saw the scroll"
     assert result.stall is not None, result
-    assert result.stall.visibility == "visible", result
-    assert result.stall.painted, result
+    message = lazy_load_warning(result, 100)
+    assert message is not None
+    if result.stall.answered:
+        assert result.stall.visibility == "visible", result
+        assert result.stall.painted, result
+    else:
+        # Nothing of the page is claimed: it said nothing.
+        assert "The page did not answer at all" in message, message
+        assert "the page was running" not in message, message
+
+
+@pytest.mark.browser
+def test_a_page_that_does_not_answer_ends_the_pass_at_its_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The frame wait's own timer needs the page's main thread (docs/09 P100).
+
+    A stopped GPU process in Chromium 156 can hold the page's main thread, and
+    then the timer that bounds the wait never fires: the pass waited forever.
+    Here the page holds its own main thread from its first scroll, for longer
+    than the test would wait, so it answers nothing on every platform. The
+    pass ends at the frame timeout plus `ANSWER_GRACE_S`, and the warning
+    claims nothing of a page that said nothing.
+    """
+    monkeypatch.setattr(prepare, "FRAME_TIMEOUT_S", 1.5)
+    monkeypatch.setattr(prepare, "ANSWER_GRACE_S", 2.0)
+
+    async def run() -> tuple[LazyLoadPass, float]:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            try:
+                page = await browser.new_page(viewport=DEFAULT_VIEWPORT)
+                await page.goto(f"{FIXTURE.as_uri()}#light")
+                await page.evaluate(
+                    """() => addEventListener('scroll', () => {
+                        const end = performance.now() + 120000;
+                        while (performance.now() < end) {}
+                    }, {once: true})"""
+                )
+                start = time.monotonic()
+                result = await asyncio.wait_for(
+                    scroll_to_load(page, 100, 0.25, excluded=("#comments",)),
+                    PASS_DEADLINE_S,
+                )
+                return result, time.monotonic() - start
+            finally:
+                # Closing the browser ends the page's loop with its process.
+                await browser.close()
+
+    result, took = asyncio.run(run())
+    assert result.ended == "unrendered", result
+    assert result.steps == 1
+    assert result.stall == FrameStall(visibility=None, painted=None, late_s=None)
+    # The frame wait's bound, then the scroll back to the top's.
+    assert 1.5 + 2.0 <= took < 1.5 + 2.0 + 2.0 + 10, took
+    message = lazy_load_warning(result, 100)
+    assert message == (
+        f"{UNRENDERED.replace('30 seconds', '1.5 seconds')} The page did not "
+        "answer at all: its own timer, due when the wait ran out, had not "
+        "reported 2 seconds later. Its main thread was busy or not run, or its "
+        "answer could not get out of the browser, so it cannot say whether the "
+        "browser or the page stopped."
+    )
 
 
 UNRENDERED = (
@@ -353,6 +430,14 @@ def test_the_unrendered_warning_says_what_was_not_seen() -> None:
             'The page was hidden (its visibilityState was "hidden"), and a '
             "browser does not render a hidden page.",
             id="hidden",
+        ),
+        pytest.param(
+            FrameStall(visibility=None, painted=None, late_s=None),
+            "The page did not answer at all: its own timer, due when the wait "
+            "ran out, had not reported 5 seconds later. Its main thread was busy "
+            "or not run, or its answer could not get out of the browser, so it "
+            "cannot say whether the browser or the page stopped.",
+            id="no-answer",
         ),
     ],
 )

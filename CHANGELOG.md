@@ -366,6 +366,14 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **The lazy-load pass no longer waits forever on a page that does not
+  answer.** Its frame wait was bounded by a timer in the page, and a timer
+  needs the page's main thread to run. In Chromium 156, which Playwright 1.64
+  brought, a GPU process that stops drawing can hold that thread too, and
+  then the pass waited for as long as the GPU process was stopped. The wait
+  is now bounded outside the page as well, 5 seconds past the frame timeout,
+  and the warning then says the page did not answer and claims nothing more
+  about it. See docs/09 P100.
 - **A table too long to print whole no longer fails the capture.** Chromium
   copies a table's row and cell data into every page the table breaks
   across, so printing one table took memory growing with the square of its

@@ -38,16 +38,27 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Sequence
+from collections import Counter
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page as AsyncPage
 
 from ..config import CaptureOptions
 from .pdf import print_geometry
-from .pdfium_bridge import Box, Glyph, Ink, PageInk, PdfInkError, page_count, read_ink
+from .pdfium_bridge import (
+    Box,
+    Glyph,
+    Ink,
+    PageInk,
+    PdfInkError,
+    page_characters,
+    page_count,
+    read_ink,
+)
 
 LOGGER = logging.getLogger("webshot")
 
@@ -275,7 +286,7 @@ MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter}) => {
                     rules.push(`[${attribute}="${key}"]${high}${pseudo} { ${important(parts)} }`);
                 }
             }
-            elements.push({element, key, expect});
+            elements.push({element, key, expect, own});
         }
         plans.push({candidate, code, elements});
     });
@@ -287,7 +298,7 @@ MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter}) => {
         `:not([${attribute}]) { background-image: none !important }`);
     // Kept before the first write, so whatever happens below can be undone.
     const sheet = new CSSStyleSheet();
-    const state = {attribute, sheet, marked: [], roots: [], all, describe,
+    const state = {attribute, sheet, marked: [], roots: [], inlined: [], all, describe,
                    layout: all.map(layout), measure: layout};
     window.__webshotInk = state;
     const adopted = new Set([document]);
@@ -307,24 +318,79 @@ MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter}) => {
     // for would keep its own colours.
     const parsed = sheet.cssRules.length === rules.length ? null
         : `${rules.length - sheet.cssRules.length} of ${rules.length} rules did not parse`;
+    const kept = (element, expect, code) => {
+        const style = getComputedStyle(element);
+        for (const name of expect) {
+            const value = style.getPropertyValue(name);
+            const rgb = rgbOf(value);
+            if (!rgb || rgb.join(',') !== code.join(',')) return `${describe(element)} kept ${name} ${value}`;
+        }
+        return null;
+    };
+    // A declaration the page made `!important` in an element's own `style`
+    // attribute beats every rule of a sheet, `!important` or not: an ad
+    // slot's `background: rgb(250, 250, 250) !important` kept its colour, and
+    // the box printed at the foot of every page went unmeasured (docs/09
+    // P97-3). For such an element only, each of its declarations that the
+    // attribute holds as `!important` is written there in its place, and the
+    // attribute's text is put back exactly afterwards. A page rule that reads
+    // the attribute (P83-4) is what the layout check below stands guard
+    // against, as it does for the sheet.
+    const inline = (element, own) => {
+        let wrote = false;
+        for (const declaration of own) {
+            const at = declaration.indexOf(':');
+            const name = declaration.slice(0, at).trim();
+            if (element.style.getPropertyPriority(name) !== 'important') continue;
+            if (!wrote) state.inlined.push([element, element.getAttribute('style')]);
+            wrote = true;
+            element.style.setProperty(name, declaration.slice(at + 1).trim(), 'important');
+        }
+        return wrote;
+    };
     return plans.map(({candidate, code, elements}) => {
         let unmarked = parsed;
-        for (const {element, expect} of unmarked ? [] : elements) {
-            const style = getComputedStyle(element);
-            for (const name of expect) {
-                const value = style.getPropertyValue(name);
-                const rgb = rgbOf(value);
-                if (!rgb || rgb.join(',') !== code.join(',')) {
-                    unmarked = `${describe(element)} kept ${name} ${value}`;
-                    break;
-                }
-            }
+        for (const {element, expect, own} of unmarked ? [] : elements) {
+            unmarked = kept(element, expect, code);
+            if (unmarked && inline(element, own)) unmarked = kept(element, expect, code);
             if (unmarked) break;
         }
         return {name: describe(candidate.element), position: candidate.position, code,
                 elements: elements.length, unmarked};
     });
 }"""
+
+#: How many fixed or sticky boxes the page has, counted as `MARK_BOXES_SCRIPT`
+#: chooses them, and nothing else: run just before the render, so the check
+#: after it knows a box was printed even when the box is gone by then.
+COUNT_BOXES_SCRIPT = r"""() => {
+    const up = node => node.assignedSlot || node.parentElement
+        || (node.parentNode instanceof ShadowRoot ? node.parentNode.host : null);
+    const chosen = new Set();
+    const collect = root => {
+        for (const element of root.querySelectorAll('*')) {
+            const position = getComputedStyle(element).position;
+            if ((position === 'fixed' || position === 'sticky') && element.getClientRects().length) {
+                let inside = false;
+                for (let node = up(element); node && !inside; node = up(node)) inside = chosen.has(node);
+                if (!inside) chosen.add(element);
+            }
+            if (element.shadowRoot) collect(element.shadowRoot);
+        }
+    };
+    collect(document);
+    return chosen.size;
+}"""
+
+
+async def count_printed_boxes(page: AsyncPage) -> int | None:
+    """How many fixed or sticky boxes the page prints, or `None` if unread."""
+    try:
+        return int(await page.evaluate(COUNT_BOXES_SCRIPT))
+    except PlaywrightError as exc:
+        LOGGER.debug("Counting the fixed and sticky boxes failed: %s", exc)
+        return None
+
 
 #: How many elements' layout changed since `MARK_BOXES_SCRIPT` recorded it,
 #: and the first of them with its two positions. Run in a later turn of the
@@ -350,14 +416,20 @@ LAYOUT_MOVED_SCRIPT = r"""async () => {
 }"""
 
 #: Undo `MARK_BOXES_SCRIPT` exactly. The sheet is first cut to its transition
-#: rule, so the colours return without animating, and only then removed with
-#: the attributes: that change moves no colour, so nothing animates then either.
+#: rule, so the colours return without animating; then each `style` attribute
+#: written to gets its own text back, while that rule still holds; and only
+#: then are the sheet and the attributes removed: that change moves no colour,
+#: so nothing animates then either.
 RESTORE_BOXES_SCRIPT = r"""() => {
     const state = window.__webshotInk;
     if (!state) return 0;
     delete window.__webshotInk;
     state.sheet.replaceSync(`[${state.attribute}] { transition: none !important }`);
     for (const element of state.marked) void getComputedStyle(element).color;
+    for (const [element, style] of state.inlined) {
+        if (style === null) element.removeAttribute('style');
+        else element.setAttribute('style', style);
+    }
     for (const element of state.marked) element.removeAttribute(state.attribute);
     for (const root of state.roots) {
         root.adoptedStyleSheets = root.adoptedStyleSheets.filter(sheet => sheet !== state.sheet);
@@ -416,16 +488,24 @@ class CoveredText:
 
 
 async def find_covered_text(
-    page: AsyncPage, options: CaptureOptions, rendered: Path
+    page: AsyncPage,
+    options: CaptureOptions,
+    rendered: Path,
+    header_footer: Mapping[str, Any] | None = None,
+    boxes_at_render: int | None = None,
 ) -> CoveredText:
     """Measure the page text each fixed or sticky box prints over.
 
     Run after the render and before anything else changes the page, so the
     measuring print lays the page out exactly as `rendered` was: the same page
-    box, backgrounds on, and nothing changed but colours. Two checks hold that:
-    no element's layout may have moved once the page has reacted to the marks,
-    and `rendered` must have as many pages as the measuring print, because a
-    measurement of a different layout would certify a different PDF.
+    box, the same running header and footer (`header_footer`, the render's
+    own), backgrounds on, and nothing changed but colours. Three checks hold
+    that: no element's layout may have moved once the page has reacted to the
+    marks, `rendered` must have as many pages as the measuring print, and each
+    page must hold the same text in both, because a measurement of a different
+    page would certify a different PDF. `boxes_at_render`, the count
+    `count_printed_boxes` took before the render, makes the third check run
+    when every box has gone by now (docs/09 P97-4).
     """
     started = time.monotonic()
     try:
@@ -457,7 +537,10 @@ async def find_covered_text(
         for record in marked
     ]
     unmarked = tuple(box for box in boxes if box.unmarked)
-    if not boxes or len(unmarked) == len(boxes):
+    # With no box now, there is nothing to measure, unless the render printed
+    # one that has gone since: then whether the page changed is the question.
+    gone = 0 if boxes else boxes_at_render or 0
+    if (not boxes and not gone) or (boxes and len(unmarked) == len(boxes)):
         await _restore(page)
         return CoveredText(boxes=len(boxes), unmarked=unmarked)
     try:
@@ -479,6 +562,7 @@ async def find_covered_text(
             print_background=True,
             tagged=False,
             outline=False,
+            **(header_footer or {}),
         )
     except PlaywrightError as exc:
         return CoveredText(
@@ -491,6 +575,13 @@ async def find_covered_text(
     try:
         pages = await asyncio.to_thread(read_ink, pdf)
         printed = await asyncio.to_thread(page_count, rendered)
+        changed = (
+            _changed_text(
+                await asyncio.to_thread(page_characters, rendered), pages, boxes
+            )
+            if len(pages) == printed
+            else None
+        )
     except PdfInkError as exc:
         return CoveredText(boxes=len(boxes), unmarked=unmarked, unmeasured=str(exc))
     LOGGER.debug(
@@ -508,6 +599,15 @@ async def find_covered_text(
                 f"{printed}, so it did not measure the layout that was printed"
             ),
         )
+    if changed is not None:
+        if gone:
+            changed = (
+                f"{_boxes(gone)} {'was' if gone == 1 else 'were'} on the page when "
+                f"it was printed and none when it was measured, and {changed}"
+            )
+        return CoveredText(boxes=len(boxes), unmarked=unmarked, unmeasured=changed)
+    if gone:
+        return CoveredText(boxes=0)
     unread = unread_text(pages)
     if unread is not None:
         return CoveredText(boxes=len(boxes), unmarked=unmarked, unmeasured=unread)
@@ -517,6 +617,51 @@ async def find_covered_text(
         coverings=measure(pages, boxes),
         unmarked=unmarked,
     )
+
+
+def _changed_text(
+    rendered: Sequence[str], pages: Sequence[PageInk], boxes: Sequence[MarkedBox]
+) -> str | None:
+    """Where the measuring print's text differs from the render's, or `None`.
+
+    Marking changes colours, so each page holds the same characters in both
+    prints unless the page itself changed in between. A consent banner that its
+    own script hid five seconds after load was printed in the render, mid-fade,
+    and gone from the measuring print a moment later, so the check measured a
+    page without it and found nothing to report (docs/09 P97-4).
+
+    One difference is by design: a box with a CSS filter prints as a picture,
+    with no text, in the render, and as text in the measuring print, where its
+    filter is swapped for none (P83-1). So the pages are compared as counts of
+    characters, both ways but not alike: every character the render printed
+    must be in the measuring print, and every character the measuring print
+    drew outside the marked boxes must be in the render. A box gone since the
+    render fails the first; a change to the page's own text fails either.
+    """
+    codes = {box.code for box in boxes if box.unmarked is None}
+    for number, (then, page) in enumerate(zip(rendered, pages, strict=True), start=1):
+        drawn = {ink.order: ink.color for ink in page.inks if ink.kind == "text"}
+        printed = Counter(c for c in then if not c.isspace())
+        every = Counter(g.char for g in page.glyphs if not g.char.isspace())
+        own = Counter(
+            g.char
+            for g in page.glyphs
+            if not g.char.isspace() and drawn.get(g.order) not in codes
+        )
+        lost = sum((printed - every).values())
+        if lost:
+            return (
+                f"the page changed between the render and the check: page {number} "
+                f"of the PDF holds {lost:,} characters the measuring print does not"
+            )
+        added = sum((own - printed).values())
+        if added:
+            return (
+                f"the page changed between the render and the check: page {number} "
+                f"of the measuring print holds {added:,} characters of the page's own "
+                "text that the PDF's does not"
+            )
+    return None
 
 
 def unread_text(pages: Sequence[PageInk]) -> str | None:
@@ -692,15 +837,18 @@ def _boxes(count: int) -> str:
     return f"{count} fixed or sticky box{'' if count == 1 else 'es'}"
 
 
-def covered_text_warnings(result: CoveredText) -> list[str]:
-    """The manifest warnings for a measurement: one per box that covers text."""
+def covered_text_warnings(result: CoveredText, walls: Sequence[str] = ()) -> list[str]:
+    """The manifest warnings for a measurement: one per box that covers text.
+
+    `walls` names the access walls the page showed (`capture.landing`). On
+    such a page a box over the text may be the wall, which the site keeps the
+    article under, so the warning does not offer --exclude as the remedy.
+    """
     warnings = []
     if result.unmeasured is not None:
         # The count is said only where something counted the boxes: when the
         # script that finds them failed, there is no number to state.
-        counted = (
-            "" if result.boxes is None else f" The page has {_boxes(result.boxes)}, so"
-        )
+        counted = f" The page has {_boxes(result.boxes)}, so" if result.boxes else ""
         warnings.append(
             "WebShot could not check whether a fixed or sticky box prints over the "
             f"page's text ({result.unmeasured}).{counted or ' So'} the PDF may show "
@@ -716,19 +864,36 @@ def covered_text_warnings(result: CoveredText) -> list[str]:
             if covering.printed == covering.pages
             else f"on {_pages(covering.printed, total)}, and "
         )
+        remedy = (
+            f"The page showed {' and '.join(walls)}'s access wall, and this box "
+            "may be part of it: --exclude would not bring back text the site "
+            "keeps under the wall."
+            if walls
+            else f'Pass --exclude "{covering.name}" to capture the page without '
+            "the box."
+        )
         warnings.append(
             f"A {covering.position} box, {covering.name}, prints {printed}over "
             f"{_plural(covering.characters, 'character')} of the page's text in "
             f"{_plural(covering.lines, 'line')} on {_pages(covering.pages, total)}, "
             f'starting "{covering.sample}". The text stays in the PDF\'s text layer, '
-            "but on the page the box is drawn over it. Pass --exclude "
-            f'"{covering.name}" to capture the page without the box.'
+            f"but on the page the box is drawn over it. {remedy}"
         )
     if result.unmarked:
         named = "; ".join(f"{box.name} ({box.unmarked})" for box in result.unmarked)
+        # A fixed box is printed on every page whatever it covers, so that much
+        # is known without the measurement (docs/09 P97-3).
+        fixed = sum(1 for box in result.unmarked if box.position == "fixed")
+        every = (
+            ""
+            if not fixed
+            else " Chromium prints a fixed box on every page, so "
+            + ("it is" if len(result.unmarked) == 1 else f"{fixed} of them are")
+            + " on every page of the PDF."
+        )
         warnings.append(
             f"WebShot could not mark {_boxes(len(result.unmarked))} to check what "
             "page text they print over, so the PDF may show them over its text "
-            f"without a warning: {named}."
+            f"without a warning: {named}.{every}"
         )
     return warnings

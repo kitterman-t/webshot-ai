@@ -89,8 +89,8 @@ NOISE_SELECTORS = [
 #: viewport, so Chromium prints it on every page over the text beneath it, and
 #: its words are read into the bundle between the article's. Cookiebot's was
 #: measured, printed on five of six pages of one article in clean mode as well
-#: as faithful (docs/09 P79); the others follow their vendors' documented
-#: markup and were not met in a capture. Each selector is a name the vendor
+#: as faithful (docs/09 P79), and Osano's on two of three (P97-4); the others
+#: follow their vendors' documented markup and were not met in a capture. Each selector is a name the vendor
 #: gave its own element, so none matches a page's own box the way the noise
 #: list's `[class*='cookie-consent' i]` can, which is why that list stays
 #: clean mode's alone.
@@ -102,6 +102,9 @@ CONSENT_MANAGERS: dict[str, tuple[str, ...]] = {
     "TrustArc": ("#truste-consent-track",),
     "Usercentrics": ("#usercentrics-root", "#usercentrics-cmp-ui"),
     "Sourcepoint": ("[id^='sp_message_container']",),
+    # Measured: its banner shown on load and hidden by its own script five
+    # seconds later, so a quick capture printed it mid-fade (docs/09 P97-4).
+    "Osano": (".osano-cm-window", ".osano-cm-dialog"),
 }
 
 #: The rules that act on `release_clamped_text`'s marks. Part of the page's
@@ -406,6 +409,15 @@ NEXT_FRAME_JS = """timeout => new Promise(resolve => {
 #: machine's ordinary jitter.
 LATE_TIMER_S = 1.0
 
+#: How long past `FRAME_TIMEOUT_S` the pass waits for the page to answer at
+#: all. The page's own timer answers when the wait runs out, but only while its
+#: main thread runs. In Chromium 156 a GPU process that stops drawing can hold
+#: the page's main thread as well; then nothing answered, and the pass waited
+#: until the GPU process drew again, or forever (docs/09 P100). Five times
+#: `LATE_TIMER_S`: a timer later than that is reported as no answer, and the
+#: warning says the same of both, that the page cannot say which side stopped.
+ANSWER_GRACE_S = 5.0
+
 #: One step down, and back to the top when the pass ends. Chromium 153's
 #: scroll methods return a promise that settles when the scroll has finished,
 #: and `page.evaluate` waits for a promise it is handed. On a page that sets
@@ -499,17 +511,24 @@ class FrameStall:
 
     The page cannot see why the browser drew nothing, but it can rule out
     itself: whether it was hidden, whether it had been running, and whether
-    it had been drawn before (docs/09 P76).
+    it had been drawn before (docs/09 P76). A page that did not answer within
+    `ANSWER_GRACE_S` of the wait running out rules out nothing, and every
+    field is None (docs/09 P100).
     """
 
     #: `document.visibilityState`. A browser does not render a hidden page.
-    visibility: str
+    visibility: str | None
     #: Whether the page had a first paint on record: whether a frame of it
     #: had ever been drawn.
-    painted: bool
+    painted: bool | None
     #: How much later than asked the page's own timer fired, in seconds. A
     #: page whose main thread was busy, or not run at all, fires it late.
-    late_s: float
+    late_s: float | None
+
+    @property
+    def answered(self) -> bool:
+        """Whether the page said anything at all when the wait ran out."""
+        return self.visibility is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -610,18 +629,38 @@ async def scroll_to_load(
         await page.evaluate(SCROLL_STEP_JS)
         # The delay starts once the page has seen the scroll, not when it was
         # asked for: until it renders, the page has not seen it (docs/09 P34).
-        seen = await page.evaluate(NEXT_FRAME_JS, FRAME_TIMEOUT_S * 1000)
+        # Bounded here too: the page's own bound needs its main thread to run.
+        try:
+            seen = await asyncio.wait_for(
+                page.evaluate(NEXT_FRAME_JS, FRAME_TIMEOUT_S * 1000),
+                FRAME_TIMEOUT_S + ANSWER_GRACE_S,
+            )
+        except TimeoutError:
+            seen = None
         if seen is not True:
             ended = "unrendered"
-            stall = FrameStall(
-                visibility=seen["visibility"],
-                painted=seen["painted"],
-                late_s=max(0.0, seen["lateMs"] / 1000),
+            stall = (
+                FrameStall(visibility=None, painted=None, late_s=None)
+                if seen is None
+                else FrameStall(
+                    visibility=seen["visibility"],
+                    painted=seen["painted"],
+                    late_s=max(0.0, seen["lateMs"] / 1000),
+                )
             )
             break
         await asyncio.sleep(delay_s)
 
-    await page.evaluate(SCROLL_TO_TOP_JS)
+    if stall is not None and not stall.answered:
+        # A page that did not answer would not answer this either. Sent, so it
+        # runs before anything later once the page runs again; not waited on
+        # past the grace, so the pass ends and says why.
+        try:
+            await asyncio.wait_for(page.evaluate(SCROLL_TO_TOP_JS), ANSWER_GRACE_S)
+        except TimeoutError:
+            LOGGER.info("The page has not yet answered the scroll back to the top.")
+    else:
+        await page.evaluate(SCROLL_TO_TOP_JS)
     LOGGER.info("Lazy-load pass finished after %d step(s).", steps)
     return LazyLoadPass(
         steps=steps,
@@ -674,15 +713,24 @@ def lazy_load_warning(result: LazyLoadPass, max_scrolls: int) -> str | None:
 def _stall_seen(stall: FrameStall) -> str:
     """What the page saw while no frame came, and so which side stopped (docs/09 P76).
 
-    The first that holds is the one said: a hidden page explains the rest, and
-    a page that was not running cannot say what the browser was doing.
+    The first that holds is the one said: a page that said nothing rules
+    nothing out, a hidden page explains the rest, and a page that was not
+    running cannot say what the browser was doing.
     """
+    if not stall.answered:
+        return (
+            "The page did not answer at all: its own timer, due when the wait "
+            f"ran out, had not reported {ANSWER_GRACE_S:g} seconds later. Its "
+            "main thread was busy or not run, or its answer could not get out "
+            "of the browser, so it cannot say whether the browser or the page "
+            "stopped."
+        )
     if stall.visibility != "visible":
         return (
             f'The page was hidden (its visibilityState was "{stall.visibility}"), '
             "and a browser does not render a hidden page."
         )
-    if stall.late_s >= LATE_TIMER_S:
+    if stall.late_s is not None and stall.late_s >= LATE_TIMER_S:
         return (
             f"The page's own timer fired {stall.late_s:.1f} seconds late, so for "
             "part of the wait the page could not run anything: its main thread "

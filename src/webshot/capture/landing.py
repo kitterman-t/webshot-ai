@@ -22,6 +22,7 @@ the line docs/11 draws around access controls.
 from __future__ import annotations
 
 import contextlib
+import logging
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -29,6 +30,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from playwright.async_api import Error as PlaywrightError
+
+LOGGER = logging.getLogger("webshot")
 
 #: Fewer characters of text than this, with no image and no video, is a page
 #: that did not render its content. The figure is the one Crawl4AI's structural
@@ -318,6 +321,46 @@ async def bot_check_page(page: Any) -> BotCheckPage:
             "not established, so check the PDF before relying on it."
         )
     )
+
+
+#: Access walls (a site asking the reader to sign in, register or subscribe
+#: before it shows the article), by vendor, as each vendor's script writes its
+#: box. Mg2's ConneXt was measured: a news site's registration box, printed on
+#: ten pages over an article whose text the PDF lost (docs/09 P97-1). Piano's
+#: follows its documented markup and was not met in a capture. A wall is only
+#: named, never a reason to fail: whether it hid the article is what the
+#: printed-text share measures (`render/text_layer.py`).
+ACCESS_WALLS: dict[str, tuple[str, ...]] = {
+    "Mg2 ConneXt": (".Mg2-connext",),
+    "Piano": (".tp-modal", ".tp-backdrop"),
+}
+
+#: The vendors in `ACCESS_WALLS` with a box shown on the page.
+_ACCESS_WALLS = r"""walls => walls.filter(([vendor, selectors]) =>
+    selectors.some(selector => [...document.querySelectorAll(selector)].some(element => {
+        const box = element.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && element.checkVisibility({
+            checkOpacity: true, checkVisibilityCSS: true,
+            opacityProperty: true, visibilityProperty: true,
+        });
+    }))).map(([vendor]) => vendor)"""
+
+
+async def access_walls(page: Any) -> tuple[str, ...]:
+    """The access walls shown on the page, by vendor.
+
+    Read for its wording only: a page that cannot be read names no wall, and
+    the share of the text the PDF holds still says what was lost.
+    """
+    try:
+        found = await page.evaluate(
+            _ACCESS_WALLS,
+            [[vendor, list(selectors)] for vendor, selectors in ACCESS_WALLS.items()],
+        )
+    except PlaywrightError as exc:
+        LOGGER.debug("Reading the page for access walls failed: %s", exc)
+        return ()
+    return tuple(str(vendor) for vendor in found)
 
 
 def bot_check_page_message(source: str, check: str) -> str:
