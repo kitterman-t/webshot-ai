@@ -278,6 +278,11 @@ which records the measurements behind each change.
 
 ### Changed
 
+- **docling-slim 2.140.** A heading whose runs are formatted differently,
+  such as `Fen<b>dral</b>ix`, is written plain: docling used to give the
+  whole heading its first run's bold. A `<br>` in a heading, caption or list
+  item still reads as a space, as before: docling now writes it as a line
+  break itself, and the bridge keeps it from doing so (docs/09 P96).
 - **Bold, code and links join the word they touch only where the page draws
   them touching.** A part docling formats or links was joined to the text
   beside it wherever the markup ran the two together, so a link drawn with an

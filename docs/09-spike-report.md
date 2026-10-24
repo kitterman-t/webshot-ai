@@ -8926,6 +8926,12 @@ fails on any requirement in pyproject.toml whose name is not in normalized
 form, and on a missing dependency table. Against the pyproject.toml it
 replaces, it names exactly `Markdown` and `Pillow`.
 
+Confirmed on 2026-10-24. The first Dependabot run on webshot-ai after
+the change (started by hand: its schedule is weekly, on Mondays) logged
+`Updating markdown from 3.10.3 to 3.11.1`, then ran
+`uv lock --upgrade-package markdown==3.11.1`, a step no earlier run had
+reached, and opened webshot-ai#68.
+
 ## P27: what MarkItDown's Office readers pass over (2026-10-11)
 
 A slide-text file made from a lecture deck said one slide held only its
@@ -20414,3 +20420,58 @@ long, gives 15 and 15 with the copy and 15 and 15 without it. So the copy is
 gone, along with the tests of the copy itself.
 `test_a_longer_table_builds_its_grid_no_more_often` holds the count either
 way.
+
+## P96: docling-slim 2.140 and the bridge (2026-10-24)
+
+Dependabot proposed docling-slim 2.140.0 (from 2.138.0) on webshot-ai#66, and
+29 tests failed on every platform. Three changes in docling's HTML backend
+caused them, all from 2.139.0. With the changes below, the golden corpus,
+its second path and parity pass unchanged on the macOS recording machine.
+
+### P96-1 — docling writes a `<br>` in one-paragraph text as a line break
+
+The backend puts a private-use character in place of each `<br>` while it
+parses (`_BR_SENTINEL`). Up to 2.138 it left that character in a heading's,
+caption's or list item's text. The bridge then wrote each one out: a space
+where the text is one line, as a browser reads it there, a newline in code,
+and nothing for a part of an item's line that held only `<br>`s
+(`_write_document_line_breaks`, P56). docling 2.139 resolves the character
+itself in those texts (docling #4675, `_resolve_line_breaks`), so
+`<li>Jask<br>ov</li>` came out "Jask\nov", across two lines of content.txt.
+It also drops a part that held only `<br>`s before the bridge sees it. By then
+a `<br>` can no longer be told apart from the text. Of the 29 failures, 27
+were this: every case in `test_line_breaks_in_items.py`.
+
+The bridge now swaps the module's `_resolve_line_breaks` for the `.strip()` it
+replaced, once, before its first parse, so docling leaves the character in as
+2.138 did, and P56's rules hold unchanged. The bridge is the only module that
+imports docling, so the swap reaches nothing else, and a backend without the
+function is left as it is. The swap does not reach two other places 2.139
+changed: `<pre>` text, which the bridge reads itself (P55), and a checkbox's
+label (`_extract_text_excluding_tag_obj_ids`), which no test covers. Read from
+docling's code, not measured: a checkbox's label with a `<br>` now keeps a
+newline where 2.138 left the character for the bridge.
+
+### P96-2 — a flattened heading keeps only a formatting all of it shares
+
+`AnnotatedTextList.to_single_text_element` makes one text of a heading's runs.
+It used to take the first run's formatting and hyperlink for the whole text,
+with a "Clashing formatting" or "Clashing hyperlinks" warning when the runs
+differed. It now keeps one only when every run shares it. So
+`<h2>Fen<b>dral</b>ix</h2>`, written `## **Fendralix**` before, bold over the
+whole word although only "dral" is bold on the page, is now `## Fendralix`.
+The join P48 measures holds either way. `test_inline_joins.py` asserted the
+old bold and now asserts the plain heading.
+
+### P96-3 — the warning the logging probe relied on is gone
+
+`test_logging.py` shows that `setup_logging` caps each noisy library's logger,
+by first proving each library logs. For docling it used a heading holding two
+links, which raised "Clashing hyperlinks". 2.139 no longer warns there, and
+with the root logger wide open, a heading with two links, the same with ids,
+and a caption with two links produce no docling record at INFO or above. The
+backend's one warning left, "Clashing provenance tags", fired on none of
+them. The cap on `docling.backend.html_backend` stays as a guard for that
+warning. The probe now logs a record of its own on that logger, which still
+shows the cap applies to it, and no longer claims docling's own warning
+reaches it.

@@ -60,9 +60,10 @@ DEFAULT_OCR_PSM = _DefaultPsm(11)
 #:   ... exceeds defined trailer size". Every PDF it reads here is one WebShot
 #:   produced (Chromium's print, the walkthrough appendix, OCRmyPDF's output);
 #:   no local input format is a PDF.
-#: * `docling.backend.html_backend` reports "Clashing hyperlinks" when a heading
-#:   or text run holds two links and its item can carry one. The bundle's
-#:   `links.json` is read from the page itself and keeps every link.
+#: * `docling.backend.html_backend` reported "Clashing hyperlinks" when a
+#:   heading or text run held two links and its item could carry one, until
+#:   docling-slim 2.139, and still reports "Clashing provenance tags". The
+#:   bundle's `links.json` is read from the page itself and keeps every link.
 #: * `fontTools` narrates each table it prunes ("head pruned", "glyf pruned")
 #:   at INFO while OCRmyPDF subsets the text-layer font on the protected path.
 #:   OCRmyPDF's own command line sets this logger to ERROR; WebShot calls it as

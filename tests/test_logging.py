@@ -10,10 +10,13 @@ those libraries' housekeeping at ERROR.
 Each probe runs in a fresh interpreter, because `logging.basicConfig` does
 nothing once the root logger has a handler, and pytest has already given it
 one. Each one also triggers the real records (pypdf repairing a trailer,
-docling merging a heading's two links, fontTools subsetting a fixture font,
-trafilatura and htmldate reading a page), and a control run with the root
-logger wide open proves they were emitted, so a quiet stderr cannot be the
-quiet of a probe that never reached the libraries.
+fontTools subsetting a fixture font, trafilatura and htmldate reading a
+page), and a control run with the root logger wide open proves they were
+emitted, so a quiet stderr cannot be the quiet of a probe that never
+reached the libraries. docling's HTML backend no longer warns about a
+heading's two links (since docling-slim 2.139 it keeps neither), and its
+one warning left fired on none of the pages tried, so its logger gets a
+record of the probe's own (docs/09 P96-3).
 """
 
 from __future__ import annotations
@@ -26,8 +29,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-#: The smallest inputs that make each library speak. A heading holding two
-#: links is what docling cannot represent and warns about; a PDF whose trailer
+#: The smallest inputs that make each library speak. A PDF whose trailer
 #: understates its object count is what pypdf repairs and warns about.
 _PROBE = """
 import io, logging, re, sys
@@ -55,6 +57,7 @@ extract(
     "<a href='https://b.example/'>two</a></h2></body></html>",
     [],
 )
+logging.getLogger("docling.backend.html_backend").warning("DOCLING-WARNING-MARKER")
 
 from pathlib import Path
 from fontTools.subset import Subsetter
@@ -108,7 +111,9 @@ def test_the_probe_reaches_every_library_it_quiets(control: list[str]) -> None:
     """The guard for the guard: each record must exist before it can be hidden."""
     text = "\n".join(control)
     assert "Object count" in text and "exceeds defined trailer size" in text, text
-    assert "Clashing hyperlinks" in text, text
+    assert "WARNING [docling.backend.html_backend]: DOCLING-WARNING-MARKER" in text, (
+        text
+    )
     assert any(line.startswith("INFO [fontTools.subset]") for line in control), text
     assert any(line.startswith("DEBUG [trafilatura") for line in control), text
     assert any(line.startswith("DEBUG [htmldate") for line in control), text
