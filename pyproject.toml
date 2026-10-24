@@ -55,7 +55,7 @@ dependencies = [
     "playwright>=1.63.0,<2",
     # >=6 is required: the AF-embedding code already uses the EmbeddedFile API,
     # which the previous >=4.2 floor did not guarantee (docs/05 task 0.1).
-    "pypdf>=6.20.1,<7",
+    "pypdf>=6.21.1,<7",
     # Reads a PDF as a viewer draws it: every object in paint order with its
     # bounds and colour, and every character's box, which pypdf does not
     # give. The covered-text check needs both from the PDF Chromium printed
