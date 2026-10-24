@@ -103,6 +103,34 @@ def print_geometry(options: CaptureOptions) -> dict[str, Any]:
     }
 
 
+def header_footer_options(
+    options: CaptureOptions,
+    *,
+    title: str,
+    final_url: str,
+    appendix_expected: bool = False,
+) -> dict[str, Any]:
+    """The running header and footer the render prints, as `page.pdf` options.
+
+    Defined once for the render and for the covered-text check's measuring
+    print, which must print the same text on each page as the render did to
+    tell that the page has not changed in between (docs/09 P97-4).
+    """
+    if not options.header_footer:
+        return {}
+    source_label = (
+        urlparse(final_url).netloc or Path(unquote(urlparse(final_url).path)).name
+    )
+    header, footer = _header_footer_templates(
+        title, source_label, total_is_final=not appendix_expected
+    )
+    return {
+        "display_header_footer": True,
+        "header_template": header,
+        "footer_template": footer,
+    }
+
+
 async def render_pdf(
     page: AsyncPage,
     options: CaptureOptions,
@@ -119,19 +147,9 @@ async def render_pdf(
     page total (see `_header_footer_templates`).
     """
     LOGGER.info("Rendering PDF...")
-    extra: dict[str, Any] = {}
-    if options.header_footer:
-        source_label = (
-            urlparse(final_url).netloc or Path(unquote(urlparse(final_url).path)).name
-        )
-        header, footer = _header_footer_templates(
-            title, source_label, total_is_final=not appendix_expected
-        )
-        extra = {
-            "display_header_footer": True,
-            "header_template": header,
-            "footer_template": footer,
-        }
+    extra = header_footer_options(
+        options, title=title, final_url=final_url, appendix_expected=appendix_expected
+    )
     # Translated here rather than left to `classify`. A `PlaywrightError` out
     # of `page.pdf()` — a browser that crashed mid-print, a PDF protocol
     # failure — reached the generic branch and was reported as exit 5,

@@ -42,6 +42,10 @@ _KINDS = {
     raw.FPDF_PAGEOBJ_FORM: "form",
 }
 
+#: What `FPDFText_GetUnicode` gives for a line break, and for a character it
+#: has no code for: not characters of the page's text.
+_NO_CHARACTER = frozenset((0x0D, 0x0A, 0xFFFE, 0xFFFF))
+
 #: Form XObjects nest no deeper than this in anything Chromium prints; a form
 #: deeper still is read as one object, its contents uncounted.
 _MAX_DEPTH = 32
@@ -108,6 +112,60 @@ def page_count(path: Path) -> int:
         document.close()
 
 
+def page_texts(pdf: Path | bytes) -> tuple[str, ...]:
+    """Each page's text, as a reader copying it gets it: in the order PDFium
+    reads it, with the spaces and line breaks it infers between runs."""
+    name = pdf.name if isinstance(pdf, Path) else "the PDF"
+    try:
+        document = pdfium.PdfDocument(str(pdf) if isinstance(pdf, Path) else pdf)
+    except pdfium.PdfiumError as exc:
+        raise PdfInkError(f"PDFium could not open {name}: {exc}") from exc
+    try:
+        texts = []
+        for index in range(len(document)):
+            page = document[index]
+            textpage = page.get_textpage()
+            try:
+                texts.append(textpage.get_text_range())
+            finally:
+                textpage.close()
+                page.close()
+        return tuple(texts)
+    except pdfium.PdfiumError as exc:
+        raise PdfInkError(f"PDFium could not read {name}: {exc}") from exc
+    finally:
+        document.close()
+
+
+def page_characters(pdf: Path | bytes) -> tuple[str, ...]:
+    """Each page's characters as `read_ink` reads them, without their boxes:
+    every character but line breaks and the markers PDFium uses for none."""
+    name = pdf.name if isinstance(pdf, Path) else "the PDF"
+    try:
+        document = pdfium.PdfDocument(str(pdf) if isinstance(pdf, Path) else pdf)
+    except pdfium.PdfiumError as exc:
+        raise PdfInkError(f"PDFium could not open {name}: {exc}") from exc
+    try:
+        pages = []
+        for index in range(len(document)):
+            page = document[index]
+            textpage = page.get_textpage()
+            try:
+                codes = (
+                    raw.FPDFText_GetUnicode(textpage.raw, char)
+                    for char in range(textpage.count_chars())
+                )
+                pages.append("".join(chr(c) for c in codes if c not in _NO_CHARACTER))
+            finally:
+                textpage.close()
+                page.close()
+        return tuple(pages)
+    except pdfium.PdfiumError as exc:
+        raise PdfInkError(f"PDFium could not read {name}: {exc}") from exc
+    finally:
+        document.close()
+
+
 def read_ink(pdf: bytes) -> tuple[PageInk, ...]:
     """Every page's objects in paint order, and its characters."""
     try:
@@ -142,7 +200,7 @@ def _read_page(document: pdfium.PdfDocument, index: int) -> PageInk:
         glyphs = []
         for char in range(textpage.count_chars()):
             code = raw.FPDFText_GetUnicode(textpage.raw, char)
-            if code in (0x0D, 0x0A, 0xFFFE, 0xFFFF):
+            if code in _NO_CHARACTER:
                 continue
             left, bottom, right, top = (ctypes.c_double() for _ in range(4))
             raw.FPDFText_GetCharBox(textpage.raw, char, left, right, bottom, top)

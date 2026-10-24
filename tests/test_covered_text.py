@@ -25,6 +25,7 @@ from typing import Any
 
 import pytest
 from playwright.async_api import async_playwright
+from pypdf import PdfReader
 
 from webshot.cli import main
 from webshot.render.covering import (
@@ -280,7 +281,16 @@ def test_a_box_that_could_not_be_marked_is_named_with_what_it_kept() -> None:
     assert covered_text_warnings(CoveredText(boxes=1, unmarked=(unmarked,))) == [
         "WebShot could not mark 1 fixed or sticky box to check what page text they "
         "print over, so the PDF may show them over its text without a warning: div.x "
-        "(div.x > span kept color rgb(1, 2, 3))."
+        "(div.x > span kept color rgb(1, 2, 3)). Chromium prints a fixed box on "
+        "every page, so it is on every page of the PDF."
+    ]
+    # A sticky box prints once, so nothing is said of every page (P97-3).
+    sticky = MarkedBox("th.s", "sticky", STICKY, unmarked="th.s kept color red")
+    assert covered_text_warnings(CoveredText(boxes=2, unmarked=(unmarked, sticky))) == [
+        "WebShot could not mark 2 fixed or sticky boxes to check what page text they "
+        "print over, so the PDF may show them over its text without a warning: div.x "
+        "(div.x > span kept color rgb(1, 2, 3)); th.s (th.s kept color red). Chromium "
+        "prints a fixed box on every page, so 1 of them are on every page of the PDF."
     ]
 
 
@@ -300,6 +310,27 @@ def test_text_whose_characters_belong_to_no_object_fails_the_check() -> None:
 
 def test_no_boxes_no_warnings() -> None:
     assert covered_text_warnings(CoveredText()) == []
+
+
+def test_on_a_walled_page_a_box_is_not_given_the_exclude_remedy() -> None:
+    """The box may be the wall, which the site keeps the article under (P97-1)."""
+    [warning] = covered_text_warnings(
+        CoveredText(boxes=1, pages=2, coverings=(_covering(),)), ["Mg2 ConneXt"]
+    )
+    assert "Pass --exclude" not in warning
+    assert warning.endswith(
+        "The page showed Mg2 ConneXt's access wall, and this box may be part of it: "
+        "--exclude would not bring back text the site keeps under the wall."
+    )
+
+
+def test_a_box_gone_since_the_render_with_no_box_left_is_named() -> None:
+    """With no box left there is no count to state (P97-4)."""
+    assert covered_text_warnings(CoveredText(boxes=0, unmeasured="it changed")) == [
+        "WebShot could not check whether a fixed or sticky box prints over the "
+        "page's text (it changed). So the PDF may show one over its text without a "
+        "warning."
+    ]
 
 
 def _capture(tmp_path: Path, *args: str) -> list[str]:
@@ -355,6 +386,7 @@ ROUND_TRIP = """<!doctype html><html><head><style>
   html :where([style^="border-bottom-color"], [style*=";border-bottom-color"],
     [style*="; border-bottom-color"]) { border-bottom-style: solid; }
   .empty { position: sticky; bottom: 0; z-index: 99999; }
+  @layer page { .layered { color: rgb(4, 5, 6) !important; } }
 </style></head><body>
   <div class="bar" style="border: 1px solid red">Closed
     <span style="background: rgba(10, 20, 30, 0.25)">on Friday</span>
@@ -362,6 +394,7 @@ ROUND_TRIP = """<!doctype html><html><head><style>
   <div class="host"></div>
   <p>The page.</p>
   <div class="stubborn" style="position: fixed; top: 300px; color: rgb(1, 2, 3) !important">Mine</div>
+  <div class="layered" style="position: fixed; top: 340px">Layered</div>
   <div class="empty" style="position: sticky"></div>
   <script>
     const root = document.querySelector('.host').attachShadow({mode: 'open'});
@@ -388,6 +421,7 @@ DURING_SCRIPT = """() => [
     getComputedStyle(document.querySelector('.bar')).color,
     getComputedStyle(document.querySelector('.bar'), '::before').color,
     getComputedStyle(document.querySelector('.host').shadowRoot.querySelector('b')).color,
+    getComputedStyle(document.querySelector('.stubborn')).color,
 ]"""
 
 
@@ -431,15 +465,95 @@ def test_marking_takes_moves_nothing_and_restoring_leaves_the_page_as_it_was() -
     ] == [
         ("div.bar", "fixed", None),
         ("div.host", "sticky", None),
-        ("div.stubborn", "fixed", "div.stubborn kept color rgb(1, 2, 3)"),
+        # The page's own inline `!important` beats any sheet, so the colour is
+        # written into that attribute in its place (docs/09 P97-3).
+        ("div.stubborn", "fixed", None),
+        # An `!important` rule in a cascade layer beats an unlayered one, and
+        # the element's attribute holds nothing to write over: still unmarked,
+        # and said so.
+        ("div.layered", "fixed", "div.layered kept color rgb(4, 5, 6)"),
         ("div.empty", "sticky", None),
     ]
     assert seen["moved"] == {"moved": 0, "first": None}
-    bar, host = (tuple(box["code"]) for box in seen["marked"][:2])
-    assert bar != host
+    bar, host, stubborn = (tuple(seen["marked"][index]["code"]) for index in (0, 1, 2))
+    assert len({bar, host, stubborn}) == 3
     assert seen["during"] == [
         f"rgb({bar[0]}, {bar[1]}, {bar[2]})",
         f"rgb({bar[0]}, {bar[1]}, {bar[2]})",
         f"rgb({host[0]}, {host[1]}, {host[2]})",
+        f"rgb({stubborn[0]}, {stubborn[1]}, {stubborn[2]})",
     ]
     assert seen["after"] == seen["before"]
+
+
+SLOT = Path(__file__).parent / "fixtures" / "covering_inline_slot_page.html"
+VANISHING = Path(__file__).parent / "fixtures" / "covering_vanishing_banner_page.html"
+FILTERED = Path(__file__).parent / "fixtures" / "covering_filtered_box_page.html"
+
+
+def _capture_file(tmp_path: Path, fixture: Path) -> tuple[list[str], str]:
+    pdf = tmp_path / "capture.pdf"
+    assert main([str(fixture), "--output", str(pdf), "--no-ocr"]) == 0
+    manifest = json.loads(
+        (pdf.with_suffix(".ai") / "manifest.json").read_text(encoding="utf-8")
+    )
+    text = " ".join(
+        " ".join(
+            page.extract_text() or "" for page in PdfReader(str(pdf)).pages
+        ).split()
+    )
+    return list(manifest["warnings"]), text
+
+
+@pytest.mark.browser
+def test_a_box_whose_inline_important_colour_beat_the_sheet_is_measured(
+    tmp_path: Path,
+) -> None:
+    """An ad slot's `background: ... !important` in its own style attribute kept
+    its colour, so the box was reported as not marked and never measured, on
+    every page it printed on (P97-3)."""
+    warnings, _ = _capture_file(tmp_path, SLOT)
+    assert not [w for w in warnings if "could not mark" in w], warnings
+    [slot] = warnings
+    assert slot.startswith(
+        "A fixed box, ins#slot-anchor, prints on both pages, and over "
+    )
+    assert slot.endswith(
+        'Pass --exclude "ins#slot-anchor" to capture the page without the box.'
+    )
+
+
+@pytest.mark.browser
+def test_a_box_gone_between_the_render_and_the_check_is_not_a_clean_result(
+    tmp_path: Path,
+) -> None:
+    """A banner its own script hid after the render was printed in the PDF and
+    gone from the measuring print, which found nothing and said nothing (P97-4)."""
+    warnings, text = _capture_file(tmp_path, VANISHING)
+    assert "This harbor office banner leaves after one printing." in text
+    [changed] = warnings
+    assert changed.startswith(
+        "WebShot could not check whether a fixed or sticky box prints over the page's "
+        "text (1 fixed or sticky box was on the page when it was printed and none "
+        "when it was measured, and the page changed between the render and the "
+        "check: page 1 of the PDF holds "
+    )
+    assert changed.endswith(
+        " characters the measuring print does not). So the PDF may "
+        "show one over its text without a warning."
+    )
+
+
+@pytest.mark.browser
+def test_a_filtered_box_printed_as_a_picture_is_not_a_page_that_changed(
+    tmp_path: Path,
+) -> None:
+    """A filtered box prints as a picture in the render and as text when
+    measured, its filter swapped for none (P83-1). The render's text must be
+    in the measuring print, and the measuring print's text outside the boxes
+    in the render; the box's own words are neither (review of P97-4)."""
+    warnings, text = _capture_file(tmp_path, FILTERED)
+    assert "drawn with a shadow filter" not in text  # printed as a picture
+    assert not [w for w in warnings if "page changed" in w], warnings
+    [notice] = warnings
+    assert notice.startswith("A fixed box, div.notice, prints ")
