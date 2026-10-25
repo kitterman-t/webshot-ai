@@ -545,6 +545,18 @@ there with its reason, and the run's job summary lists every skip.
     reader could see a repeat of is changed. That includes the root
     element's background, and the body's when the root has none, which
     paints the whole canvas from a tile the root's box sizes (docs/09 P103).
+20. **Text behind a closed control:** once the page is prepared for print and
+    before the bundle, a capture MUST record a manifest warning naming each
+    control in the page's content whose closed region holds at least 200
+    characters of text: an `aria-expanded="false"` control whose
+    `aria-controls` region, or a Bootstrap collapse toggle whose target, has
+    no box (in neither the PDF nor the bundle); a closed `<details>` (in the
+    bundle, not the PDF); and a known expander whose text the page fetches
+    only when opened (YouTube's description). Regions in a header,
+    navigation, footer or aside, and regions mostly of link text, are page
+    chrome and are not named. Under `--no-ai-bundle` the warning says only
+    that the text is not in the PDF. WebShot does not open them (docs/09
+    P102).
 
 ## 6. Security requirements (carried forward and new; all MUST)
 

@@ -543,6 +543,14 @@ class LazyLoadPass:
     ended: Literal["bottom", "removed-growth", "limit", "unrendered"]
     #: The document's height at the last step, in CSS pixels.
     height: int
+    #: Its height at the first step, so a warning can say how much the page
+    #: grew while it was scrolled (docs/09 P105-1).
+    first_height: int = 0
+    #: How many times the page grew right after the window had come within
+    #: a window's height of its end: what an endless feed does, which loads
+    #: more before the window reaches the last line, and what a long page the
+    #: window is still far from the end of does not.
+    end_growths: int = 0
     #: For `removed-growth`: each removed region that grew while the kept
     #: content stood still, as (name, what removes it: `clean` or `exclude`).
     growing: tuple[tuple[str, str], ...] = ()
@@ -586,12 +594,20 @@ async def scroll_to_load(
     stall: FrameStall | None = None
     steps = 0
     height = 0
+    first_height = 0
+    end_growths = 0
+    was_at_end = False
     selectors = {"noise": list(noise), "excluded": list(excluded)}
 
     for steps in range(1, max_scrolls + 1):
         state = await page.evaluate(LAZY_LOAD_STATE_JS, selectors)
         height = state["height"]
+        if steps == 1:
+            first_height = height
         bottom = state["y"] + state["viewport"]
+        if was_at_end and height > previous_height:
+            end_growths += 1
+        was_at_end = bottom >= height - state["viewport"]
         if bottom >= height - 4:
             stable_steps = stable_steps + 1 if height == previous_height else 0
             if stable_steps >= 3:
@@ -664,6 +680,8 @@ async def scroll_to_load(
     LOGGER.info("Lazy-load pass finished after %d step(s).", steps)
     return LazyLoadPass(
         steps=steps,
+        first_height=first_height,
+        end_growths=end_growths,
         ended=ended,
         height=height,
         growing=growing,
@@ -675,7 +693,32 @@ async def scroll_to_load(
 def lazy_load_warning(result: LazyLoadPass, max_scrolls: int) -> str | None:
     """The manifest warning for a lazy-load pass that did not reach the page's end."""
     if result.ended == "limit":
-        return f"Lazy-load scrolling reached the {max_scrolls}-step safety limit."
+        # Said with what the pass saw: a news page's endless feed ran the pass
+        # to its limit and printed 66 pages of other stories after a two-page
+        # article, and the warning said only that a limit was reached
+        # (docs/09 P105-1). A feed grows as the window nears its end; a
+        # long article that grew earlier, from its own lazy pictures, and is
+        # longer than the steps reach needs more steps, not fewer (review of
+        # #316).
+        if result.end_growths:
+            times = "once" if result.end_growths == 1 else f"{result.end_growths} times"
+            return (
+                f"Lazy-load scrolling reached the {max_scrolls}-step safety limit "
+                f"with the page still loading more at its end: {times} the window "
+                "came near the end of the page and the page grew, from "
+                f"{result.first_height:,} to {result.height:,} pixels tall over "
+                "the pass, as an endless feed of other stories does. Everything "
+                "it loaded is in the capture, so the PDF may run on long past the "
+                "page's own content. Pass --no-scroll, or a lower --max-scrolls, "
+                "to stop sooner."
+            )
+        return (
+            f"Lazy-load scrolling reached the {max_scrolls}-step safety limit "
+            f"before the window settled at the end of the page ({result.height:,} "
+            "pixels tall), so content further down that loads only when it is "
+            "scrolled to may not have loaded. Pass a higher --max-scrolls to go "
+            "further."
+        )
     if result.ended == "bottom":
         return None
     if result.ended == "unrendered":

@@ -207,8 +207,36 @@ def test_a_capture_that_keeps_the_feed_scrolls_to_the_limit() -> None:
     result, _, seen = _scroll("light", max_scrolls=12)
     assert result.ended == "limit", (result, seen)
     assert result.steps == 12
+    # The feed grew each time the window came near its end, and the warning
+    # says so with what the pass counted and the heights it saw (P105-1).
+    assert result.end_growths > 0 and 0 < result.first_height < result.height, result
+    times = "once" if result.end_growths == 1 else f"{result.end_growths} times"
     assert lazy_load_warning(result, 12) == (
-        "Lazy-load scrolling reached the 12-step safety limit."
+        "Lazy-load scrolling reached the 12-step safety limit with the page still "
+        f"loading more at its end: {times} the window came near the end of the page "
+        f"and the page grew, from {result.first_height:,} to {result.height:,} "
+        "pixels tall over the pass, as an endless feed of other stories does. "
+        "Everything it loaded is in the capture, so the PDF may run on long past "
+        "the page's own content. Pass --no-scroll, or a lower --max-scrolls, to "
+        "stop sooner."
+    )
+
+
+@pytest.mark.parametrize("first_height", [180_000, 120_000])
+def test_a_limit_reached_before_the_end_of_a_long_page_says_so(
+    first_height: int,
+) -> None:
+    """A page longer than the steps reach is not a feed, even one that grew
+    on the way down from its own lazy pictures: it needs more steps, not fewer
+    (review of #316)."""
+    still = LazyLoadPass(
+        steps=100, ended="limit", height=180_000, first_height=first_height
+    )
+    assert lazy_load_warning(still, 100) == (
+        "Lazy-load scrolling reached the 100-step safety limit before the window "
+        "settled at the end of the page (180,000 pixels tall), so content further "
+        "down that loads only when it is scrolled to may not have loaded. Pass a "
+        "higher --max-scrolls to go further."
     )
 
 

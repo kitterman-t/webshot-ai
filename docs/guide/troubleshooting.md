@@ -96,8 +96,11 @@ with `--selector`.
 ### The page is cut off part-way down
 
 Lazy-loading pages need the scroll pass. If the manifest warns that scrolling
-"reached the safety limit", raise `--max-scrolls`, or slow it with
-`--scroll-delay` so content has time to load.
+"reached the safety limit" before the window settled at the end of the page,
+raise `--max-scrolls`, or slow it with `--scroll-delay` so content has time to
+load. If it says the page was still loading more at its end, it is more likely an
+endless feed of other stories, and the PDF may run on long past what you came
+for: capture it again with `--no-scroll`, or a lower `--max-scrolls`.
 
 Some pages never end: a comment feed appends more each time the window nears
 the bottom. When the only part still growing is one the capture removes (clean
@@ -235,6 +238,19 @@ the box is inside a shadow root), it says that instead.
 WebShot does not hide these boxes itself, because some are part of the page.
 The consent dialogs it knows are the exception: both modes hide them, and a
 separate warning names them.
+
+### A warning says the page keeps text behind a closed control
+
+A "show more" button, an accordion or a `<details>` the page shows closed
+keeps its text out of the PDF: WebShot records the page as it was shown and
+does not press anything. The warning names each control, the region it opens
+and how many characters that region holds, and says where the text is: in
+neither the PDF nor the bundle when the page does not lay the region out at
+all, in the bundle but not the PDF for a closed `<details>`, and nowhere yet
+when the page fetches the text only once the control is pressed, as a video
+page's description does. To capture the text, open the control in your own
+browser and save the page there, or show the region with a `--css`
+stylesheet, for example `#summaryFull { display: block !important; }`.
 
 ### A warning says the text layer has ligature characters
 

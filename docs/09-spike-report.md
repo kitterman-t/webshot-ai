@@ -8394,6 +8394,49 @@ lacks the advice.
 - Akamai's page served as a 403, which still gets P23-3's two readings: the
   403 path reads the response headers, and Akamai's name no check.
 
+## P105: an endless feed ran the lazy-load pass to its limit, and the warning said only that (2026-10-25)
+
+
+### P105-1 — 66 pages of other stories after a two-page article
+
+A health-news article exited 0 with a 68-page, 30 MB PDF. The article is
+pages 1 and 2; pages 3 to 67 are the site's endless feed of other stories,
+loaded as the lazy-load pass scrolled. The warnings were "Lazy-load scrolling
+reached the 100-step safety limit" and one about visual assets past the
+limit; neither said that the extra pages were a feed, or what to do.
+`--no-scroll` gave 8 pages with the article whole.
+
+The pass now records the page's height at its first step beside its last,
+and how many times the page grew right after the window had come within a
+window's height of its end, as a feed loads more before the last line is in
+view, and the limit warning says which of two things happened. When the page
+grew near its end, it says so with the count and both heights, that an endless feed
+does this, that everything loaded is in the capture so the PDF may run on
+long past the page's own content, and to pass `--no-scroll` or a lower
+`--max-scrolls`. Otherwise the window never settled at the end of a long
+page, so content further down may not have loaded, and a higher
+`--max-scrolls` goes further. The first version gave the feed advice whenever
+the page was taller at the last step than the first; the review of #316
+found that a long article grown early by its own lazy pictures would then be
+told to scroll less, and lose more of itself. No golden capture reaches the limit, so no
+golden output moves; `tests/test_endless_feed.py` held the old sentence.
+
+### P105-2 — what this does not do
+
+- **Stop at a feed.** Telling a feed of other stories from an article that
+  loads its own next part as it is scrolled needs the page's structure, and a
+  wrong stop loses the article; the issue's detector is left for a decision
+  of its own. The pass already stops when the page grows only inside what the
+  capture removes (P23-8).
+- **Count the PDF's pages in the warning.** The warning is written before the
+  render; the report already records the page count.
+
+### P105-3 — the tests
+
+`tests/test_endless_feed.py`: the feed that runs to the limit in faithful
+mode now gets the growing-page sentence with the heights the pass recorded,
+and a page that did not grow gets the other.
+
 ## P79: a consent dialog printed over the article, in both modes (2026-10-17)
 
 From the capture that produced P78. Master was d247610.
@@ -20896,3 +20939,85 @@ already-untiled boxes left as they were.
   a form alone. Not built.
 - **The layers this pass keeps** (dashed or translucent borders, real
   patterns, offset tiles) still print as pages of tiles.
+
+## P102: text a page keeps behind a closed control, named (2026-10-25)
+
+
+### P102-1 — a case page's summary stayed collapsed, and nothing said so
+
+A legal case page shows an 80-word teaser and a "show full summary" button
+(`data-bs-toggle="collapse"`, `aria-controls="summaryShort summaryFull"`).
+The full summary, about 1,020 words and the page's main content, is in the
+served HTML as `span#summaryFull.collapse`, `display: none` until the button
+is pressed. The PDF and `content.md` held only the teaser, with no warning:
+the region has no box, so the snapshot leaves it out with the print, and
+P97's printed-text share, which compares the two, saw them agree.
+`release_clamped_text` opens CSS clamps only.
+
+A closed `<details>` behaves differently, measured on a synthetic page: its
+text has no box in print, but the snapshot keeps it, so `content.md` holds
+what the PDF does not.
+
+### P102-2 — a video page's description is not in the document until opened
+
+A video page's description printed cut off at its clamp with "…more". Read
+from the live page, the expander's `#snippet` holds the first 237 characters
+under `max-height: 6rem`, and `#expanded` is empty: the rest is fetched only
+when the button is pressed, so no stylesheet can show it and no comparison
+with the bundle can see it. A talk page's "Talk details" behaves the same
+way. Of the watch-page PDFs captured before, five measured 0.07 to 0.13 on
+P97's share, from related-video titles printed as blank boxes; the
+description's loss is in neither side.
+
+### P102-3 — the check
+
+After the print CSS and the media switch, and before the bundle, the page is
+read for closed regions holding at least 200 characters of text:
+
+- a control marked `aria-expanded="false"` whose `aria-controls` names an
+  element with no box;
+- a Bootstrap collapse toggle (`data-bs-toggle` or `data-toggle` of
+  `collapse`) whose `data-bs-target`, `data-target` or `href` names one;
+- a closed `<details>`;
+- YouTube's description expander (`ytd-text-inline-expander` without
+  `is-expanded`, its `#expand` shown), known by its vendor's markup.
+
+A region, or its control, in a header, navigation, footer or aside (or their
+ARIA roles, menus, dialogs, listboxes and trees), and a region whose text is
+more than half link text, is page chrome, which is how a collapsed menu
+reads, and is not named. Nor is anything the capture hid itself (a consent
+dialog, clean mode's noise, an `--exclude`), which has no box for the same
+reason a closed region has none; the review of #313 found the first version
+reporting such text as the page's. One manifest warning names up to five, each with its
+control's label, the region, its characters and where its text is: in neither
+the PDF nor the bundle, in the bundle only, or not yet fetched. Under
+`--no-ai-bundle` there is no bundle to name, and the review of #313 found the
+first version saying "in the bundle" all the same; the warning then says only
+"not in the PDF". WebShot opens nothing: what the page showed is what is recorded, and the warning gives the
+two remedies, the reader's own browser and a `--css` rule, the second only
+where the text is in the document.
+
+On the live pages: the case page is named with 6,543 characters behind
+`button#showSummary`, and the video page's expander is named as fetched when
+opened. Ten other live pages from the same run (news, law-firm and
+government articles) named nothing, and a documentation page named one closed
+`<details>` of 240 characters, which is what it is.
+
+### P102-4 — what this does not cover
+
+- **Opening the regions.** A flag that opens collapses and `<details>` before
+  print would change what the page showed, which faithful mode does only for
+  consent dialogs (spec §5 item 5); it is left for a decision of its own.
+- **A talk page's details**, and any other site's expander that marks itself
+  with neither ARIA nor Bootstrap's attributes, are not in the known list:
+  their markup was not checked.
+- **Frames and shadow roots** are not read; a region in either is not named.
+
+### P102-5 — the tests
+
+`tests/test_collapsed_content.py` holds the warning's wording for each kind,
+a list of seven cut to five, an unread page, and a capture of
+`tests/fixtures/collapsed_content_page.html`: the collapse, the closed
+`<details>` and the expander are named, and what the warning says of each is
+what the PDF and `content.md` hold; the folded menu, the short `<details>` and
+the footer notice are not.
