@@ -44,6 +44,7 @@ from .bundle.localpaths import LocalPathRecorder
 from .bundle.manifest import BUNDLE_FORMAT
 from .bundle.publish import announce_replacements, publish_ai_bundle, sha256_file
 from .bundle.videos import VideoEnrichment, enrich_with_videos
+from .capture.collapsed import collapsed_content, collapsed_content_warning
 from .capture.discover import read_page
 from .capture.landing import (
     WallCheck,
@@ -701,6 +702,14 @@ async def capture_open_page(
         # Before the bundle's screenshots and the print, either of which could
         # otherwise catch a video's controls mid-spinner (docs/09 P66).
         await settle_media_controls(page)
+        # As the page will print and be read: after the print CSS and the media
+        # switch, which can hide or show a region, and before the bundle, whose
+        # holding or lacking the text the warning states (docs/09 P102).
+        folded = collapsed_content_warning(
+            await collapsed_content(page), bundle=options.ai_bundle
+        )
+        if folded:
+            warnings.append(folded)
         clock.mark("capture")
 
         # How the bundle spells this machine's paths. Inactive, and so the

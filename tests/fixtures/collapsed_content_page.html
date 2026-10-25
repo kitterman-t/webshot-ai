@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A case page with its summary folded away</title>
+<!-- docs/09 P102. The closed controls a page can hold its text behind: a
+     Bootstrap-style collapse whose full summary has no box, a closed
+     <details> of prose, and a video page's description expander whose text is
+     not in the document until it is opened. And the ones that are page
+     chrome or too short to matter: a folded navigation menu, a short closed
+     <details>, a folded footer notice. All of the text is invented. -->
+<style>
+  body { font: 16px/1.5 Georgia, serif; margin: 0 auto; max-width: 42rem; padding: 1rem; }
+  .collapse:not(.show) { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <nav>
+    <button aria-expanded="false" aria-controls="menu">Menu</button>
+    <ul id="menu" hidden>
+      <li><a href="#a">The harbor office and its opening hours on weekdays</a></li>
+      <li><a href="#b">The ferry timetable for the summer and the winter seasons</a></li>
+      <li><a href="#c">The tide tables, the lighthouse and the bookbinder's workshop</a></li>
+      <li><a href="#d">Visiting the old ledger in its dry cabinet with a glass front</a></li>
+    </ul>
+  </nav>
+</header>
+<main>
+  <h1>Harbor Town v. Ferry Company</h1>
+  <p id="summaryShort">The town sued the ferry company over the reconstructed
+     tide entries in its ledger, and the court has heard the first of its
+     arguments, which turn on whether the half-fathom rounding in the ferry's
+     logbooks</p>
+  <button id="showSummary" data-bs-toggle="collapse" aria-expanded="false"
+          aria-controls="summaryShort summaryFull">show full summary</button>
+  <span id="summaryFull" class="collapse">The town sued the ferry company over
+     the reconstructed tide entries in its ledger. The harbor master had copied
+     two lost February readings from the ferry's logbooks, which round every
+     depth to the nearest half fathom, and marked both with a circle in the
+     margin. The company argued that the circles were enough notice; the town
+     argued that a ledger used to set mooring fees must say how precise each
+     entry is. The court held a first hearing in the spring and asked both
+     sides for the logbooks of the three winters before.</span>
+  <h2>Questions people ask</h2>
+  <details>
+    <summary>Why were two entries lost?</summary>
+    <p>The old ledger was left beside a window through the winter storms, and
+       its pages swelled and stuck together along their lower edges. A
+       bookbinder from the next valley eased them apart over three afternoons,
+       and only the two February entries could not be read again.</p>
+  </details>
+  <details>
+    <summary>Is the ledger on view?</summary>
+    <p>On weekday mornings.</p>
+  </details>
+  <h2>Video of the hearing</h2>
+  <ytd-text-inline-expander id="description-inline-expander">
+    <div id="snippet">The first hearing, recorded by the town council, with the
+       harbor master's account of the</div>
+    <div id="expanded"></div>
+    <button id="expand">…more</button>
+  </ytd-text-inline-expander>
+</main>
+<footer>
+  <details>
+    <summary>Legal</summary>
+    <p>This page is a fixture written for a test. The harbor, the town, the
+       ferry company and the case are all invented, and so is every word of
+       this notice, which is long enough to be counted but sits in a footer,
+       where a folded notice is page chrome and not the page.</p>
+  </details>
+</footer>
+</body>
+</html>
