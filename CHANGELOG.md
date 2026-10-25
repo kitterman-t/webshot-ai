@@ -366,6 +366,16 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **A translucent gradient background no longer prints as a page of
+  rasters.** Chromium has no vector form for a gradient with a translucent
+  stop, so it rasterizes each layer over the whole printable page, and it
+  paints a layer above the bottom one as a repeating tile when the box's
+  width is not a whole number of pixels. The raster is then a page full of
+  tiles, of which only the box is shown: a five-page library page whose
+  buttons carried ten such layers each printed 230 of them, 22 MB. A layer
+  whose repeat could only land under an opaque border, or in a sliver
+  narrower than a pixel, is now set to `no-repeat` before the render; the
+  same page is 2.6 MB, and its bundle is unchanged. See docs/09 P103.
 - **The lazy-load pass no longer waits forever on a page that does not
   answer.** Its frame wait was bounded by a timer in the page, and a timer
   needs the page's main thread to run. In Chromium 156, which Playwright 1.64

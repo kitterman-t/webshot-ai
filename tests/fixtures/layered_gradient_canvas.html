@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A short page on a gradient</title>
+<style>
+  /* The root has no background, so the body's propagates to the canvas: it
+     paints the whole printed page, tiled from the root's box, and its repeat
+     is what covers the page below this short content. */
+  body {
+    margin: 0;
+    padding: 20px;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.4), rgba(204, 204, 204, 0.4)),
+      radial-gradient(at 20% 0%, rgba(7, 142, 187, 0.3) 0, rgba(0, 0, 0, 0) 50%);
+  }
+</style>
+</head>
+<body>
+<h1>A short page on a gradient</h1>
+<p>The content ends near the top of the page.</p>
+</body>
+</html>

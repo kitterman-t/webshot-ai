@@ -534,6 +534,17 @@ there with its reason, and the run's job summary lists every skip.
     access wall WebShot knows by its vendor's markup (`ACCESS_WALLS`: Mg2
     ConneXt, Piano), the warning names it and gives the save-it-yourself
     advice instead of `--exclude`. The capture still exits 0 (docs/09 P97).
+19. **A translucent gradient tiled across the printed page:** Chromium
+    rasterizes a gradient with a translucent stop, or one it paints as a
+    repeating tile, over the whole printable page, once per layer per box.
+    Before the render, and after the bundle, a capture MUST set `no-repeat`
+    on a gradient layer, of an element or a pseudo-element, in every frame
+    and open shadow root, whose tile is its whole positioning area and whose
+    repeat could land only under an opaque solid border or in a sliver
+    narrower than a pixel. Any other layer keeps its repeat, so no layer the
+    reader could see a repeat of is changed. That includes the root
+    element's background, and the body's when the root has none, which
+    paints the whole canvas from a tile the root's box sizes (docs/09 P103).
 
 ## 6. Security requirements (carried forward and new; all MUST)
 

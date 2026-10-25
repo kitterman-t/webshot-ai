@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Layered gradient buttons</title>
+<style>
+  /* Two translucent gradient layers on a box whose width is not a whole
+     number of pixels. Chromium paints the upper layer as a repeating tile,
+     and its PDF backend rasterizes that tile across the whole printable
+     page, once for each layer of each box. */
+  .swatch {
+    display: inline-block;
+    box-sizing: border-box;
+    width: 300.25px;
+    padding: 15px 20px;
+    border: 1px solid rgb(99, 41, 142);
+    color: #fff;
+    background-color: rgb(100, 42, 144);
+    background-image:
+      radial-gradient(at 80% 0%, rgba(7, 142, 187, 0.4) 0, rgba(0, 0, 0, 0) 50%),
+      radial-gradient(at 0% 50%, rgba(85, 15, 138, 0.7) 0, rgba(0, 0, 0, 0) 50%);
+  }
+</style>
+</head>
+<body>
+<h1>Layered gradient buttons</h1>
+<p>Each button below carries two translucent gradient layers.</p>
+<p><a class="swatch" href="#first">First button</a></p>
+<p><a class="swatch" href="#second">Second button</a></p>
+<p><a class="swatch" href="#third">Third button</a></p>
+</body>
+</html>
