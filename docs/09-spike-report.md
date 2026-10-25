@@ -20734,3 +20734,57 @@ passed on the Mac and in the container.
   and every measurement above are arm64.
 - **macOS.** The Mac gave no block in 15 runs with 1.64. Whether its GPU
   process can hold the page in 156 is not known.
+
+## P101: an `--exclude` that missed what the page added later, and names that held load-time ids (2026-10-25)
+
+
+### P101-1 — the slide-out matched `--exclude` and printed anyway
+
+A news article captured with `--exclude ".pf-widget"` still printed a
+"Virtual Event" slide-out, `div#….pf-widget.pf-message.pf-widget-slideout`,
+over 532 characters on all three pages, and the warning named it. The element
+matches the selector. `hide_elements` marks what a selector matches once,
+while the page is prepared, and the slide-out arrived afterwards on a timer.
+A `--css` rule hiding the same class worked.
+
+Each `--exclude` is now also a rule, `<selector> { display: none !important; }`,
+in a stylesheet adopted by the document after the marks are made, so it holds
+for whatever the page adds before the print. Adopted, it is in no document a
+snapshot reads, and nothing it hides has a box for the bundle, the
+covered-text check or the clipping check to find. Each rule is inserted alone,
+so a selector can only be a selector; one that `querySelectorAll` takes and a
+stylesheet does not is a manifest warning naming it. The marks stay: the
+snapshot and the lazy-load pass test for them.
+
+### P101-2 — suggested selectors held ids made up on each load
+
+The covered-text warning names a box by tag, id and classes, and suggests
+`--exclude` with that name. The slide-out's id was 32 hex digits, different
+in each run (`e43b7dece27fe6060b54a0135e6292ae`, then
+`3f3edb4f4c95b20ec97a6e8d1a80179d`), and a registration wall's two boxes had
+load timestamps (`1792860338710`, `1792860338735`), so following the advice
+could not work on the next run. An id with a leading digit, of 16 or more hex
+digits, or shaped as a UUID is now left out of the name, which falls back to
+the classes, or to the parent's step, as for an element with no id. Ids such
+as `site-header` and `gpt_unit_/6978/anchor_0` stay. The clipping warning's
+names are not changed: they locate an element and suggest no selector.
+
+The review of #312 found what that leaves: a box under `body` with a made-up
+id and no class is named `div`, and `--exclude "div"`, now a stylesheet rule
+too, would hide every `div` on the page. The same was already true of a name
+such as `div > div`. So the marking runs each name as a selector and
+records what it matched: the box alone, other elements too, or nothing. The
+warning offers `--exclude` only for the first. For the second it says the name
+matches other elements, and that a `--css` rule written for the box removes it
+alone. For the third, a name cut short at 160 characters or a box inside a
+shadow root, which no selector from the document reaches, it says just that,
+since nothing else would be hidden; the first version called all of these
+shared, and the second review of #312 found the claim untrue for the third.
+
+### P101-3 — the tests
+
+`tests/fixtures/covering_late_box_page.html` adds a fixed slide-out, with an id
+made up from the time, when printing starts: without `--exclude` the warning
+names it `div.slide-out`; with `--exclude "div.slide-out"` the PDF lacks it
+and nothing is warned. `tests/test_covered_text.py` also holds the generated-id
+rule on six ids and a selector no stylesheet takes.

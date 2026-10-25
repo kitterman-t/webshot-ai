@@ -71,6 +71,7 @@ from .capture.prepare import (
     hide_elements,
     hide_obstructive_overlays,
     isolate_content,
+    keep_excluded_hidden,
     lazy_load_warning,
     release_clamped_text,
     release_wide_tables,
@@ -641,6 +642,9 @@ async def capture_open_page(
             hidden += await hide_elements(page, NOISE_SELECTORS)
             hidden += await hide_obstructive_overlays(page)
         hidden += await hide_elements(page, options.exclude_selectors)
+        late = await keep_excluded_hidden(page, options.exclude_selectors)
+        if late:
+            warnings.append(late)
         if hidden:
             LOGGER.info("Removed %d non-document element(s).", hidden)
 

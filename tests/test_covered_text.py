@@ -27,6 +27,7 @@ import pytest
 from playwright.async_api import async_playwright
 from pypdf import PdfReader
 
+from webshot.capture.prepare import EXCLUDE_SHEET_JS
 from webshot.cli import main
 from webshot.render.covering import (
     INK_ATTRIBUTE,
@@ -185,9 +186,36 @@ def _covering(**changes: Any) -> Covering:
         "characters": 120,
         "lines": 6,
         "sample": "Under the bar",
+        "reach": "alone",
     }
     fields.update(changes)
     return Covering(**fields)
+
+
+def test_a_name_that_matches_more_than_the_box_is_not_offered_as_an_exclude() -> None:
+    """`--exclude "div"` would hide every div on the page (review of #312)."""
+    [warning] = covered_text_warnings(
+        CoveredText(
+            boxes=1, pages=3, coverings=(_covering(name="div", reach="shared"),)
+        )
+    )
+    assert "Pass --exclude" not in warning
+    assert warning.endswith(
+        "div names other elements of the page too, so --exclude with it would hide "
+        "them as well; a --css rule written for this box removes it alone."
+    )
+
+
+def test_a_name_that_matches_no_element_is_not_offered_and_not_called_shared() -> None:
+    """Cut short, or in a shadow root: nothing else would be hidden either."""
+    [warning] = covered_text_warnings(
+        CoveredText(boxes=1, pages=3, coverings=(_covering(reach="unmatched"),))
+    )
+    assert "Pass --exclude" not in warning and "other elements" not in warning
+    assert warning.endswith(
+        "Its name matches no element of the page's document as a selector (it was "
+        "cut short, or the box is inside a shadow root), so --exclude is not offered."
+    )
 
 
 def test_the_warning_names_the_box_its_pages_and_how_much_it_covers() -> None:
@@ -489,11 +517,12 @@ def test_marking_takes_moves_nothing_and_restoring_leaves_the_page_as_it_was() -
 SLOT = Path(__file__).parent / "fixtures" / "covering_inline_slot_page.html"
 VANISHING = Path(__file__).parent / "fixtures" / "covering_vanishing_banner_page.html"
 FILTERED = Path(__file__).parent / "fixtures" / "covering_filtered_box_page.html"
+LATE = Path(__file__).parent / "fixtures" / "covering_late_box_page.html"
 
 
-def _capture_file(tmp_path: Path, fixture: Path) -> tuple[list[str], str]:
+def _capture_file(tmp_path: Path, fixture: Path, *args: str) -> tuple[list[str], str]:
     pdf = tmp_path / "capture.pdf"
-    assert main([str(fixture), "--output", str(pdf), "--no-ocr"]) == 0
+    assert main([str(fixture), "--output", str(pdf), "--no-ocr", *args]) == 0
     manifest = json.loads(
         (pdf.with_suffix(".ai") / "manifest.json").read_text(encoding="utf-8")
     )
@@ -557,3 +586,98 @@ def test_a_filtered_box_printed_as_a_picture_is_not_a_page_that_changed(
     assert not [w for w in warnings if "page changed" in w], warnings
     [notice] = warnings
     assert notice.startswith("A fixed box, div.notice, prints ")
+
+
+@pytest.mark.browser
+def test_a_box_the_page_adds_after_preparation_is_named_without_its_made_up_id(
+    tmp_path: Path,
+) -> None:
+    """The slide-out arrives once printing starts and carries an id made up on
+    each load, so the warning names it by its class (P101-2)."""
+    warnings, text = _capture_file(tmp_path, LATE)
+    assert "A harbor event slides out over the ledger." in text
+    [late] = warnings
+    assert late.startswith("A fixed box, div.slide-out, prints ")
+    assert late.endswith(
+        'Pass --exclude "div.slide-out" to capture the page without the box.'
+    )
+
+
+@pytest.mark.browser
+def test_exclude_hides_a_box_the_page_adds_after_preparation(tmp_path: Path) -> None:
+    """The marks are made once; the stylesheet holds for what comes later
+    (P101-1)."""
+    warnings, text = _capture_file(tmp_path, LATE, "--exclude", "div.slide-out")
+    assert "slides out over the ledger" not in text
+    assert warnings == []
+
+
+GENERATED_IDS = """<!doctype html><html><body>
+  <div id="1792860338710" class="modal-scrollable" style="position: fixed; top: 0">a</div>
+  <div id="e43b7dece27fe6060b54a0135e6292ae" class="pf-widget" style="position: fixed; top: 40px">b</div>
+  <div id="f2a735b5-cb84-4669-a7ab-5658da13edd9" style="position: fixed; top: 80px">c</div>
+  <div id="3f3edb4f4c95b20ec97a6e8d1a80179d" style="position: fixed; top: 120px">d</div>
+  <div id="site-header" class="masthead" style="position: fixed; top: 160px">e</div>
+  <div id="gpt_unit_/6978/anchor_0" style="position: fixed; top: 200px">f</div>
+  <div class="host"></div>
+  <script>
+    document.querySelector('.host').attachShadow({mode: 'open'}).innerHTML =
+      '<div class="inner" style="position: fixed; top: 240px">g</div>';
+  </script>
+</body></html>"""
+
+
+@pytest.mark.browser
+def test_an_id_made_up_on_each_load_is_left_out_of_the_name() -> None:
+    """A selector naming such an id matches nothing on the next run (P101-2)."""
+
+    async def run() -> list[str]:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            try:
+                page = await browser.new_page()
+                await page.set_content(GENERATED_IDS)
+                marked = await page.evaluate(
+                    MARK_BOXES_SCRIPT,
+                    {
+                        "attribute": INK_ATTRIBUTE,
+                        "base": [5, 243, 43],
+                        "noFilter": NO_FILTER_ID,
+                    },
+                )
+                await page.evaluate(RESTORE_BOXES_SCRIPT)
+                return [(box["name"], box["reach"]) for box in marked]
+            finally:
+                await browser.close()
+
+    # The two left with no id and no class are named, but "div" matches every
+    # div, and a box in a shadow root matches nothing from the document
+    # (review of #312).
+    assert asyncio.run(run()) == [
+        ("div.modal-scrollable", "alone"),
+        ("div.pf-widget", "alone"),
+        ("div", "shared"),
+        ("div", "shared"),
+        ("div#site-header.masthead", "alone"),
+        ("div#gpt_unit_\\/6978\\/anchor_0", "alone"),
+        ("div.host > div.inner", "unmatched"),
+    ]
+
+
+@pytest.mark.browser
+def test_a_selector_no_stylesheet_takes_is_said_and_the_rest_still_apply() -> None:
+    async def run() -> list[str]:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            try:
+                page = await browser.new_page()
+                await page.set_content("<div class='a'>x</div>")
+                refused = await page.evaluate(EXCLUDE_SHEET_JS, ["div.a", "div["])
+                hidden = await page.evaluate(
+                    "getComputedStyle(document.querySelector('.a')).display"
+                )
+                return [*refused, hidden]
+            finally:
+                await browser.close()
+
+    assert asyncio.run(run()) == ["div[", "none"]

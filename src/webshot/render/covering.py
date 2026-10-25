@@ -199,15 +199,22 @@ MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter}) => {
         }
     };
     // Classes even beside an id: they are what an `--exclude` is most often
-    // written against.
+    // written against. An id the page makes up on each load is left out, since
+    // a selector naming it matches nothing the next time: a slide-out's id was
+    // 32 hex digits, different in each run, and two boxes' ids were load
+    // timestamps (docs/09 P101-2). Generated: a leading digit, 16 or more hex
+    // digits, or a UUID.
+    const generated = id => /^\d/.test(id) || /^[0-9a-f]{16,}$/i.test(id)
+        || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const stableId = element => element.id && !generated(element.id) ? element.id : '';
     const step = element => {
-        const id = element.id ? `#${CSS.escape(element.id)}` : '';
+        const id = stableId(element) ? `#${CSS.escape(element.id)}` : '';
         const classes = [...element.classList].slice(0, 3).map(name => `.${CSS.escape(name)}`);
         return element.localName + id + classes.join('');
     };
     const describe = element => {
         const parent = up(element);
-        const selector = element.id || !parent || top(parent) ? step(element) : `${step(parent)} > ${step(element)}`;
+        const selector = stableId(element) || !parent || top(parent) ? step(element) : `${step(parent)} > ${step(element)}`;
         return selector.length > 160 ? `${selector.slice(0, 159)}…` : selector;
     };
     const subtree = element => {
@@ -355,8 +362,20 @@ MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter}) => {
             if (unmarked && inline(element, own)) unmarked = kept(element, expect, code);
             if (unmarked) break;
         }
-        return {name: describe(candidate.element), position: candidate.position, code,
-                elements: elements.length, unmarked};
+        // What the name matches as an `--exclude`: this box alone, other
+        // elements too (a bare `div`, which a made-up id left behind, would
+        // hide every `div` on the page), or nothing (a name cut short, or a
+        // box inside a shadow root, which `--exclude` does not reach). Review
+        // of #312.
+        const name = describe(candidate.element);
+        let reach = 'unmatched';
+        try {
+            const matched = [...document.querySelectorAll(name)];
+            if (matched.length === 1 && matched[0] === candidate.element) reach = 'alone';
+            else if (matched.some(element => element !== candidate.element)) reach = 'shared';
+        } catch (error) { reach = 'unmatched'; }
+        return {name, position: candidate.position, code, elements: elements.length,
+                unmarked, reach};
     });
 }"""
 
@@ -450,6 +469,9 @@ class MarkedBox:
     code: tuple[int, int, int]
     #: Why its colours could not be set, or `None` when they were.
     unmarked: str | None = None
+    #: What `name` matches as an `--exclude`: `alone` (this box and nothing
+    #: else), `shared` (other elements too) or `unmatched` (no element).
+    reach: str = "unmatched"
 
 
 @dataclass(frozen=True, slots=True)
@@ -469,6 +491,9 @@ class Covering:
     lines: int
     #: The first stretch of covered text, as the PDF's text layer has it.
     sample: str
+    #: What `name` matches as an `--exclude`: `alone` (this box and nothing
+    #: else), `shared` (other elements too) or `unmatched` (no element).
+    reach: str = "unmatched"
 
 
 @dataclass(frozen=True, slots=True)
@@ -533,6 +558,7 @@ async def find_covered_text(
                 int(record["code"][2]),
             ),
             unmarked=record["unmarked"],
+            reach=str(record["reach"]),
         )
         for record in marked
     ]
@@ -767,6 +793,7 @@ def measure(
                     {(number, round(glyph.baseline)) for number, glyph, _ in hits}
                 ),
                 sample=_sample(hits),
+                reach=box.reach,
             )
         )
     return tuple(found)
@@ -871,6 +898,14 @@ def covered_text_warnings(result: CoveredText, walls: Sequence[str] = ()) -> lis
             if walls
             else f'Pass --exclude "{covering.name}" to capture the page without '
             "the box."
+            if covering.reach == "alone"
+            else f"{covering.name} names other elements of the page too, so "
+            "--exclude with it would hide them as well; a --css rule written for "
+            "this box removes it alone."
+            if covering.reach == "shared"
+            else "Its name matches no element of the page's document as a "
+            "selector (it was cut short, or the box is inside a shadow root), so "
+            "--exclude is not offered."
         )
         warnings.append(
             f"A {covering.position} box, {covering.name}, prints {printed}over "
