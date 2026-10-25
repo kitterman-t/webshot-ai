@@ -911,6 +911,45 @@ async def isolate_content(page: Page, selector: str) -> None:
     )
 
 
+#: `--exclude` as a stylesheet as well as marks, so an element the page adds
+#: after preparation is hidden too. A news site's slide-out arrived on a timer
+#: once the marks were made, matched the `--exclude` given for it, and printed
+#: over 532 characters on every page (docs/09 P101-1). Adopted, so the sheet
+#: is in no document a snapshot reads; one rule per selector, each inserted
+#: alone, so a selector can only ever be a selector. Answers the selectors
+#: whose rule did not take.
+EXCLUDE_SHEET_JS = """selectors => {
+    const sheet = new CSSStyleSheet();
+    const refused = [];
+    for (const selector of selectors) {
+        try { sheet.insertRule(`${selector} { display: none !important; }`, sheet.cssRules.length); }
+        catch (error) { refused.push(selector); }
+    }
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+    return refused;
+}"""
+
+
+async def keep_excluded_hidden(page: Page, selectors: Sequence[str]) -> str | None:
+    """Hide what `selectors` match from now on, and say if one could not be.
+
+    `hide_elements` has already marked what they match now; this covers what
+    the page adds before the print. The warning is for a selector that
+    `querySelectorAll` accepts and a stylesheet does not.
+    """
+    if not selectors:
+        return None
+    refused: list[str] = await page.evaluate(EXCLUDE_SHEET_JS, list(selectors))
+    if not refused:
+        return None
+    named = ", ".join(f'"{selector}"' for selector in refused)
+    return (
+        f"--exclude {named} hid what it matched when the page was prepared, but "
+        "could not be applied as a stylesheet, so an element it matches that the "
+        "page adds later may still print."
+    )
+
+
 async def hide_elements(page: Page, selectors: Sequence[str]) -> int:
     if not selectors:
         return 0

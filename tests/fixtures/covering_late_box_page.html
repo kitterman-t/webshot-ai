@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A ledger under a late slide-out</title>
+<!-- docs/09 P101. A fixed slide-out the page adds only once printing starts,
+     after the capture has prepared the page, as a news site's slid in on a
+     timer; its id is made up on each load, as that site's was. All of the
+     text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/30px sans-serif; color: #111; background: #fff; }
+  .column { width: 420px; margin-left: 20px; }
+  .line { height: 30px; white-space: nowrap; overflow: hidden; }
+  .slide-out { position: fixed; left: 0; right: 0; bottom: 0; height: 100px;
+    background: #223; color: #fff; z-index: 5; }
+</style>
+</head>
+<body>
+  <div class="column">
+    <div class="line">Line 01 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 02 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 03 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 04 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 05 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 06 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 07 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 08 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 09 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 10 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 11 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 12 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 13 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 14 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 15 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 16 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 17 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 18 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 19 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 20 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 21 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 22 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 23 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 24 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 25 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 26 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 27 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 28 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 29 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 30 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 31 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 32 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 33 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 34 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 35 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 36 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 37 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 38 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 39 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 40 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 41 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 42 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 43 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 44 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 45 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 46 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 47 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 48 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 49 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 50 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 51 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 52 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 53 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 54 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 55 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 56 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 57 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 58 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 59 of the harbor ledger, copied by hand.</div>
+    <div class="line">Line 60 of the harbor ledger, copied by hand.</div>
+  </div>
+  <script>
+    addEventListener('beforeprint', () => {
+      if (document.querySelector('.slide-out')) return;
+      const box = document.createElement('div');
+      box.className = 'slide-out';
+      box.id = (Date.now() * 4096).toString(16).padStart(32, 'e');
+      box.textContent = 'A harbor event slides out over the ledger.';
+      document.body.append(box);
+    });
+  </script>
+</body>
+</html>

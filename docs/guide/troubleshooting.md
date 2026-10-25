@@ -223,6 +223,15 @@ to `--exclude` to capture the page without the box:
 webshot https://example.com/article --exclude "div.notice-bar"
 ```
 
+`--exclude` also hides a matching box the page adds later, such as a
+slide-out that arrives on a timer. The name leaves out an id that looks made
+up on each load (a leading digit, a long run of hex digits, a UUID), because a
+selector naming it would match nothing on the next run. The warning suggests
+`--exclude` only when the name matches that box alone. When the name would
+match other elements too, it says so, and a `--css` rule written for the box
+is the way to remove it; when the name matches nothing (it was cut short, or
+the box is inside a shadow root), it says that instead.
+
 WebShot does not hide these boxes itself, because some are part of the page.
 The consent dialogs it knows are the exception: both modes hide them, and a
 separate warning names them.
