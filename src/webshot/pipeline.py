@@ -105,6 +105,7 @@ from .render.covering import (
 )
 from .render.embed import collect_payloads, embed_bundle
 from .render.frames import fit_frames
+from .render.gradients import untile_gradients
 from .render.images import image_reduction_warnings, reduce_oversized_images
 from .render.ligatures import (
     ligature_forms,
@@ -816,6 +817,19 @@ async def capture_open_page(
             warnings.append(split_message)
             if ai_result:
                 ai_result.warnings.append(split_message)
+
+        # After the bundle, which so never records its marks, and before the
+        # render and every print that checks it, so they all print the page
+        # it leaves. It moves no box: only which pixels a background repeats
+        # into, all of them under an opaque border or narrower than a pixel.
+        crash.step = "untiling gradient backgrounds"
+        untiled = await untile_gradients(page)
+        if untiled:
+            LOGGER.info(
+                "Untiled the gradient background of %d box(es), which Chromium "
+                "would have rasterized across the whole page.",
+                untiled,
+            )
 
         # Just before the render, so the covered-text check knows what it
         # printed even of a box gone by the time it looks (docs/09 P97-4).

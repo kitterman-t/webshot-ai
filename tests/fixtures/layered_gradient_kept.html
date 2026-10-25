@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gradient backgrounds a repeat shows in</title>
+<style>
+  .swatch {
+    display: inline-block;
+    box-sizing: border-box;
+    width: 300.25px;
+    padding: 15px 20px;
+    border: 1px solid rgb(99, 41, 142);
+    color: #fff;
+    background-color: rgb(100, 42, 144);
+    background-image:
+      radial-gradient(at 80% 0%, rgba(7, 142, 187, 0.4) 0, rgba(0, 0, 0, 0) 50%),
+      radial-gradient(at 0% 50%, rgba(85, 15, 138, 0.7) 0, rgba(0, 0, 0, 0) 50%);
+  }
+  /* Untiled: the repeat lands only under an opaque border. */
+  .untiled-element {}
+  .untiled-before { position: relative; background: none; }
+  .untiled-before::before {
+    content: ""; position: absolute; inset: 0; z-index: -1;
+    background-image:
+      linear-gradient(90deg, rgba(7, 142, 187, 0.4), rgba(0, 0, 0, 0)),
+      radial-gradient(rgba(85, 15, 138, 0.7) 0, rgba(0, 0, 0, 0) 50%);
+  }
+  /* Kept: a dashed border shows what is painted under it. */
+  .dashed { border-style: dashed; }
+  /* Kept: a translucent border does too. */
+  .translucent { border-color: rgba(99, 41, 142, 0.5); }
+  /* Kept: a tile smaller than its box is a pattern. */
+  .pattern { background-size: 25% 50%; }
+  /* Kept: a tile offset into its box repeats into the gap. */
+  .offset { background-position: 10px 0; }
+  /* Kept: a tile placed in the content box repeats into the padding. */
+  .content-origin { background-origin: content-box; }
+  /* Kept: already not repeating. */
+  .no-repeat { background-repeat: no-repeat; }
+</style>
+</head>
+<body>
+<h1>Gradient backgrounds a repeat shows in</h1>
+<p><a class="swatch untiled-element" href="#a">Untiled element</a></p>
+<p><a class="swatch untiled-before" href="#b">Untiled pseudo-element</a></p>
+<p><a class="swatch dashed" href="#c">Dashed border</a></p>
+<p><a class="swatch translucent" href="#d">Translucent border</a></p>
+<p><a class="swatch pattern" href="#e">Patterned</a></p>
+<p><a class="swatch offset" href="#f">Offset</a></p>
+<p><a class="swatch content-origin" href="#g">Content origin</a></p>
+<p><a class="swatch no-repeat" href="#h">Already not repeating</a></p>
+</body>
+</html>

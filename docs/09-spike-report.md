@@ -20788,3 +20788,111 @@ made up from the time, when printing starts: without `--exclude` the warning
 names it `div.slide-out`; with `--exclude "div.slide-out"` the PDF lacks it
 and nothing is warned. `tests/test_covered_text.py` also holds the generated-id
 rule on six ids and a selector no stylesheet takes.
+
+## P103: a translucent gradient Chromium tiles prints as a page of rasters (2026-10-25)
+
+A university library's five-page data-services page, captured with
+`--auto-selector`, made a 22.9 MB PDF. It had been read as one 504×736 image
+embedded about 90 times, where one shared XObject should do. It was not one
+image. The pages paint 230 tiling patterns, none shared, and each holds its
+own 504×736 RGB raster with a 504×736 soft mask (plus a 1-pixel strip at two
+edges). The 230 rasters have 230 different SHA-256 digests, as do their
+masks, so deduplicating identical objects (pypdf's
+`compress_identical_objects`) took the file only to 22.7 MB. The rasters were
+21.6 MB of it; 98 were over 100 KB each.
+
+### P103-1 — where the rasters come from
+
+Chromium makes them, not WebShot: a bare Playwright `page.pdf` of the same
+URL with the capture's page settings was 28.4 MB with 241 such rasters, and
+the stages after the print (the image pass in `render/images.py`, the bundle
+embed) add none. On the page, 24 boxes (buttons, a call-to-action block, a
+tagline) each carry ten translucent `radial-gradient(at X% Y%, rgba(…) 0,
+transparent 50%)` layers, `background-repeat` left at `repeat`, on a box
+whose width is not a whole number of pixels (413.25 px).
+
+Two behaviours combine, each measured with plain `page.pdf` (Playwright 1.64,
+Skia/PDF m156):
+
+- Skia's PDF backend writes an opaque gradient as a vector shading, but has
+  no vector form for one with a translucent stop, or for one Blink paints as
+  a repeating tile. It rasterizes either one at one pixel per point over the
+  clip's bounds, here the whole printable area, and never shares the result
+  between draws ("Don't bother to de-dup fallback shader", `SkPDFShader.cpp`).
+  For a single translucent blob that costs 4 to 8 KB a layer.
+- Blink paints each layer above the bottom one as a repeating tile when one
+  tile does not cover the box's pixel-snapped painting area, which a
+  fractional width is enough for. The raster is then a page full of tiles,
+  42 to 60 % of its pixels visible, 200 to 295 KB each, of which only the
+  box's rectangle is ever shown: 4 % of the visible pixels fall inside the
+  rectangles the patterns fill.
+
+Six such buttons of ten layers each:
+
+| Width | `background-repeat` | PDF |
+|---|---|---|
+| 413.25 px | `repeat` | 10.9 MB |
+| 413 px | `repeat` | 524 KB |
+| 413.25 px | `no-repeat` | 524 KB |
+
+One layer does not do it; two do. Taking the border away does not stop it.
+Six buttons built again with ten layers of other colours and positions gave
+8.1 MB, 688 KB and 688 KB for the same three rows.
+
+### P103-2 — the change
+
+`render/gradients.py` sets `no-repeat`, inline and `!important`, on a gradient
+layer only where a repeat cannot paint anything a reader sees: the tile is the
+whole positioning area (size `auto`, `100% 100%`, `cover` or `contain`,
+positioned by percentages, attachment `scroll`), and every pixel of the
+painting area outside it lies under an opaque solid border. What the repeat
+added there was the tile's opposite edge, under the border or in a sliver
+narrower than a pixel. A pseudo-element takes the value through a custom
+property on a marked element and an adopted stylesheet, as the ligature pass
+reaches one. A real pattern (a tile smaller than its box, or offset into it),
+a `content-box` origin, and a dashed or translucent border keep their repeat.
+So does the background that paints the canvas: the root element's, or the
+body's when the root has none (CSS Backgrounds 3, 2.11.2). Its tile is sized
+by the root's box but it paints the whole page, and on a short page its
+repeat is what covers the canvas below the content (found in review;
+`layered_gradient_canvas.html`).
+The pass runs after the bundle is built, so no mark reaches it, and before
+the render and every print that checks it; it logs how many boxes it changed.
+
+The library page went from 22.3 MB to 2.6 MB, five pages either way and no
+warnings; it still prints 230 rasters, each now one blob. Its bundle files
+were byte-identical. Rendered at 100 dpi, each page differed from the
+unpatched print in at most 66 pixels, by at most 22 of 255, in one-pixel rows
+at a box's edge: the sliver the repeat used to fill.
+
+### P103-3 — the tests
+
+`tests/fixtures/layered_gradient_buttons.html` is three invented buttons with
+two translucent layers at 300.25 px. On master their PDF is 622 KB and three
+of its six rasters are 43 % covered; with the pass it is 114 KB and the most
+covered is 2.2 %. `test_no_button_prints_a_page_of_tiles` holds the share
+under 10 %. Linux's Chromium 156 (the CI runner's `ubuntu:24.04` image) has the
+same bug, 401 KB for the buttons through a plain `page.pdf` against 28 KB with
+`no-repeat`, but prints an untiled translucent layer as a vector shading under
+a soft mask, with no raster at all. So the test's guard is a control rather
+than a count: `layered_gradient_kept.html`, whose kept boxes still repeat, must
+print at least one raster over 10 % covered, which proves the walk sees
+rasters on that platform. With the pass disabled the buttons fail at 43 % on
+both macOS and Linux.
+`test_only_a_repeat_nobody_sees_is_removed` checks the computed repeat of eight
+boxes in `layered_gradient_kept.html`: an element and a pseudo-element
+untiled, and the dashed, translucent, patterned, offset, content-origin and
+already-untiled boxes left as they were.
+
+### P103-4 — what this does not cover
+
+- **Every translucent layer is still a page-sized raster.** Untiled, each is
+  one blob of a few kilobytes, but the library page still carries 230 of
+  them. Cropping each raster to the rectangles its pattern fills, in a
+  post-print pass beside `render/images.py`, was estimated at 1.48 MB to
+  0.70 MB of image bytes for the untiled page (21.6 MB to 0.82 MB without
+  this pass). That pass would have to follow `scn` pattern fills, which the
+  image walk does not, and leave a pattern used for a stroke, text or inside
+  a form alone. Not built.
+- **The layers this pass keeps** (dashed or translucent borders, real
+  patterns, offset tiles) still print as pages of tiles.
