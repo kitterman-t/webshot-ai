@@ -149,7 +149,7 @@ dev = [
     "mypy>=2.4.0",
     "pip-licenses>=5",
     "pip-audit>=2.7",
-    "hypothesis>=6.170.1",
+    "hypothesis>=6.170.8",
     # The IANA time zones for tests that give a date in a named zone: the
     # Linux CI image has no system zoneinfo, and without it `ZoneInfo` finds
     # no zone at all.
