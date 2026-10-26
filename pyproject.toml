@@ -98,7 +98,7 @@ dependencies = [
     # Markdown behind one bridge, replacing the bespoke parsers; Trafilatura
     # reads the captured post-JS HTML for --auto-selector. Page metadata is
     # the page's own declarations, not Trafilatura's (docs/09 P82, P88, P93).
-    "markitdown>=0.1.7,<0.2",
+    "markitdown>=0.1.9,<0.2",
     # Direct because WebShot asks it a question of its own: what local text
     # that is not UTF-8 is in, once windows-1252 does not read as text (docs/09
     # P38). MarkItDown already depends on it, so no package is added; only
