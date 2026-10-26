@@ -153,7 +153,7 @@ dev = [
     # The IANA time zones for tests that give a date in a named zone: the
     # Linux CI image has no system zoneinfo, and without it `ZoneInfo` finds
     # no zone at all.
-    "tzdata>=2024.1",
+    "tzdata>=2026.5",
 ]
 
 [project.urls]
