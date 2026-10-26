@@ -68,7 +68,7 @@ dependencies = [
     # Every name here is written as PyPI normalizes it. Written `Markdown`,
     # Dependabot found nothing to rewrite and never proposed 3.11 (docs/09
     # P84-5); tests/test_dependency_names.py holds the rule.
-    "markdown>=3.11.1,<4",
+    "markdown>=3.11.2,<4",
     # Pillow 12.3 carries 41 known advisories, fixed in 13.0.0 (pip-audit/OSV,
     # Oct 2026); the protected path feeds it page images, so the floor is the
     # fixed release. 13 needs docling-core 2.104, the first to support it.
