@@ -347,12 +347,19 @@ def test_a_browser_that_stops_drawing_is_told_apart_from_the_page(
                 await browser.close()
 
     result, related, processes = asyncio.run(run())
-    assert result.ended == "unrendered", (result, processes)
+    # Held from before the first measurement, the page answers not even that
+    # (docs/09 P100-5): the pass ended at its bound in the scroll's place.
+    assert result.ended in ("unrendered", "unanswered"), (result, processes)
     assert result.steps == 1
     assert related == 20, "nothing loaded: the page never saw the scroll"
-    assert result.stall is not None, result
     message = lazy_load_warning(result, 100)
     assert message is not None
+    if result.ended == "unanswered":
+        assert result.stall is None, result
+        assert "did not answer when asked to measure itself" in message, message
+        assert "the page was running" not in message, message
+        return
+    assert result.stall is not None, result
     if result.stall.answered:
         assert result.stall.visibility == "visible", result
         assert result.stall.painted, result
@@ -414,6 +421,70 @@ def test_a_page_that_does_not_answer_ends_the_pass_at_its_bound(
         "answer could not get out of the browser, so it cannot say whether the "
         "browser or the page stopped."
     )
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("held", ["measure", "scroll"])
+def test_a_page_held_before_it_scrolls_ends_the_pass_at_its_bound(
+    monkeypatch: pytest.MonkeyPatch, held: str
+) -> None:
+    """A step's measurement and its scroll need the main thread too (P100-5).
+
+    In CI a stopped GPU process held the page before the pass's first
+    measurement, which had no bound, and the test above waited out its 60 s.
+    Here the page holds its own main thread from a timer that comes due as
+    the pass starts, or from inside the scroll step, so it answers nothing on
+    every platform. Either way the pass ends at its bound, at the first step.
+    """
+    monkeypatch.setattr(prepare, "FRAME_TIMEOUT_S", 1.5)
+    monkeypatch.setattr(prepare, "ANSWER_GRACE_S", 2.0)
+    hold = """() => {
+        const end = performance.now() + 120000;
+        while (performance.now() < end) {}
+    }"""
+    if held == "measure":
+        arm = f"() => setTimeout({hold}, 0)"
+    else:
+        # Held inside scrollBy itself: a listener runs later, in the frame.
+        arm = f"""() => {{
+            const scrollBy = window.scrollBy.bind(window);
+            window.scrollBy = (...args) => {{ ({hold})(); scrollBy(...args); }};
+        }}"""
+
+    async def run() -> tuple[LazyLoadPass, float]:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            try:
+                page = await browser.new_page(viewport=DEFAULT_VIEWPORT)
+                await page.goto(f"{FIXTURE.as_uri()}#light")
+                await page.evaluate(arm)
+                # Long enough for the timer to have come due and taken the
+                # thread before the pass asks anything.
+                await asyncio.sleep(0.2)
+                start = time.monotonic()
+                result = await asyncio.wait_for(
+                    scroll_to_load(page, 100, 0.25, excluded=("#comments",)),
+                    PASS_DEADLINE_S,
+                )
+                return result, time.monotonic() - start
+            finally:
+                await browser.close()
+
+    result, took = asyncio.run(run())
+    assert result.ended == "unanswered", result
+    assert result.steps == 1
+    assert result.stall is None
+    # The step's bound, then the scroll back to the top's.
+    assert 1.5 + 2.0 <= took < 1.5 + 2.0 + 2.0 + 10, took
+    assert lazy_load_warning(result, 100) == UNANSWERED
+
+
+UNANSWERED = (
+    "The lazy-load pass stopped at step 1: the page did not answer when asked "
+    "to measure itself or to scroll, within 3.5 seconds. Its main thread was "
+    "busy or not run, or its answer could not get out of the browser, so "
+    "content it loads as it is scrolled may not have been loaded."
+)
 
 
 UNRENDERED = (

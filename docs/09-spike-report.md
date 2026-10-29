@@ -20778,6 +20778,43 @@ passed on the Mac and in the container.
 - **macOS.** The Mac gave no block in 15 runs with 1.64. Whether its GPU
   process can hold the page in 156 is not known.
 
+### P100-5 — the pass was not bounded everywhere it waits (2026-10-28)
+
+P100-4 said the lazy-load pass was bounded. It was not: P100-2 bounded the
+frame wait and the scroll back to the top, and left the two page calls each
+step makes before the frame wait, its measurement (`LAZY_LOAD_STATE_JS`) and
+its scroll (`SCROLL_STEP_JS`). Neither waits on a frame, so each answers at
+once while the page's main thread runs, and neither had a bound.
+
+`test_a_browser_that_stops_drawing_is_told_apart_from_the_page` then failed
+in CI on #327 (tests, Linux arm64, py3.12, job 123127370656), a change that
+touches no capture code: the pass outran the test's 60 s
+deadline, and the traceback ends at `prepare.py:603`, the first step's
+measurement. The test stops the GPU process half a second before the pass
+starts. Held that early, the page did not answer even the measurement. The
+import before it (#324) had passed the same test on the same playwright,
+1.64.1, whose Chromium is still 156.0.8078.4: one run in some, as P100's
+were.
+
+Both calls are now bounded by the frame wait's own bound, `FRAME_TIMEOUT_S`
+plus `ANSWER_GRACE_S`, so nothing the frame wait would have waited for is cut
+short. A pass that runs out there ends `unanswered`, a new end with its own
+warning, which says the page did not answer when asked to measure itself or
+to scroll. It claims nothing more, because a page that answers nothing says
+nothing of what it could see, and it does not reuse the no-answer stall's
+text, which speaks of the frame wait's timer. The scroll back to the top is
+bounded after it as after a frame wait that got no answer.
+
+`test_a_page_held_before_it_scrolls_ends_the_pass_at_its_bound` holds the
+page's main thread from a timer that comes due as the pass starts, and from
+inside `scrollBy`. On the code before this, both cases waited out the 60 s
+deadline; with it, both end `unanswered` at step 1 inside the bound. The GPU
+test now accepts `unanswered` beside `unrendered`, and asserts the warning
+claims nothing of a page that said nothing.
+
+What this still does not cover is the first bullet of P100-4: the stages after
+the pass.
+
 ## P101: an `--exclude` that missed what the page added later, and names that held load-time ids (2026-10-25)
 
 

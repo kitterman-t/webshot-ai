@@ -418,6 +418,20 @@ LATE_TIMER_S = 1.0
 #: warning says the same of both, that the page cannot say which side stopped.
 ANSWER_GRACE_S = 5.0
 
+
+def _answer_bound_s() -> float:
+    """How long the pass waits for any answer from the page.
+
+    The frame wait's whole bound, and the bound on a step's measurement and
+    its scroll too. Neither of those waits on a frame, so a page answers them
+    at once while its main thread runs; but a stopped GPU process can hold
+    that thread before the pass has scrolled at all, and the first
+    measurement then never answered (docs/09 P100-5). No longer than the
+    frame wait, so nothing is cut short here that it would have waited for.
+    """
+    return FRAME_TIMEOUT_S + ANSWER_GRACE_S
+
+
 #: One step down, and back to the top when the pass ends. Chromium 153's
 #: scroll methods return a promise that settles when the scroll has finished,
 #: and `page.evaluate` waits for a promise it is handed. On a page that sets
@@ -540,7 +554,9 @@ class LazyLoadPass:
     #: `removed-growth`: the page was still growing, only inside regions the
     #: capture removes. `limit`: `--max-scrolls` ran out first. `unrendered`:
     #: the page did not render within `FRAME_TIMEOUT_S` of a scroll.
-    ended: Literal["bottom", "removed-growth", "limit", "unrendered"]
+    #: `unanswered`: the page did not answer a step's measurement or its
+    #: scroll within the pass's bound (docs/09 P100-5).
+    ended: Literal["bottom", "removed-growth", "limit", "unrendered", "unanswered"]
     #: The document's height at the last step, in CSS pixels.
     height: int
     #: Its height at the first step, so a warning can say how much the page
@@ -587,7 +603,9 @@ async def scroll_to_load(
     LOGGER.info("Loading lazy content (up to %d scroll steps)...", max_scrolls)
     stable_steps = 0
     previous_height = 0
-    ended: Literal["bottom", "removed-growth", "limit", "unrendered"] = "limit"
+    ended: Literal["bottom", "removed-growth", "limit", "unrendered", "unanswered"] = (
+        "limit"
+    )
     growing: tuple[tuple[str, str], ...] = ()
     steady: _Steady | None = None
     steady_steps = 0
@@ -600,7 +618,13 @@ async def scroll_to_load(
     selectors = {"noise": list(noise), "excluded": list(excluded)}
 
     for steps in range(1, max_scrolls + 1):
-        state = await page.evaluate(LAZY_LOAD_STATE_JS, selectors)
+        try:
+            state = await asyncio.wait_for(
+                page.evaluate(LAZY_LOAD_STATE_JS, selectors), _answer_bound_s()
+            )
+        except TimeoutError:
+            ended = "unanswered"
+            break
         height = state["height"]
         if steps == 1:
             first_height = height
@@ -642,14 +666,18 @@ async def scroll_to_load(
                     ended = "removed-growth"
                     steady_steps = steps - steady.step
                     break
-        await page.evaluate(SCROLL_STEP_JS)
+        try:
+            await asyncio.wait_for(page.evaluate(SCROLL_STEP_JS), _answer_bound_s())
+        except TimeoutError:
+            ended = "unanswered"
+            break
         # The delay starts once the page has seen the scroll, not when it was
         # asked for: until it renders, the page has not seen it (docs/09 P34).
         # Bounded here too: the page's own bound needs its main thread to run.
         try:
             seen = await asyncio.wait_for(
                 page.evaluate(NEXT_FRAME_JS, FRAME_TIMEOUT_S * 1000),
-                FRAME_TIMEOUT_S + ANSWER_GRACE_S,
+                _answer_bound_s(),
             )
         except TimeoutError:
             seen = None
@@ -667,7 +695,7 @@ async def scroll_to_load(
             break
         await asyncio.sleep(delay_s)
 
-    if stall is not None and not stall.answered:
+    if ended == "unanswered" or (stall is not None and not stall.answered):
         # A page that did not answer would not answer this either. Sent, so it
         # runs before anything later once the page runs again; not waited on
         # past the grace, so the pass ends and says why.
@@ -721,6 +749,16 @@ def lazy_load_warning(result: LazyLoadPass, max_scrolls: int) -> str | None:
         )
     if result.ended == "bottom":
         return None
+    if result.ended == "unanswered":
+        # Nothing of the page is claimed: it said nothing, not even what a
+        # stalled frame wait's timer reports (docs/09 P100-5).
+        return (
+            f"The lazy-load pass stopped at step {result.steps}: the page did "
+            "not answer when asked to measure itself or to scroll, within "
+            f"{_answer_bound_s():g} seconds. Its main thread was busy or not "
+            "run, or its answer could not get out of the browser, so content "
+            "it loads as it is scrolled may not have been loaded."
+        )
     if result.ended == "unrendered":
         message = (
             f"The lazy-load pass stopped after {result.steps} step(s): the page "

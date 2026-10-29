@@ -383,7 +383,9 @@ which records the measurements behind each change.
   then the pass waited for as long as the GPU process was stopped. The wait
   is now bounded outside the page as well, 5 seconds past the frame timeout,
   and the warning then says the page did not answer and claims nothing more
-  about it. See docs/09 P100.
+  about it. So are each step's measurement and scroll, which a page held
+  before the pass began did not answer either; that pass now ends at the same
+  bound with a warning of its own. See docs/09 P100 and P100-5.
 - **A table too long to print whole no longer fails the capture.** Chromium
   copies a table's row and cell data into every page the table breaks
   across, so printing one table took memory growing with the square of its
