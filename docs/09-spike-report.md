@@ -21058,3 +21058,4 @@ a list of seven cut to five, an unread page, and a capture of
 `<details>` and the expander are named, and what the warning says of each is
 what the PDF and `content.md` hold; the folded menu, the short `<details>` and
 the footer notice are not.
+
