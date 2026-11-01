@@ -21059,3 +21059,33 @@ a list of seven cut to five, an unread page, and a capture of
 what the PDF and `content.md` hold; the folded menu, the short `<details>` and
 the footer notice are not.
 
+
+## P112: pypdf 6.21.2's seven advisories held every pull request (2026-11-01)
+
+On 2026-11-01 the vulnerability audit, a required check, failed on master's
+lock. It found seven advisories against pypdf 6.21.2, the release P95 moved
+to: CVE-2026-119206, 119207, 119208 and 119209, fixed in 6.21.3, and
+CVE-2026-119203, 119204 and 119205, fixed in 6.21.4. The scan reads the whole
+lock, so it failed on every pull request whatever the pull request changed,
+#335 the first.
+
+This change takes pypdf 6.21.4, the lock's resolution on 2026-11-01, and
+makes it pypdf's floor, as P95 made 6.21.2. Nothing else in the lock moves.
+
+### P112-1 — what the two releases change for WebShot
+
+pypdf's changelog lists six security fixes across the two releases. It
+validates the page count after decrypting, bounds the entries of a
+cross-reference stream, avoids excessive error messages, bounds the page
+attributes copied in flattening, detects the end of the file when reading a
+standard trailer, and fixes loop detection when cloning a dictionary. It
+also reads page labels, named destinations and the outline root once rather
+than per page, and resolves indirect widths in a CID font's `/W` array.
+
+WebShot clones a PDF with `PdfWriter(clone_from=…)` in four places (the
+bundle embed, image recompression, the video appendix and protected
+assembly), and the clipping check reads a page's text with `extract_text`,
+so the cloning fix and the width fix are both on paths every capture takes.
+The full verify passes on the macOS recording machine: pytest, the golden
+corpus and its second path, parity, and the vulnerability audit, which finds
+nothing. Captured output does not change.
