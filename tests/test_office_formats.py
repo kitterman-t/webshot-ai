@@ -111,6 +111,12 @@ CASES = (
     ("bare_link_report.docx", "docx", "SENTINEL DOCX BARE LINK WALLABY", "mammoth"),
     ("bare_link_book.epub", "epub", "SENTINEL EPUB BARE LINK XERUS", None),
     ("bare_link_archive.zip", "zip", "SENTINEL ZIP BARE LINK YAPOK", None),
+    (
+        "cell_paragraphs_report.docx",
+        "docx",
+        "SENTINEL DOCX CELL LINES BANDICOOT",
+        "mammoth",
+    ),
 )
 
 #: The warnings each fixture's manifest must carry: what the converter could
@@ -310,6 +316,45 @@ def test_office_fixture_round_trips(
     # target is not an http or https address (docs/09 P75).
     if name.startswith("bare_link_"):
         _assert_bare_links_kept(name, bundle, pdf)
+
+    # ...and each paragraph in a table cell is a line of the PDF's own, so a
+    # code box's lines are lines of code (docs/09 P111).
+    if name.startswith("cell_paragraphs_"):
+        _assert_cell_paragraphs_kept(pdf)
+
+
+def _assert_cell_paragraphs_kept(pdf: Path) -> None:
+    """Each line of each cell of `cell_paragraphs_report.docx`, in the PDF.
+
+    Each must be the whole of a line of the PDF's text, or begin one where
+    the cell beside it is on the same line, and each below the last.  The
+    lines ran on as one line before, which no line of the cell matched.
+    """
+    from pypdf import PdfReader
+    from tools.fixtures.office import CELL_PARAGRAPH_TABLES, cell_paragraph_lines
+
+    pdf_lines = [
+        " ".join(line.split())
+        for page in PdfReader(pdf).pages
+        for line in page.extract_text().splitlines()
+    ]
+    cells = [cell for table in CELL_PARAGRAPH_TABLES for row in table for cell in row]
+    assert cells
+    for cell in cells:
+        lines = cell_paragraph_lines(cell)
+        found = [
+            next(
+                (
+                    index
+                    for index, line in enumerate(pdf_lines)
+                    if line == expected or line.startswith(f"{expected} ")
+                ),
+                None,
+            )
+            for expected in lines
+        ]
+        assert None not in found, (lines, pdf_lines)
+        assert found == sorted(set(found)), (lines, found)
 
 
 def _assert_bare_links_kept(name: str, bundle: Path, pdf: Path) -> None:

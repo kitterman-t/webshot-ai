@@ -5,7 +5,7 @@ which formats it accepts, how big they may be, how the resulting page is
 titled and styled — is decided in `adapters.py`; this file's whole job is to
 hand MarkItDown a stream with an explicit type hint and hand back a string.
 
-Twelve behaviors of MarkItDown are corrected here rather than inherited, because
+Thirteen behaviors of MarkItDown are corrected here rather than inherited, because
 each damages content WebShot promises to preserve (docs/09 P3-1):
 
 1. **TSV is not a format MarkItDown knows.**  Its CSV converter is
@@ -113,6 +113,12 @@ each damages content WebShot promises to preserve (docs/09 P3-1):
     `<pre>`'s blank first and last lines stayed, and a `\\r` left before a
     `\\r\\n` was a line break inside an item but nothing outside it.  The
     reader takes the line endings as a browser does (docs/09 P92).
+13. **It writes a table cell's paragraphs as one line.**  markdownify writes
+    a `<p>` or `<div>` in a cell as the space around it, a Markdown row being
+    one line, and the browser draws a line at each edge of one: a Word code
+    box, one cell with a paragraph a line of code, printed as one line of
+    code.  The writer writes a `<br>` where the browser breaks, as it does for
+    a `<br>` in a cell (docs/09 P111).
 
 MarkItDown itself parses XML through `defusedxml` (its RSS and EPUB
 converters), which is *not* what spec §6.6 rests on: the adapter defuses every
@@ -956,6 +962,130 @@ def _beside_a_break(el: Any) -> bool:
     return False
 
 
+#: Blocks a table cell's text breaks at, as the browser draws them.  markdownify
+#: writes each into the cell's line as the space around it, a Markdown row
+#: being one line, so a Word cell's paragraphs ran on as one (docs/09 P111).
+_CELL_LINES = frozenset({"p", "div", "article", "section"})
+
+
+def _in_a_cell_line(parent_tags: Iterable[str]) -> bool:
+    """Whether markdownify is writing into a table cell's line.
+
+    Not in a heading in the cell, which is one line wherever it stands, nor in
+    code (`_noformat`), where a block is the code's own text.
+    """
+    tags = set(parent_tags)
+    return bool({"td", "th"} & tags) and not (
+        "_noformat" in tags or any(_HEADING_TAG_RE.fullmatch(tag) for tag in tags)
+    )
+
+
+def _written_parts(node: Any) -> list[Any]:
+    """What markdownify writes for `node` that the page shows, in order.
+
+    Each string that is not all ASCII whitespace, which is what markdownify
+    strips from a paragraph's edges, each picture, and each `<br>`.  A comment
+    writes nothing.
+    """
+    if isinstance(node, Tag) and node.name not in ("br", "img"):
+        candidates: Iterable[Any] = node.descendants
+    else:
+        candidates = (node,)
+    return [
+        part
+        for part in candidates
+        if (isinstance(part, Tag) and part.name in ("br", "img"))
+        or (type(part) is NavigableString and _ASCII_WHITESPACE_RUN.sub("", part))
+    ]
+
+
+def _cell_line_of(part: Any, within: Any) -> str | None:
+    """How `part`, written in `within`, stands to a line of the cell.
+
+    `"block"` where a `_CELL_LINES` block holds it, `"break"` where it is a
+    `<br>`, and None otherwise.  Not where code or a heading between holds it,
+    which writes it on its own line: there a block or a `<br>` ends no line.
+    """
+    kind = "break" if isinstance(part, Tag) and part.name == "br" else None
+    for holder in (part, *part.parents):
+        if isinstance(holder, Tag):
+            # Nothing above the cell is the cell's: the walk that passed it
+            # took the `<div>` a table sits in for a block holding the text
+            # after a paragraph.
+            if holder.name in ("td", "th"):
+                break
+            if holder.name in _NOFORMAT_TAGS or _HEADING_TAG_RE.fullmatch(holder.name):
+                kind = None
+            elif holder.name in _CELL_LINES and holder is not part:
+                kind = kind or "block"
+        # `within` is text where the text stands on its own.
+        if holder is within:
+            break
+    return kind
+
+
+def _ends_a_line(node: Any) -> bool:
+    """Whether the last thing `node` writes is a `<br>` that ends a line."""
+    parts = _written_parts(node)
+    return bool(parts) and _cell_line_of(parts[-1], node) == "break"
+
+
+def _begins_a_line(node: Any) -> bool:
+    """Whether the first thing `node` writes begins a line of its own: a
+    `<br>`, or a block that writes its own break (`_as_a_cell_line`)."""
+    parts = _written_parts(node)
+    return bool(parts) and _cell_line_of(parts[0], node) is not None
+
+
+def _nearest_written(el: Any, step: str) -> Any:
+    """What writes text nearest `el` in `step`'s direction, in its cell line.
+
+    A sibling, or else a sibling of the inline element `el` stands in, and so
+    on out to the cell or the block that holds `el`: a `<p>` that is all a
+    `<span>`, `<b>` or `<a>` holds is beside what is beside them.
+    """
+    node = el
+    while True:
+        sibling = getattr(node, step)
+        while sibling is not None and not _written_parts(sibling):
+            sibling = getattr(sibling, step)
+        if sibling is not None:
+            return sibling
+        parent = node.parent
+        if parent is None or parent.name in BLOCKS or parent.name in ("td", "th"):
+            return None
+        node = parent
+
+
+def _as_a_cell_line(el: Any, written: str) -> str:
+    """A block markdownify wrote into a table cell's line, on a line of its own.
+
+    The browser begins a line at each edge of a `<p>` or `<div>` that has
+    something of the cell's on its other side, and markdownify wrote the
+    space around it there: a Word code box, one cell holding a paragraph a
+    line, read as one line of code (docs/09 P111).  So a `<br>` goes where the
+    browser breaks: before the block where something stands before it, and
+    after it where text follows that begins no line of its own.  Where the
+    line has already ended there, with a `<br>` beside the block or at the end
+    of what it or the text before it writes, that is the break: a `<br>` the
+    browser draws as the end of a block's last line made a blank line.
+    Between two blocks the second writes the break.  Where none goes, the
+    space markdownify wrote stays, so a block that is all the cell holds, or
+    all an inline element beside text holds, is written as before.
+    """
+    line = written.strip(" ")
+    if not line:
+        return written
+    before = _nearest_written(el, "previous_sibling")
+    after = _nearest_written(el, "next_sibling")
+    lead = trail = " "
+    if before is not None and not _ends_a_line(before):
+        lead = f"{LINE_BREAK} "
+    if after is not None and not _begins_a_line(after) and not _ends_a_line(el):
+        trail = f"{LINE_BREAK} "
+    return f"{lead}{line}{trail}"
+
+
 def _edges(text: str, *, breaks: bool) -> tuple[str, str, str]:
     """`text` as its leading edge, what is between, and its trailing edge.
 
@@ -1305,6 +1435,26 @@ class _TextMarkdownify(_CustomMarkdownify):
             written: str = super().convert_br(el, text, parent_tags)
             return written
         return f"{LINE_BREAK} {text}"
+
+    def convert_p(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
+        """A paragraph, and in a table cell a line of the cell's own
+        (`_as_a_cell_line`, docs/09 P111)."""
+        written: str = super().convert_p(el, text, parent_tags)
+        if _in_a_cell_line(parent_tags):
+            return _as_a_cell_line(el, written)
+        return written
+
+    def convert_div(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
+        """A division, and in a table cell a line of the cell's own, as a
+        paragraph is (`convert_p`)."""
+        written: str = super().convert_div(el, text, parent_tags)
+        if _in_a_cell_line(parent_tags):
+            return _as_a_cell_line(el, written)
+        return written
+
+    # markdownify binds these to its own `convert_div` when its class is made.
+    convert_article = convert_div
+    convert_section = convert_div
 
     def convert_pre(self, el: Any, text: str, parent_tags: Iterable[str]) -> str:
         """A code block, fenced so that none of its own lines can close it.
