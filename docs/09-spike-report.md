@@ -15613,6 +15613,7 @@ again here.
   column break with text on both sides of it in one paragraph.
 - **A table cell's paragraphs are one line**: markdownify writes a `<p>` in a
   cell as the space around it, so a Word cell of two paragraphs reads as one.
+  P111 has since written each on a line of its own.
 - **An EPUB's metadata runs on**: MarkItDown joins its `**Title:**`,
   `**Authors:**` and `**Language:**` lines with a newline, and the page reads
   them as one line.
@@ -21059,6 +21060,121 @@ a list of seven cut to five, an unread page, and a capture of
 what the PDF and `content.md` hold; the folded menu, the short `<details>` and
 the footer notice are not.
 
+
+## P111: a table cell's paragraphs ran on as one line (2026-11-01)
+
+P77-5 listed it among what P77 did not cover: markdownify writes a `<p>` in a
+table cell as the space around it, so a Word cell of two paragraphs read as
+one. It costs most in a code box, which Word users make as a one-cell table
+with a paragraph a line of code.
+
+### P111-1 — what fails
+
+mammoth writes a Word cell as `<td>` and each of its paragraphs as a `<p>`.
+markdownify's `convert_p` writes a paragraph under `_inline`, which it sets
+for a cell and a heading, as `' ' + text + ' '`, and its `convert_td` strips
+the cell and turns any newline into a space, a Markdown row being one line.
+The browser begins a line at each edge of a `<p>` or `<div>`, so the page
+read `import alpakit as ak import brindle as br` where the document had two
+lines, and the PDF's text layer held them as one. A `<div>` in a cell, from an
+HTML page or an EPUB, was written the same way.
+
+### P111-2 — the change
+
+`_TextMarkdownify.convert_p` and `convert_div`, and `article` and `section`,
+which markdownify binds to its own `convert_div`, write a block in a cell's
+line through `_as_a_cell_line`. Where something the page shows stands before
+the block in the cell, a `<br>` goes before it; where text follows it that
+begins no line of its own, a `<br>` goes after it. Between two blocks the
+second writes the break. What stands beside a block is looked for past the
+inline elements it is in, out to the cell or the block that holds it. Where
+the line has already ended, with a `<br>` beside the block or at the end of
+what it or the text before it writes, that is the break. It is the `<br>` and
+space P77 writes, so the row stays one line of Markdown and the table a
+table, and where no `<br>` goes markdownify's space stays. Not in a heading
+in a cell, which is one line wherever it stands (P77-2), nor in code, where a
+block is the code's text (P59). A cell of one paragraph, a paragraph that
+writes nothing, and every paragraph outside a table are written byte for byte
+as before.
+
+### P111-3 — the real files
+
+Measured on 60 real Word files, converted by `to_markdown` with the change and
+with `_in_a_cell_line` patched to answer no:
+
+- **50 are byte-identical.**
+- **10 change, and gain only `<br>`s**: 107 in all. Each holds the same words
+  in the same order, `<br>` read as a space, and as many lines of Markdown.
+  They are five documents: one in four versions, two in two copies each, and
+  two others.
+- **One of the 10 had a capture delivered from it.** Captured again with the
+  change, the PDF's text has each line of each of its code boxes on a line of
+  its own. Of the two other captures delivered from these files, neither has a
+  cell of more than one paragraph.
+
+### P111-4 — what this does not cover
+
+- **A paragraph's indentation.** markdownify collapses each run of ASCII
+  spaces and tabs to one space and strips a paragraph's edges, so leading
+  spaces or a tab in a Word paragraph are gone, in a cell or not. A no-break
+  space is kept (P43) and shows on the page, though `pdftotext` without
+  `-layout` gives the line without it. None of the real code boxes is
+  indented.
+- **An empty paragraph is no line.** mammoth leaves an empty paragraph out, so
+  a blank line between groups of code is gone. The code still runs.
+- **content.md's lines in a cell are docling's** (P77-5): it writes a cell's
+  `<br>` as spaces, as it did for Word's `w:br` in a cell.
+- **A list, a quotation or a `<pre>` in a cell** is written as before,
+  but for the paragraphs of an item or a quotation that holds more than one:
+  those are lines of the cell, as the browser draws them, where they ran on
+  as one. A list's items stay on the cell's line, a quotation's edges begin
+  no line, and a `<pre>` is P59's inline code.
+
+### P111-5 — two shapes the first version got wrong
+
+The review of #335 found two, and both were real. The first version looked
+for a block's neighbours among its own siblings, and took markdownify's
+spaces off. A `<p>` or `<div>` that is all a `<span>`, `<b>` or `<a>` holds
+has none, so it got neither a `<br>` nor its space: `alpha<span><p>omega</p></span>`
+read `alphaomega`, and two link cards, `<a><div>…</div></a>` side by side,
+ran their texts together. It also took a neighbour for a line break only
+where it was a `<br>` itself. A `<p>` ending in one, as rich-text editors
+write it, got a second, and the page drew a blank line the browser does not:
+`<p>alpha<br></p><p>omega</p>` and `<p>alpha<br></p>text` showed one, and a
+paragraph holding only a `<br>` between two others showed two blank lines
+for one. Neither shape is in the 60 Word files, which is why P111-3's
+measurement missed them; both are now in the tests, and the Word fixture
+holds a paragraph ending in a line break. P111-3's figures are the same with
+the corrected version.
+
+Its second round found one more, and a claim the code did not support. The
+walk that asks whether text after a block begins a line of its own skipped
+its stop when that text stood on its own, and climbed out of the cell: in a
+table inside a `<div>`, `<section>` or `<article>`, as an HTML page or an
+EPUB chapter has one, it took that element for a block holding the text, so
+`<p>alpha</p>omega` was one line again. The walk now ends at the text and at
+the cell. And P111-4 said a list or a quotation in a cell was written as
+before, which held only where an item or a quotation holds one paragraph;
+P111-4 now says what changes.
+
+### P111-6 — the tests
+
+`tests/test_cell_paragraphs.py` writes paragraphs and divisions in a cell
+beside text, formatting, a `<br>`, an empty paragraph and a comment, and in
+a `<span>`, bold text and a link, and checks the lines the page draws and
+that the row stays one line of Markdown. It checks that a `<br>` that
+already ends a line is the only break there, that a header cell and each
+cell of a row keep their own lines, that a heading and code in a cell, a
+cell of one paragraph and paragraphs outside a table are written as before,
+and the lines of `cell_paragraphs_report.docx` through the whole of the
+adapter, with as many `<br>`s in each cell as it has lines less one. It
+writes each case of a block in a cell again with the table in a `<div>`, a
+`<section>`, an `<article>` and a quotation, and checks the paragraphs of an
+item and of a quotation in a cell, and what is otherwise written as before
+there. With the change taken out, 95 of its 137 tests fail; with the first
+version 20, and with the second 6.
+`tests/test_office_formats.py` captures the fixture and finds each line of
+each cell on a line of the PDF's own, below the last.
 
 ## P112: pypdf 6.21.2's seven advisories held every pull request (2026-11-01)
 

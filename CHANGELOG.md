@@ -370,6 +370,16 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **Each paragraph in a table cell of a converted document is a line of its
+  own.** markdownify writes a `<p>` or `<div>` in a table cell as the space
+  around it, a Markdown row being one line, so a Word cell's paragraphs ran
+  on as one line. A code box, which Word users make as a one-cell table with
+  a paragraph a line of code, printed as one line of code that does not run.
+  The bridge now writes a `<br>` where the browser breaks, the line break it
+  already writes for Word's `w:br` (P77), and a cell of one paragraph is
+  written as before. Of 60 real Word files, the 10 that change gain only
+  `<br>`s, 107 in all, with the same words in the same order. See docs/09
+  P111.
 - **A translucent gradient background no longer prints as a page of
   rasters.** Chromium has no vector form for a gradient with a translucent
   stop, so it rasterizes each layer over the whole printable page, and it

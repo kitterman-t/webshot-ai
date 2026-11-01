@@ -105,6 +105,9 @@ a line begins; and in the places it stays what it was: a heading, and code
 The three `bare_link_*` fixtures hold links whose text is their target — a
 file name, a path, a host, an HTML tag's name, an https address — in a
 paragraph, a heading, a list item, a table cell and code (docs/09 P75).
+
+`cell_paragraphs_report.docx` holds table cells of several paragraphs, a code
+box among them, which markdownify wrote as one line (docs/09 P111).
 """
 
 from __future__ import annotations
@@ -190,6 +193,7 @@ SENTINELS = {
     "bare_link_report.docx": "SENTINEL DOCX BARE LINK WALLABY",
     "bare_link_book.epub": "SENTINEL EPUB BARE LINK XERUS",
     "bare_link_archive.zip": "SENTINEL ZIP BARE LINK YAPOK",
+    "cell_paragraphs_report.docx": "SENTINEL DOCX CELL LINES BANDICOOT",
 }
 
 #: Deterministic timestamp for every archive member, so regenerating a fixture
@@ -4075,6 +4079,73 @@ def write_bare_link_archive(path: Path) -> None:
     _write_archive(path, [("pages/bare-links.html", page)])
 
 
+# --------------------------------------------------------------------------- #
+# A table cell's paragraphs (docs/09 P111)
+# --------------------------------------------------------------------------- #
+
+#: The tables of `cell_paragraphs_report.docx`: each a list of rows, each row
+#: a list of cells, each cell its paragraphs.  A `\n` in a paragraph is a
+#: `w:br`, and an empty one is an empty paragraph.  The first table is a code
+#: box as Word users make one: one cell, a paragraph a line of code.  The
+#: second holds a cell of one paragraph, which reads as before, beside cells
+#: of two; the third a line break in a cell's paragraph, an empty paragraph,
+#: which mammoth leaves out, and a paragraph ending in a line break, which
+#: ends its line and makes none empty.
+CELL_PARAGRAPH_TABLES: list[list[list[list[str]]]] = [
+    [[["import alpakit as ak", "import brindle as br", "from corvex import dunlin"]]],
+    [
+        [["egret = ak.read('fennel.csv')", "print(egret.head())"], ["gecko"]],
+        [["heron = 0.05", "ibis = heron * 2"], ["jackal one", "jackal two"]],
+    ],
+    [[["kudu\nlemur", "", "nilgai\n", "print(mink)"]]],
+]
+
+
+def cell_paragraph_lines(cell: list[str]) -> list[str]:
+    """The lines the page shows for a cell of `CELL_PARAGRAPH_TABLES`."""
+    return [line for paragraph in cell for line in paragraph.split("\n") if line]
+
+
+def _cell_paragraph(text: str) -> str:
+    """A paragraph of a cell, indented as a code box's paragraphs are."""
+    runs = _WORD_BREAK.join(_word_text(line) for line in text.split("\n"))
+    content = f"<w:r>{runs}</w:r>" if text else ""
+    return f'<w:p><w:pPr><w:ind w:left="360"/></w:pPr>{content}</w:p>'
+
+
+def write_cell_paragraphs_report(path: Path) -> None:
+    tables = "".join(
+        "<w:tbl><w:tblPr/>"
+        + "".join(
+            "<w:tr>"
+            + "".join(
+                "<w:tc><w:tcPr/>"
+                + "".join(_cell_paragraph(text) for text in cell)
+                + "</w:tc>"
+                for cell in row
+            )
+            + "</w:tr>"
+            for row in table
+        )
+        + "</w:tbl>"
+        + _docx_paragraph("")
+        for table in CELL_PARAGRAPH_TABLES
+    )
+    body = _docx_paragraph(SENTINELS["cell_paragraphs_report.docx"]) + tables
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<w:document {_DECLARE}><w:body>{body}</w:body></w:document>\n"
+    )
+    _write_archive(
+        path,
+        [
+            ("[Content_Types].xml", _DOCX_CONTENT_TYPES),
+            ("_rels/.rels", _DOCX_RELS),
+            ("word/document.xml", document),
+        ],
+    )
+
+
 WRITERS = {
     "sample_report.docx": write_docx,
     "sample_deck.pptx": write_pptx,
@@ -4131,6 +4202,7 @@ WRITERS = {
     "bare_link_report.docx": write_bare_link_report,
     "bare_link_book.epub": write_bare_link_book,
     "bare_link_archive.zip": write_bare_link_archive,
+    "cell_paragraphs_report.docx": write_cell_paragraphs_report,
 }
 
 
