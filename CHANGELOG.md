@@ -158,6 +158,10 @@ which records the measurements behind each change.
 
 ### Security
 
+- **pypdf 6.21.4**, up from 6.21.2, which clears the 7 advisories the
+  vulnerability audit reports against 6.21.2 (CVE-2026-119203 to 119209).
+  pypdf's floor is the fixed release. The required vulnerability scan failed
+  on every pull request until this change (docs/09 P112).
 - **Five dependencies with published advisories are updated.** pillow
   13.0.0 (41 advisories against 12.3.0), pypdf 6.21.2 (7 against 6.20.1),
   filelock 4.2.4 (3), certifi 2026.10.23 and opentelemetry-api 1.45.1 (1
