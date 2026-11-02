@@ -4235,7 +4235,7 @@ requires-dist = [
     { name = "charset-normalizer", specifier = ">=3.5.1,<4" },
     { name = "chonkie", specifier = ">=1.7.0" },
     { name = "defusedxml", specifier = ">=0.7.1,<0.8" },
-    { name = "docling-core", extras = ["chunking"], marker = "extra == 'chunk-hybrid'", specifier = ">=2.101.1" },
+    { name = "docling-core", extras = ["chunking"], marker = "extra == 'chunk-hybrid'", specifier = ">=2.104.0" },
     { name = "docling-slim", extras = ["format-html"], specifier = ">=2.140.0" },
     { name = "huggingface-hub", specifier = ">=2.2.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.170.8" },
