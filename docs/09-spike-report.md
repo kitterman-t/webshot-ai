@@ -8913,6 +8913,8 @@ The rebased bump is armed again by `dependabot-auto-merge.yml`, which runs on
 every push to the pull request. The watch names such a bump: auto-merge off
 after 6 h, and the bump edits a workflow file. The case is rare. It needs two
 workflow-editing pull requests open together, one merging under the other.
+(P84-6 found it was not rare and groups the action bumps into one pull
+request.)
 
 **The alternative, not adopted:** arm with a fine-grained token that has
 Workflows read and write on webshot-ai. It would be stored as a *Dependabot*
@@ -8974,6 +8976,48 @@ the change (started by hand: its schedule is weekly, on Mondays) logged
 `Updating markdown from 3.10.3 to 3.11.1`, then ran
 `uv lock --upgrade-package markdown==3.11.1`, a step no earlier run had
 reached, and opened webshot-ai#68.
+
+### P84-6 — not rare: two of four action bumps, so they come as one (2026-11-02)
+
+On Monday 2026-11-02 Dependabot opened four action bumps on webshot-ai, and
+two of them hit P84-3:
+
+- #89 (setup-python 7.1.0) and #92 (claude-code-action 1.0.263) both edit
+  `claude-review.yml`;
+- #90 (gh-action-pypi-publish 1.14.3) and #91 (setup-uv 10.3.2) both edit
+  `release.yml`.
+
+#89 merged at 10:10Z and #90 at 10:55Z. #92's last check finished at 11:09Z
+and #91's at 11:17:55Z, and GitHub turned each one's auto-merge off within a
+minute. The REST timeline records only the event. GraphQL's
+`AutoMergeDisabledEvent` also gives the reason: reason code
+`workflow_policy_update_error`, "Tried to create or update workflow without
+`workflows` permission". Commenting `@dependabot rebase` on both at 16:02Z
+re-armed them.
+
+P84-3 thought this would be rare, since it needs two workflow-editing bumps
+open at the same time. But that is what a normal Monday looks like. Each
+action is pinned in several workflows (setup-uv in five of webshot-ai's), so
+any two action bumps are likely to share a file.
+
+**The fix: every action bump arrives in one pull request.** The github-actions
+update in `dependabot.yml` now has one group, whose pattern is `*`. Only one
+pull request a week then edits workflows, so no action bump can merge under
+another.
+
+**Costs and limits:**
+
+- A failing action holds the others until it is fixed or ignored. That costs
+  less than one bump in two waiting for a comment.
+- The group covers version updates only. A security update still arrives on
+  its own, at once.
+- The case can still recur when a person's change or an export from the sync
+  edits a workflow under the group's pull request. The watch still names that
+  case.
+- No credential was added; P84-3's alternative stays not adopted.
+
+`tests/test_dependency_staleness.py` fails if the actions update stops
+grouping every action.
 
 ## P27: what MarkItDown's Office readers pass over (2026-10-11)
 

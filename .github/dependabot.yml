@@ -65,6 +65,17 @@ updates:
     # arrives at once.
     cooldown:
       default-days: 7
+    # One pull request for every action, not one each. The auto-merge token
+    # cannot write workflow text that neither side of a merge holds, so when
+    # two bumps edit one workflow file, the second's auto-merge is turned off
+    # the moment the first merges (docs/09 P84-3). Each action is pinned in
+    # several workflows, and on 2026-11-02 that stopped two of four bumps
+    # (P84-6). Grouped, no action bump can merge under another. Security
+    # updates are not grouped and still arrive at once.
+    groups:
+      actions:
+        patterns:
+          - "*"
     labels:
       - dependencies
       - ci
