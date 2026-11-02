@@ -685,6 +685,23 @@ def test_every_ecosystem_has_a_cooldown_and_actions_take_only_the_default() -> N
         assert all(isinstance(d, int) and 1 <= d <= 30 for d in days), update
 
 
+def test_every_action_bump_arrives_in_one_pull_request() -> None:
+    """Two action bumps that edit one workflow file cannot both merge
+    themselves: the second's merge would write workflow text neither side
+    holds, which the auto-merge token may not do (docs/09 P84-3, P84-6).
+    One group matching every action leaves one pull request to merge."""
+    config = yaml.safe_load(
+        (REPO_ROOT / ".github" / "dependabot.yml").read_text("utf-8")
+    )
+    (actions,) = [
+        u for u in config["updates"] if u["package-ecosystem"] == "github-actions"
+    ]
+    groups = actions.get("groups")
+    assert groups, "the github-actions update has no groups"
+    assert [g["patterns"] for g in groups.values()] == [["*"]], groups
+    assert all("applies-to" not in g for g in groups.values()), groups
+
+
 def test_the_watch_runs_on_a_schedule_on_a_hosted_runner_and_writes_an_issue() -> None:
     path = REPO_ROOT / ".github" / "workflows" / "dependency-watch.yml"
     workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
