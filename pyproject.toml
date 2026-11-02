@@ -117,7 +117,7 @@ dependencies = [
 # DOCX/PPTX/XLSX inputs (docs/05 task 3.2). EPUB and ZIP need no extra —
 # MarkItDown's base install already converts them — but they are documented
 # with this group because archive safety and the fixtures arrived together.
-office = ["markitdown[docx,pptx,xlsx]>=0.1.8,<0.2"]
+office = ["markitdown[docx,pptx,xlsx]>=0.1.9,<0.2"]
 # RapidOCR behind the OcrEngine protocol (docs/05 task 3.5): pip-only, no
 # system binary. rapidocr declares no inference backend of its own, so the
 # extra names onnxruntime explicitly rather than leaning on the copy magika
