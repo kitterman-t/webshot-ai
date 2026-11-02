@@ -709,7 +709,7 @@ chunking = [
 
 [[package]]
 name = "docling-slim"
-version = "2.140.0"
+version = "2.142.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -722,9 +722,9 @@ dependencies = [
     { name = "requests" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/35/16/ad528a3882a62655b1c9df387ed01931e8d1c00d15e452d879450167fe0a/docling_slim-2.140.0.tar.gz", hash = "sha256:0d8f72cb7f2da3146a8171265d47f8b115aec6557156256d62a453ca6495f702", size = 843603, upload-time = "2026-10-16T09:01:53.171Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1f/43/fa84e245dd80d8c48912f0495c3a31a333fb3804efb0295646f5f052e748/docling_slim-2.142.1.tar.gz", hash = "sha256:b6042f9b6c8f156f04d59a298188b33aa8f6317ca57073225453056c164af0f4", size = 922507, upload-time = "2026-10-23T08:20:49.57Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/87/2b/c2fdd9f74844072200869d2037e777a7533b7d7ebf734d06667c7f7fd1f9/docling_slim-2.140.0-py3-none-any.whl", hash = "sha256:91ab66bc79c471aa4c23d956a6c4887344d84673a496dcc867ec6a3ada8e41d5", size = 1024840, upload-time = "2026-10-16T09:01:50.903Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/5f/6ca181855e1cad1d9e8be1830fa660cf481bbb5e5da6caa21df491181e71/docling_slim-2.142.1-py3-none-any.whl", hash = "sha256:8013da3da0692b51406e6192c3b2aba4c241da92ff055af106dbe6b723b7f528", size = 1116839, upload-time = "2026-10-23T08:20:47.142Z" },
 ]
 
 [package.optional-dependencies]
@@ -4236,7 +4236,7 @@ requires-dist = [
     { name = "chonkie", specifier = ">=1.7.0" },
     { name = "defusedxml", specifier = ">=0.7.1,<0.8" },
     { name = "docling-core", extras = ["chunking"], marker = "extra == 'chunk-hybrid'", specifier = ">=2.104.0" },
-    { name = "docling-slim", extras = ["format-html"], specifier = ">=2.140.0" },
+    { name = "docling-slim", extras = ["format-html"], specifier = ">=2.142.1" },
     { name = "huggingface-hub", specifier = ">=2.3.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.170.8" },
     { name = "img2pdf", specifier = ">=0.6,<1" },
