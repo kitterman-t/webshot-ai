@@ -37,6 +37,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,6 +69,15 @@ EXPORT = (
 CLEAN = 0
 VULNERABLE = 1
 INCOMPLETE = 2
+
+#: Seconds to wait before each repeat of a pip-audit run that OSV refused.
+#: pip-audit gives up on the first 5xx, so on 2026-11-02 one bad gateway from
+#: api.osv.dev failed a pull request's CI job on an audit that was clean when
+#: run again. An outage that outlasts these still ends the audit as incomplete.
+SERVICE_RETRY_DELAYS: tuple[float, ...] = (10.0, 30.0)
+
+#: What pip-audit prints when the vulnerability service, not the input, failed.
+SERVICE_ERROR = "pip_audit._service.interface.ServiceError"
 
 
 class ExportError(ValueError):
@@ -235,8 +245,17 @@ def audit_run(
     ]
     if osv_url is not None:
         command += ["--osv-url", osv_url]
-    completed = subprocess.run(command, capture_output=True, text=True, check=False)
     label = f"pip-audit run {index + 1} ({len(pins)} pins)"
+    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    # Repeated only when the run wrote nothing and blamed the service: a run
+    # that failed on its input fails the same way again, and one that wrote a
+    # report is judged on that report.
+    for delay in SERVICE_RETRY_DELAYS:
+        if report.is_file() or SERVICE_ERROR not in completed.stderr:
+            break
+        print(f"{label}: OSV did not answer; trying again in {delay:g} s")
+        time.sleep(delay)
+        completed = subprocess.run(command, capture_output=True, text=True, check=False)
 
     if not report.is_file():
         return {}, [
