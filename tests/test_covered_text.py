@@ -681,3 +681,25 @@ def test_a_selector_no_stylesheet_takes_is_said_and_the_rest_still_apply() -> No
                 await browser.close()
 
     assert asyncio.run(run()) == ["div[", "none"]
+
+
+def test_boxes_that_would_read_alike_are_said_once_with_their_number() -> None:
+    """P113-4: a page ran its welcome ad twice, and the manifest said the same
+    sentence twice. Two boxes of one name over the same text are one warning
+    that counts them; a third box of that name elsewhere keeps its own."""
+    twin = _covering(
+        name="div#overlay", reach="shared", printed=(1, 2, 3), pages=(1, 2)
+    )
+    elsewhere = _covering(
+        name="div#overlay", reach="shared", printed=(1, 2, 3), pages=(3,)
+    )
+    warnings = covered_text_warnings(
+        CoveredText(boxes=3, pages=3, coverings=(twin, twin, elsewhere))
+    )
+    assert len(warnings) == 2
+    assert warnings[0].startswith(
+        "2 fixed boxes, each named div#overlay, print on all 3 pages, and each over "
+        "120 characters of the page's text in 6 lines on pages 1-2, "
+    )
+    assert "but on the page the boxes are drawn over it." in warnings[0]
+    assert warnings[1].startswith("A fixed box, div#overlay, prints on all 3 pages")

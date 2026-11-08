@@ -65,19 +65,27 @@ from .capture.prepare import (
     CLEAN_PRINT_CSS,
     NOISE_SELECTORS,
     LazyLoadPass,
+    TextWait,
     _wait_for_fonts_and_images,
+    adopt_stylesheet,
     consent_dialogs_message,
+    css_imports,
+    dropped_imports_message,
     has_scrolling_tables,
     hide_consent_dialogs,
     hide_elements,
     hide_obstructive_overlays,
+    interstitials_message,
     isolate_content,
     keep_excluded_hidden,
     lazy_load_warning,
     release_clamped_text,
     release_wide_tables,
+    rendered_text_message,
     scroll_to_load,
     select_main_content,
+    text_wait_bound,
+    wait_for_rendered_text,
 )
 from .capture.session import CrashWatch, launch_context
 from .config import CaptureOptions, CaptureResult
@@ -530,6 +538,7 @@ async def capture_open_page(
     content_type: str,
     failed_requests: RequestFailures,
     warnings: list[str],
+    text_wait: TextWait | None = None,
 ) -> CaptureResult:
     """Capture a page that is already open and already showing what to capture.
 
@@ -642,7 +651,10 @@ async def capture_open_page(
             warnings.append(consent_dialogs_message(consent.shown))
         if options.mode == "clean":
             hidden += await hide_elements(page, NOISE_SELECTORS)
-            hidden += await hide_obstructive_overlays(page)
+            overlays = await hide_obstructive_overlays(page)
+            hidden += overlays.hidden
+            if overlays.covering:
+                warnings.append(interstitials_message(overlays.covering))
         hidden += await hide_elements(page, options.exclude_selectors)
         late = await keep_excluded_hidden(page, options.exclude_selectors)
         if late:
@@ -658,13 +670,18 @@ async def capture_open_page(
                 released,
             )
 
-        await page.add_style_tag(content=BASE_PRINT_CSS)
+        # Adopted, not `<style>` elements: a page whose `style-src` allows no
+        # inline style refused those, and the capture ended with exit 5
+        # (docs/09 P116). In this order, so `--css` still has the last word.
+        await adopt_stylesheet(page, BASE_PRINT_CSS)
         if options.mode == "clean":
-            await page.add_style_tag(content=CLEAN_PRINT_CSS)
+            await adopt_stylesheet(page, CLEAN_PRINT_CSS)
         if options.extra_css:
-            await page.add_style_tag(
-                content=options.extra_css.read_text(encoding="utf-8")
-            )
+            extra_css = options.extra_css.read_text(encoding="utf-8")
+            await adopt_stylesheet(page, extra_css)
+            dropped = css_imports(extra_css)
+            if dropped:
+                warnings.append(dropped_imports_message(dropped))
         await page.emulate_media(media=options.media)
         # After every stylesheet and the media switch, because it measures
         # computed style; before the bundle, so the geometry the bundle
@@ -805,6 +822,7 @@ async def capture_open_page(
                 visuals=len(ai_result.assets) + ai_result.unsaved_visuals,
                 videos=len(ai_result.videos),
                 required=options.require_content,
+                waited_s=text_wait_bound(text_wait),
             )
             if empty and options.require_content:
                 raise CaptureIntegrityError(empty)
@@ -1320,6 +1338,20 @@ async def _capture(
                     ) from exc
             if options.wait_after_load_s:
                 await asyncio.sleep(options.wait_after_load_s)
+            # A page that shows no text yet gets time for its script to render
+            # some (docs/09 P113-5). Not after --wait-for, which named what to
+            # wait for, nor under --interactive-auth, where a person says when
+            # the page is ready, nor in the protected viewer, which reads pages
+            # its own way.
+            text_wait: TextWait | None = None
+            if not (
+                options.wait_for_selector
+                or options.interactive_auth
+                or options.protected_viewer
+            ):
+                text_wait = await wait_for_rendered_text(page)
+                if text_wait and text_wait.characters:
+                    LOGGER.info(rendered_text_message(text_wait))
 
             if options.interactive_auth:
                 if not sys.stdin.isatty():
@@ -1496,6 +1528,7 @@ async def _capture(
                 content_type=content_type,
                 failed_requests=failed_requests,
                 warnings=warnings,
+                text_wait=text_wait,
             )
         finally:
             await context.close()

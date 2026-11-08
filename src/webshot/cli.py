@@ -305,7 +305,14 @@ def build_parser() -> argparse.ArgumentParser:
             "then build a searchable image-backed PDF and page-level AI bundle"
         ),
     )
-    parser.add_argument("--css", type=Path, help="additional UTF-8 CSS file to inject")
+    parser.add_argument(
+        "--css",
+        type=Path,
+        help=(
+            "additional UTF-8 CSS file, applied after every stylesheet of the "
+            "page's own; it cannot use @import"
+        ),
+    )
     parser.add_argument("--user-agent", help="override Chromium's native user-agent")
     parser.add_argument(
         "--allow-http-errors",

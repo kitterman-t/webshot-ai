@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Catalogue record</title>
+  <meta name="description" content="A single-page app that shows no text until its script renders the record, two and a half seconds after it loads (docs/09 P113-5). The text is invented.">
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    setTimeout(() => {
+      document.getElementById('root').innerHTML =
+        '<h1>Lighthouse keepers of the north coast</h1>' +
+        '<p>A record of the keepers who tended the north coast lights, with the years each one served.</p>';
+    }, 2500);
+  </script>
+</body>
+</html>

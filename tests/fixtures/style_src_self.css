@@ -1,0 +1,4 @@
+/* Served from the page's own origin, which `style-src 'self'` allows. */
+body { font-family: Georgia, serif; }
+pre { font-size: 13px; }
+.linked-rule { display: none; }

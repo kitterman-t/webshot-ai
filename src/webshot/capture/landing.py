@@ -419,7 +419,12 @@ def refused_status_message(source: str, status: int, headers: Mapping[str, str])
 
 
 def empty_capture_message(
-    *, page_text_characters: int, visuals: int, videos: int, required: bool
+    *,
+    page_text_characters: int,
+    visuals: int,
+    videos: int,
+    required: bool,
+    waited_s: float | None = None,
 ) -> str | None:
     """What an empty capture says: a warning, or under `required` the failure.
 
@@ -431,7 +436,10 @@ def empty_capture_message(
     `--max-assets` or whose capture failed, so "no image" is said only of a
     page that showed none. `videos` is the manifest's video records. A page of
     pictures and no text is not empty, and neither is a page whose only
-    content is a video.
+    content is a video. `waited_s` is the time the capture gave a page that
+    showed no text for its script to render some (`wait_for_rendered_text`)
+    when that wait ran out with none, or None; it is said so the reader does
+    not wait as long again by hand.
     """
     if visuals or videos or page_text_characters >= NEAR_EMPTY_CHARACTERS:
         return None
@@ -446,9 +454,15 @@ def empty_capture_message(
         if required
         else "--require-content makes this a failure (exit 5)."
     )
+    waited = (
+        f" WebShot gave its script {waited_s:g} s more to render text after the "
+        "page loaded."
+        if waited_s is not None
+        else ""
+    )
     return (
         f"The capture is {'empty' if page_text_characters == 0 else 'nearly empty'}: "
-        f"content.txt holds {held}, and there is no image and no video. "
+        f"content.txt holds {held}, and there is no image and no video.{waited} "
         "A page shows this when the browser had no session, when its script had "
         "not rendered the content yet, or when --selector matched an empty "
         "element. --storage-state or --auth-profile supplies a session, and "

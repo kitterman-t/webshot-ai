@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fixed shell page</title>
+  <style>
+    body { font: 16px/1.5 Georgia, serif; margin: 0; }
+    /* An app that keeps its whole document in a fixed, scrolling shell: on
+       top at every point of the window, and it is the page (docs/09 P113-4). */
+    #app-shell { position: fixed; inset: 0; overflow: auto; z-index: 100; background: #fff; }
+    main { max-width: 680px; margin: 24px auto; }
+  </style>
+</head>
+<body>
+  <div id="app-shell">
+    <main>
+      <h1>Tide tables for the north pier</h1>
+      <p>High water on Monday is at six in the morning and again a little after half past six in the evening.</p>
+      <p>The shell that holds this page is fixed to the window, so clean mode must keep it whole.</p>
+    </main>
+  </div>
+</body>
+</html>
