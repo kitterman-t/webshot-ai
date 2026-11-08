@@ -21427,6 +21427,128 @@ the directory beside it, and refuses a PDF with no bundle and a file that is
 not a PDF.
 
 
+## P115: a page's own `@page` margin left the running header no room (2026-11-07)
+
+P113-5 found it while checking a report that faithful mode clipped a library
+catalogue's record column, and left it out of that change. The page loads
+pdf.js's `viewer.css`, which carries `@page { margin: 0px; }`. Chromium
+honours a page's `@page` margin over the margin `page.pdf` is given, and the
+running header and footer (`render/pdf.py`, `header_footer_options`) print in
+that margin. So the page had none for them: in faithful mode its fixed nav bar
+printed over the header's title and URL, and `pdftotext -layout` interleaved
+the two. Clean mode hid the bar, but the margin was still 0.
+
+### P115-1 — what Chromium prints
+
+Measured on a synthetic page of that shape (the test fixture is
+`tests/fixtures/page_margin_zero.html`): `@page { margin: 0 }`, a 48 px bar
+fixed to the top, and enough body text for several pages. Letter, 0.6in,
+scale 0.9, as a capture prints it.
+
+- **The bar and the header share a line.** The header's text spans 9.6 to
+  25.2 pt from the top of every page, whatever the margin. The bar's text spans
+  11.6 to 23.7 pt. `pdftotext -layout` read the first lines as
+  `HEADERTITLE SEARCHWORD` / `NAVBARWORD … example.test`, P113-5's
+  interleaving.
+- **The body runs under the footer.** The footer spans 764.1 to 779.7 pt on a
+  792 pt page. The body's last line on the first page ended at 784.5 pt.
+- **The width moves too.** The clipping probe (P16-4) read 906 px, where a page
+  without the rule reads 779 px. A `@page { margin: 2cm }` page read 738 px.
+- **The header is still there.** Chromium draws it in its band whatever the
+  margin. What changes is that the page is drawn over it.
+
+### P115-2 — a correction, not a warning
+
+The choice was between (a) WebShot's print CSS setting the margin it passes
+whenever the header and footer are on, and (b) a manifest warning when the
+page's margin leaves them no room. (a) is the change.
+
+P16-4 warns and does not correct because undoing a layout means guessing which
+of several rules to undo. Nothing here needs a guess. The header and footer are
+WebShot's, they print in the margin, and `--margin` says how big the margin is.
+A warning would publish a PDF with its source line overprinted on every page,
+when one rule prevents it. Under `--no-header-footer` nothing of WebShot's needs
+the room, so the page's own margin stays in force, as before.
+
+### P115-3 — `revert`, not the length
+
+Writing `--margin` into the CSS, `@page { margin: 0.6in !important }`,
+fixes the fixture and moves every page without a rule. The
+bar's text landed at 55.07 pt where `page.pdf`'s own 0.6in put it at 54.32 pt.
+Chromium seems to round the parameter's 57.6 px down to 57 px and the CSS
+length up to 58 px. Either way, every capture, and every golden, would have
+moved by a pixel.
+
+`@page { margin: revert !important; }` hands the margin back to the one
+`page.pdf` was given. Checked by text positions (`pdftotext -bbox`) and pixels
+(`pdftoppm -r 72`) at six settings: 0.6in at scale 0.9 on Letter, 0 at 1.0 on
+Letter, 12mm at 0.75 on A4, 1cm at 1.0 on landscape Letter, 0.5in at 1.3 on
+Legal, and 7.3mm at 0.9 on A4. In all six, a page without a rule printed
+identically with the sheet and without it, and the `margin: 0` page with the
+sheet printed identically to the page without a rule. `auto`, `initial` and
+`unset` gave the margin 0, and `revert-layer` left the page's own rule in
+force.
+
+It reaches every shape of rule tried: `margin: 0`, `margin: 2cm`,
+`margin-top` and `margin-bottom` alone, `:first`, `:left` and `:right`, a named
+page (`page: record`), and a rule inside `@media print`. With the rule the
+probe reads 779 px for each. `--prefer-css-page-size` still takes the page's
+size (an A5 page stays A5) and now takes `--margin`'s margins inside it.
+Without the flag, a page with `@page { size: A5 }` is laid out at A5 and fitted
+to Letter, as P16-4 found. The margins inside that A5 box are now `--margin`'s
+too, so the body starts lower on the paper: 152.6 pt where it started at
+109.8 pt.
+
+### P115-4 — adopted, and what it does not reach
+
+The rule is a constructed sheet in `document.adoptedStyleSheets`
+(`keep_header_footer_margins`, `capture/prepare.py`). It is installed with the
+print CSS when the header and footer are on, so every print after it uses the
+same margins: the table-width probe, the render, the covered-text check's
+measuring print, and the clipping probe. Adopted rather than added as a
+`<style>` for two reasons. A `style-src 'self'` policy made `add_style_tag`
+raise ("Applying inline style violates the following Content Security Policy
+directive"), but the constructed sheet applied. And the bundle's snapshot reads
+no adopted sheet.
+
+**A page's own `!important` margin still wins.** Chromium lets the *earliest*
+important `@page` declaration win, the reverse of the order it uses for normal
+ones. Measured with `@page { margin: 0 !important }` in the page:
+
+- In `<head>`, it beat WebShot's `!important` rule both as a `<style>` added
+  after it and as an adopted sheet.
+- In `<body>`, it lost to a `<style>` added at the end of `<head>`, which comes
+  earlier, and beat the adopted sheet, which comes after everything.
+
+Wrapping the rule in `@layer` changed neither result. Winning there would need
+a `<style>` before every sheet of the page's, which a `style-src` policy
+refuses and the snapshot would carry. No page measured so far has such a rule.
+`tests/test_page_margins.py` pins the limit, so a Chromium change to that order
+fails a test rather than leaving the spec's claim untrue.
+
+**Found in passing, not fixed here.** That `style-src 'self'` test was not
+just a test of this rule. A capture of a page served with that header failed
+with exit 5, because `add_style_tag(BASE_PRINT_CSS)` raised before anything
+was printed. P116 fixed it by adopting the print CSS too. This rule is
+installed after it and after `--css`, so it is still the last sheet.
+
+### P115-5 — the tests and the goldens
+
+`tests/test_page_margins.py` captures the fixture in faithful and clean mode
+and reads each page's top and bottom 38 pt (inside the 43.2 pt margin). The
+header's title and the footer's "WebShot" must be there, and none of the bar's
+or the body's words. In faithful mode the bar must still print. Under
+`--no-header-footer` the page's `margin: 0` must stand. Printed directly, a
+page without a rule must give the same glyphs, at the same places, with the
+rule as without it. Each of the seven rule shapes above, with the rule, must
+give the same glyphs as a page with none. A page's `!important` margin must
+still win. Thirteen tests. With the rule's install made a no-op, nine of them
+fail. The four that still pass are the page without a rule, the bar printing in
+faithful mode, `--no-header-footer`, and the `!important` limit.
+
+No golden fixture has an `@page` rule. The rule leaves a page without one
+unchanged, so no golden should move.
+
 ## P116: a page whose policy refuses inline style failed the whole capture (2026-11-07)
 
 P115-4 found it while fixing the running header's margin. A capture of any
@@ -21542,3 +21664,61 @@ still applies. Run with `add_style_tag` patched back in, the three capture
 tests fail with exit 5. With the print CSS left out, the token's end is cut off
 at the page's edge. Fifteen cases pin what `css_imports` finds and what it
 leaves.
+
+## P118 — a timeout test that raced the stand-in's fill timer (2026-11-08)
+
+A pull request's `tests (linux, py3.13)` job, on a self-hosted Linux runner,
+failed one test of 6,012:
+`test_a_track_that_never_fills_in_is_a_timeout_not_an_empty_track`, with
+`assert 'never rendered an accordion' in ''`. The empty message means the walk
+found the accordions, so the stand-in's 250 ms track fill had already run when
+a readiness check looked. The test gave the walk a 50 ms budget, so its premise
+held only while the click and the first check finished within 250 ms of that
+timer starting. That is a wall-clock race. This run lost it with the runners'
+host at a load average of 135 and 14 workflow runs queued for it. The pull
+request changes nothing in `webshot.journey`.
+
+The stand-in now has a `stuck` path segment that never fills a track view, and
+the test walks it, so the timeout is reached by construction however slow the
+machine is. A wider margin would only have moved the race. Every other test
+keeps the 250 ms fill, which a walker must poll for (P11-2).
+
+A 1,000 ms budget reproduces the failure on demand, because it lets the fill
+land inside the budget the way a slow machine does. Against the ordinary path
+the test then fails with the CI message, `assert 'never rendered an accordion'
+in ''`, and against `stuck` it passes. The test keeps its 50 ms budget, which
+now costs nothing but speed.
+
+## P119: the sync judged a newer master by an older manifest (2026-11-08)
+
+A sync run started by one merge to master failed with "the export view leaks;
+nothing was pushed", listing lines from a private tool that the next merge
+had added. Nothing reached webshot-ai, and the run's import step went ahead.
+
+### P119-1 — the cause
+
+The run checked out the commit that started it (12d82b8a) and `main` loaded
+`manifest.toml` from that working tree. `fetch` then took private master
+again, as it is meant to, and a merge about a minute later had moved it to
+cad44132, which added the tool and the manifest entry that makes its
+directory private. The export view was built from cad44132's tree with
+12d82b8a's private paths, so the tool's files counted as shared.
+
+The leak rules stopped it only because a rule for the tool's subject was
+already in the older manifest. A private tool whose words no rule names would
+have exported with no warning. The gate held by luck: the private-path list
+is the boundary's first line, and it was the one that was out of date.
+
+### P119-2 — the fix and the test
+
+`state()`, which every `check`, `export`, `import` and `auto` run goes
+through, now takes the boundary from the `manifest.toml` in the commit it
+judges (`boundary_at`). `leaks`, which reads files on disk or in the index,
+still uses the working tree's manifest, which is the one that governs them.
+
+`tests/test_sync_boundary.py::test_a_commit_is_judged_by_its_own_manifest`
+commits a private tool with no leak rule and the manifest entry for it on top
+of a root commit. The export of that commit holds only `README.md`; the same
+export under the root's manifest holds the tool's file and reports no leak,
+which is the silent case above. With `state()` restored to the working tree's
+manifest, the test fails at its first check of the boundary.

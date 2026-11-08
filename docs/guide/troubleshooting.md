@@ -239,6 +239,16 @@ WebShot does not hide these boxes itself, because some are part of the page.
 The consent dialogs it knows are the exception: both modes hide them, and a
 separate warning names them.
 
+### The page prints over the running header or footer
+
+With the header and footer on, WebShot prints in `--margin`'s margins whatever
+`@page` margin the page's own stylesheet sets, so a page that asks for
+`@page { margin: 0 }` still leaves them room. A page's margin marked
+`!important` is the exception: Chromium lets it win, and the page can print
+over the header's title and URL. Hide the box that covers them with
+`--exclude`, or capture with `--no-header-footer`, which also leaves the
+page's own margins in force.
+
 ### A warning says the page keeps text behind a closed control
 
 A "show more" button, an accordion or a `<details>` the page shows closed

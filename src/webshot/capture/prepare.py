@@ -261,6 +261,27 @@ body { margin: 0 !important; background: transparent !important; }
 a[href] { text-decoration-thickness: 0.06em; text-underline-offset: 0.12em; }
 """
 
+#: The running header and footer print in the page's top and bottom margins,
+#: and Chromium honours a page's own `@page` margin over the one `page.pdf` is
+#: given. pdf.js's `viewer.css`, loaded by a catalogue page for an embedded
+#: viewer, carries `@page { margin: 0 }`, so the page's fixed bar printed
+#: over the header's title and URL, and the text layer interleaved the two
+#: (docs/09 P113-5, P115).
+#:
+#: `revert`, not `--margin`'s own value: `revert` hands the margin back to the
+#: one `page.pdf` was given, and a page with no `@page` rule prints with this
+#: sheet byte for byte as it did without it. The same length written into the
+#: CSS rounds differently: `0.6in` there put the text 0.75 pt lower than
+#: `0.6in` passed to `page.pdf` (P115).
+#:
+#: Adopted, like the clipping probe's sheet: a `style-src` policy refuses a
+#: `<style>` element and not a constructed sheet, and the bundle's snapshot
+#: reads no adopted sheet. `!important` beats every `@page` margin a page sets
+#: without it, wherever the rule sits. A page's own `!important` margin still
+#: wins: Chromium lets the *earliest* important `@page` declaration win, and an
+#: adopted sheet always comes last (P115).
+HEADER_FOOTER_MARGINS_CSS = "@page { margin: revert !important; }"
+
 
 #: How many of the images still loading a warning names; the rest it counts.
 NAMED_PENDING_IMAGES = 5
@@ -1515,6 +1536,17 @@ ADOPT_STYLESHEET_SCRIPT = """css => {
     sheet.replaceSync(css);
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
 }"""
+
+
+async def keep_header_footer_margins(page: Page) -> None:
+    """Print in `--margin`'s margins, whatever `@page` margin the page sets.
+
+    Only for a capture with the running header and footer, which need the
+    room: without them a page's own margin takes nothing from WebShot, and it
+    stays in force as before (docs/09 P115). The top document only, because a
+    frame's `@page` rules never reach the print.
+    """
+    await adopt_stylesheet(page, HEADER_FOOTER_MARGINS_CSS)
 
 
 #: A frame holding a sign-in or payment field is never changed, whatever the
