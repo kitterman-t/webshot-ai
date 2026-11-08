@@ -226,8 +226,14 @@ class Attempt:
     started_at: str
     status: str
     conclusion: str | None
-    #: The job's id, which is its check run's: where its coverage record is.
+    #: The job's id in its run's latest attempt: what `gh run rerun --job` takes.
     job_id: int = 0
+    #: The id of the job that ran, which is its check run's: where its
+    #: coverage record is. Re-running a run's failed jobs copies the jobs that
+    #: passed into the new attempt under new ids, without their annotations
+    #: (docs/09 P89-12), so for a copy this is the attempt that ran it. Zero
+    #: means `job_id` ran.
+    record_job_id: int = 0
 
 
 @dataclass(frozen=True)
@@ -358,27 +364,79 @@ def review_attempts(
         named = {p.get("number") for p in run.get("pull_requests") or []}
         if named and number not in named:
             continue
-        jobs = gh_json(
-            "api",
-            f"repos/{repo}/actions/runs/{run['id']}/jobs?filter=latest&per_page=100",
-        )["jobs"]
-        for job in jobs:
-            if job.get("name") != REVIEW_JOB:
-                continue
-            attempts.append(
-                Attempt(
-                    run_id=int(run["id"]),
-                    url=str(job.get("html_url") or run.get("html_url")),
-                    head_sha=str(run.get("head_sha") or ""),
-                    started_at=str(
-                        job.get("started_at") or run.get("created_at") or ""
-                    ),
-                    status=str(job.get("status") or "unknown"),
-                    conclusion=job.get("conclusion"),
-                    job_id=int(job.get("id") or 0),
-                )
+        reviews = [
+            j for j in run_jobs(repo, int(run["id"])) if j.get("name") == REVIEW_JOB
+        ]
+        if not reviews:
+            continue
+        job = max(reviews, key=_run_attempt)
+        attempts.append(
+            Attempt(
+                run_id=int(run["id"]),
+                url=str(job.get("html_url") or run.get("html_url")),
+                head_sha=str(run.get("head_sha") or ""),
+                started_at=str(job.get("started_at") or run.get("created_at") or ""),
+                status=str(job.get("status") or "unknown"),
+                conclusion=job.get("conclusion"),
+                job_id=int(job.get("id") or 0),
+                record_job_id=int(ran_as(job, reviews).get("id") or 0),
             )
+        )
     return attempts
+
+
+def _run_attempt(job: Mapping[str, Any]) -> int:
+    return int(job.get("run_attempt") or 1)
+
+
+def run_jobs(repo: str, run_id: int) -> list[Json]:
+    """Every job of every attempt of run *run_id*, or an error if any is missing.
+
+    `filter=latest` gives only the latest attempt's, and there a job that an
+    earlier attempt ran and a re-run carried over is a copy with no
+    annotations (docs/09 P89-12). A list that stopped at a page would drop the
+    latest attempt's jobs, which come last, so a short list is an error.
+    """
+    jobs: list[Json] = []
+    total = 0
+    for page in range(1, 11):
+        found = gh_json(
+            "api",
+            f"repos/{repo}/actions/runs/{run_id}/jobs"
+            f"?filter=all&per_page=100&page={page}",
+        )
+        batch = found.get("jobs") if isinstance(found, dict) else None
+        if not isinstance(batch, list):
+            raise GhError(f"the job list of run {run_id} has no jobs: {found!r:.300}")
+        jobs += batch
+        total = found.get("total_count")
+        if not isinstance(total, int):
+            raise GhError(f"the job list of run {run_id} has no total_count")
+        if len(jobs) >= total or not batch:
+            break
+    if len(jobs) < total:
+        raise GhError(f"run {run_id} lists {total} jobs; {len(jobs)} were read")
+    return jobs
+
+
+def ran_as(job: Json, same_name: Sequence[Json]) -> Json:
+    """The job that ran *job*: itself, or the attempt a re-run copied it from.
+
+    A copy keeps the start and end times of the job it copies, and gets a new
+    id in the new attempt (docs/09 P89-12). A job a re-run ran again starts
+    afresh, so it matches nothing earlier and is its own.
+    """
+    if job.get("status") != "completed" or not job.get("started_at"):
+        return job
+    times = (job.get("started_at"), job.get("completed_at"))
+    earlier = [
+        j
+        for j in same_name
+        if j.get("status") == "completed"
+        and (j.get("started_at"), j.get("completed_at")) == times
+        and j.get("conclusion") == job.get("conclusion")
+    ]
+    return min(earlier, key=_run_attempt, default=job)
 
 
 _THREADS = """
@@ -1114,13 +1172,12 @@ def coverage_markdown(record: Mapping[str, Any]) -> str:
 
 def read_coverage(repo: str, attempt: Attempt) -> tuple[Json | None, str]:
     """The coverage record a review job left, or None and why there is none."""
-    if not attempt.job_id:
+    job_id = attempt.record_job_id or attempt.job_id
+    if not job_id:
         return None, "its job id is unknown, so its record cannot be read"
-    found = gh_json(
-        "api", f"repos/{repo}/check-runs/{attempt.job_id}/annotations?per_page=100"
-    )
+    found = gh_json("api", f"repos/{repo}/check-runs/{job_id}/annotations?per_page=100")
     if not isinstance(found, list):
-        raise GhError(f"the annotations of job {attempt.job_id} are not a list")
+        raise GhError(f"the annotations of job {job_id} are not a list")
     records = [
         a for a in found if isinstance(a, dict) and a.get("title") == COVERAGE_TITLE
     ]

@@ -19214,6 +19214,67 @@ suite failed each time. The breaks were: ignore a lost review; let a missing
 result through; let an empty result through by truthiness; let an earlier
 review answer a review event; retry nothing; and retry a POST.
 
+### P89-12 — a re-run's copy of the review carries no record (2026-11-08)
+
+Every way of re-judging is a re-run (P89-3): `rejudge` posts
+`actions/jobs/<id>/rerun` for a failed verdict, and every failing verdict
+prints `gh run rerun <run id> --failed`. A re-run is a new attempt of the
+run. GitHub copies the jobs that passed into it, and gives each copy a new
+job id and so a new check run. A copy keeps its job's start and end times,
+conclusion and log. It does not keep the job's annotations, and the coverage
+record is an annotation on the review job (P89-9). The verdict listed jobs
+with `filter=latest`, which gives the copies, and read the record from the
+copy's id.
+
+Measured on #358's review run 42454248200, at head 004ff1a1:
+
+| Attempt | `review` job | Started, ended | Annotations | Verdict |
+|---|---|---|---|---|
+| 1 | 128658636509 | 07:03:22Z, 07:33:38Z, cancelled | 1 | failed |
+| 2 | 128665805243 | 07:38:04Z, 07:39:54Z, success | 1, the coverage record: `coverage=complete gaps=0 shortfalls=0` | cancelled: no runner took it |
+| 3 | 128704220534, a copy | 07:38:04Z, 07:39:54Z | 0 | cancelled: no runner took it |
+| 4 | 128767035356, a copy | 07:38:04Z, 07:39:54Z | 0 | failed: "it left no coverage record" |
+
+Attempt 4's verdict judged a review whose two bug agents and two
+compliance agents had each read all 87 changed lines, and failed it as one
+whose reading was unknown. The remedy it printed, `gh run rerun 42454248200
+--failed`, starts a fifth attempt with a fourth copy, so it could never pass.
+The verdict's other remedy, `gh run rerun <run> --job <review job>`, works,
+because it runs the review again: a fresh review, and a model's cost, to
+recover a record that already existed. So does the draft-and-ready toggle.
+
+The same holds for every re-judge, not only this one: a reply resolved in a
+thread re-runs the failed verdict, the new attempt copies the review, and
+the verdict reads the copy. Before P89-9 the verdict read nothing from the
+review job but its conclusion, which a copy keeps, so re-judging worked until
+the record was added. How many verdicts failed this way since then was not
+counted. A verdict that ran in the same attempt as its review, which is most
+of them, read the real job and was never affected.
+
+**The fix.** `review_attempts` lists the jobs of every attempt
+(`filter=all`), takes the latest attempt's review job for its status,
+conclusion and the id a re-run takes, and reads the record from the job that
+ran it (`ran_as`): the earliest completed job of the same name with the same
+start time, end time and conclusion. A job that a re-run ran again starts
+afresh and matches nothing earlier, so it stays its own, and if it left no
+record the verdict still fails. `Attempt.record_job_id` is where the record
+is; `job_id` stays what `gh run rerun --job` takes. The job list is read in
+pages until `total_count` jobs have come, and a list that stops short is an
+error, because the latest attempt's jobs come last and a short list would
+drop exactly them.
+
+Replayed against run 42454248200 through the real API, the fixed code reads
+128665805243's record as of attempts 3 and 4, where the old code found none,
+and leaves attempt 2's job as its own.
+
+`tests/test_review_verdict.py` holds #358's shape: a cancelled review, the
+review that passed, and two copies. The verdict passes on the record of the
+job that ran; a review the latest attempt ran again is its own and fails
+without a record; and a job list that stops at its first page raises. Four
+parts of the fix were broken on purpose, one at a time, and a test failed
+each time: reading the copy's id, never resolving a copy, accepting a short
+list, and matching any completed job regardless of its times.
+
 ## P90 — one image the OCR engine could not read ended the capture (2026-10-18)
 
 P10-33 left one thing open. An error RapidOCR raises during recognition,

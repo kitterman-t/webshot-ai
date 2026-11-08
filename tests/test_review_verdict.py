@@ -609,9 +609,16 @@ class FakeGh:
             )
         if "/actions/workflows/claude-review.yml/runs?" in path:
             return json.dumps({"workflow_runs": self.runs})
-        if "/jobs?filter=latest" in path:
+        if "/jobs?filter=all" in path:
             run_id = int(path.split("/runs/")[1].split("/")[0])
-            return json.dumps({"jobs": self.jobs.get(run_id, [])})
+            jobs = self.jobs.get(run_id, [])
+            page = int(path.rsplit("page=", 1)[1])
+            return json.dumps(
+                {
+                    "total_count": len(jobs),
+                    "jobs": jobs[(page - 1) * 100 : page * 100],
+                }
+            )
         if path.startswith(f"repos/{REPO}/pulls/7/files"):
             return json.dumps([{"filename": f} for f in self.files])
         if "/compare/" in path:
@@ -1535,6 +1542,67 @@ def test_a_clean_summary_from_a_review_with_no_record_fails_the_check(
     fake.annotations = {10: [coverage_annotation(record())]}
     assert judge() == 0
     assert "read all 10 changed lines" in capsys.readouterr().out
+
+
+def test_a_review_a_re_run_carried_over_is_judged_by_the_job_that_ran(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#358's run 42454248200 (docs/09 P89-12): the review passed in attempt 2.
+
+    Re-running the failed verdict copied it into attempts 3 and 4 under new
+    ids, with the same times and no annotations, and the verdict read the copy.
+    """
+    run, (cancelled,) = review_run(1, "cancelled")
+    ran = {
+        **cancelled,
+        "id": 20,
+        "run_attempt": 2,
+        "conclusion": "success",
+        "started_at": "2026-10-17T11:05:00Z",
+        "completed_at": "2026-10-17T11:07:00Z",
+    }
+    copies = [{**ran, "id": 30 + n, "run_attempt": 3 + n} for n in range(2)]
+    jobs = [{**cancelled, "run_attempt": 1}, ran, *copies]
+    fake = FakeGh(
+        runs=[run],
+        jobs={1: jobs},
+        threads=[[claude_thread(True)]],
+        annotations={20: [coverage_annotation(record())]},
+    )
+    use(monkeypatch, fake)
+    (found,) = rv.review_attempts(REPO, 7, "fix/x", "2026-10-17T09:00:00Z")
+    # The latest attempt's job is what a re-run takes; the record is where it ran.
+    assert (found.job_id, found.record_job_id, found.conclusion) == (31, 20, "success")
+    assert judge() == 0
+    out = capsys.readouterr().out
+    assert "read all 10 changed lines" in out and "verdict=pass" in out
+    # A review the latest attempt ran again starts afresh and is its own.
+    again = {**copies[1], "started_at": "2026-10-17T12:00:00Z"}
+    fake.jobs = {1: [*jobs[:-1], again]}
+    (found,) = rv.review_attempts(REPO, 7, "fix/x", "2026-10-17T09:00:00Z")
+    assert (found.job_id, found.record_job_id) == (31, 31)
+    assert judge() == 1
+    assert "it left no coverage record" in capsys.readouterr().out
+
+
+def test_a_job_list_that_stops_short_is_an_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run, (job,) = review_run(1, "success")
+    # 150 jobs, so the list takes two pages; the second never comes.
+    fake = FakeGh(runs=[run], jobs={1: [{**job, "id": n} for n in range(150)]})
+    use(monkeypatch, fake)
+    assert len(rv.run_jobs(REPO, 1)) == 150
+    calls = fake.__call__
+
+    def first_page_only(*args: str) -> str:
+        if "page=2" in args[1] and "/jobs?" in args[1]:
+            return json.dumps({"total_count": 150, "jobs": []})
+        return calls(*args)
+
+    monkeypatch.setattr(rv, "gh", first_page_only)
+    with pytest.raises(rv.GhError, match="lists 150 jobs; 100 were read"):
+        rv.run_jobs(REPO, 1)
 
 
 def coverage_args(path: Path, **overrides: str) -> list[str]:
