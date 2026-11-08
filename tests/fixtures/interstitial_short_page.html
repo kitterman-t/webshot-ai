@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Short page</title>
+  <style>
+    body { font: 16px/1.5 Georgia, serif; margin: 0; }
+    /* A decorative background fixed to the window beneath the page. The body
+       ends near the top of the window, so below it this layer is the only
+       thing at a point, and it must not read as an interstitial
+       (docs/09 P113-4). */
+    .backdrop-art { position: fixed; inset: 0; z-index: -1; background: linear-gradient(#fff, #e8eef6); }
+    main { max-width: 680px; margin: 24px auto; }
+  </style>
+</head>
+<body>
+  <div class="backdrop-art"></div>
+  <main>
+    <h1>Harbour notice</h1>
+    <p>The north pier is closed for repairs until the end of the month.</p>
+  </main>
+</body>
+</html>

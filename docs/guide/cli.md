@@ -62,7 +62,7 @@ Settings can also come from a TOML file and from the environment, in the order
 | `--auth-profile` | `AUTH_PROFILE` |  | private persistent browser profile for protected sites; keeps sign-in local without exporting cookies to JSON |
 | `--interactive-auth` | — | off | open a headed browser and pause while you complete sign-in/MFA; requires --auth-profile |
 | `--protected-viewer` | — | off | capture every page exposed by an authenticated SharePoint PDF viewer, then build a searchable image-backed PDF and page-level AI bundle |
-| `--css` | `CSS` |  | additional UTF-8 CSS file to inject |
+| `--css` | `CSS` |  | additional UTF-8 CSS file, applied after every stylesheet of the page's own; it cannot use @import |
 | `--user-agent` | `USER_AGENT` |  | override Chromium's native user-agent |
 | `--allow-http-errors` | — | off | capture the page even when the server answers with an HTTP error status (400 or above); without it such an answer fails the run with exit 3, or exit 4 for 401 and 403 |
 | `--require-content` | — | off | fail with exit 5, publishing nothing, when the capture holds no image, no video and fewer than 50 characters of text, instead of warning about it; needs the AI bundle, whose counts it reads |

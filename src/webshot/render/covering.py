@@ -881,7 +881,25 @@ def covered_text_warnings(result: CoveredText, walls: Sequence[str] = ()) -> lis
             f"page's text ({result.unmeasured}).{counted or ' So'} the PDF may show "
             "one over its text without a warning."
         )
+    # Boxes that would read alike are said once, with their number. A page
+    # that ran its welcome ad twice had two fixed boxes of one name over the
+    # same text, and the manifest said the same sentence twice, which read as
+    # a duplicated warning rather than two boxes (docs/09 P113-4).
+    alike: dict[tuple[object, ...], list[Covering]] = {}
     for covering in result.coverings:
+        key = (
+            covering.position,
+            covering.name,
+            covering.reach,
+            covering.characters,
+            covering.lines,
+            tuple(covering.pages),
+            tuple(covering.printed),
+            covering.sample,
+        )
+        alike.setdefault(key, []).append(covering)
+    for group in alike.values():
+        covering = group[0]
         total = result.pages or len(covering.printed)
         # A box Chromium repeats on every page is named once, with the pages
         # it covers text on, which are what a reader loses; the pages it
@@ -907,12 +925,23 @@ def covered_text_warnings(result: CoveredText, walls: Sequence[str] = ()) -> lis
             "selector (it was cut short, or the box is inside a shadow root), so "
             "--exclude is not offered."
         )
-        warnings.append(
+        subject = (
             f"A {covering.position} box, {covering.name}, prints {printed}over "
+            if len(group) == 1
+            else f"{len(group)} {covering.position} boxes, each named "
+            f"{covering.name}, print {printed}each over "
+        )
+        drawn = (
+            "the box is drawn over it"
+            if len(group) == 1
+            else "the boxes are drawn over it"
+        )
+        warnings.append(
+            f"{subject}"
             f"{_plural(covering.characters, 'character')} of the page's text in "
             f"{_plural(covering.lines, 'line')} on {_pages(covering.pages, total)}, "
             f'starting "{covering.sample}". The text stays in the PDF\'s text layer, '
-            f"but on the page the box is drawn over it. {remedy}"
+            f"but on the page {drawn}. {remedy}"
         )
     if result.unmarked:
         named = "; ".join(f"{box.name} ({box.unmarked})" for box in result.unmarked)

@@ -24,7 +24,7 @@ import pytest
 from playwright.async_api import async_playwright
 from pypdf import PdfReader
 
-from webshot.capture.prepare import BASE_PRINT_CSS
+from webshot.capture.prepare import BASE_PRINT_CSS, adopt_stylesheet
 from webshot.capture.snapshot import FLAT_TREE_JS, HEADING_JS
 from webshot.capture.visuals import (
     RESTORE_SCROLL_JS,
@@ -248,7 +248,7 @@ def test_recognized_text_stays_off_the_page_in_every_tree(tmp_path: Path) -> Non
             try:
                 page = await browser.new_page()
                 await page.goto(FIXTURE.as_uri(), wait_until="load")
-                await page.add_style_tag(content=BASE_PRINT_CSS)
+                await adopt_stylesheet(page, BASE_PRINT_CSS)
                 await capture_visual_assets(
                     page,
                     tmp_path / "assets",

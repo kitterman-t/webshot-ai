@@ -29,7 +29,7 @@ import pytest
 from playwright.async_api import async_playwright
 from pypdf import PdfReader
 
-from webshot.capture.prepare import BASE_PRINT_CSS
+from webshot.capture.prepare import BASE_PRINT_CSS, adopt_stylesheet
 from webshot.capture.visuals import capture_visual_assets
 from webshot.config import CaptureOptions
 from webshot.ocr.engine import OCRResult
@@ -119,7 +119,7 @@ async def _print(fixture: Path, directory: Path) -> Printed:
             page = await browser.new_page(viewport={"width": 1440, "height": 1000})
             await page.goto(fixture.as_uri())
             # As the pipeline leaves the page for the visual-asset stage.
-            await page.add_style_tag(content=BASE_PRINT_CSS)
+            await adopt_stylesheet(page, BASE_PRINT_CSS)
             await page.emulate_media(media="print")
             bare = await printed_width(page, options)
             assets, warnings, _ = await capture_visual_assets(
@@ -135,9 +135,9 @@ async def _print(fixture: Path, directory: Path) -> Printed:
             layers = await page.locator("[data-webshot-ocr-text='true']").count()
             layered = await printed_width(page, options)
             pages = _page_texts(await page.pdf(**print_geometry(options)))
-            await page.add_style_tag(content=NO_MARGIN)
+            await adopt_stylesheet(page, NO_MARGIN)
             without_margin = _page_texts(await page.pdf(**print_geometry(options)))
-            await page.add_style_tag(content=OLD_GEOMETRY)
+            await adopt_stylesheet(page, OLD_GEOMETRY)
             old_geometry = await printed_width(page, options)
             return Printed(
                 kinds=[asset.kind for asset in assets],

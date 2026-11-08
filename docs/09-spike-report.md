@@ -21249,3 +21249,296 @@ so the cloning fix and the width fix are both on paths every capture takes.
 The full verify passes on the macOS recording machine: pytest, the golden
 corpus and its second path, parity, and the vulnerability audit, which finds
 nothing. Captured output does not change.
+
+
+
+## P113 — capture problems from one course week (2026-11-07)
+
+A course week's capture logged six problems with their evidence. P113-1 to
+P113-3 concern tools kept out of this release; P113-4 to P113-6 are
+WebShot's. Every test is synthetic. Two of the write-up's claims were not
+what was measured, and the entries say what was: the interstitial and the
+blank record page were both warned about, and the clipped column did not
+reproduce.
+
+### P113-4 — clean mode left an interstitial ad over the article
+
+`webshot https://spectrum.ieee.org/children-beating-up-robot`, in clean mode,
+printed a fixed advertisement over the article on page 1 and the pages after
+it. The write-up said nothing warned. That was not so: the covering check
+(P83) warned that `div#overlay_DFP` printed on all nine pages, over 5,490
+characters in 108 lines on pages 1 to 5. It warned twice, in the same words,
+because the page, its feed scrolled 100 steps, held two boxes of that name.
+Clean mode removed neither box.
+
+The page was read in a browser at WebShot's window, 1440 by 1000.
+`#overlay_DFP` is `position: fixed`, 640 by 480, centred, `z-index:
+2147483644`. Its child `#overlay_DFP_bg` is fixed too, the whole window at
+80% black, with `z-index: -1`. Clean mode's overlay rule (P79) hides a fixed
+box at least 45% of the window wide and 8% high whose own `z-index` is 10 or
+more. The dialog is 640 px, under 45% of 1440 (648). The backdrop is the
+whole window, but its `z-index` is -1. That value places it within the
+dialog's stacking context, which is above the page, so it prints over the
+text while the rule reads it as behind. The rule saw neither.
+
+The size rule stays, and a second rule joins it. The page is asked which
+element is drawn on top (`elementsFromPoint`) at each of nine points, a 3x3
+grid at a sixth, a half and five sixths of the window's width and height.
+From that element, the rule climbs, across shadow roots, to the outermost
+ancestor fixed to the window. A box that is on top at five points or more,
+more than half the window, is hidden whole, so its backdrop goes with it,
+and a manifest warning names it. A header, a footer bar or a side panel is
+on top at three points at most. Elements already marked hidden, a consent
+dialog for one, are skipped, so they do not stand in front of what is
+beneath them. On the live page, the rule found `div#overlay_DFP` on top at
+all nine points and hid it. A later capture of the page got no ad from the
+ad server, so the end-to-end proof is the fixture.
+
+Writing the fixture's negative case turned up a defect in the old rule. A
+page that keeps its whole document in a fixed, scrolling shell, `inset: 0`
+with `z-index: 100`, is a large fixed box, and clean mode hid it: the capture
+printed the header and footer and nothing else. Neither rule now hides a box
+holding more than half the page's rendered text. Such a box is the page. An
+ad, a sign-up box or a welcome splash holds a few words beside it. The share
+is a half, not a tenth, because the fixture's short article under a box with
+one paragraph of its own failed a tenth. A box that holds more text than the
+page is left for the covering check to report. The covering warnings now
+group boxes that would read alike, same name, pages and counts, into one
+sentence that counts them: "2 fixed boxes, each named …, print on all 3
+pages, and each over …".
+
+`tests/test_interstitials.py` captures `interstitial_page.html`, the measured
+shape: a 640 px dialog with a `z-index: -1` backdrop child, beside a 48 px
+masthead and a decorative fixed background at `z-index: -1`. In clean mode
+the ad's words are in neither the PDF nor `content.md`, the article and the
+masthead are in both, the warning names `div#promo-overlay`, and no covering
+warning is left. In faithful mode the ad prints, and one covering warning
+names it. `interstitial_shell_page.html` keeps its text in clean mode. It
+failed before the guard, with the size rule alone. `test_covered_text.py`
+holds the grouped warning: two alike boxes give one sentence, and a third of
+the same name elsewhere keeps its own. The spec's overlay policy (§5 item 5)
+says all of this.
+
+The Claude review of the change found a shape the first version got wrong.
+Below the end of a short page's body nothing else is at a point, so a
+decorative background fixed at `z-index: -1` was the element on top there.
+On a page whose body ended above the window's middle, it was on top at six
+points of the nine and was hidden as an interstitial, with a warning that
+said so. The size rule never had this problem, because it asks for a
+`z-index` of 10. A fixed root whose own `z-index` is negative paints beneath
+the page's content, and the grid rule now skips it. The rule keys on the
+root's stacking, not the hit's, because the measured backdrop is at -1
+inside a dialog at 2147483644, and that one is still on top.
+`interstitial_short_page.html` holds the short page. The first version
+hid its background, and this version hides nothing there. A test runs the
+pass on both fixtures in a browser.
+
+### P113-5 — a single-page app printed blank
+
+A Primo record page (a library catalogue's permalink) printed a one-page PDF
+with no record text, exit 0, with defaults. `--delay 12` gave the full
+record. The write-up said nothing warned. The run's log says otherwise: "The
+capture is empty: content.txt holds no text, and there is no image and no
+video …", which names a script that has not rendered as one cause and
+`--wait-for` as one remedy. So the warning was there, and the capture was
+still blank.
+
+Read in a browser, the page showed no text for 4.5 s after DOMContentLoaded.
+Its header came 6.4 s after navigation began, its record at 6.9 s and more
+links at 11.5 s. Its network went quiet for 2.5 s before the text came, so
+"wait for network idle" would have stopped too early. WebShot captures one
+second after DOMContentLoaded (`--delay`'s default). That second went by on
+an empty body, then the lazy-load pass ran four steps on it.
+
+`wait_for_rendered_text` now runs after the post-load wait. A page with a
+script and no rendered text gets up to 10 s for text to come and then stand
+still, text and element count unchanged, for a second. Rendered text means
+`innerText` of the body, then of open shadow roots and same-origin frames.
+It is not `textContent`, because an app shell carries template text and
+hidden "Loading" markup that a reader never sees. A page with text, or with
+no script, is not waited for. Nothing changes for any golden case, every one
+of which has text when it loads. The wait does not run after `--wait-for`,
+which named what to wait for, or under `--interactive-auth`, where a person
+says when, or in the protected viewer. The log says what the wait brought
+("its script rendered 1,128 characters in 5.3 s more"). When it runs out,
+the empty-capture warning says WebShot gave the script 10 s more, the bound
+and not the measured time, so the warning does not differ from run to run.
+It says so only when the wait ran out (`TextWait.ran_out`). The Claude
+review found that the first version also said it after a wait the page cut
+short by navigating, a fraction of a second in, because both ended with no
+text. The function lives in `capture/prepare.py`, because `landing.py` is
+detection only and says so. On the live page, clean and faithful captures
+with defaults now print the record.
+
+The write-up also said `--mode faithful` clipped the record column
+("Conscious machin…"). That did not reproduce. A faithful capture printed
+the column whole, the clipping check was silent, and the run's own
+faithful PNG shows the whole title. What does show in faithful mode is
+another defect, logged as a follow-up rather than fixed here. The page loads
+pdf.js's `viewer.css`, which sets `@page { margin: 0px; }`. Chromium honours
+a page's `@page` margin over the one WebShot passes, so the PDF has no
+margin, and the running header WebShot draws there (title and URL) lies
+under the page's fixed navigation bar. `pdftotext -layout` interleaves the
+two ("Conscious NEW / machines: / SEARCHRobot rights"), which may be what
+read as a clipped title. Clean mode hides the bar, so its header shows.
+
+`tests/test_rendered_text_wait.py` captures `landing/late_render.html`,
+whose script renders a record 2.5 s after load. The record is in the PDF, no
+empty warning is given, and the log line is there. `empty_shell.html`, whose
+script never renders, waits the 10 s and says so in its warning. Unit tests
+drive the loop with scripted readings: text that is already there, and no
+script, are not waited for. Text that comes is waited for until it stands
+still. Text that never comes runs out with zero characters. A page that
+navigates under the wait stops it.
+
+### P113-6 — a review's coverage measure counted text no PDF prints
+
+Reviews of finished captures have measured how much of the bundle's text a
+PDF prints as the share of `content.md`'s word 5-grams found in `pdftotext`
+output (P16, P99-2). One week's review scored it 0.02 to 0.49 on five
+pages and put the misses down to link targets and OCR markers in
+`content.md`. Both are in `content.md` and in no PDF's text layer. A link is
+written `[text](url)`, and a picture's recognized text sits between `[OCR
+text from asset-N …]` markers.
+
+The capture has measured this itself after every render since P97, and
+correctly. It takes runs of letters and digits from `content.txt`, which has
+no link targets, drops the OCR blocks, takes runs within each line, and
+compares them with PDFium's text. It warns below a half. The review had no
+way to read that number, because the manifest records it only when it is
+low. So it wrote a second, worse measure. `tools/coverage/printed_share.py`
+runs the capture's measure on a finished PDF. It reads the `content.txt` the
+PDF carries, or the `.ai` directory's for a capture made with
+`--no-embed-bundle`, and a PDF with neither is "not measured", exit 2. It
+exits 1 when a share is below a half, and `--json` gives one record a line.
+
+On that week's captures it reads the Moral Machine at 398 of 398 runs, TED-Ed's
+lesson page at 566 of 568, IEEE Spectrum at 4,642 of 4,648, and the Primo
+record at 339 of 395 (86%). The 5-gram scores for these were 0.30, 0.49,
+0.64 and 0.22. The two YouTube watch pages read 7% and 12%, and they are low
+by both measures. Their manifests already said so ("350 of the 4,501 …
+runs", 8%): the related videos' titles print as blank boxes (P97-2). The
+tool's count runs on the finished files, after video records were added to
+`content.txt`, hence 4,792 runs against the capture's 4,501.
+`tests/test_printed_share_tool.py` captures a page of twelve long links. The
+tool reads it at 95% or more, where the 5-gram measure over its
+`content.md` scores under 0.6. It reads a `--no-embed-bundle` capture from
+the directory beside it, and refuses a PDF with no bundle and a file that is
+not a PDF.
+
+
+## P116: a page whose policy refuses inline style failed the whole capture (2026-11-07)
+
+P115-4 found it while fixing the running header's margin. A capture of any
+page served with `Content-Security-Policy: style-src 'self'`, and no
+`'unsafe-inline'`, ended with exit 5 before anything printed. This change
+gives the page WebShot's CSS as adopted constructed sheets, which that policy
+does not govern (spec §5 item 22).
+
+### P116-1 — what failed
+
+`capture_open_page` gave the page WebShot's print CSS (`BASE_PRINT_CSS`), the
+clean mode's (`CLEAN_PRINT_CSS`) and `--css` through Playwright's
+`page.add_style_tag`, which appends a `<style>` element to the head. The policy
+refuses that element: Chromium makes no sheet for it (`style.sheet` is `null`)
+and logs "Applying inline style violates the following Content Security Policy
+directive 'style-src 'self''". Playwright races the call against the page's
+console, and an error there that names the Content Security Policy becomes the
+call's exception. Nothing caught it, so the capture exited 5. Measured on a
+loopback server that sends the header for a page and its same-origin sheet:
+exit 5 at the first call, in clean and faithful mode, with and without the
+bundle.
+
+### P116-2 — always adopted, not a fallback
+
+The other way out was to keep the `<style>` elements and adopt a sheet only
+when `add_style_tag` was refused. It was not taken, for two reasons:
+
+- **The refusal signal is a race.** Playwright fails the call on *any* console
+  error naming the policy while it runs, from any frame of the page, such as a
+  script or image the page's own policy refuses. The call can fail when the
+  style applied, and a refused `<style>` stays in the document. A fallback
+  keyed on that exception would install the sheet twice on some pages and
+  depend on timing on others.
+- **One page, two cascades.** The same page would print with WebShot's rules
+  in one place in the cascade under a policy and another without one.
+
+Playwright's `bypass_csp` was not taken either. It switches off the page's
+whole policy, so scripts the page refuses would run during the capture: what
+is captured changes, and a page's protection against hostile content in it is
+gone. Adopted sheets are what the clipping probe (P16-4), the frame release
+(P16-17), `--exclude` (P101-1) and the ligature sheet already use under
+`style-src` policies.
+
+`adopt_stylesheet` (`capture/prepare.py`) installs the three in their old
+order, so `--css` still comes last. The tests that set up a page as the
+pipeline leaves it (`test_ocr_layer.py`, `test_shadow_frame_visuals.py`)
+install `BASE_PRINT_CSS` the same way.
+
+### P116-3 — what adopting changes
+
+- **Cascade order.** Adopted sheets come after every sheet of the document's,
+  and these come after any the page had adopted before them. A `<style>`
+  appended to the head came before a `<style>` or `<link>` in the page's body
+  and before every adopted sheet. Where a rule of the page's and one of
+  WebShot's tie on importance, layer and specificity, WebShot's now wins, wherever
+  the page's sits. `test_the_print_css_comes_after_every_sheet_of_the_page`
+  pins it: a body `<style>` holding `pre { white-space: pre !important }`
+  won over `BASE_PRINT_CSS` installed with `add_style_tag` (measured) and
+  loses to it adopted, and a `--css` rule adopted after it wins again.
+- **The document.** It holds no `<style>` of WebShot's now. The bundle's
+  snapshot never printed one (`_NOT_SHOWN` drops `STYLE`), and no golden holds
+  the print CSS's text.
+- **`@import` in `--css`.** A constructed sheet cannot hold `@import`:
+  `replaceSync` drops each one with only a console warning ("@import rules are
+  not allowed here"). The print CSS and the clean mode's have none. A `--css`
+  file that used one applied it before and would lose it silently, so a
+  manifest warning now names each one dropped and says to copy the imported
+  rules into the file. `css_imports` finds them where CSS honours them, at the
+  head of the sheet after any `@charset` and `@layer` statements. An
+  `@import` anywhere else is dropped by a `<style>` element too. It steps over
+  comments, strings, escapes and parentheses, so a `;` in a URL does not end
+  the rule. This is the one thing a `--css` file could do before and cannot
+  now.
+
+The full verify passes on the macOS recording machine: pytest, the golden
+corpus and its second path, parity and the strict docs build. No golden
+moved.
+
+### P116-4 — found in passing, not fixed here
+
+- **`long_tables.py` still makes a `<style>` element** for the pieces of a
+  split table (spec §5 item 17). Under the policy Chromium refuses it, measured
+  the same way (`style.sheet` is `null`). That happens in `page.evaluate`, so
+  nothing raises: the rule that takes the margin from between the pieces does
+  not apply, and nothing says so.
+- **Restoring a saved `style` attribute does not apply under the policy.** The
+  release trial in `capture/prepare.py`, the frame fit in `render/frames.py`
+  and the covered-text check in `render/covering.py` undo their trial values
+  with `setAttribute('style', saved)`. Measured: after a CSSOM write of
+  `max-height: 5px`, `setAttribute('style', 'color: red')` set the attribute
+  but `max-height` stayed `5px` and the colour did not apply.
+  `removeAttribute` works, so only an element that had a `style` attribute
+  keeps the trial's values, and a release the trial rejected can stay applied.
+- **The clipping check flags a wrapped `pre-wrap` line in clean mode.**
+  Without any policy, on master, a `<pre>` of readings separated by spaces
+  wider than the paper printed whole, every word in the PDF's text, and clean
+  mode still warned that its text ran off the page. Faithful mode did not.
+  The likely cause is the space `pre-wrap` keeps at the end of each wrapped
+  line, which hangs past the line's edge. That was not measured. The fixture
+  here uses one unbroken token instead, which raises no warning on master.
+
+### P116-5 — the tests
+
+`tests/test_style_src_policy.py` serves `tests/fixtures/style_src_self.html`
+and its sheet from a loopback server that sends the policy as a header. The
+capture exits 0 in clean and faithful mode, with `--css`, and with no
+warnings. In the PDF, the line the page's inline `<style>` would hide prints,
+showing the policy is in force. The line the page's own linked sheet hides
+does not, and neither does the one `--css` hides. A `<pre>` token 405
+characters long wraps, so its end is in the text layer. A `--css` file
+starting with `@import` gives the warning naming it, and the rest of the file
+still applies. Run with `add_style_tag` patched back in, the three capture
+tests fail with exit 5. With the print CSS left out, the token's end is cut off
+at the page's edge. Fifteen cases pin what `css_imports` finds and what it
+leaves.

@@ -347,8 +347,12 @@ there with its reason, and the run's job summary lists every skip.
    browser's session asking, not the page, and Chromium prints a fixed
    dialog over the text of every page. A manifest warning names each one
    that was on screen. `clean` mode also hides page chrome and large fixed
-   overlays; `faithful` mode hides nothing else. The number of elements
-   hidden is logged. Capture is an act of record — what was altered must be
+   overlays, and a box fixed to the window, not painted beneath the page (a
+   negative `z-index`), that is drawn on top at more than half of a 3x3 grid
+   of points over it (an interstitial with its backdrop), which a manifest
+   warning names; neither rule hides a box holding more than
+   half of the page's text, which is the page (docs/09 P113-4). `faithful`
+   mode hides nothing else. The number of elements hidden is logged. Capture is an act of record — what was altered must be
    declared (docs/09 P79).
 6. **Frames and shadow roots:** the snapshot is the page's flat tree. Every
    open shadow root, and the document of every frame the page can script
@@ -557,6 +561,18 @@ there with its reason, and the run's job summary lists every skip.
     chrome and are not named. Under `--no-ai-bundle` the warning says only
     that the text is not in the PDF. WebShot does not open them (docs/09
     P102).
+22. **A page whose policy refuses inline style:** a page served with a
+    `Content-Security-Policy` whose `style-src` allows no inline style
+    refuses every `<style>` element. A capture of it MUST still print with
+    WebShot's print CSS, the clean mode's and `--css`. None of them is a
+    `<style>` element: each is a constructed stylesheet the document adopts,
+    which that policy does not govern, in that order, so `--css` comes last.
+    Adopted sheets follow every stylesheet of the page's own in the cascade,
+    so where a rule of the page's and one of WebShot's tie, WebShot's wins,
+    wherever in the document the page's sits. A constructed sheet cannot hold
+    `@import`: the `@import` rules at the head of a `--css` file are not
+    applied, and a capture MUST record a manifest warning naming them
+    (docs/09 P116).
 
 ## 6. Security requirements (carried forward and new; all MUST)
 

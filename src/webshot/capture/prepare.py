@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -1031,6 +1032,118 @@ async def keep_excluded_hidden(page: Page, selectors: Sequence[str]) -> str | No
     )
 
 
+async def adopt_stylesheet(page: Page, css: str) -> None:
+    """Give the page's document `css` as a constructed, adopted stylesheet.
+
+    How WebShot's print CSS, the clean mode's and `--css` reach the page. They
+    were `<style>` elements, which a page served with a `style-src` policy
+    that allows no inline style refuses; Playwright's `add_style_tag` reports
+    the refusal as an error, and the capture ended with exit 5 before anything
+    printed (docs/09 P115-4, P116). The policy does not govern a constructed
+    sheet, which the clipping probe, `--exclude` and the ligature sheet
+    already rely on.
+
+    Adopted sheets come after every sheet of the document's own in the
+    cascade, so these rules now follow a page's `<style>` or `<link>` in its
+    body, and any sheet the page had adopted, where a `<style>` appended to
+    the head came before them. A constructed sheet cannot hold `@import`:
+    `css_imports` finds what one drops (P116).
+    """
+    await page.evaluate(ADOPT_STYLESHEET_SCRIPT, css)
+
+
+_AT_KEYWORD = re.compile(r"@(-?[A-Za-z_][\w-]*)")
+
+#: The statements that may come before an `@import` and leave it in force.
+_SHEET_HEAD_RULES = frozenset({"charset", "import", "layer"})
+
+
+def css_imports(css: str) -> list[str]:
+    """The `@import` rules in a stylesheet's text, where CSS would honour them.
+
+    That is before every rule but `@charset` and `@layer` statements. An
+    `@import` anywhere else is dropped by a `<style>` element too, so it never
+    applied and dropping it costs nothing. Each is answered as written after
+    `@import`, its whitespace collapsed, for a warning to name: a constructed
+    sheet drops them all with only a console message (docs/09 P116).
+    """
+    imports: list[str] = []
+    position = 0
+    while True:
+        position = _skip_space_and_comments(css, position)
+        keyword = _AT_KEYWORD.match(css, position)
+        if keyword is None or keyword.group(1).lower() not in _SHEET_HEAD_RULES:
+            return imports
+        end = _statement_end(css, keyword.end())
+        if end is None:
+            # A block, as `@layer base { … }` has, is a rule: no `@import`
+            # after it counts.
+            return imports
+        if keyword.group(1).lower() == "import":
+            imports.append(" ".join(css[keyword.end() : end].split()))
+        position = end + 1
+
+
+def _skip_space_and_comments(css: str, position: int) -> int:
+    """Past whitespace, comments and the `<!--` and `-->` a sheet may hold."""
+    while position < len(css):
+        if css[position].isspace():
+            position += 1
+        elif css.startswith("/*", position):
+            close = css.find("*/", position + 2)
+            position = len(css) if close < 0 else close + 2
+        elif css.startswith("<!--", position):
+            position += 4
+        elif css.startswith("-->", position):
+            position += 3
+        else:
+            break
+    return position
+
+
+def _statement_end(css: str, position: int) -> int | None:
+    """Where the at-rule from `position` ends: its `;`, or the sheet's end.
+
+    `None` when a `{` comes first, which makes it a block. Strings, comments,
+    escapes and parentheses are stepped over, so a `;` in a URL is not an end.
+    """
+    depth = 0
+    while position < len(css):
+        character = css[position]
+        if character == "\\":
+            position += 2
+            continue
+        if css.startswith("/*", position):
+            close = css.find("*/", position + 2)
+            position = len(css) if close < 0 else close + 2
+            continue
+        if character in "\"'":
+            position += 1
+            while position < len(css) and css[position] not in (character, "\n"):
+                position += 2 if css[position] == "\\" else 1
+        elif character == "(":
+            depth += 1
+        elif character == ")":
+            depth = max(0, depth - 1)
+        elif depth == 0 and character == "{":
+            return None
+        elif depth == 0 and character == ";":
+            return position
+        position += 1
+    return len(css)
+
+
+def dropped_imports_message(imports: Sequence[str]) -> str:
+    """The warning for `--css` `@import` rules a constructed sheet dropped."""
+    named = "; ".join(f"@import {rule}" for rule in imports)
+    return (
+        f"--css: {len(imports)} @import rule(s) were not applied ({named}). "
+        "WebShot installs --css as an adopted stylesheet, which a page's "
+        "style-src policy cannot refuse and which cannot hold @import; copy "
+        "the imported rules into the file instead."
+    )
+
+
 async def hide_elements(page: Page, selectors: Sequence[str]) -> int:
     if not selectors:
         return 0
@@ -1648,22 +1761,261 @@ def consent_dialogs_message(shown: Sequence[tuple[str, str]]) -> str:
     )
 
 
-async def hide_obstructive_overlays(page: Page) -> int:
+#: How many of the nine points of a 3x3 grid over the window a fixed box must
+#: be on top at before clean mode takes it for an interstitial: more than half
+#: of the window. A header, a footer bar or a side panel is on top at three at
+#: most; a dialog with a backdrop behind it, at all nine.
+INTERSTITIAL_POINTS = 5
+
+#: The most of the page's text a box taken for an interstitial may hold, as a
+#: share of the body's. A page that keeps its whole document in a fixed,
+#: scrolling shell is on top everywhere too, and it is the page; an ad, a
+#: newsletter wall or a "welcome" splash holds a few words beside it. Half,
+#: not a tenth: a short article under a sign-up box with a paragraph of terms
+#: is still the larger part, and a box that holds more than the page is left
+#: for the covering check to report rather than guessed at.
+INTERSTITIAL_TEXT_SHARE = 0.5
+
+#: Clean mode's two overlay rules, in one pass. The first is the size rule it
+#: has always had. The second finds what is on top across the window, which
+#: the first misses in two ways, both measured on one news site's ad
+#: (docs/09 P113-4): its dialog, 640 px wide, fell under 45% of the 1440 px
+#: window, and its backdrop, the full window at 80% black, had `z-index: -1`,
+#: inside the dialog's own stacking context, so it printed over the text but
+#: read as behind it. So the second rule asks the page which element is drawn
+#: on top at each point of a grid, climbs from it to the outermost box fixed to
+#: the window, and hides that box whole, its backdrop with it. Neither rule
+#: hides a box that holds most of the page's text (`INTERSTITIAL_TEXT_SHARE`):
+#: the size rule used to, and a page kept in a fixed scrolling shell printed
+#: empty.
+#: `elementsFromPoint` skips what is already marked, so a consent dialog hidden
+#: a moment before does not stand in front of an interstitial beneath it.
+HIDE_OBSTRUCTIVE_OVERLAYS_JS = """([points, textShare]) => {
+    let count = 0;
+    const pageText = (document.body.innerText || '').length;
+    // Both rules: a box holding most of the page's text is the page. The size
+    // rule hid such a shell whole before, and the capture came out empty.
+    const isPage = node => (node.innerText || '').length > pageText * textShare;
+    for (const element of document.querySelectorAll('body *')) {
+        const style = getComputedStyle(element);
+        if (style.position !== 'fixed') continue;
+        const rect = element.getBoundingClientRect();
+        const large = rect.width >= innerWidth * 0.45 && rect.height >= innerHeight * 0.08;
+        if (large && Number(style.zIndex || 0) >= 10 && !isPage(element)) {
+            element.setAttribute('data-webshot-hidden', 'true');
+            count++;
+        }
+    }
+    const marked = node => node.closest('[data-webshot-hidden="true"]') !== null;
+    const up = node => node.parentElement
+        || (node.getRootNode() instanceof ShadowRoot ? node.getRootNode().host : null);
+    const top = (x, y) => {
+        let found = document.elementsFromPoint(x, y).find(node => !marked(node)) || null;
+        // Into open shadow roots, where a consent banner or an ad draws.
+        while (found && found.shadowRoot) {
+            const inner = found.shadowRoot.elementsFromPoint(x, y)
+                .find(node => node !== found && !marked(node));
+            if (!inner || inner === found) break;
+            found = inner;
+        }
+        return found;
+    };
+    const fixedRoot = node => {
+        let root = null;
+        for (let at = node; at && at !== document.body && at !== document.documentElement; at = up(at)) {
+            if (getComputedStyle(at).position === 'fixed') root = at;
+        }
+        // A root with a negative z-index paints beneath the page's own
+        // content. Below the end of a short page's body there is nothing
+        // else at a point, so a decorative background at -1 was "on top" at
+        // six points of nine and hid as an interstitial (P113-4, review).
+        // The root's own stacking decides, not the hit's: the measured ad's
+        // backdrop is at -1 inside a dialog at 2147483644, which is on top.
+        if (root && Number.parseInt(getComputedStyle(root).zIndex, 10) < 0) return null;
+        // A mark inside a shadow root is read by no stylesheet of the
+        // document's, so the box hidden is the host its tree hangs from.
+        while (root && root.getRootNode() instanceof ShadowRoot) root = root.getRootNode().host;
+        return root;
+    };
+    const tally = new Map();
+    for (const fx of [1 / 6, 1 / 2, 5 / 6]) {
+        for (const fy of [1 / 6, 1 / 2, 5 / 6]) {
+            const hit = top(innerWidth * fx, innerHeight * fy);
+            const root = hit && fixedRoot(hit);
+            if (root && !marked(root)) tally.set(root, (tally.get(root) || 0) + 1);
+        }
+    }
+    const covering = [];
+    for (const [root, hits] of tally) {
+        if (hits < points || isPage(root)) continue;
+        root.setAttribute('data-webshot-hidden', 'true');
+        count++;
+        const cls = typeof root.className === 'string' ? root.className.trim().split(/\\s+/)[0] : '';
+        covering.push(root.localName + (root.id ? `#${root.id}` : cls ? `.${cls}` : ''));
+    }
+    return {count, covering};
+}"""
+
+
+@dataclass(frozen=True)
+class Overlays:
+    """What `hide_obstructive_overlays` hid."""
+
+    #: Every element hidden, by either rule.
+    hidden: int
+    #: The boxes hidden because they were on top across most of the window,
+    #: named as `element#id` or `element.class`, in document order of the
+    #: grid's first hit. The size rule's are counted, not named, as before.
+    covering: tuple[str, ...]
+
+
+async def hide_obstructive_overlays(page: Page) -> Overlays:
     """Hide large fixed overlays while leaving ordinary positioned content alone."""
-    hidden: int = await page.evaluate(
-        """() => {
-            let count = 0;
-            for (const element of document.querySelectorAll('body *')) {
-                const style = getComputedStyle(element);
-                if (style.position !== 'fixed') continue;
-                const rect = element.getBoundingClientRect();
-                const large = rect.width >= innerWidth * 0.45 && rect.height >= innerHeight * 0.08;
-                if (large && Number(style.zIndex || 0) >= 10) {
-                    element.setAttribute('data-webshot-hidden', 'true');
-                    count++;
+    answer: dict[str, Any] = await page.evaluate(
+        HIDE_OBSTRUCTIVE_OVERLAYS_JS, [INTERSTITIAL_POINTS, INTERSTITIAL_TEXT_SHARE]
+    )
+    return Overlays(
+        hidden=int(answer["count"]),
+        covering=tuple(str(name) for name in answer["covering"]),
+    )
+
+
+def interstitials_message(covering: Sequence[str]) -> str:
+    """The manifest warning for the boxes clean mode hid as interstitials."""
+    boxes = "box" if len(covering) == 1 else "boxes"
+    named = _listed(list(covering))
+    return (
+        f"Clean mode hid the fixed {boxes} drawn on top across most of the window: "
+        f"{named}. A box fixed to the window prints on every page of the PDF, over "
+        "the text beneath it, and one this size was an interstitial (an ad, a "
+        "sign-up or a welcome screen) with any backdrop it drew. --mode faithful "
+        "keeps it."
+    )
+
+
+#: How long a page with no text when the post-load wait ends is given for its
+#: script to render some. A library catalogue's record page, a single-page app,
+#: showed none for 4.5 s after DOMContentLoaded and its whole record 5 s after
+#: it; WebShot's one second after DOMContentLoaded printed a blank page
+#: (docs/09 P113-5). Bounded, because an app shell whose script never renders
+#: (a browser with no session) would otherwise hold the capture for good.
+RENDERED_TEXT_WAIT_S = 10.0
+
+#: Once text has come, how long it and the element count must stand still
+#: before the capture goes on. The same record page drew its header and then
+#: its record within half a second; a second is past that.
+RENDERED_TEXT_SETTLE_S = 1.0
+
+#: The page's rendered text, as a count: `innerText` of the body, then of each
+#: open shadow root and same-origin frame when the body has none. `innerText`,
+#: not `textContent`, because an app shell carries template text and hidden
+#: "Loading" markup that a reader never sees. With the element count, which
+#: says whether the page is still building, and whether it has a script at
+#: all: a page with none cannot fill itself.
+RENDERED_TEXT_JS = """() => {
+    const rendered = node => ((node && node.innerText) || '').trim().length;
+    let text = rendered(document.body);
+    if (!text) {
+        const roots = [document];
+        for (let index = 0; index < roots.length && !text; index++) {
+            for (const element of roots[index].querySelectorAll('*')) {
+                if (element.shadowRoot) {
+                    roots.push(element.shadowRoot);
+                    for (const child of element.shadowRoot.children) text += rendered(child);
+                }
+                if (element.localName === 'iframe') {
+                    try { text += rendered(element.contentDocument && element.contentDocument.body); }
+                    catch (error) { /* cross-origin: not this page's text */ }
                 }
             }
-            return count;
-        }"""
+        }
+    }
+    return {text, nodes: document.getElementsByTagName('*').length, scripts: document.scripts.length};
+}"""
+
+
+@dataclass(frozen=True)
+class TextWait:
+    """What `wait_for_rendered_text` waited for, when it waited at all."""
+
+    #: Seconds past the post-load wait.
+    waited_s: float
+    #: The rendered text when it stopped, as `RENDERED_TEXT_JS` counts it: 0
+    #: when none came before the wait ended.
+    characters: int
+    #: The bound the wait was given.
+    limit_s: float = RENDERED_TEXT_WAIT_S
+    #: Whether it ended because `limit_s` passed. False when text came and
+    #: stood still, and when the page navigated or closed under it, which a
+    #: zero `characters` alone does not tell apart from a wait that ran out.
+    ran_out: bool = False
+
+
+def text_wait_bound(wait: TextWait | None) -> float | None:
+    """The seconds the empty-capture warning may say the script was given:
+    the bound, when the wait ran it out, or None. The bound rather than the
+    time measured, which runs a poll past it and would make the warning
+    differ run to run; and only a wait that ran out, because one the page
+    cut short by navigating gave the script a fraction of it (P113-5)."""
+    return wait.limit_s if wait is not None and wait.ran_out else None
+
+
+async def wait_for_rendered_text(
+    page: Page,
+    limit_s: float = RENDERED_TEXT_WAIT_S,
+    settle_s: float = RENDERED_TEXT_SETTLE_S,
+) -> TextWait | None:
+    """Give a page that shows no text yet time for its script to render some.
+
+    None when there was nothing to wait for: the page already shows text, or
+    has no script that could add any. Otherwise polls until text has come and
+    stood still for `settle_s`, or `limit_s` has passed, and says how long it
+    took and how much text there was. The page's network is not a signal: the
+    record page above had nothing in flight for 2.5 s before its text came.
+    """
+    try:
+        last: dict[str, int] = await page.evaluate(RENDERED_TEXT_JS)
+    except PlaywrightError as exc:
+        LOGGER.debug("Reading the page's rendered text failed: %s", exc)
+        return None
+    if last["text"] or not last["scripts"]:
+        return None
+    started = time.monotonic()
+    still_since: float | None = None
+    ran_out = False
+    while True:
+        if time.monotonic() - started >= limit_s:
+            ran_out = True
+            break
+        await asyncio.sleep(0.25)
+        try:
+            now: dict[str, int] = await page.evaluate(RENDERED_TEXT_JS)
+        except PlaywrightError as exc:
+            # The page navigated or closed under the wait. What it is now is
+            # for the checks after this one (a sign-in wall, an empty page).
+            LOGGER.debug("Reading the page's rendered text failed: %s", exc)
+            break
+        if now["text"]:
+            if still_since is None or (now["text"], now["nodes"]) != (
+                last["text"],
+                last["nodes"],
+            ):
+                still_since = time.monotonic()
+            elif time.monotonic() - still_since >= settle_s:
+                last = now
+                break
+        last = now
+    return TextWait(
+        waited_s=round(time.monotonic() - started, 1),
+        characters=int(last["text"]),
+        limit_s=limit_s,
+        ran_out=ran_out,
     )
-    return hidden
+
+
+def rendered_text_message(wait: TextWait) -> str:
+    """What the log says of a wait that brought text."""
+    return (
+        f"The page showed no text when it had loaded; its script rendered "
+        f"{wait.characters:,} characters in {wait.waited_s:g} s more."
+    )

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Interstitial page</title>
+  <style>
+    body { font: 16px/1.5 Georgia, serif; margin: 0; }
+    .masthead { position: fixed; top: 0; left: 0; right: 0; height: 48px; z-index: 50; background: #eef; }
+    .backdrop-art { position: fixed; inset: 0; z-index: -1; background: linear-gradient(#fff, #f6f6f6); }
+    main { max-width: 680px; margin: 72px auto; }
+    /* The shape measured on a news site (docs/09 P113-4): a dialog narrower
+       than 45% of a 1440 px window, its backdrop a child at z-index -1 inside
+       the dialog's own stacking context, so it paints over the page. */
+    #promo-overlay { position: fixed; width: 640px; height: 480px; z-index: 2147483644;
+                     top: 0; left: 0; right: 0; bottom: 0; margin: auto; }
+    #promo-form { position: relative; z-index: 2147483616; background: #fff; height: 480px; }
+    #promo-backdrop { position: fixed; inset: 0; z-index: -1; background: #000; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div class="backdrop-art"></div>
+  <div class="masthead">The Lantern Gazette</div>
+  <main>
+    <article>
+      <h1>Gulls learn the ferry timetable</h1>
+      <p>Harbour gulls arrive at the north pier four minutes before each ferry docks, the keeper's log shows over a whole season.</p>
+      <p>The birds gather on the railings, wait for the gangway, and leave once the last car has rolled off the deck.</p>
+      <p>On the two days the ferry did not sail, the gulls came anyway and left at the usual time, which the keeper wrote down twice.</p>
+      <p>The last paragraph says the timetable is posted beside the ticket window.</p>
+    </article>
+  </main>
+  <div id="promo-overlay" role="dialog" aria-label="sponsored pop-up">
+    <div id="promo-form">
+      <div>SPONSORED MESSAGE</div>
+      <div role="button">Close this message</div>
+      <p>Moonbeam connectors for every lantern.</p>
+    </div>
+    <div id="promo-backdrop"></div>
+  </div>
+</body>
+</html>

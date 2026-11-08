@@ -18,6 +18,13 @@ which records the measurements behind each change.
 
 ### Added
 
+- **`tools/coverage/printed_share.py` measures a finished PDF's printed text
+  as the capture does.** Reviews measured it as the share of `content.md`'s
+  word 5-grams in `pdftotext`'s output, which counts link targets and
+  recognized text that no PDF prints, so a lesson page and an interactive
+  site that printed all their text scored 0.49 and 0.30. The tool runs the
+  capture's own check (P97) on the `content.txt` a PDF carries, or the `.ai`
+  directory beside it, and fails when it finds neither. See docs/09 P113-6.
 - **`--local-paths relative` keeps the capture machine's folders out of a
   local capture's bundle.** A page rendered from a local file recorded its own
   absolute `file:` URL, and every image and link under it, in `capture.json`,
@@ -370,6 +377,26 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **Clean mode hides an interstitial drawn on top across the window.** A news
+  site's welcome ad printed over the first pages of its article in clean
+  mode: its dialog was narrower than the size rule's 45% of the window, and
+  its full-window backdrop had `z-index: -1` inside the dialog's stacking
+  context, so it read as behind the page while printing over it. Clean mode
+  now also hides the outermost fixed box drawn on top at five or more points
+  of a 3x3 grid over the window, its backdrop with it, and a manifest warning
+  names it. Neither rule hides a box holding more than half of the page's
+  text: the size rule used to hide a page kept in a fixed scrolling shell,
+  and the capture came out empty. Two boxes of one name over the same text
+  are one covering warning that counts them, where the manifest said the same
+  sentence twice. See docs/09 P113-4.
+- **A page that shows no text yet is given time for its script.** A library
+  catalogue's record page, a single-page app, showed no text for 4.5 s after
+  DOMContentLoaded, and WebShot printed it blank one second after. A page
+  with a script and no rendered text when the post-load wait ends now gets up
+  to 10 s for text to come and stand still for a second. The log says how
+  long it took, and the empty-capture warning says when the wait ran out. Not
+  under `--wait-for`, `--interactive-auth` or the protected viewer. See
+  docs/09 P113-5.
 - **Each paragraph in a table cell of a converted document is a line of its
   own.** markdownify writes a `<p>` or `<div>` in a table cell as the space
   around it, a Markdown row being one line, so a Word cell's paragraphs ran
