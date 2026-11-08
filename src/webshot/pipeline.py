@@ -78,6 +78,7 @@ from .capture.prepare import (
     interstitials_message,
     isolate_content,
     keep_excluded_hidden,
+    keep_header_footer_margins,
     lazy_load_warning,
     release_clamped_text,
     release_wide_tables,
@@ -682,6 +683,12 @@ async def capture_open_page(
             dropped = css_imports(extra_css)
             if dropped:
                 warnings.append(dropped_imports_message(dropped))
+        # With the print CSS, so every print of the page after it — the
+        # probes that measure the printed width, the render, the covered-text
+        # check's measuring print — is laid out in the same margins
+        # (docs/09 P115).
+        if options.header_footer:
+            await keep_header_footer_margins(page)
         await page.emulate_media(media=options.media)
         # After every stylesheet and the media switch, because it measures
         # computed style; before the bundle, so the geometry the bundle

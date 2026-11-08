@@ -29,9 +29,12 @@ decisions in that are deliberate:
   margins and scale give a first answer, and it is wrong in two common cases:
   a page's own `@page` margin changes the width it is laid out at even when
   `--prefer-css-page-size` is off, and a page wider than the paper is laid out
-  again up to half as wide once more, then scaled down to fit. So one page of
-  the capture is printed a second time with a probe that writes its own width
-  into the text layer, and that number is the edge (docs/09 P16-4).
+  again up to half as wide once more, then scaled down to fit. (With the
+  header and footer on, WebShot gives the margins back to `--margin`, but not
+  under `--no-header-footer` nor against a margin the page marks
+  `!important`: docs/09 P115.) So one page of the capture is printed a
+  second time with a probe that writes its own width into the text layer, and
+  that number is the edge (docs/09 P16-4).
 
 Running after the render is what keeps the check from changing what it checks:
 the probe prints the page again and the measurement resizes the viewport, and

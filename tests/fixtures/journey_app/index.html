@@ -378,6 +378,11 @@ function openTrackAt(s, t) {
   trackPending = true;
   render();                                            // ...and the body is a shell
   clearTimeout(trackFillTimer);
+  // Opt-in, and NOT measured: a track view that stays a shell for good. A fill
+  // that merely arrives late turns the readiness-timeout test into a race
+  // between this timer and the walker's first poll, and a loaded runner loses
+  // it (docs/09 P118). Reached by "stuck" in the path.
+  if (location.pathname.includes("stuck")) return;
   trackFillTimer = setTimeout(() => { trackPending = false; render(); }, 250);
 }
 

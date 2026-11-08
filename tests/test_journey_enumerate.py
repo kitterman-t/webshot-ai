@@ -394,10 +394,16 @@ def test_a_track_that_never_fills_in_is_a_timeout_not_an_empty_track(
     """CONTRIBUTING rule 5, against the failure a fixed wait produces."""
 
     async def work(page: Any, url: str) -> str:
-        # A readiness budget shorter than the stand-in's fill, so the poll runs out.
+        # The "stuck" stand-in never fills its track view, so the poll runs out
+        # however slow the machine. A budget merely shorter than the ordinary
+        # 250 ms fill raced it, and lost at load 135 (docs/09 P118).
         contract = DomContract(readiness_timeout_ms=50, poll_interval_ms=10)
         try:
-            await enumerate_journey(page, source=url, contract=contract)
+            await enumerate_journey(
+                page,
+                source=url.replace("/journey/", "/journey-stuck/"),
+                contract=contract,
+            )
         except EnumerationFailure as exc:
             return str(exc)
         return ""

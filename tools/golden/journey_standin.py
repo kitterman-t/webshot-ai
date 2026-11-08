@@ -23,11 +23,14 @@ below is present because a naive walker passes without it:
 | `document.title` keeping the last track's name | P9-4 | a walker keying titles on it |
 | No `data-testid`, `aria-label` only on track rows | P9-6 | relying on hooks production does not have |
 
-Three behaviours are opt-in by path segment and are **not** measured — they
+These behaviours are opt-in by path segment and are **not** measured — they
 model failures so the refusals have something real to refuse: `drift` advances
 progress on a track open, `shift` drops a module once a track is fully open,
-and `solo` collapses siblings (which P11-5 measured as *not* happening, and
-which is kept only to show what the count assertion cannot see).
+`solo` collapses siblings (which P11-5 measured as *not* happening, and which
+is kept only to show what the count assertion cannot see), and `stuck` leaves a
+track view a shell for good, so a readiness timeout is reached by construction
+rather than by outrunning a timer (P118). `dupe`, `twins` and `types` are
+opt-in the same way; index.html says what each one models.
 
 Two things are stand-ins for a mechanism rather than copies of one, and it is
 worth being plain about which. Node reuse is *a* way to make a held reference

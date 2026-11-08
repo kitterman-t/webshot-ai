@@ -561,6 +561,19 @@ there with its reason, and the run's job summary lists every skip.
     chrome and are not named. Under `--no-ai-bundle` the warning says only
     that the text is not in the PDF. WebShot does not open them (docs/09
     P102).
+21. **A page's own `@page` margin and the running header and footer:**
+    Chromium honours a page's `@page` margin over the margin `page.pdf` is
+    given, and the running header and footer print in that margin, so a page
+    whose stylesheet sets `@page { margin: 0 }` prints over them. With the
+    header and footer on, a capture MUST print in `--margin`'s margins,
+    whatever `@page` margin the page sets, on every page and for every print
+    of the page, the render and the checks that print it again. A page with no
+    `@page` rule MUST print exactly as it would without the correction. Under
+    `--no-header-footer` the page's own margin stays in force, as nothing of
+    WebShot's needs the room. A margin the page marks `!important` still
+    wins: Chromium lets the earliest important `@page` declaration win, and
+    the correction, which no `style-src` policy may refuse, comes last
+    (docs/09 P115).
 22. **A page whose policy refuses inline style:** a page served with a
     `Content-Security-Policy` whose `style-src` allows no inline style
     refuses every `<style>` element. A capture of it MUST still print with
