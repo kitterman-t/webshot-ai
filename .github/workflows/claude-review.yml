@@ -216,7 +216,7 @@ jobs:
           fi
           gh --version
           echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-      - uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
+      - uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d # v1.0.266
         # Claude Code starts a subagent in the background unless the call says
         # `run_in_background: false` (2.1.241, and still 2.1.281, the build
         # nearest the 2.1.283 that v1.0.235 installs), and the review plugin's
