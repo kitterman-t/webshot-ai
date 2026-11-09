@@ -64,7 +64,7 @@ dependencies = [
     # (docs/09 P83). In the tree already through OCRmyPDF; direct because
     # WebShot now calls it, through render/pdfium_bridge.py alone.
     "pypdfium2>=5.14.0,<6",
-    "pydantic>=2.14.2,<3",
+    "pydantic>=2.14.3,<3",
     # Every name here is written as PyPI normalizes it. Written `Markdown`,
     # Dependabot found nothing to rewrite and never proposed 3.11 (docs/09
     # P84-5); tests/test_dependency_names.py holds the rule.
