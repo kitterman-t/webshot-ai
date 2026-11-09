@@ -673,7 +673,7 @@ wheels = [
 
 [[package]]
 name = "docling-core"
-version = "2.104.0"
+version = "2.105.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "defusedxml" },
@@ -691,9 +691,9 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/dd/39/07095f73dec9a9dfeaf75acce470a708c7f88fc66a5565a63f88dd6567ff/docling_core-2.104.0.tar.gz", hash = "sha256:94a5c968d40c3ff3cba59fe94d4c92b53e617637ba758b3f6bd38f585e147fe1", size = 446513, upload-time = "2026-10-22T14:02:02.15Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/53/83/61671c783190a2cd1625adca8648fa5f8cd81f468413ef76c63766ee9d21/docling_core-2.105.0.tar.gz", hash = "sha256:01db20cf35100b776f348602729c45516487536e60ffa4c81a6979aee91f7bb2", size = 448812, upload-time = "2026-10-27T16:22:11.845Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a4/3d/effaf34794872ad8800bb0cc21de9c5c838ec080086249c6d222afaaa276/docling_core-2.104.0-py3-none-any.whl", hash = "sha256:e820fb6f130678df06119ea1f437d1a597c1c441fddd0e95299e27348d961011", size = 329981, upload-time = "2026-10-22T14:02:00.295Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/6b/4707c6082ae406cce567c45dd0625c401436af60d9acecc81a88f38aacf3/docling_core-2.105.0-py3-none-any.whl", hash = "sha256:f5b270e23a9ae4b2cc028e43ad6ece31c3d6a9bebca382e41418ecf7e5f6e7ef", size = 330500, upload-time = "2026-10-27T16:22:10.164Z" },
 ]
 
 [package.optional-dependencies]
@@ -4239,7 +4239,7 @@ requires-dist = [
     { name = "charset-normalizer", specifier = ">=3.5.1,<4" },
     { name = "chonkie", specifier = ">=1.7.0" },
     { name = "defusedxml", specifier = ">=0.7.1,<0.8" },
-    { name = "docling-core", extras = ["chunking"], marker = "extra == 'chunk-hybrid'", specifier = ">=2.104.0" },
+    { name = "docling-core", extras = ["chunking"], marker = "extra == 'chunk-hybrid'", specifier = ">=2.105.0" },
     { name = "docling-slim", extras = ["format-html"], specifier = ">=2.142.1" },
     { name = "huggingface-hub", specifier = ">=2.3.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.170.14" },
