@@ -15758,6 +15758,9 @@ paragraph `alpha <a href="T">T</a> omega` followed by another paragraph:
 | `style`, `script` | everything after it in the document gone |
 | `https://example.invalid/marrowby` | a link: the one target the shortcut was meant for |
 
+*Python-Markdown 3.11.3 links any `scheme://` address, so the `file:` target
+keeps its text through the shortcut since P129.*
+
 Every target but the https one read wrong the same way in a heading, a list
 item, a table cell, a quotation, a definition and bold text. It is the P28 class, a document's text written as
 markup, by the writer P28 gave a text-safe `escape`: markdownify's own markup
@@ -21783,3 +21786,70 @@ of a root commit. The export of that commit holds only `README.md`; the same
 export under the root's manifest holds the tool's file and reports no leak,
 which is the silent case above. With `state()` restored to the working tree's
 manifest, the test fails at its first check of the boundary.
+
+## P129: Python-Markdown 3.11.3 links an address in angle brackets whatever its scheme (2026-11-15)
+
+Dependabot's bump of Python-Markdown from 3.11.2 to 3.11.3 failed one test on
+all six test jobs, Linux and macOS on Python 3.11 to 3.13:
+`tests/test_bare_links.py::test_the_shortcut_lost_every_target_but_an_address[file]`,
+with `AssertionError: alpha file:///tmp/tarnby.pdf omega`. It passes on
+master's lock and fails on the bump's, with the same source tree.
+
+### P129-1 — the upstream change
+
+3.11.3 widens `AUTOLINK_RE` in `markdown/inlinepatterns.py`:
+
+```diff
+-AUTOLINK_RE = r'<((?:[Ff]|[Hh][Tt])[Tt][Pp][Ss]?://[^<>]*)>'
++AUTOLINK_RE = r'<([A-Za-z][A-Za-z0-9+.-]*://[^<>]*)>'
+```
+
+`<…>` is now a link when it holds `scheme://` for any scheme. 3.11.2 linked
+http, https, ftp and ftps alone and read any other `<word…>` as an inline
+HTML tag. A target with no `://`, `<report.pdf>` among them, is still a tag.
+
+### P129-2 — what it changes for WebShot
+
+**The writer, nothing.** `_TextMarkdownify` writes every link
+`[text](target)` (P75-2), so no converted document reaches Python-Markdown as
+`<target>`. On the bump's head the golden corpus and parity passed in CI, and
+every test but this one.
+
+**The failing test pinned a fact about Python-Markdown.** It holds what the
+old `autolinks` shortcut did to each target (P75-5), and its set of targets
+the shortcut got right named only `https`. Through the shortcut,
+`file:///tmp/tarnby.pdf` read `alpha  omega` on 3.11.2 and reads
+`alpha file:///tmp/tarnby.pdf omega` on 3.11.3. Its page is now the writer's
+byte for byte, `<a rel="noopener noreferrer">` with the target nh3 drops, in
+all nine blocks of the test file; on 3.11.2 all nine differed. So `file`
+joins `https` in `AUTOLINKED`, and the test now checks that the page of each
+target there is the writer's page, which is what that set's comment claims.
+
+**A Markdown file's own `<scheme://…>` keeps its text.** Through
+`_render_markdown_document`'s path, `See <file:///tmp/tarnby.pdf> now`
+rendered `<p>See  now</p>` on 3.11.2, as did `ssh://` and `javascript://`
+addresses. On 3.11.3 each is a link, and nh3 keeps its text and drops the
+target, since no scheme outside spec §6.5's `URL_SCHEMES` survives. The
+`javascript://` link the new pattern forms therefore ends where
+`[text](javascript:…)` always did. P75-4's `See <report.pdf> now` still reads
+`See  now`.
+
+3.11.3 also changes hash headings, reference and footnote definitions, the
+toc extension's tag stripping and ids, code spans after an unmatched backtick
+run, emphasis pairing (CommonMark's rule of 3), attr_list's valueless
+attributes and codehilite's language class. This entry measured none of them
+beyond the test suite, the golden corpus and parity passing on the bump.
+
+### P129-3 — the tests
+
+- `test_the_shortcut_lost_every_target_but_an_address` takes
+  `AUTOLINKED = {"https", "file"}` and asserts each one's page equals the
+  writer's.
+- `test_a_markdown_files_own_address_reads_as_its_text` renders an https,
+  ftp, `file`, ssh and `javascript` address in angle brackets: each reads as
+  its text, only the https one keeps a target, and `<report.pdf>` still loses
+  its text.
+
+With markdown 3.11.2 both fail, on the `file` target and on the Markdown
+file's `file:` address, and the module's other 67 tests pass. With 3.11.3 all
+70 pass.
