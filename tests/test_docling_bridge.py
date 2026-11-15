@@ -108,6 +108,36 @@ def test_tables_export_as_full_grids(result) -> None:
     assert result.tables == [[["Quarter", "Value"], ["Q1", "1.2"]]]
 
 
+@pytest.mark.parametrize("footer_first", [False, True], ids=["after", "before"])
+def test_a_table_footer_reaches_every_surface_after_the_body(
+    footer_first: bool,
+) -> None:
+    """docling-slim 2.142.1 lifted the rows of a `<thead>` and a `<tbody>`
+    into the table but not those of a `<tfoot>`, so a footer's rows were
+    left out of every surface, with no warning. 2.145.0 keeps them, and puts
+    them last as a browser does, also where the page writes the `<tfoot>`
+    before the `<tbody>`, as HTML 4 required (docling #4323, docs/09 P130)."""
+    foot = "<tfoot><tr><td>Total</td><td>3.4</td></tr></tfoot>"
+    body = (
+        "<tbody><tr><td>Q1</td><td>1.2</td></tr>"
+        "<tr><td>Q2</td><td>2.2</td></tr></tbody>"
+    )
+    page = (
+        "<html><head></head><body><h1>T</h1><table>"
+        "<thead><tr><th>Quarter</th><th>Value</th></tr></thead>"
+        f"{foot + body if footer_first else body + foot}</table></body></html>"
+    )
+    result = extract(page, [])
+    assert result.tables == [
+        [["Quarter", "Value"], ["Q1", "1.2"], ["Q2", "2.2"], ["Total", "3.4"]]
+    ]
+    assert "| Q2 | 2.2 |\n| Total | 3.4 |" in result.markdown
+    for surface in (result.text, result.doctags, result.document_json):
+        assert "Total" in surface
+    assert any("Total" in seed.text for seed in result.chunk_seeds)
+    assert not result.warnings
+
+
 def test_definition_list_text_is_modeled_natively(result) -> None:
     assert "Capture" in result.text and "The act of recording." in result.text
 

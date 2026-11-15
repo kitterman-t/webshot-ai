@@ -458,8 +458,14 @@ def test_the_pdf_has_every_row_once_in_order_and_the_bundle_one_table(
     # before it.
     assert rendered.index("FOOTERSENTINEL") > rendered.index("R22")
     # The header once per piece at least, and once more per page a piece
-    # breaks across.
-    assert rendered.count("Station") >= len(PIECES)
+    # breaks across. Counted as a row: "Station" alone is also the start of
+    # the footer's "Stations reporting" (docs/09 P130).
+    assert len(re.findall(r"Station\s*Hour", rendered)) >= len(PIECES)
+    # The bundle has the table whole: its header row once, every body row once
+    # in order, and its footer's row once, straight after the last body row.
+    # docling-slim 2.142.1 dropped a <tfoot>'s rows from the bundle (P130).
     markdown = (split_capture.with_suffix(".ai") / "content.md").read_text("utf-8")
-    assert markdown.count("| Station") == 1
+    assert len(re.findall(r"^\| Station \| Hour \|", markdown, re.MULTILINE)) == 1
     assert re.findall(r"R\d\d", markdown) == hours
+    assert markdown.count("FOOTERSENTINEL") == 1
+    assert re.search(r"\| R24 \|.*\n\|.*\| FOOTERSENTINEL \|\n", markdown)

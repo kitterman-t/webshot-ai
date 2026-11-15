@@ -21783,3 +21783,66 @@ of a root commit. The export of that commit holds only `README.md`; the same
 export under the root's manifest holds the tool's file and reports no leak,
 which is the silent case above. With `state()` restored to the working tree's
 manifest, the test fails at its first check of the boundary.
+
+## P130: docling-slim 2.145 keeps a table's `<tfoot>` rows (2026-11-15)
+
+Dependabot proposed docling-slim 2.145.0 (from 2.142.1) on webshot-ai#114,
+and one test failed on all six test jobs:
+`test_long_tables.py::test_the_pdf_has_every_row_once_in_order_and_the_bundle_one_table`,
+`assert 4 == 1` on `markdown.count("| Station")`. The bundle still held the
+table once. The test counted a substring, and the new footer row matched it
+three times.
+
+### P130-1 — the upstream change
+
+Up to 2.142.1 the HTML backend lifted the rows of a table's `<thead>` and
+`<tbody>` into the table before it counted and filled the grid. Both
+`get_html_table_row_col` and `parse_table_data` did it with this loop:
+
+```python
+for t in cast(list[Tag], element.find_all(["thead", "tbody"], recursive=False)):
+    t.unwrap()
+```
+
+A `<tfoot>`'s rows were in neither, so they never reached the grid. 2.145.0
+("html: Keep rows stored in tfoot", docling #4323) calls
+`_unwrap_table_sections` in both places instead. It moves each `<tfoot>` to
+the end of the table, since the HTML table model puts footer rows last
+wherever the source has the element, and then unwraps `thead`, `tbody` and
+`tfoot`. That is the whole `html_backend.py` diff between the two versions.
+docling-core is 2.105.0 in both locks.
+
+Both versions captured `tests/fixtures/long_table.html` whole and in five-row
+pieces. Under 2.142.1 the footer's text, `FOOTERSENTINEL`, was in
+`content.html`, `accessibility.yaml` and the source copy, and in none of
+`content.md`, `content.txt`, `content.json`, `chunks.jsonl` or the table's
+CSV. No warning named the loss. Under 2.145.0 the footer is the table's last
+row in all five. `content.md` writes it as
+`| Stations reporting | Stations reporting | Stations reporting | FOOTERSENTINEL |`,
+repeating the cell that spans three columns, as docling writes every spanning
+cell. Apart from those five files and `content.doctags`, only the manifest
+differs, in the docling version, the capture's time and path, and the sizes
+and digests of the changed files. Its warnings are the same.
+
+### P130-2 — the test was wrong, and what holds the footer now
+
+The bump fixes a loss. The defect was the test's count, because
+`"| Station"` is also how each `Stations reporting` cell starts. The test now
+counts the header as a row, `^\| Station \| Hour \|`, and wants it once. It
+also wants `FOOTERSENTINEL` once in `content.md`, on the row straight after
+R24. Under 2.142.1 that check fails with `0 == 1`, so the test now catches the
+loss it missed. The PDF check beside it, `rendered.count("Station") >=
+len(PIECES)`, had the same flaw and passed anyway. Its 8 matches were 6 header
+rows and 2 printings of the footer. It counts `Station\s*Hour` now.
+
+`test_docling_bridge.py::test_a_table_footer_reaches_every_surface_after_the_body`
+holds the backend to this on a three-row table, with the `<tfoot>` written
+after the `<tbody>` and, as HTML 4 required, before it. The footer row must
+reach the exported grid and `content.md` after the body rows, and the plain
+text, DocTags, `content.json` and the chunks too, with no warning. Both cases fail under 2.142.1 and pass under 2.145.0. The bridge has
+no code for this. The minimum in `pyproject.toml`, `>=2.145.0`, keeps an
+install off the old backend.
+
+`git grep -il "<tfoot"` finds only the long-table fixture, and no golden case
+captures it, so no golden is expected to move. The golden corpus was not run
+for this entry; CI runs it.
