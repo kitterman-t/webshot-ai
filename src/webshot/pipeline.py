@@ -59,6 +59,7 @@ from .capture.landing import (
     sign_in_wall,
     sign_in_wall_message,
 )
+from .capture.marks import shown_despite_marking_message, unmark_shown
 from .capture.media_controls import settle_media_controls
 from .capture.prepare import (
     BASE_PRINT_CSS,
@@ -125,7 +126,12 @@ from .render.ligatures import (
 from .render.long_tables import SplitTable, split_long_tables, split_tables_warning
 from .render.pdf import header_footer_options, is_tagged, render_pdf, validate_pdf
 from .render.pdfium_bridge import PdfInkError, page_texts
-from .render.text_layer import printed_share, printed_text_warning
+from .render.text_layer import (
+    printed_share,
+    printed_text_warning,
+    wall_words,
+    wall_words_warning,
+)
 from .render.video_appendix import append_video_appendix
 from .validate.verapdf import validate as verapdf_validate
 from .version import VERSION as GENERATOR_VERSION
@@ -651,12 +657,12 @@ async def capture_open_page(
         if consent.shown:
             warnings.append(consent_dialogs_message(consent.shown))
         if options.mode == "clean":
-            hidden += await hide_elements(page, NOISE_SELECTORS)
+            hidden += await hide_elements(page, NOISE_SELECTORS, "noise")
             overlays = await hide_obstructive_overlays(page)
             hidden += overlays.hidden
             if overlays.covering:
                 warnings.append(interstitials_message(overlays.covering))
-        hidden += await hide_elements(page, options.exclude_selectors)
+        hidden += await hide_elements(page, options.exclude_selectors, "exclude")
         late = await keep_excluded_hidden(page, options.exclude_selectors)
         if late:
             warnings.append(late)
@@ -699,6 +705,12 @@ async def capture_open_page(
                 "Turned off ligatures the page's own CSS re-enabled on %d element(s).",
                 overridden,
             )
+        # After the print stylesheets and the media switch, which decide what
+        # prints; before every stage that reads the marks as the answer --
+        # the bundle's snapshot first among them (docs/09 P128).
+        shown = await unmark_shown(page, options.exclude_selectors)
+        if shown:
+            warnings.append(shown_despite_marking_message(shown, selector))
         # At the printed width, so after the print CSS and the media switch;
         # before the bundle, so the layout it records is the one printed
         # (docs/09 P16-11). Only a page with a table in a sideways scroller
@@ -903,24 +915,34 @@ async def capture_open_page(
             warnings.append(failed)
             if ai_result:
                 ai_result.warnings.append(failed)
-        # The PDF as printed, before the appendix, against the bundle's text
-        # from before the videos; first of the checks on the print, so a wall
-        # it names is said before the boxes the wall is made of (docs/09 P97).
+        # The PDF's text as printed, before the appendix, read once for the two
+        # checks on it that follow. In a thread: it reads every page.
+        crash.step = "reading the printed text"
+        printed_pages: tuple[str, ...] | None = None
+        unread = ""
+        try:
+            printed_pages = await asyncio.to_thread(page_texts, temporary_output)
+        except PdfInkError as exc:
+            unread = str(exc)
+        # Against the bundle's text from before the videos; first of the checks
+        # on the print, so a wall it names is said before the boxes the wall is
+        # made of (docs/09 P97).
         walls: tuple[str, ...] = ()
+        unprinted: str | None = None
         if ai_result and bundle_text is not None:
             crash.step = "comparing the printed text with the bundle's"
-            unprinted: str | None
-            try:
-                printed = printed_share(
-                    bundle_text, await asyncio.to_thread(page_texts, temporary_output)
-                )
-            except PdfInkError as exc:
+            if printed_pages is None:
+                # Both checks on the print, named in one warning: one failure
+                # stopped them, and the wall's check below does not run after
+                # this one says something.
                 unprinted = (
                     "WebShot could not read the PDF's text to compare it with the "
-                    f"bundle's ({exc}), so whether the PDF shows the page's text "
-                    "was not checked."
+                    f"bundle's ({unread}), so whether the PDF shows the page's "
+                    "text, and whether it stops at the words of a registration or "
+                    "subscription wall, were not checked."
                 )
             else:
+                printed = printed_share(bundle_text, printed_pages)
                 unprinted = printed_text_warning(printed)
                 if unprinted:
                     walls = await access_walls(page)
@@ -928,6 +950,34 @@ async def capture_open_page(
             if unprinted:
                 warnings.append(unprinted)
                 ai_result.warnings.append(unprinted)
+        # A wall can hold the article back from the page itself, so the bundle
+        # and the PDF agree on a teaser and the share above is whole: what is
+        # left to see is the wall's own words where the text stops (docs/09
+        # P124-2). With or without a bundle, since it reads only the PDF. Not
+        # after the share's warning, which has said the PDF lacks the text and
+        # named the wall the page showed, with the same advice; nor after its
+        # warning that the PDF's text could not be read, which names this
+        # check too.
+        crash.step = "reading the printed text for a wall's words"
+        walled: str | None = None
+        if unprinted is None:
+            if printed_pages is None:
+                walled = (
+                    f"WebShot could not read the PDF's text ({unread}), so whether "
+                    "it stops at the words of a registration or subscription wall "
+                    "was not checked."
+                )
+            else:
+                stopped = wall_words(printed_pages)
+                if stopped is not None:
+                    walls = await access_walls(page)
+                    walled = wall_words_warning(
+                        stopped, walls, bundle=options.ai_bundle
+                    )
+        if walled:
+            warnings.append(walled)
+            if ai_result:
+                ai_result.warnings.append(walled)
         # After the render, which it measures by printing the page again with
         # its fixed and sticky boxes in colours of their own, and first of the
         # checks that follow it: the clipping check narrows the viewport, which

@@ -535,7 +535,9 @@ def finalize_ai_bundle(
         # was chosen (docs/05 task 3.4).  Both are additive: `page_metadata`
         # above is still the DOM's own declarations, unchanged, and a capture
         # without --auto-selector records the same decision it always made.
-        "discovered_metadata": asdict(discovered),
+        # The byline fields are written only when there is one (docs/09
+        # P124-3), so a page without a byline records what it always did.
+        "discovered_metadata": discovered.record(),
         "content_discovery": {
             "strategy": selection.strategy,
             "selector": selection.selector,

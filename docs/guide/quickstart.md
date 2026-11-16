@@ -4,7 +4,7 @@
 
 WebShot is not published to PyPI, and `pip install webshot` installs an
 unrelated package that happens to share the name. Install from a source
-checkout instead, with [uv](https://docs.astral.sh/uv/) and Python 3.11 or
+checkout instead, with [uv](https://docs.astral.sh/uv/) and Python 3.11.5 or
 newer:
 
 ```bash

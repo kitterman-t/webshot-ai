@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tide tables for the north quay</title>
+<style>
+  body { font: 16px/1.5 Georgia, serif; margin: 0 auto; max-width: 42rem; padding: 1rem; }
+  /* Shaped as Complianz writes its banner: a container with one banner per
+     consent type, all but the one shown kept hidden by the plugin's class,
+     fixed in the window's corner. */
+  .cmplz-hidden { display: none; }
+  .cmplz-cookiebanner { position: fixed; bottom: 1rem; right: 1rem; width: 20rem;
+    padding: 1rem; background: #fff; border: 1px solid #333; z-index: 99999; }
+  #cmplz-manage-consent .cmplz-manage-consent { position: fixed; bottom: 0; left: 1rem; }
+  /* Shaped as CookieYes writes its centred popup, over an overlay that dims
+     the page behind it. */
+  .cky-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 9998; }
+  .cky-consent-container { position: fixed; top: 30%; left: 25%; width: 50%;
+    padding: 1rem; background: #fff; border: 1px solid #333; z-index: 9999; }
+  .cky-btn-revisit-wrapper { position: fixed; bottom: 1rem; left: 1rem; }
+  .cky-modal { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tide tables for the north quay</h1>
+  <p>High water at the north quay comes forty minutes after the harbour mouth.</p>
+  <p>This page names the consent plugins Complianz and CookieYes, and its own
+     note says "manage consent" without being a dialog.</p>
+  <div class="cookie-notes">A note about the biscuits sold at the quay kiosk.</div>
+  <p>Paragraph three gives the spring tides for the first week of the month.</p>
+  <p>Paragraph four gives the neap tides for the second week of the month.</p>
+  <p>Paragraph five warns that a strong westerly raises the water a hand's width.</p>
+  <p>The last paragraph says the gauge is read at dawn and at dusk by the keeper.</p>
+</main>
+<div id="cmplz-cookiebanner-container">
+  <div class="cmplz-cookiebanner cmplz-hidden banner-1 optin" role="dialog"
+    aria-modal="true">Hidden opt-in banner text</div>
+  <div class="cmplz-cookiebanner banner-1 optout" role="dialog" aria-modal="true">
+    <div class="cmplz-header">Manage your privacy choices</div>
+    <div class="cmplz-message">We use technologies like cookies to store device
+      information.</div>
+    <button class="cmplz-btn cmplz-accept">Accept</button>
+    <button class="cmplz-btn cmplz-deny">Deny</button>
+  </div>
+</div>
+<div id="cmplz-manage-consent">
+  <button class="cmplz-btn cmplz-hidden cmplz-manage-consent">Manage consent button</button>
+</div>
+<div class="cky-overlay"></div>
+<div class="cky-consent-container cky-popup-center" role="region"
+  aria-label="We value your privacy">
+  <p class="cky-title">We value your privacy</p>
+  <p>We use cookies to enhance your browsing experience and analyse our traffic.</p>
+  <button class="cky-btn cky-btn-reject">Reject All</button>
+  <button class="cky-btn cky-btn-accept">Accept All</button>
+</div>
+<div class="cky-btn-revisit-wrapper cky-revisit-bottom-left">
+  <button class="cky-btn-revisit">Consent preferences button</button>
+</div>
+<div class="cky-modal"><div class="cky-preference-center">Customise consent
+  preferences dialog</div></div>
+</body>
+</html>
