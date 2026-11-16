@@ -59,6 +59,7 @@ from .capture.landing import (
     sign_in_wall,
     sign_in_wall_message,
 )
+from .capture.marks import shown_despite_marking_message, unmark_shown
 from .capture.media_controls import settle_media_controls
 from .capture.prepare import (
     BASE_PRINT_CSS,
@@ -656,12 +657,12 @@ async def capture_open_page(
         if consent.shown:
             warnings.append(consent_dialogs_message(consent.shown))
         if options.mode == "clean":
-            hidden += await hide_elements(page, NOISE_SELECTORS)
+            hidden += await hide_elements(page, NOISE_SELECTORS, "noise")
             overlays = await hide_obstructive_overlays(page)
             hidden += overlays.hidden
             if overlays.covering:
                 warnings.append(interstitials_message(overlays.covering))
-        hidden += await hide_elements(page, options.exclude_selectors)
+        hidden += await hide_elements(page, options.exclude_selectors, "exclude")
         late = await keep_excluded_hidden(page, options.exclude_selectors)
         if late:
             warnings.append(late)
@@ -704,6 +705,12 @@ async def capture_open_page(
                 "Turned off ligatures the page's own CSS re-enabled on %d element(s).",
                 overridden,
             )
+        # After the print stylesheets and the media switch, which decide what
+        # prints; before every stage that reads the marks as the answer --
+        # the bundle's snapshot first among them (docs/09 P128).
+        shown = await unmark_shown(page, options.exclude_selectors)
+        if shown:
+            warnings.append(shown_despite_marking_message(shown, selector))
         # At the printed width, so after the print CSS and the media switch;
         # before the bundle, so the layout it records is the one printed
         # (docs/09 P16-11). Only a page with a table in a sideways scroller

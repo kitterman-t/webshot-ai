@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A post beside a related list</title>
+<style>
+  /* A page whose print stylesheet insists that its related list prints,
+     beside the post a capture scoped with --selector. */
+  body { margin: 0; padding: 20px; font-family: Helvetica, Arial, sans-serif; }
+  @media print {
+    body aside.related { display: block !important; }
+  }
+</style>
+</head>
+<body>
+<main id="post">
+  <h1>Notes from the river walk</h1>
+  <p>The post says the footbridge reopens after the spring repairs.</p>
+</main>
+<aside class="related">
+  <h2>Related</h2>
+  <p>The related list says the ferry runs every half hour on weekends.</p>
+</aside>
+</body>
+</html>

@@ -1027,7 +1027,10 @@ async def isolate_content(page: Page, selector: str) -> None:
                 const parent = node.parentElement;
                 if (!parent) break;
                 for (const sibling of parent.children) {
-                    if (sibling !== node) sibling.setAttribute('data-webshot-hidden', 'true');
+                    if (sibling !== node) {
+                        sibling.setAttribute('data-webshot-hidden', 'true');
+                        sibling.setAttribute('data-webshot-hidden-by', 'selector');
+                    }
                 }
                 if (parent !== document.body) parent.setAttribute('data-webshot-ancestor', 'true');
                 node = parent;
@@ -1187,11 +1190,18 @@ def dropped_imports_message(imports: Sequence[str]) -> str:
     )
 
 
-async def hide_elements(page: Page, selectors: Sequence[str]) -> int:
+async def hide_elements(page: Page, selectors: Sequence[str], reason: str) -> int:
+    """Mark what `selectors` match to leave out, and record `reason` on it.
+
+    The reason is what `unmark_shown` names when the page's print CSS shows
+    a marked box anyway (docs/09 P128): `noise` for clean mode's selectors,
+    `exclude` for `--exclude`. The last rule to mark a box sets its reason,
+    and `--exclude` runs last, so the user's choice wins.
+    """
     if not selectors:
         return 0
     hidden: int = await page.evaluate(
-        """selectors => {
+        """([selectors, reason]) => {
             let count = 0;
             for (const selector of selectors) {
                 let elements;
@@ -1200,11 +1210,12 @@ async def hide_elements(page: Page, selectors: Sequence[str]) -> int:
                 for (const element of elements) {
                     if (!element.hasAttribute('data-webshot-hidden')) count++;
                     element.setAttribute('data-webshot-hidden', 'true');
+                    element.setAttribute('data-webshot-hidden-by', reason);
                 }
             }
             return count;
         }""",
-        list(selectors),
+        [list(selectors), reason],
     )
     return hidden
 
@@ -1772,6 +1783,7 @@ HIDE_CONSENT_DIALOGS_JS = """managers => {
                 if (element.hasAttribute('data-webshot-hidden')) continue;
                 if (found === null && shown(element)) found = selector;
                 element.setAttribute('data-webshot-hidden', 'true');
+                element.setAttribute('data-webshot-hidden-by', 'consent');
                 hidden++;
             }
         }
@@ -1857,6 +1869,7 @@ HIDE_OBSTRUCTIVE_OVERLAYS_JS = """([points, textShare]) => {
         const large = rect.width >= innerWidth * 0.45 && rect.height >= innerHeight * 0.08;
         if (large && Number(style.zIndex || 0) >= 10 && !isPage(element)) {
             element.setAttribute('data-webshot-hidden', 'true');
+            element.setAttribute('data-webshot-hidden-by', 'overlay');
             count++;
         }
     }
@@ -1903,6 +1916,7 @@ HIDE_OBSTRUCTIVE_OVERLAYS_JS = """([points, textShare]) => {
     for (const [root, hits] of tally) {
         if (hits < points || isPage(root)) continue;
         root.setAttribute('data-webshot-hidden', 'true');
+        root.setAttribute('data-webshot-hidden-by', 'overlay');
         count++;
         const cls = typeof root.className === 'string' ? root.className.trim().split(/\\s+/)[0] : '';
         covering.push(root.localName + (root.id ? `#${root.id}` : cls ? `.${cls}` : ''));
