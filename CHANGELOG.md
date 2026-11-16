@@ -308,6 +308,12 @@ which records the measurements behind each change.
 
 ### Changed
 
+- **Python-Markdown 3.11.3.** A Markdown file's address in angle brackets,
+  such as `<ssh://example.invalid/x>` or `<file:///tmp/x.pdf>`, reads as its
+  text: 3.11.3 links one whatever its scheme, where 3.11.2 linked http,
+  https, ftp and ftps alone and passed the rest through as a tag the
+  sanitizer dropped with its text. A target outside spec §6.5's schemes is
+  still dropped (docs/09 P129).
 - **docling-slim 2.140.** A heading whose runs are formatted differently,
   such as `Fen<b>dral</b>ix`, is written plain: docling used to give the
   whole heading its first run's bold. A `<br>` in a heading, caption or list

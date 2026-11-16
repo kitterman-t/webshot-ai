@@ -1,11 +1,12 @@
 """A link whose text is its target keeps its text on the page (docs/09 P75).
 
 markdownify writes such a link as `<target>`, its `autolinks` shortcut, and
-Python-Markdown links that form only for http, https and ftp.  Any other
+Python-Markdown links that form only for an address, `scheme://…` (before
+3.11.3, only an http, https, ftp or ftps one: docs/09 P129).  Any other
 target it read as an HTML tag: nh3 dropped `<report.pdf>` and the text with
 it, kept `<em>` and made the rest of the paragraph italic, and dropped
 everything after `<script>`.  The writer writes every link `[text](target)`,
-which renders an http or https link the same page as before.
+which renders an address the same page as before.
 
 A link in `code`, `kbd` or `samp` is written as its text: markdownify's own
 rule, which MarkItDown's `<a>` replaced and kept for `pre` alone, so a link in
@@ -54,7 +55,10 @@ from tools.fixtures.office import BARE_LINK_TARGETS, bare_link_lines  # noqa: E4
 FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "office"
 
 #: The targets whose page did not change: the ones Python-Markdown autolinks.
-AUTOLINKED = {"https"}
+#: 3.11.3 autolinks any `scheme://` address; 3.11.2 autolinked http, https,
+#: ftp and ftps alone, and read `<file:///…>` as a tag that nh3 dropped with
+#: its text (docs/09 P129).
+AUTOLINKED = {"https", "file"}
 #: Spec §6.5: nh3 keeps no URL scheme but http(s), data and mailto, so this
 #: link's text stays and its target goes, as for any `file:` link.
 NO_HREF = {"file"}
@@ -161,9 +165,11 @@ def test_the_shortcut_lost_every_target_but_an_address(label: str) -> None:
     target = BARE_LINK_TARGETS[label]
     document = f"<p>alpha {_link(target)} omega</p>"
     assert _markdown(document, _Shortcut).strip() == f"alpha <{target}> omega"
-    reads = _reads(_page(document, _Shortcut))
+    page = _page(document, _Shortcut)
+    reads = _reads(page)
     if label in AUTOLINKED:
         assert reads == f"alpha {target} omega"
+        assert page == _page(document), page
     else:
         assert reads != f"alpha {target} omega", reads
 
@@ -267,6 +273,31 @@ def test_a_mailto_link_keeps_its_text_and_loses_its_target() -> None:
             == _page(document, _Shortcut)
             == (f"<p>alpha {text} omega</p>")
         )
+
+
+# --------------------------------------------------------------------------- #
+# A Markdown file's own `<target>`
+# --------------------------------------------------------------------------- #
+
+
+def test_a_markdown_files_own_address_reads_as_its_text() -> None:
+    """docs/09 P129: Python-Markdown 3.11.3 links `<scheme://…>` whatever the
+    scheme, where 3.11.2 linked http, https, ftp and ftps and read any other
+    as a tag, which nh3 dropped with its text.  The link it now makes for
+    `javascript://…` still meets nh3, which keeps no target outside spec
+    §6.5's schemes, so it reaches the page as its text with no target."""
+    for target, linked in (
+        ("https://example.invalid/x", True),
+        ("ftp://example.invalid/x", False),
+        ("file:///tmp/tarnby.pdf", False),
+        ("ssh://example.invalid/x", False),
+        ("javascript://example.invalid/%0aalert(1)", False),
+    ):
+        page = _render(f"See <{target}> now")
+        assert _reads(page) == f"See {target} now", page
+        assert ("href=" in page) is linked, page
+    # With no `://` it is a tag still, and its text is lost (P75-4).
+    assert _render("See <report.pdf> now") == "<p>See  now</p>"
 
 
 # --------------------------------------------------------------------------- #
