@@ -33,6 +33,14 @@ it does read: it splits them at commas and "and", drops what follows a
 digit, title-cases a lowercase one.  `declared_author` and
 `declared_sitename` read each from the page's own declarations, as written.
 
+A declaration can still name the wrong person: a law firm's article declared
+the colleague who posted it, in `<meta name="author">` and in JSON-LD, and
+printed its writer under an "Author(s)" heading (docs/09 P124-3).  So
+`printed_byline` reads the names a page prints as its byline, by rules that
+are this module's and narrow enough to refuse what P88 measured Trafilatura
+getting wrong, and the byline replaces a declaration when it names someone
+the declaration does not.
+
 Nor is the title (docs/09 P93).  When a page has one `<h1>`, Trafilatura
 takes its text ahead of the `<title>`; with none it can take one side of a
 "Title | Site" `<title>`.  `declared_title` reads the title the page
@@ -49,6 +57,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
+from urllib.parse import SplitResult, urljoin, urlsplit
 
 from trafilatura import extract
 
@@ -235,6 +244,108 @@ _BLOCK_ELEMENTS = frozenset(
 #: not who or what it is.
 _WEB_ADDRESS = re.compile(r"https?://", re.IGNORECASE)
 
+# A printed byline (docs/09 P124-3).  P88 stopped reading one because
+# Trafilatura read whatever an element classed or linked as an author held:
+# each listed post's author on an index page, a name run into a job title or
+# the labels of social links, a commit's author.  The rules here read text,
+# never a class, and each refuses one of those shapes.
+
+#: Elements whose text is never a byline's: code, and what the page does not
+#: show as text.
+_QUIET_ELEMENTS = frozenset(
+    "script style noscript template textarea title svg math select option".split()
+)
+
+#: Elements whose text the byline rules read.  Not `h1`, the title.
+_BYLINE_ELEMENTS = frozenset(
+    "p div span address li dd dt small strong b em i cite a h2 h3 h4 h5 h6".split()
+)
+
+#: Elements whose contents are another thing than the article's own text: the
+#: site's menus, a sidebar, a picture's caption and credit, a control.
+_ASIDE_ELEMENTS = frozenset("nav aside figure figcaption button label".split())
+
+_HEADINGS = {f"h{rank}": rank for rank in range(1, 7)}
+
+#: A byline "By …" counts only this close after the page's first `<h1>`, in
+#: characters of text, where an article prints its byline.  A listed post or
+#: a related article further down the page has a byline of its own, and on an
+#: index page there is no one byline to read.
+BYLINE_WINDOW = 1500
+
+#: A line of text longer than this is a sentence, not a byline.
+_BYLINE_LINE = 160
+
+#: "By …" or "Written by …", and the names after it.
+_BY = re.compile(r"(?:written\s+)?by:?\s+(.+)", re.IGNORECASE)
+
+#: A heading that labels the names after it as the article's authors.
+_AUTHOR_LABEL = re.compile(
+    r"(?:(?:about\s+)?the\s+)?authors?(?:\s*\(s\))?|written\s+by|about\s+the\s+authors?",
+    re.IGNORECASE,
+)
+
+#: More names than this under an author heading is a list of people, not a
+#: byline: a contributors page, say.
+_MAX_BYLINE_NAMES = 8
+
+#: More text than this between an author heading and the end of its section
+#: is a section of the article that happens to be headed so, not a byline's
+#: names, their contacts and a line of biography.
+_AUTHOR_SECTION_TEXT = 600
+
+#: What ends the names in a byline line: a date or a section after a bar or a
+#: dash, as "By Jane Doe | March 3, 2026" has it.
+_BYLINE_END = re.compile(
+    r"\s*[|\N{MIDDLE DOT}\N{BULLET}]\s*|\s+[\N{EM DASH}\N{EN DASH}-]\s+"
+)
+
+#: What separates the names in a byline line.
+_NAME_SEPARATOR = re.compile(r"\s*[,;&]\s*|\s+and\s+", re.IGNORECASE)
+
+#: A word of a name, for telling whether a byline names someone the
+#: declaration does not: its letters, without the full stops, apostrophes and
+#: hyphens a name can be spelled with or without.
+_WORD = re.compile(r"[^\W\d_]+")
+
+#: Words of a name that are not capitalized: "Ludwig van Beethoven".
+_NAME_PARTICLES = frozenset(
+    "da das de del della der des di do dos du el la le van von bin ibn al y e".split()
+)
+
+#: Words no person's name holds, so that a title-cased phrase after "By" is
+#: not one: "By The Numbers", "By Our Readers", "By This Logic".
+_NOT_NAME_WORDS = frozenset(
+    (
+        "the a an this that these those our your my his her their its all "
+        "every each some any no how what why when where which who whom whose "
+        "of for from with without into onto upon over under about after before"
+    ).split()
+)
+
+#: Words that make a part of a byline a role, an organization or a section
+#: of the site, not a person: "By Jane Doe, Staff Writer" names Jane Doe and
+#: her role, a financial news site printed "By" before a link to its "Stock
+#: Markets" section, and a business magazine printed its council's name and
+#: "Councils Member" after a contributor's (docs/09 P124-3).  Some are
+#: surnames too ("Guest", "Press", "Senior"), and a name holding one is passed
+#: over with the roles, which is why a byline that names only some of the
+#: declared people does not replace them.  An organization's name that holds
+#: none of them ("Harbor Lane Review") reads as a name.
+_ROLE_WORDS = frozenset(
+    (
+        "staff writer writers editor editors editorial reporter reporters "
+        "correspondent contributor contributors contributing columnist producer "
+        "analyst team desk bureau news newsroom press wire agency service "
+        "services office department partner associate counsel director "
+        "professor fellow senior chief special guest intern freelance "
+        "photographer illustrator university school college institute inc llc "
+        "llp ltd business market markets stock stocks economy finance politics "
+        "technology tech sports opinion world health science culture "
+        "entertainment lifestyle travel member members council councils"
+    ).split()
+)
+
 #: Below this, "the main content" is not a claim worth making: a page with a
 #: paragraph on it has no main region to isolate, and matching a handful of
 #: words back into the DOM would land on something arbitrary.
@@ -273,15 +384,40 @@ class DiscoveredMetadata:
     #: heading's text or a part of the `<title>` (docs/09 P93).
     title: str = ""
     #: The names the page declares, as it writes them, joined with
-    #: `AUTHOR_SEPARATOR`.  Never a byline's text (docs/09 P88).
+    #: `AUTHOR_SEPARATOR`; or the names of its printed byline, when it prints
+    #: one that names someone they do not (docs/09 P88, P124-3).
     author: str = ""
     #: `YYYY-MM-DD`, or empty when the page declares no date that
     #: `declared_date` reads. Never one found in the text, the URL or a
-    #: heading (docs/09 P82).
+    #: heading (docs/09 P82), nor one marked inside a link to another page
+    #: (P124-4).
     date: str = ""
     #: The site name the page declares, as it writes it.  Never a part of the
     #: `<title>` or the URL's host (docs/09 P88).
     sitename: str = ""
+    #: The names the page prints as its byline (`printed_byline`), as it
+    #: prints them, joined with `AUTHOR_SEPARATOR`.  Recorded only when there
+    #: is one.
+    byline: str = ""
+    #: What the page's declarations name, when `author` is the byline
+    #: instead because it names someone they do not.  Recorded only then.
+    declared_author: str = ""
+
+    def record(self) -> dict[str, str]:
+        """The manifest's `discovered_metadata`: the four fields always, the
+        byline and the declared author only when there is one, so that a page
+        without a byline records what it always did."""
+        record = {
+            "title": self.title,
+            "author": self.author,
+            "date": self.date,
+            "sitename": self.sitename,
+        }
+        if self.byline:
+            record["byline"] = self.byline
+        if self.declared_author:
+            record["declared_author"] = self.declared_author
+        return record
 
 
 def read_page(html: str) -> PageReading:
@@ -297,11 +433,29 @@ def read_metadata(html: str) -> DiscoveredMetadata:
     name (docs/09 P82, P88), and neither is a declaration.
     """
     reader = _read_declarations(html)
+    declared = _author(reader)
+    byline = _byline(reader)
+    # The byline replaces a declaration when it names someone the
+    # declaration does not: what the page prints is what its reader is told,
+    # and the declaration was a CMS's record of who posted it (docs/09
+    # P124-3).  A byline that names only declared people is no evidence
+    # against them, since its reading passes over a name holding a role's
+    # word and so can name fewer people than the page prints.  With no
+    # declaration, `author` keeps P88's rule and the byline is recorded on
+    # its own.
+    replaced = bool(
+        byline
+        and declared
+        and not _same_people(byline, declared)
+        and _names_someone_else(byline, declared)
+    )
     return DiscoveredMetadata(
         title=_title(reader),
-        author=_author(reader),
+        author=byline if replaced else declared,
         date=_date(reader),
         sitename=_sitename(reader),
+        byline=byline,
+        declared_author=declared if replaced else "",
     )
 
 
@@ -383,9 +537,46 @@ def declared_author(html: str) -> str:
     these reads (a JSON-LD `{"@id": …}` reference, say) still ends the
     search at its level: the authors of the comments below it are not the
     page's.  Nothing is read from a byline's class or text, a heading,
-    `rel="author"` or `twitter:creator`.
+    `rel="author"` or `twitter:creator`: `printed_byline` reads a byline.
     """
     return _author(_read_declarations(html))
+
+
+def printed_byline(html: str) -> str:
+    """The names the page prints as its byline, joined with
+    `AUTHOR_SEPARATOR`, or "" (docs/09 P124-3).
+
+    Read from the page's text in two shapes, and nowhere else:
+
+    1. a line "By Jane Doe" or "Written by Jane Doe and John Roe", not a
+       heading, in the `BYLINE_WINDOW` characters after the page's first
+       `<h1>`, where an article prints its byline: what follows a bar or a
+       spaced dash (a date, a section) is not read, and the names are what is
+       between the commas, semicolons, ampersands and "and"s;
+    2. a heading whose whole text labels authors ("Author", "Authors",
+       "Author(s)", "About the author", "Written by"), and the names in the
+       lower headings after it and in the `<strong>` or `<b>` elements that
+       open their block, as a biography's subject does, up to the next
+       heading of its rank or the end of the section around it, when that
+       comes within `_AUTHOR_SECTION_TEXT` characters.  What a biography sets
+       in bold inside its sentence, the review its subject edits, say, is not
+       read.
+
+    A name is two to five words, each capitalized but for a particle such as
+    "van", with no digit and nothing but letters, apostrophes, hyphens and
+    full stops, and none of them a word such as "the", "our" or "of" that no
+    name holds.  A part holding a word of a role, an organization or a
+    section (`_ROLE_WORDS`: "Staff Writer", "Harbor Lane News") is not a name
+    and is passed over, and so is a name that holds one ("Rowan Guest"), so
+    the byline can name fewer people than the page prints; an organization's
+    name that holds none ("Harbor Lane Review") reads as a name.  Text inside a
+    link, a menu, a sidebar, a figure or its caption, a form or a control is
+    never a byline, and nor is code.  More than eight names under one heading
+    is a list of people, not a byline.  Every byline the page prints must
+    name the same people, in any order and spelling of case and punctuation:
+    a page with two that differ prints no one byline, and none is read.
+    """
+    return _byline(_read_declarations(html))
 
 
 def declared_sitename(html: str) -> str:
@@ -439,6 +630,84 @@ def _author(reader: _Declarations | None) -> str:
             if depth == outermost
         )
     return AUTHOR_SEPARATOR.join(_first_kind(declarations))
+
+
+def _byline(reader: _Declarations | None) -> str:
+    if reader is None or not reader.bylines:
+        return ""
+    first = reader.bylines[0]
+    if any(
+        not _same_people("; ".join(names), "; ".join(first)) for names in reader.bylines
+    ):
+        return ""
+    return AUTHOR_SEPARATOR.join(first)
+
+
+def _same_people(one: str, other: str) -> bool:
+    """Whether two lists of names name the same people: the same letters,
+    whatever the order, the case, the punctuation and the separators, so
+    "R. Chen" is "R Chen" and "Doe, Jane" is "Jane Doe"."""
+    return _letters(one) == _letters(other)
+
+
+def _letters(names: str) -> list[str]:
+    return sorted(character for character in names.casefold() if character.isalpha())
+
+
+def _names_someone_else(byline: str, declared: str) -> bool:
+    """Whether a byline names someone the declaration does not: a name of it
+    whose words, whatever their case and punctuation, are not all among the
+    words of one declared value.  One value can hold several names
+    ("Jane Doe and John Roe") or one written surname first ("Doe, Jane"),
+    which is why a name is looked for among a value's words."""
+    values = [set(_words(value)) for value in declared.split(AUTHOR_SEPARATOR)]
+    return any(
+        not any(set(_words(name)) <= words for words in values)
+        for name in byline.split(AUTHOR_SEPARATOR)
+    )
+
+
+def _words(names: str) -> list[str]:
+    return _WORD.findall(names.casefold())
+
+
+def _byline_names(text: str) -> list[str]:
+    """The names in what follows "By", or none when any part of it is neither
+    a name nor holds a role's word.  A part that holds one is passed over as
+    a role, and so is a name that holds one, "Rowan Guest" say (`_ROLE_WORDS`):
+    the names returned can be fewer than the page prints."""
+    names: list[str] = []
+    for part in _NAME_SEPARATOR.split(_BYLINE_END.split(text, maxsplit=1)[0]):
+        if not part:
+            continue
+        if _is_role(part):
+            continue
+        if not _is_name(part):
+            return []
+        if part not in names:
+            names.append(part)
+    return names
+
+
+def _is_role(part: str) -> bool:
+    return any(word.strip(".").casefold() in _ROLE_WORDS for word in part.split())
+
+
+def _is_name(part: str) -> bool:
+    words = part.split()
+    if not 2 <= len(words) <= 5 or len(part) > 60:
+        return False
+    for word in words:
+        if word.casefold() in _NAME_PARTICLES:
+            continue
+        if word.strip(".").casefold() in _NOT_NAME_WORDS:
+            return False
+        if not word[0].isupper() or not all(
+            character.isalpha() or character in "'\N{RIGHT SINGLE QUOTATION MARK}-."
+            for character in word
+        ):
+            return False
+    return not _is_role(part)
 
 
 def _sitename(reader: _Declarations | None) -> str:
@@ -517,6 +786,45 @@ class _Element:
     #: The element is the `name` of that author item.
     name_of: _AuthorItem | None = None
     text: _Text | None = None
+    #: A link's `href`, or None for an element that is not a link, an `<a>`
+    #: with no `href` among them.
+    href: str | None = None
+    #: The element's text, read for a byline.
+    line: _Line | None = None
+    #: Characters of text the page had shown when the element opened.
+    shown: int = 0
+    #: A `<strong>` or `<b>` under an author heading that opened its block,
+    #: as a biography's subject does (`_opens_its_block`).
+    leads: bool = False
+
+
+@dataclass(eq=False, slots=True)
+class _Line:
+    """An element's text, while it is short enough to be a byline."""
+
+    parts: list[str] = field(default_factory=list)
+    length: int = 0
+    #: It grew past `_BYLINE_LINE`: a sentence, not a byline.
+    overflowed: bool = False
+    #: It is inside a link, a menu, a sidebar, a figure or a control.
+    aside: bool = False
+    #: It opened within `BYLINE_WINDOW` of the first `<h1>`.
+    near_title: bool = False
+
+
+@dataclass(eq=False, slots=True)
+class _Label:
+    """An author heading, and the names after it so far."""
+
+    rank: int
+    #: The section, article or aside around the heading, whose end ends it.
+    within: _Element | None
+    names: list[str] = field(default_factory=list)
+    #: Characters of text since the heading.
+    text: int = 0
+    #: More names than `_MAX_BYLINE_NAMES`, or more text than
+    #: `_AUTHOR_SECTION_TEXT`.
+    crowded: bool = False
 
 
 class _Declarations(HTMLParser):
@@ -561,15 +869,47 @@ class _Declarations(HTMLParser):
         self._texts: list[_Text] = []
         #: How many microdata authors have opened, which orders them.
         self._places = 0
+        #: The page's own address, as its canonical link and `og:url` state
+        #: it: a `<time>` in a link to it is the page's date (docs/09 P124-4).
+        self.own_addresses: list[str] = []
+        #: Each byline the page prints, as its names (`printed_byline`).
+        self.bylines: list[tuple[str, ...]] = []
+        #: The elements whose text is being read for a byline, innermost last.
+        self._lines: list[_Line] = []
+        #: Open elements whose text is code or is not shown, and open asides.
+        self._quiet = 0
+        self._asides = 0
+        #: Characters of text since the first `<h1>` opened, or None before.
+        self._since_title: int | None = None
+        #: Characters of text the page has shown, outside code and what is
+        #: not shown.
+        self._shown = 0
+        #: The author heading whose names are being read.
+        self._label: _Label | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = {name: value or "" for name, value in attrs}
         self._date_declarations(tag, attributes)
+        if tag == "link" and "canonical" in attributes.get("rel", "").lower().split():
+            if attributes.get("href"):
+                self.own_addresses.append(attributes["href"])
+        rank = _HEADINGS.get(tag)
+        if rank is not None and self._label is not None and rank <= self._label.rank:
+            self._end_label()
+        if (
+            tag == "h1"
+            and self._since_title is None
+            and not self._quiet
+            and not self._asides
+        ):
+            self._since_title = 0
         if tag == "meta" and attributes.get("content"):
             keys = dict.fromkeys(
                 _meta_key(attributes.get(name)) for name in ("property", "name")
             )
             for key in keys:
+                if key == "og:url":
+                    self.own_addresses.append(attributes["content"])
                 if key in _META_AUTHOR_KEYS:
                     self.authors.append((_META_AUTHOR_KEYS[key], attributes["content"]))
                 if key in _META_SITENAME_KEYS:
@@ -598,6 +938,13 @@ class _Declarations(HTMLParser):
             if tiers and "content" in attributes:
                 self.dates.append((min(tiers), attributes["content"]))
         elif tag == "time":
+            # A date marked inside a link is the date of what the link opens:
+            # a related article's card, a listed post.  It is the page's own
+            # only when the link opens the page itself, as a post's permalink
+            # does (docs/09 P124-4).
+            link = self._innermost_link()
+            if link is not None and not self._opens_this_page(link):
+                return
             tier = _MARKED
             if itemprop is not None:
                 tier = itemprop
@@ -619,7 +966,13 @@ class _Declarations(HTMLParser):
             for text in self._texts:
                 text.spoiled = True
         void = tag in _VOID_ELEMENTS
-        element = _Element(tag, scope="itemscope" in attributes and not void)
+        element = _Element(
+            tag, scope="itemscope" in attributes and not void, shown=self._shown
+        )
+        if tag == "a" and "href" in attributes:
+            element.href = attributes["href"]
+        if not void:
+            self._open_line(element)
         properties = attributes.get("itemprop", "").lower().split()
         if "name" in properties:
             # Before this element opens: a name is its enclosing item's.
@@ -647,6 +1000,119 @@ class _Declarations(HTMLParser):
                 self._texts.append(element.text)
             self._open.append(element)
 
+    def _open_line(self, element: _Element) -> None:
+        """Count what the element opens, and read its text for a byline when
+        it is an element whose text can be one."""
+        if element.tag in _QUIET_ELEMENTS:
+            self._quiet += 1
+        if self._quiet:
+            return
+        # An element's edge is a word's edge in a byline: "By<a>Jane Doe</a>"
+        # is set apart by the page's style, and reads "By Jane Doe".
+        for line in self._lines:
+            line.parts.append(" ")
+        aside = (
+            bool(self._asides)
+            or element.href is not None
+            or self._innermost_link() is not None
+        )
+        if element.tag in _ASIDE_ELEMENTS:
+            self._asides += 1
+        if element.tag in ("strong", "b") and self._label is not None:
+            element.leads = self._opens_its_block(self._label)
+        if element.tag in _BYLINE_ELEMENTS:
+            element.line = _Line(
+                aside=aside,
+                near_title=self._since_title is not None
+                and self._since_title <= BYLINE_WINDOW,
+            )
+            self._lines.append(element.line)
+
+    def _end_line(self, element: _Element) -> None:
+        """Uncount what the element opened, and read its text for a byline."""
+        if element.tag in _QUIET_ELEMENTS:
+            self._quiet -= 1
+        elif element.tag in _ASIDE_ELEMENTS and not self._quiet:
+            self._asides -= 1
+        if self._label is not None and element is self._label.within:
+            self._end_label()
+        line = element.line
+        if line is None:
+            return
+        if not line.overflowed:
+            self._lines.remove(line)
+        if line.overflowed or line.aside:
+            return
+        text = " ".join("".join(line.parts).split())
+        rank = _HEADINGS.get(element.tag)
+        if self._label is not None and (
+            (rank is not None and rank > self._label.rank) or element.leads
+        ):
+            if _is_name(text) and text not in self._label.names:
+                self._label.names.append(text)
+                if len(self._label.names) > _MAX_BYLINE_NAMES:
+                    self._label.crowded = True
+        if rank is not None and _AUTHOR_LABEL.fullmatch(text.rstrip(":").strip()):
+            self._end_label()
+            within = next(
+                (
+                    open_element
+                    for open_element in reversed(self._open)
+                    if open_element.tag in ("section", "article", "aside", "main")
+                ),
+                None,
+            )
+            self._label = _Label(rank, within)
+        # Not a heading's: a subhead such as "By Industry Sector" is set as
+        # one, and a byline is not.
+        if line.near_title and rank is None:
+            match = _BY.fullmatch(text)
+            names = _byline_names(match.group(1)) if match else []
+            if names:
+                self.bylines.append(tuple(names))
+
+    def _opens_its_block(self, label: _Label) -> bool:
+        """Whether an element opening now is the first text of its block: no
+        text has shown since the innermost open block opened, or since the
+        author heading when that came later, as in a section that holds the
+        heading and the name.  A biography sets its subject first; what it
+        sets in bold inside a sentence, the review its subject edits, say, is
+        not its subject (docs/09 P124-3)."""
+        block = next(
+            (
+                open_element
+                for open_element in reversed(self._open)
+                if open_element.tag in _BLOCK_ELEMENTS
+            ),
+            None,
+        )
+        since_block = self._shown - (block.shown if block is not None else 0)
+        return min(since_block, label.text) == 0
+
+    def _end_label(self) -> None:
+        label, self._label = self._label, None
+        if label is not None and label.names and not label.crowded:
+            self.bylines.append(tuple(label.names))
+
+    def _innermost_link(self) -> _Element | None:
+        for element in reversed(self._open):
+            if element.href is not None:
+                return element
+        return None
+
+    def _opens_this_page(self, link: _Element) -> bool:
+        """Whether a link opens the page itself, as its canonical address or
+        `og:url` names it.  A link to a part of it (`#comment-4`) opens that
+        part, a comment's permalink, and not the page."""
+        if not link.href or not self.own_addresses:
+            return False
+        opened = urlsplit(urljoin(self.own_addresses[0], link.href.strip()))
+        if opened.fragment:
+            return False
+        return _address(opened) in {
+            _address(urlsplit(address)) for address in self.own_addresses
+        }
+
     def _innermost_item(self) -> _AuthorItem | None:
         """The author item whose properties an element opening now states."""
         for element in reversed(self._open):
@@ -655,6 +1121,21 @@ class _Declarations(HTMLParser):
         return None
 
     def handle_data(self, data: str) -> None:
+        if not self._quiet:
+            seen = len(data.strip())
+            self._shown += seen
+            if self._since_title is not None:
+                self._since_title += seen
+            if self._label is not None:
+                self._label.text += seen
+                if self._label.text > _AUTHOR_SECTION_TEXT:
+                    self._label.crowded = True
+            for line in self._lines:
+                line.parts.append(data)
+                line.length += len(data)
+                line.overflowed = line.length > _BYLINE_LINE
+            if any(line.overflowed for line in self._lines):
+                self._lines = [line for line in self._lines if not line.overflowed]
         if self._time is not None:
             self._time[1].append(data)
         if self._title is not None:
@@ -686,6 +1167,7 @@ class _Declarations(HTMLParser):
         self._end_title()  # and a <title> its title
         while self._open:  # nor did an author the page never closed
             self._end_element(self._open.pop())
+        self._end_label()
 
     def _end_time(self) -> None:
         if self._time is not None:
@@ -713,6 +1195,7 @@ class _Declarations(HTMLParser):
         self.titles.extend((_JSON_LD_TITLE, title) for title in _json_ld_titles(data))
 
     def _end_element(self, element: _Element) -> None:
+        self._end_line(element)
         value = None
         if element.text is not None:
             self._texts.remove(element.text)
@@ -731,6 +1214,12 @@ class _Declarations(HTMLParser):
         if element.item is not None:
             item = element.item
             self.microdata_authors.append((item.depth, item.order, item.name or ""))
+
+
+def _address(split: SplitResult) -> tuple[str, str, str]:
+    """An address as `_opens_this_page` compares it: the host, the path
+    without a trailing slash, and the query, whatever the scheme."""
+    return (split.netloc.lower(), split.path.rstrip("/") or "/", split.query)
 
 
 def _attribute_value(tag: str, attributes: dict[str, str]) -> str | None:

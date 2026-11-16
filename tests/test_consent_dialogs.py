@@ -73,3 +73,57 @@ def test_a_consent_dialog_is_hidden_and_named(tmp_path: Path, mode: str) -> None
     # The closed banner was hidden too, and is not named.
     assert "OneTrust" not in consent[0]
     assert "OneTrust banner text" not in markdown
+
+
+#: tests/fixtures/consent_banner_plugins_page.html: a Complianz banner in its
+#: container, with a second banner and the reopen button kept hidden, and a
+#: CookieYes popup over its overlay, as each plugin writes them (docs/09
+#: P124-1). Its text is invented.
+PLUGINS = Path(__file__).parent / "fixtures" / "consent_banner_plugins_page.html"
+PLUGIN_DIALOGS = (
+    "Manage your privacy choices",
+    "store device information",
+    "We value your privacy",
+    "enhance your browsing experience",
+    "Consent preferences button",
+)
+PLUGIN_ARTICLE = (
+    "High water at the north quay comes forty minutes after the harbour mouth.",
+    'its own note says "manage consent" without being a dialog.',
+    "A note about the biscuits sold at the quay kiosk.",
+    "The last paragraph says the gauge is read at dawn and at dusk by the keeper.",
+)
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("mode", ["faithful", "clean"])
+def test_complianz_and_cookieyes_banners_are_hidden_and_named(
+    tmp_path: Path, mode: str
+) -> None:
+    """Both printed on every page over the text, and nothing hid them: the
+    generic fixed-box warning named each, and the --exclude it offered worked
+    (docs/09 P124-1)."""
+    pdf = tmp_path / f"{mode}.pdf"
+    code = main([str(PLUGINS), "--output", str(pdf), "--mode", mode, "--no-ocr"])
+    assert code == 0
+    bundle = pdf.with_suffix(".ai")
+    markdown = (bundle / "content.md").read_text(encoding="utf-8")
+    pages = [page.extract_text() or "" for page in PdfReader(str(pdf)).pages]
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    for surface in (markdown, *pages):
+        for phrase in PLUGIN_DIALOGS:
+            assert phrase not in surface, (phrase, surface[:400])
+    flat = " ".join((markdown + "\n" + "\n".join(pages)).split())
+    for phrase in PLUGIN_ARTICLE:
+        assert phrase in " ".join(markdown.split()), phrase
+        assert phrase in flat, phrase
+    consent = [w for w in manifest["warnings"] if "consent manager" in w]
+    assert len(consent) == 1, manifest["warnings"]
+    assert consent[0].startswith(
+        "Hid the consent manager dialogs on screen: Complianz's "
+        "(#cmplz-cookiebanner-container), CookieYes' (.cky-consent-container). "
+    ), consent[0]
+    # Neither is left for the fixed-box check to find.
+    assert not [w for w in manifest["warnings"] if "prints over" in w], manifest[
+        "warnings"
+    ]

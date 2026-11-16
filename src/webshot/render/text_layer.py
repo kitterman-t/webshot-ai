@@ -15,6 +15,11 @@ differently: line breaks, list markers, table rules, the spaces a PDF reader
 infers between runs, and scripts written without spaces. Recognized text
 (OCR) is dropped from the bundle's side, because it is the bundle's reading of
 a picture, not text the page printed.
+
+A wall that keeps the article from the page itself leaves the bundle and the
+PDF agreeing on a teaser, so the share is whole and says nothing. What is left
+to see is the wall's own words where the printed text stops, and
+`wall_words` looks for them there (docs/09 P124-2).
 """
 
 from __future__ import annotations
@@ -120,4 +125,97 @@ def printed_text_warning(
         "text, a wall that hides the article, or content the page keeps "
         "collapsed, scrolled out of its box or hidden from print. Look at the "
         "PDF before relying on it."
+    )
+
+
+#: The words a registration or subscription wall prints where it stops an
+#: article: each asks the reader to sign up, subscribe or sign in *to keep
+#: reading*, or says the article is for members, which an article's own text
+#: has no reason to say. A business review's wall was a frame of its own, so
+#: the bundle held only the teaser too and the printed share was whole, and
+#: the PDF ended its article at "Sign up to keep reading" with no warning
+#: (docs/09 P124-2). A newsletter's "Sign up" or "Subscribe" alone is not one
+#: of them: every page has those. Over 371 earlier captures, two PDFs held
+#: any of these words, and both were walled articles: that one, and a
+#: members-only analysis that stopped at "Already a member? Sign in".
+_WALL_WORDS = re.compile(
+    r"\b(?:sign up|sign in|log in|subscribe|register|join"
+    r"|create (?:a )?(?:free )?account|become a (?:free )?(?:member|subscriber))\b"
+    r"[^.!?\n]{0,48}?\bto (?:keep|continue) reading\b"
+    r"|\bto (?:keep|continue) reading,? (?:please )?(?:sign up|sign in|log in"
+    r"|subscribe|register|create (?:a )?(?:free )?account"
+    r"|become a (?:free )?(?:member|subscriber))\b"
+    r"|\b(?:subscribe|sign up|sign in|log in|register"
+    r"|become a (?:free )?(?:member|subscriber)) to (?:read|access|unlock)"
+    r" (?:the (?:full|whole) (?:article|story)|the rest of (?:the|this) (?:article|story)"
+    r"|this (?:article|story))\b"
+    r"|\bbecome a member to read\b"
+    r"|\bthis (?:article|story|content) is (?:only )?(?:for|available to|reserved for"
+    r"|exclusive to) (?:paid )?(?:subscribers|members)\b"
+    r"|\balready a (?:subscriber|member)\?\s*(?:sign|log) in\b",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class WallWords:
+    """A wall's words in the printed text, and where."""
+
+    #: The words, as the PDF's text layer has them.
+    words: str
+    #: The printed page they are on, counted from 1.
+    page: int
+
+
+def wall_words(pages: Sequence[str]) -> WallWords | None:
+    """The last of a wall's words in the PDF's `pages`, when the printed text
+    holds more letters and digits before them than after, or `None`.
+
+    Where the words are is the test, as much as what they say: a wall stops
+    the article, so what the page prints after it is what follows an
+    article (its tags, an author's box, the site's footer), and a page that
+    asks for a sign-up in its header and prints the whole article below has
+    the words near its start.
+    """
+    lines = [" ".join(page.split()) for page in pages]
+    found: tuple[int, re.Match[str]] | None = None
+    for number, line in enumerate(lines, start=1):
+        for match in _WALL_WORDS.finditer(line):
+            found = (number, match)
+    if found is None:
+        return None
+    number, match = found
+    line = lines[number - 1]
+    before = sum(len(_letters(text)) for text in lines[: number - 1])
+    before += len(_letters(line[: match.start()]))
+    after = len(_letters(line[match.end() :]))
+    after += sum(len(_letters(text)) for text in lines[number:])
+    if after >= before:
+        return None
+    return WallWords(words=match.group(0), page=number)
+
+
+def wall_words_warning(
+    found: WallWords | None, walls: Sequence[str] = (), *, bundle: bool = True
+) -> str | None:
+    """The manifest warning for a PDF that stops at a wall's words, or `None`.
+    `walls` names the access walls the page showed, as `printed_text_warning`
+    names them; `bundle` is whether the capture made one, which would hold
+    the same teaser."""
+    if found is None:
+        return None
+    shown = ""
+    if walls:
+        shown = (
+            f"The page showed {' and '.join(walls)}'s access wall, which asks the "
+            "reader to sign in, register or subscribe. "
+        )
+    held = "the PDF and the bundle may both hold" if bundle else "the PDF may hold"
+    return (
+        f'{shown}The PDF\'s text has "{found.words}" on page {found.page}, the '
+        "words a registration or subscription wall prints where it stops an "
+        "article, with less of the page's text after them than before. The site "
+        "may send the rest of the article only to readers who sign in or "
+        f"subscribe, so {held} only its opening. Open the page in your own "
+        "browser, signed in if you have an account, and save it from there."
     )
