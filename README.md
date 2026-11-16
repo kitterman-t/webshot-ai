@@ -12,7 +12,7 @@ One file is the whole record, for a person or for an AI agent.
 
 ## Quick start
 
-You need Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
+You need Python 3.11.5 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/kitterman-t/webshot-ai && cd webshot-ai
