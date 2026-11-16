@@ -61,6 +61,13 @@ class CaptureOptions:
     auto_selector: bool = False
     mode: Literal["clean", "faithful"] = "clean"
     exclude_selectors: list[str] = field(default_factory=list)
+    #: Whether the closed `<details>`, accordion, collapse and "read more"
+    #: regions of the page's content are opened before it is printed and
+    #: read (`open`), or printed as the page showed them (`closed`). `None`
+    #: is the mode's choice: open in clean mode, whose purpose is the page's
+    #: text, and closed in faithful mode, which changes what the page showed
+    #: only for consent dialogs (docs/09 P120-3).
+    collapsed: Literal["open", "closed"] | None = None
     wait_for_selector: str | None = None
     wait_after_load_s: float = 1.0
     navigation_timeout_ms: int = DEFAULT_NAVIGATION_TIMEOUT_MS
@@ -166,6 +173,13 @@ class CaptureOptions:
     filesystem_roots: tuple[Path, ...] = ()
     pdfa: bool = False
     validate_pdf: Literal["report", "strict"] | None = None
+
+    @property
+    def opens_collapsed(self) -> bool:
+        """Whether closed regions are opened before printing (`collapsed`)."""
+        if self.collapsed is None:
+            return self.mode == "clean"
+        return self.collapsed == "open"
 
     @property
     def auth_mode(self) -> AuthMode:
@@ -306,6 +320,10 @@ class CaptureOptions:
             raise UsageError(
                 "--legacy-bundle emits v2-format artifacts inside the AI bundle, "
                 "which --no-ai-bundle disables; use one or the other."
+            )
+        if self.collapsed not in (None, "open", "closed"):
+            raise UsageError(
+                f"--collapsed must be open or closed, not {self.collapsed!r}."
             )
         if self.local_paths not in ("absolute", "relative"):
             raise UsageError(

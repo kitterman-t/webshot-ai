@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A chart behind "Read more"</title>
+<!-- Review of #367. A lazy-loading picture in the rest of an article that
+     waits behind "Read more" in a wrapper with `display: none`: it has no
+     box while the wrapper is hidden, so the image wait that runs on the page
+     as it loaded neither makes it eager nor waits for it. (Inside a closed
+     <details> a picture still has a box, and that wait handles it.) Far below
+     the window, so opening the wrapper does not bring it within the distance
+     at which the browser loads a lazy picture by itself. Served from
+     loopback, the picture after a short delay. All of the text is invented. -->
+<style>body { font: 16px/1.5 Georgia, serif; margin: 0 auto; max-width: 42rem; padding: 1rem; }</style>
+</head>
+<body>
+<main>
+  <h1>A chart behind "Read more"</h1>
+  <p>The harbor office counted every crossing the ferry made last year.</p>
+  <div class="more"><button class="more-button">Read more</button></div>
+  <div class="rest" style="display: none">
+    <div class="spacer" style="height: 9000px"></div>
+    <p>The chart counts every crossing the ferry made in each month of the
+       year, from the harbor office's own ledger, with the two winter months
+       the storms closed the north landing marked apart from the rest.</p>
+    <img id="chart" loading="lazy" src="/chart.png" width="240" height="120"
+         alt="Crossings by month">
+  </div>
+</main>
+</body>
+</html>

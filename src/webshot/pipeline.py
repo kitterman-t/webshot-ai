@@ -44,7 +44,15 @@ from .bundle.localpaths import LocalPathRecorder
 from .bundle.manifest import BUNDLE_FORMAT
 from .bundle.publish import announce_replacements, publish_ai_bundle, sha256_file
 from .bundle.videos import VideoEnrichment, enrich_with_videos
-from .capture.collapsed import collapsed_content, collapsed_content_warning
+from .capture.collapsed import (
+    Collapsed,
+    Opened,
+    collapsed_content,
+    collapsed_content_warning,
+    open_collapsed,
+    open_collapsed_failure,
+    opening_state,
+)
 from .capture.discover import read_page
 from .capture.landing import (
     WallCheck,
@@ -84,12 +92,14 @@ from .capture.prepare import (
     release_clamped_text,
     release_wide_tables,
     rendered_text_message,
+    restore_loaded_page,
     scroll_to_load,
     select_main_content,
     text_wait_bound,
     wait_for_rendered_text,
 )
 from .capture.session import CrashWatch, launch_context
+from .capture.watch_page import WATCH_PAGE_NOISE, is_watch_page, watch_page_note
 from .config import CaptureOptions, CaptureResult
 from .errors import (
     AuthenticationError,
@@ -576,6 +586,17 @@ async def capture_open_page(
     crash = CrashWatch(page)
     lazy: LazyLoadPass | None = None
     split: list[SplitTable] = []
+    # A video's watch page, printed for reading in clean mode: the site's
+    # bar, the player and the related rail are hidden as page chrome, and
+    # the footer says when the video was published (docs/09 P120-6).
+    watch_page = (
+        source_kind == "web" and options.mode == "clean" and is_watch_page(page.url)
+    )
+    noise: tuple[str, ...] = (
+        (*NOISE_SELECTORS, *(WATCH_PAGE_NOISE if watch_page else ()))
+        if options.mode == "clean"
+        else ()
+    )
     try:
         if options.scroll:
             crash.step = "loading the page's lazy content"
@@ -585,7 +606,7 @@ async def capture_open_page(
                 options.scroll_delay_s,
                 # What the capture will hide below, so that a feed growing only
                 # there does not hold the pass to --max-scrolls (docs/09 P23-8).
-                noise=NOISE_SELECTORS if options.mode == "clean" else (),
+                noise=noise,
                 excluded=options.exclude_selectors,
             )
             lazy_message = lazy_load_warning(lazy, options.max_scrolls)
@@ -602,7 +623,9 @@ async def capture_open_page(
             refusal = await bot_check_page(page)
             if refusal.check:
                 raise AuthenticationError(
-                    bot_check_page_message(options.source, refusal.check),
+                    bot_check_page_message(
+                        options.source, refusal.check, firewall=refusal.firewall
+                    ),
                     http_status=http_status,
                     final_url=page.url,
                 )
@@ -611,12 +634,27 @@ async def capture_open_page(
 
         crash.step = "preparing the page for print"
         warnings.extend(await _wait_for_fonts_and_images(page))
+        # A page that changed its address while it was scrolled, as a site
+        # appending its next article does, is captured under the address and
+        # title it loaded with (docs/09 P120-4).
+        navigated = lazy is not None and lazy.ended == "navigated"
         title = (
             options.document_title
-            or (await page.title()).strip()
+            or (
+                (lazy.loaded_title or "").strip()
+                if navigated and lazy is not None
+                else (await page.title()).strip()
+            )
             or "Untitled web page"
         )
-        final_url = page.url if source_kind == "web" else options.source
+        landed = (
+            lazy.loaded_url
+            if navigated and lazy is not None and lazy.loaded_url
+            else page.url
+        )
+        final_url = landed if source_kind == "web" else options.source
+        if navigated and lazy is not None:
+            await restore_loaded_page(page, lazy)
 
         # One read of the post-JS DOM feeds both discovery questions
         # (docs/05 task 3.4), before anything is isolated or hidden: the
@@ -624,6 +662,11 @@ async def capture_open_page(
         # the page as it loaded, not of what capture kept.
         reading = await asyncio.to_thread(read_page, await page.content())
         discovered = reading.metadata
+        footer_note = (
+            watch_page_note(discovered, datetime.now(UTC).date())
+            if watch_page
+            else None
+        )
         selection = await select_main_content(
             page, options.selector, reading.article, auto=options.auto_selector
         )
@@ -657,7 +700,7 @@ async def capture_open_page(
         if consent.shown:
             warnings.append(consent_dialogs_message(consent.shown))
         if options.mode == "clean":
-            hidden += await hide_elements(page, NOISE_SELECTORS, "noise")
+            hidden += await hide_elements(page, noise, "noise")
             overlays = await hide_obstructive_overlays(page)
             hidden += overlays.hidden
             if overlays.covering:
@@ -668,6 +711,29 @@ async def capture_open_page(
             warnings.append(late)
         if hidden:
             LOGGER.info("Removed %d non-document element(s).", hidden)
+
+        # After everything the capture hides, which is not the page keeping
+        # it closed, and before the release, the snapshot and every print, so
+        # all of them see the regions open (docs/09 P120-3).
+        opening: Opened | None = None
+        if options.opens_collapsed:
+            crash.step = "opening the page's closed controls"
+            opening = await open_collapsed(page)
+            failure = open_collapsed_failure(opening)
+            if failure:
+                warnings.append(failure)
+            elif opening.opened:
+                LOGGER.info(
+                    "Opened %d closed region(s) of the page's content for print.",
+                    opening.opened,
+                )
+                # The image wait ran on the page as it loaded, and skips an
+                # image with no box, so a lazy picture inside a region that
+                # was closed then was never made eager or waited for, and
+                # printed blank (review of #367).
+                warnings.extend(await _wait_for_fonts_and_images(page))
+            crash.step = "preparing the page for print"
+        opened = opening_state(options.opens_collapsed, opening)
 
         # Before the CSS, because the CSS targets the marks this leaves.
         released = await release_clamped_text(page)
@@ -739,13 +805,16 @@ async def capture_open_page(
         # otherwise catch a video's controls mid-spinner (docs/09 P66).
         await settle_media_controls(page)
         # As the page will print and be read: after the print CSS and the media
-        # switch, which can hide or show a region, and before the bundle, whose
-        # holding or lacking the text the warning states (docs/09 P102).
-        folded = collapsed_content_warning(
-            await collapsed_content(page), bundle=options.ai_bundle
-        )
-        if folded:
-            warnings.append(folded)
+        # switch, which can hide or show a region, and before the bundle is
+        # built from it (docs/09 P102). The warning waits for the bundle, whose
+        # holding or lacking each region's text it states (P120-3).
+        folded_regions: Collapsed = await collapsed_content(page)
+        if not options.ai_bundle:
+            folded = collapsed_content_warning(
+                folded_regions, bundle_text=None, opening=opened
+            )
+            if folded:
+                warnings.append(folded)
         clock.mark("capture")
 
         # How the bundle spells this machine's paths. Inactive, and so the
@@ -793,6 +862,12 @@ async def capture_open_page(
             bundle_text = (ai_result.staging_directory / "content.txt").read_text(
                 encoding="utf-8"
             )
+            folded = collapsed_content_warning(
+                folded_regions, bundle_text=bundle_text, opening=opened
+            )
+            if folded:
+                warnings.append(folded)
+                ai_result.warnings.append(folded)
             clock.mark("extract")
 
         if ai_result and options.videos:
@@ -892,6 +967,7 @@ async def capture_open_page(
             # appendix is merged on afterwards, so a footer that names a
             # total would be naming a different document (docs/09 P8-68).
             appendix_expected=bool(enrichment.walkthroughs),
+            footer_note=footer_note,
         )
         # The file as Chromium printed it, before anything is appended to it
         # or embedded in it, and before the checks that read it: a picture's
@@ -995,6 +1071,7 @@ async def capture_open_page(
                     title=title,
                     final_url=final_url,
                     appendix_expected=bool(enrichment.walkthroughs),
+                    footer_note=footer_note,
                 ),
                 boxes_at_render,
             ),

@@ -232,6 +232,13 @@ SAVE_IT_YOURSELF = (
 #: - Akamai's refusal is titled "Access Denied" and carries a reference in its
 #:   own dotted format. Both are required: the title alone is an ordinary
 #:   phrase, and an article about Akamai could quote a reference.
+#: - F5 BIG-IP's application firewall answers a request it blocks with its
+#:   stock page, titled "Request Rejected", whose whole text is "The requested
+#:   URL was rejected. Please consult with your administrator." and "Your
+#:   support ID is: <digits>". A government policy page was captured as that
+#:   page, 126 characters with exit 0, by two captures in one run (docs/09
+#:   P120-1). As with Akamai, the title and the support ID are both required,
+#:   and the sentence too: each alone is a phrase a page could quote.
 #:
 #: The answer is `[vendor, detail]`, or null when no signature is present.
 _BOT_CHECK_PAGE = r"""() => {
@@ -265,6 +272,13 @@ _BOT_CHECK_PAGE = r"""() => {
         );
         if (reference) return ['akamai', reference[1]];
     }
+    if (document.title.trim().toLowerCase() === 'request rejected' && document.body) {
+        const said = document.body.innerText.replace(/\s+/g, ' ');
+        const support = /Your support ID is:?\s*<?\s*(\d{6,})\s*>?/i.exec(said);
+        if (support && /The requested URL was rejected\./i.test(said)) {
+            return ['f5', support[1]];
+        }
+    }
     return null;
 }"""
 
@@ -281,6 +295,9 @@ class BotCheckPage:
     check: str | None = None
     #: Why the page could not be read, when it could not.
     unread: str | None = None
+    #: Whether the page is a firewall's refusal of the request rather than a
+    #: check that names automation, which decides what the message may claim.
+    firewall: bool = False
 
 
 def _bot_check_name(vendor: str, detail: str) -> str:
@@ -288,6 +305,11 @@ def _bot_check_name(vendor: str, detail: str) -> str:
         return f"DataDome's bot protection (its challenge frame from {detail})"
     if vendor == "perimeterx":
         return f"HUMAN's bot protection, formerly PerimeterX ({detail})"
+    if vendor == "f5":
+        return (
+            f'the "Request Rejected" page of F5 BIG-IP\'s application firewall '
+            f"(support ID {detail})"
+        )
     return f'Akamai\'s "Access Denied" page (Reference #{detail})'
 
 
@@ -313,7 +335,9 @@ async def bot_check_page(page: Any) -> BotCheckPage:
         if found is None:
             return BotCheckPage()
         vendor, detail = found
-        return BotCheckPage(check=_bot_check_name(str(vendor), str(detail)))
+        return BotCheckPage(
+            check=_bot_check_name(str(vendor), str(detail)), firewall=vendor == "f5"
+        )
     return BotCheckPage(
         unread=(
             f"The bot-check test could not read the page ({page.url}): "
@@ -363,8 +387,20 @@ async def access_walls(page: Any) -> tuple[str, ...]:
     return tuple(str(vendor) for vendor in found)
 
 
-def bot_check_page_message(source: str, check: str) -> str:
-    """What exit 4 says when a bot check's page was shown in place of the page."""
+def bot_check_page_message(source: str, check: str, *, firewall: bool = False) -> str:
+    """What exit 4 says when a bot check's page was shown in place of the page.
+
+    A firewall's page says only that the request was rejected, not why, so
+    the message claims no more than that: a rule may refuse the request for
+    something other than the browser (docs/09 P120-1).
+    """
+    if firewall:
+        return (
+            f"{source} showed {check} in place of the page: the site's firewall "
+            "rejected the request. This is not a sign-in page. If the page opens "
+            "in your own browser, the firewall refused this automated one. "
+            f"{SAVE_IT_YOURSELF}"
+        )
     return (
         f"{source} showed {check} in place of the page: a bot check refused "
         f"an automated browser. This is not a sign-in page. {SAVE_IT_YOURSELF}"

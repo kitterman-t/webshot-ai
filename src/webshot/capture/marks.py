@@ -1,10 +1,11 @@
 """Boxes WebShot marked to leave out that the page's own print CSS shows anyway.
 
-Four rules mark what they leave out with `data-webshot-hidden`: the content
+Five rules mark what they leave out with `data-webshot-hidden`: the content
 selector (`--selector` or the auto-selector) marks the siblings along the
 path to its root, the consent rule marks consent dialogs in either mode, clean
-mode marks page furniture and what it takes for an overlay, and `--exclude`
-marks what the user named. Each records which it was in
+mode marks page furniture and what it takes for an overlay, the lazy-load
+pass marks the articles a page appended once it changed its address
+(docs/09 P120-4), and `--exclude` marks what the user named. Each records which it was in
 `data-webshot-hidden-by`. The print stylesheet hides a marked box with
 `display: none !important`, and a page's own `!important` rule of higher
 specificity wins that tie, so the box prints. Every later stage takes the mark
@@ -62,6 +63,7 @@ REASONS = {
     "overlay": "taken in clean mode for an overlay",
     "noise": "taken in clean mode for page furniture",
     "consent": "taken for a consent dialog",
+    "appended": "an article the page appended after the one captured",
 }
 
 

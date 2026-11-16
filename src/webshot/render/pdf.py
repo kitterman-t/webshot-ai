@@ -41,7 +41,7 @@ LOGGER = logging.getLogger("webshot")
 
 
 def _header_footer_templates(
-    title: str, source: str, *, total_is_final: bool = True
+    title: str, source: str, *, total_is_final: bool = True, note: str | None = None
 ) -> tuple[str, str]:
     """The running header and footer Chromium prints on every page.
 
@@ -57,6 +57,10 @@ def _header_footer_templates(
     not known until it has been rendered, which happens later and in a second
     browser. "Page 3" is true on every page of the composed file; "Page 3 of 4"
     is false on four of them.
+
+    `note` is a line printed between the two halves of the footer, which a
+    watch page uses for its publication and capture dates (docs/09 P120-6);
+    without one the footer is what it always was.
     """
     # The templates are separate documents that no page stylesheet reaches, and
     # the title in the header is in the text layer like any other text.
@@ -73,9 +77,21 @@ def _header_footer_templates(
         f'<span style="white-space:nowrap;">{safe_source}</span></div>'
     )
     total = ' of <span class="totalPages"></span>' if total_is_final else ""
+    middle = (
+        '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+        f"{html.escape(note)}</span>"
+        if note
+        else ""
+    )
+    # Spelled outside the f-string: Python 3.11 allows no backslash inside
+    # an f-string's expression, and the attribute needs its quotes escaped.
+    gap = "gap:16px;" if note else ""
+    pages_style = ' style="white-space:nowrap;"' if note else ""
     footer = (
-        f'<div style="{common}padding:0 0.6in;display:flex;justify-content:space-between;">'
-        f'<span>WebShot</span><span>Page <span class="pageNumber"></span>{total}'
+        f'<div style="{common}padding:0 0.6in;display:flex;justify-content:space-between;'
+        f'{gap}">'
+        f"<span>WebShot</span>{middle}<span{pages_style}>Page "
+        f'<span class="pageNumber"></span>{total}'
         "</span></div>"
     )
     return header, footer
@@ -109,6 +125,7 @@ def header_footer_options(
     title: str,
     final_url: str,
     appendix_expected: bool = False,
+    footer_note: str | None = None,
 ) -> dict[str, Any]:
     """The running header and footer the render prints, as `page.pdf` options.
 
@@ -122,7 +139,7 @@ def header_footer_options(
         urlparse(final_url).netloc or Path(unquote(urlparse(final_url).path)).name
     )
     header, footer = _header_footer_templates(
-        title, source_label, total_is_final=not appendix_expected
+        title, source_label, total_is_final=not appendix_expected, note=footer_note
     )
     return {
         "display_header_footer": True,
@@ -139,6 +156,7 @@ async def render_pdf(
     title: str,
     final_url: str,
     appendix_expected: bool = False,
+    footer_note: str | None = None,
 ) -> None:
     """Print the page, with the running header and footer unless disabled.
 
@@ -148,7 +166,11 @@ async def render_pdf(
     """
     LOGGER.info("Rendering PDF...")
     extra = header_footer_options(
-        options, title=title, final_url=final_url, appendix_expected=appendix_expected
+        options,
+        title=title,
+        final_url=final_url,
+        appendix_expected=appendix_expected,
+        footer_note=footer_note,
     )
     # Translated here rather than left to `classify`. A `PlaywrightError` out
     # of `page.pdf()` — a browser that crashed mid-print, a PDF protocol

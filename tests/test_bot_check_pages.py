@@ -6,7 +6,8 @@ block page's text under the article's title and exited 0. P23-3 named a bot
 check only from a 403's headers, and this response had none. The page is read
 now, for signatures that are each a vendor naming itself: DataDome's frame
 from its own host, HUMAN's `#px-captcha`, and Akamai's "Access Denied" title
-with a reference in its format. The pages here are served as each check serves
+with a reference in its format, and F5 BIG-IP's "Request Rejected" page with
+its support ID (P120-1). The pages here are served as each check serves
 its own, and DataDome's frame host is answered by a route, so no request leaves
 the machine.
 
@@ -70,17 +71,33 @@ PAGES: dict[str, str] = {
         "on this server.<p>Reference #18.6f1d2c17.1792000000.1a2b3c4d</p>"
         "<p>https&#58;&#47;&#47;errors&#46;edgesuite&#46;net&#47;18&#46;6f1d2c17</p>"
     ),
+    # F5 BIG-IP's stock block page, as its firewall serves it with 200: the
+    # support ID in angle brackets, which an HTML page must escape.
+    "/f5": (
+        "<html><head><title>Request Rejected</title></head><body>The requested URL "
+        "was rejected. Please consult with your administrator.<br><br>Your support "
+        "ID is: &lt;8502708388980510717&gt;<br><br>"
+        "<a href='javascript:history.back();'>[Go Back]</a></body></html>"
+    ),
     # Pages that name every signature and are not a bot check's page: an
-    # article quoting the block page, linking to the vendor and carrying a
-    # reference under another title, and one whose frame and challenge
-    # element are present and not shown.
+    # article quoting the block pages, linking to the vendor and carrying a
+    # reference under another title, one whose frame and challenge element
+    # are present and not shown, and a page titled "Request Rejected" that
+    # quotes no support ID.
     "/quotes": (
         "<title>Access Denied: a history of bot checks</title>"
         f"{ARTICLE}<blockquote>We detected unusual activity from your device or "
         "network. Reasons may include: rapid taps or clicks.</blockquote>"
         "<p>Reference #18.6f1d2c17.1792000000.1a2b3c4d, as Akamai prints it.</p>"
+        "<p>A firewall's page reads: The requested URL was rejected. Please consult "
+        "with your administrator. Your support ID is: &lt;8502708388980510717&gt;</p>"
         '<p><a href="https://geo.captcha-delivery.com/captcha/">The frame\'s host</a>, '
         "and the element id px-captcha.</p>"
+    ),
+    "/rejected-title": (
+        "<title>Request Rejected</title><h1>Request rejected</h1>"
+        "<p>The requested URL was rejected. This article explains what that "
+        "page means when a firewall shows it.</p>" + ARTICLE
     ),
     "/hidden": (
         f"<title>An article</title>{ARTICLE}"
@@ -170,6 +187,11 @@ def _run(tmp_path: Path, source: str) -> tuple[int, dict[str, Any]]:
             "/akamai",
             'Akamai\'s "Access Denied" page (Reference #18.6f1d2c17.1792000000.1a2b3c4d)',
         ),
+        (
+            "/f5",
+            'the "Request Rejected" page of F5 BIG-IP\'s application firewall '
+            "(support ID 8502708388980510717)",
+        ),
     ],
 )
 def test_a_bot_check_page_served_200_fails(
@@ -187,7 +209,20 @@ def test_a_bot_check_page_served_200_fails(
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("path", ["/quotes", "/hidden"])
+def test_a_firewall_page_claims_no_more_than_a_rejection(
+    tmp_path: Path, site: str, vendor_host: list[str]
+) -> None:
+    """F5's page says the request was rejected, not why (docs/09 P120-1)."""
+    code, report = _run(tmp_path, f"{site}/f5")
+    assert code == 4
+    error = str(report["error"])
+    assert "the site's firewall rejected the request" in error
+    assert "If the page opens in your own browser" in error
+    assert "a bot check refused" not in error
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("path", ["/quotes", "/hidden", "/rejected-title"])
 def test_a_page_that_names_the_signatures_is_captured(
     tmp_path: Path, site: str, vendor_host: list[str], path: str
 ) -> None:

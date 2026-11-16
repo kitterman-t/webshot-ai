@@ -205,6 +205,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="clean removes common page chrome; faithful preserves the page structure",
     )
     parser.add_argument(
+        "--collapsed",
+        choices=("open", "closed"),
+        help=(
+            "open the closed <details>, accordion, collapse and read-more "
+            "regions of the page's content before printing (open), or print "
+            "them as the page showed them (closed); default: open in clean "
+            "mode, closed in faithful mode"
+        ),
+    )
+    parser.add_argument(
         "--exclude",
         action="append",
         default=[],
@@ -610,6 +620,7 @@ def options_from_args(args: argparse.Namespace) -> CaptureOptions:
         selector=args.selector,
         auto_selector=args.auto_selector,
         mode=args.mode,
+        collapsed=args.collapsed,
         exclude_selectors=args.exclude,
         wait_for_selector=args.wait_for,
         wait_after_load_s=args.delay,

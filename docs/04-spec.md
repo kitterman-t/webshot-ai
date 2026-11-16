@@ -47,6 +47,7 @@ this document listed a flag (`--custom-css`) that does not exist.
 | *(new)* `--no-embed-bundle` | web path | by default the bundle is carried inside the PDF as associated files, so one file is the whole deliverable; this restores the PDF-plus-directory shape |
 | *(new)* `--embed-assets` | web path | also embed the binary visual assets (larger file; the images are already visible in the rendered pages and `assets.json` carries their recognized text) |
 | *(new)* `--local-paths` `relative` (default `absolute`) | web path, local sources | records a local source's `source` and `final_url`, and every `file:` URL under the source file's directory that the bundle records (images and media in `assets.json`, `links.json`, `page_metadata.canonicalUrl`, the `legacy/` files, `README.txt`), relative to that directory (`./page.html`, `./images/a.png`) instead of as the capturing machine's absolute paths; the manifest and the embedded `capture.json` then say `local_paths: "relative"`, and without the flag that key is absent and the bundle is byte for byte what it was. Written that way rather than rewritten afterwards, so every digest describes the bytes the bundle holds. A `file:` URL outside the directory is kept and counted in a warning, and a bundle file that still names the directory anywhere is named in a warning. The PDF's own link annotations and the QA report keep their paths. Refused with `--protected-viewer` on a local source, whose bundle it does not reach (docs/09 P14-61) |
+| *(new)* `--collapsed` `open` or `closed` | web path | opens the closed `<details>`, accordion, collapse and "read more" regions of the page's content before it is printed and read (`open`), or prints them as the page showed them (`closed`). Unset, the mode decides: open in clean mode, closed in faithful mode (§5 item 20). The QA report records it only when it was given. Also `[capture] collapsed` / `WEBSHOT_CAPTURE_COLLAPSED` (docs/09 P120-3) |
 | *(new)* `--no-videos` | web path | skips reading the walkthroughs of videos embedded in the page. Enrichment is on by default because on a page whose procedure lives inside a player the walkthrough *is* the content; with this flag the capture is exactly what it was before the feature existed, including every byte of the bundle. A page with no embedded video pays one DOM read |
 | *(new)* `--video-assets` | web path | also downloads each embedded video's step clips and source recording into the bundle. Off by default, and not for size: an agent cannot watch a video, the stills and the narration already carry the procedure, and unplayable media is bulk rather than content. Warned-and-ignored where there is no bundle to write into (`--no-ai-bundle`, `--protected-viewer`) |
 | *(new)* `--legacy-bundle` | **ships in v3.0, removed in v3.1** | emits v2-format artifacts under `legacy/` inside the bundle, listed in the manifest with `legacy: true` |
@@ -561,18 +562,26 @@ there with its reason, and the run's job summary lists every skip.
     reader could see a repeat of is changed. That includes the root
     element's background, and the body's when the root has none, which
     paints the whole canvas from a tile the root's box sizes (docs/09 P103).
-20. **Text behind a closed control:** once the page is prepared for print and
-    before the bundle, a capture MUST record a manifest warning naming each
-    control in the page's content whose closed region holds at least 200
-    characters of text: an `aria-expanded="false"` control whose
-    `aria-controls` region, or a Bootstrap collapse toggle whose target, has
-    no box (in neither the PDF nor the bundle); a closed `<details>` (in the
-    bundle, not the PDF); and a known expander whose text the page fetches
-    only when opened (YouTube's description). Regions in a header,
-    navigation, footer or aside, and regions mostly of link text, are page
-    chrome and are not named. Under `--no-ai-bundle` the warning says only
-    that the text is not in the PDF. WebShot does not open them (docs/09
-    P102).
+20. **Text behind a closed control:** the closed regions of the page's
+    content that hold at least 200 characters of text are an
+    `aria-expanded="false"` control's `aria-controls` region, or a Bootstrap
+    collapse toggle's target, with no box; the first region with no box
+    after a control whose whole label says the article goes on ("Story
+    continues", "Read more") or after one of its three nearest ancestors; a
+    closed `<details>`; and a known expander whose text the page fetches only
+    when opened (YouTube's description). Regions in a header, navigation,
+    footer or aside, regions mostly of link text, and anything the capture
+    hid itself, are page chrome and are not counted. In clean mode, and
+    under `--collapsed open`, a capture MUST open them once it has hidden
+    what it hides and before anything is snapshotted or printed: a
+    `<details>` is given its `open` attribute, a region with no box its
+    element's default display, and the expander's button is pressed. In
+    faithful mode, and under `--collapsed closed`, it MUST NOT open them.
+    Once the page is prepared for print, a capture MUST record a manifest
+    warning naming each such region that is still closed, saying whether its
+    text is in the bundle as read from the bundle itself, never assumed from
+    its kind. Under `--no-ai-bundle` the warning says only that the text is
+    not in the PDF (docs/09 P102, P120-2, P120-3).
 21. **A page's own `@page` margin and the running header and footer:**
     Chromium honours a page's `@page` margin over the margin `page.pdf` is
     given, and the running header and footer print in that margin, so a page
