@@ -149,11 +149,13 @@ def test_the_warning_names_a_wall_the_page_showed_and_no_bundle_it_lacks() -> No
     assert "bundle" not in message
 
 
-def _warnings(tmp_path: Path, *args: str) -> tuple[int, list[str]]:
+def _warnings(
+    tmp_path: Path, *args: str, fixture: Path = FIXTURE
+) -> tuple[int, list[str]]:
     pdf = tmp_path / "capture.pdf"
     report = tmp_path / "report.json"
     code = main(
-        [str(FIXTURE), "--output", str(pdf), "--no-ocr", "--report", str(report), *args]
+        [str(fixture), "--output", str(pdf), "--no-ocr", "--report", str(report), *args]
     )
     return code, list(json.loads(report.read_text(encoding="utf-8"))["warnings"])
 
@@ -179,9 +181,10 @@ def test_a_teaser_that_stops_at_a_wall_is_named(tmp_path: Path, bundle: bool) ->
 def test_a_pdf_whose_text_cannot_be_read_is_one_warning(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bundle: bool
 ) -> None:
-    """One failure to read the PDF's text stops both checks on it, the
-    share's and the wall's, and says so once, naming each check it stopped:
-    the wall's check runs only when the share's warning did not."""
+    """One failure to read the PDF's text stops every check on it, the
+    share's, the wall's and the headings' (docs/09 P123-5), and says so once,
+    naming each check it stopped: the wall's check runs only when the share's
+    warning did not."""
 
     def unreadable(path: Path) -> tuple[str, ...]:
         raise PdfInkError(f"PDFium could not open {path.name}: a test's failure")
@@ -193,7 +196,34 @@ def test_a_pdf_whose_text_cannot_be_read_is_one_warning(
     assert len(unread) == 1, warnings
     assert "a test's failure" in unread[0]
     assert "registration or subscription wall" in unread[0], unread[0]
+    assert "lacks a heading the page showed" in unread[0], unread[0]
     assert ("bundle's" in unread[0]) is bundle, unread[0]
+
+
+#: A wall that is a bar fixed to the window's bottom edge, printed over the
+#: text at the foot of page one (docs/09 P123-6).
+FIXED_BAR = Path(__file__).parent / "fixtures" / "fixed_wall_bar_page.html"
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("mode", ["clean", "faithful"])
+def test_clean_mode_does_not_hide_a_fixed_bar_that_holds_the_wall_s_words(
+    tmp_path: Path, mode: str
+) -> None:
+    """A print that stops at a wall's words showed a wall, though WebShot does
+    not know its vendor: the box over the text may be the wall, and hiding it
+    would take the words, and the warning naming them, out of the PDF while
+    the site still keeps the article back."""
+    code, warnings = _warnings(tmp_path, "--mode", mode, fixture=FIXED_BAR)
+    assert code == 0
+    walled = [w for w in warnings if "the words a registration or subscription" in w]
+    assert len(walled) == 1, warnings
+    assert walled[0].startswith(
+        'The PDF\'s text has "Already a subscriber? Sign in" on page 2, '
+    ), walled[0]
+    assert not [w for w in warnings if w.startswith("Clean mode hid")], warnings
+    covered = [w for w in warnings if w.startswith("A fixed box, div.member-bar,")]
+    assert len(covered) == 1, warnings
 
 
 @pytest.mark.browser

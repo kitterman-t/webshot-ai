@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A post in a fixed panel, printed without its title</title>
+<style>
+  /* print_shows_panel.html, whose print stylesheet also hides the post's
+     title: clean mode marks the panel as an overlay, the print shows it
+     anyway (docs/09 P128), and the print lacks the title (P123-5). The
+     text is invented. */
+  body { margin: 0; font-family: Helvetica, Arial, sans-serif; }
+  .grid { columns: 3; padding: 20px; }
+  .grid p { margin: 0 0 10px; }
+  .panel { position: fixed; inset: 0; z-index: 999; overflow: auto;
+           background: #fff; padding: 40px; }
+  @media print {
+    .grid { display: none; }
+    body .panel { display: block !important; position: static; }
+    .panel h1 { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="grid">
+  <p>Card one: a short teaser about seasonal weather patterns in coastal towns.</p>
+  <p>Card two: a teaser about the history of public libraries and their reading rooms.</p>
+  <p>Card three: a teaser about building small wooden boats from a kit at home.</p>
+  <p>Card four: a teaser about measuring rainfall with a homemade gauge and a ruler.</p>
+  <p>Card five: a teaser about the migration routes of small songbirds each spring.</p>
+  <p>Card six: a teaser about keeping a vegetable garden through a dry summer.</p>
+</div>
+<div class="panel">
+  <h1>Welcome to the showcase</h1>
+  <p>The open post says the gallery opens on the first of the month.</p>
+  <h2>The three rooms</h2>
+  <p>Its second paragraph lists the three rooms the visitors walk through.</p>
+</div>
+</body>
+</html>

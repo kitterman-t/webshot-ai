@@ -383,14 +383,61 @@ NOTICE_BAR = (
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("mode", ["faithful", "clean"])
-def test_the_box_over_text_is_named_and_the_others_are_not(
-    tmp_path: Path, mode: str
-) -> None:
-    warnings = _capture(tmp_path, "--mode", mode)
+def test_the_box_over_text_is_named_and_the_others_are_not(tmp_path: Path) -> None:
+    warnings = _capture(tmp_path, "--mode", "faithful")
     consent = [warning for warning in warnings if "consent manager" in warning]
     assert len(consent) == 1, warnings
     assert [warning for warning in warnings if warning not in consent] == [NOTICE_BAR]
+
+
+#: Clean mode hides the same box and prints the page again (docs/09 P123-6).
+HIDDEN_NOTICE_BAR = (
+    "Clean mode hid a fixed box that printed over the page's text, and printed "
+    "the page again without it: div.notice-bar, over "
+    f"{len('Underthenoticebar,lineone') + len('Underthenoticebar,linetwo')} "
+    "characters of the page's text on 2 pages. Chromium prints a fixed box on "
+    "every page, so in a PDF it is page chrome, which clean mode removes. The "
+    "bundle was taken before, so it still holds the box's text; --mode faithful "
+    "prints the page with it and names it in a warning instead."
+)
+
+
+@pytest.mark.browser
+def test_clean_mode_hides_the_box_over_text_and_prints_again(tmp_path: Path) -> None:
+    """The others are left as faithful mode leaves them: the sticky masthead,
+    the badge in the gutter, the tint and the layer that paints nothing."""
+    warnings = _capture(tmp_path, "--mode", "clean")
+    consent = [warning for warning in warnings if "consent manager" in warning]
+    assert len(consent) == 1, warnings
+    assert [w for w in warnings if w not in consent] == [HIDDEN_NOTICE_BAR]
+    pdf = tmp_path / "capture.pdf"
+    text = " ".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    assert "weighing office is closed" not in text
+    assert "Under the notice bar, line one" in " ".join(text.split())
+    bundle = (pdf.with_suffix(".ai") / "content.txt").read_text(encoding="utf-8")
+    assert "weighing office is closed" in bundle
+
+
+@pytest.mark.browser
+def test_a_box_a_stylesheet_keeps_on_the_page_is_not_said_to_be_hidden(
+    tmp_path: Path,
+) -> None:
+    """A rule that outranks WebShot's hiding one keeps the box printing once
+    clean mode marks it, as P128 found of the marks set before the bundle,
+    which its unmarking cannot reach here: this mark is set after the first
+    render. Clean mode said it had hidden the bar and printed the page again
+    without it, beside a warning that the bar printed over the text, and the
+    second PDF still printed the bar. The box is reported as faithful mode
+    reports it, and the page is not printed again."""
+    css = tmp_path / "shows.css"
+    css.write_text(".notice-bar { display: block !important; }\n")
+    warnings = _capture(tmp_path, "--mode", "clean", "--css", str(css))
+    consent = [warning for warning in warnings if "consent manager" in warning]
+    assert len(consent) == 1, warnings
+    assert [w for w in warnings if w not in consent] == [NOTICE_BAR]
+    pdf = tmp_path / "capture.pdf"
+    text = " ".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    assert "weighing office is closed" in text
 
 
 @pytest.mark.browser
@@ -520,6 +567,12 @@ FILTERED = Path(__file__).parent / "fixtures" / "covering_filtered_box_page.html
 LATE = Path(__file__).parent / "fixtures" / "covering_late_box_page.html"
 
 
+#: The tests of the measurement itself run in faithful mode, where the box
+#: measured over the text is named and printed; clean mode would hide it and
+#: print the page again (docs/09 P123-6), which its own tests hold.
+FAITHFUL = ("--mode", "faithful")
+
+
 def _capture_file(tmp_path: Path, fixture: Path, *args: str) -> tuple[list[str], str]:
     pdf = tmp_path / "capture.pdf"
     assert main([str(fixture), "--output", str(pdf), "--no-ocr", *args]) == 0
@@ -541,7 +594,7 @@ def test_a_box_whose_inline_important_colour_beat_the_sheet_is_measured(
     """An ad slot's `background: ... !important` in its own style attribute kept
     its colour, so the box was reported as not marked and never measured, on
     every page it printed on (P97-3)."""
-    warnings, _ = _capture_file(tmp_path, SLOT)
+    warnings, _ = _capture_file(tmp_path, SLOT, *FAITHFUL)
     assert not [w for w in warnings if "could not mark" in w], warnings
     [slot] = warnings
     assert slot.startswith(
@@ -581,7 +634,7 @@ def test_a_filtered_box_printed_as_a_picture_is_not_a_page_that_changed(
     measured, its filter swapped for none (P83-1). The render's text must be
     in the measuring print, and the measuring print's text outside the boxes
     in the render; the box's own words are neither (review of P97-4)."""
-    warnings, text = _capture_file(tmp_path, FILTERED)
+    warnings, text = _capture_file(tmp_path, FILTERED, *FAITHFUL)
     assert "drawn with a shadow filter" not in text  # printed as a picture
     assert not [w for w in warnings if "page changed" in w], warnings
     [notice] = warnings
@@ -594,7 +647,7 @@ def test_a_box_the_page_adds_after_preparation_is_named_without_its_made_up_id(
 ) -> None:
     """The slide-out arrives once printing starts and carries an id made up on
     each load, so the warning names it by its class (P101-2)."""
-    warnings, text = _capture_file(tmp_path, LATE)
+    warnings, text = _capture_file(tmp_path, LATE, *FAITHFUL)
     assert "A harbor event slides out over the ledger." in text
     [late] = warnings
     assert late.startswith("A fixed box, div.slide-out, prints ")
@@ -703,3 +756,146 @@ def test_boxes_that_would_read_alike_are_said_once_with_their_number() -> None:
     )
     assert "but on the page the boxes are drawn over it." in warnings[0]
     assert warnings[1].startswith("A fixed box, div#overlay, prints on all 3 pages")
+
+
+NARROW = Path(__file__).parent / "fixtures" / "covering_narrow_fixed_header_page.html"
+SHADOW_TAB = Path(__file__).parent / "fixtures" / "covering_closed_shadow_tab_page.html"
+
+
+@pytest.mark.browser
+def test_a_box_fixed_only_where_the_page_prints_is_the_one_measured(
+    tmp_path: Path,
+) -> None:
+    """At the 1440px window the wide bar was the fixed box, and it does not
+    print; at the printed width the compact bar is, and it prints over the
+    first line of every page, with the background it has only there (docs/09
+    P123-1). Marked at the window's width, nothing was reported."""
+    warnings, text = _capture_file(tmp_path, NARROW, *FAITHFUL)
+    assert "Under the compact bar, page one" in text
+    covered = len("Underthecompactbar,pageone") + len("Underthecompactbar,pagetwo")
+    assert warnings == [
+        f"A fixed box, div.compact-bar, prints over {covered} characters of the "
+        "page's text in 2 lines on both pages, starting \"Under the compact bar, "
+        "page one\". The text stays in the PDF's text layer, but on the page the "
+        'box is drawn over it. Pass --exclude "div.compact-bar" to capture the '
+        "page without the box."
+    ]
+
+
+@pytest.mark.browser
+def test_paint_in_a_closed_shadow_root_is_the_box_s(tmp_path: Path) -> None:
+    """A collapsed dock's tab, drawn in a closed shadow root that keeps its own
+    colours, printed over a line of every page and was measured as covering
+    nothing (docs/09 P123-2). Everything drawn between the marks that bracket
+    the box is the box's."""
+    warnings, _ = _capture_file(tmp_path, SHADOW_TAB, *FAITHFUL)
+    covered = len("Underthedockedtab,pageone") + len("Underthedockedtab,pagetwo")
+    assert warnings == [
+        f"A fixed box, div.dock, prints over {covered} characters of the page's "
+        'text in 2 lines on both pages, starting "Under the docked tab, page '
+        "one\". The text stays in the PDF's text layer, but on the page the box is "
+        'drawn over it. Pass --exclude "div.dock" to capture the page without the '
+        "box."
+    ]
+
+
+@pytest.mark.browser
+def test_measuring_at_the_printed_width_puts_the_window_back(tmp_path: Path) -> None:
+    """The journey walker and the clipping check go on using the page."""
+    from webshot.config import CaptureOptions
+    from webshot.render.covering import find_covered_text
+    from webshot.render.pdf import print_geometry
+
+    async def run() -> tuple[dict[str, int] | None, CoveredText]:
+        options = CaptureOptions(source="fixture", output=tmp_path / "unused.pdf")
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            try:
+                page = await browser.new_page(viewport={"width": 1440, "height": 900})
+                await page.goto(NARROW.as_uri())
+                await page.emulate_media(media="print")
+                rendered = tmp_path / "rendered.pdf"
+                rendered.write_bytes(
+                    await page.pdf(**print_geometry(options), print_background=True)
+                )
+                found = await find_covered_text(page, options, rendered, width=779)
+                return page.viewport_size, found
+            finally:
+                await browser.close()
+
+    viewport, found = asyncio.run(run())
+    assert viewport == {"width": 1440, "height": 900}
+    assert [covering.name for covering in found.coverings] == ["div.compact-bar"]
+
+
+def test_a_picture_drawn_between_a_box_s_first_and_last_object_is_the_box_s() -> None:
+    """A box is one stacking context, painted all at once, so what lies between
+    its marks is its own paint, a picture included, whatever its colour
+    (P123-2). A picture outside that span is the page's, and covers nothing."""
+    tab = Ink(2, "image", (0, 0, 600, 50), None, 1.0)
+    page = _page(
+        1,
+        _text(0, 10, 20, "under the tab"),
+        _bar(1, alpha=0.02),
+        tab,
+        _bar(3, alpha=0.02),
+    )
+    (found,) = measure([page], BOXES)
+    assert (found.name, found.characters) == ("div.bar", len("underthetab"))
+    outside = _page(
+        1,
+        _text(0, 10, 20, "under a picture"),
+        _bar(1, alpha=0.02),
+        _bar(2, alpha=0.02),
+        Ink(3, "image", (0, 0, 600, 50), None, 1.0),
+    )
+    assert measure([outside], BOXES) == ()
+
+
+def test_text_drawn_between_a_box_s_marks_is_the_box_s_own() -> None:
+    """Text in a closed shadow root keeps its own colour; it is the box's text,
+    not page text the box covers."""
+    page = _page(
+        1, _bar(0, alpha=0.02), _text(1, 10, 20, "tab label"), _bar(2, alpha=0.02)
+    )
+    assert measure([page], BOXES) == ()
+
+
+def _hideable(**changes: Any) -> Covering:
+    fields: dict[str, Any] = {"box_characters": 40, "holds_content": False}
+    fields.update(changes)
+    return _covering(**fields)
+
+
+@pytest.mark.parametrize(
+    ("covering", "kept"),
+    [
+        (_hideable(), True),
+        # A sticky box prints once, in the page's flow: a table's header row.
+        (_hideable(position="sticky"), False),
+        # A name that matches more, or nothing, would hide the wrong thing.
+        (_hideable(reach="shared"), False),
+        (_hideable(reach="unmatched"), False),
+        # The content the capture isolated is the page's own.
+        (_hideable(holds_content=True), False),
+        # More than a quarter of the page's text, or 1,500 characters.
+        (_hideable(box_characters=300), False),
+        (_hideable(box_characters=1501), False),
+    ],
+)
+def test_clean_mode_hides_only_a_fixed_box_that_is_chrome(
+    covering: Covering, kept: bool
+) -> None:
+    from webshot.render.covering import hideable
+
+    shown = 1000 if covering.box_characters < 1000 else 100_000
+    result = CoveredText(boxes=1, pages=3, coverings=(covering,))
+    assert (hideable(result, shown) == [covering]) is kept
+
+
+def test_a_page_whose_text_is_all_in_the_box_keeps_it() -> None:
+    """A notice centred in the window, the whole of the page."""
+    from webshot.render.covering import hideable
+
+    whole = _hideable(box_characters=200)
+    assert hideable(CoveredText(boxes=1, pages=1, coverings=(whole,)), 200) == []

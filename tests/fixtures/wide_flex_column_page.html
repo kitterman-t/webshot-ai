@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A survey record held open by its table</title>
+<!-- docs/09 P123-3. A code host's repository page, by shape: a flex row with
+     a narrow file list and the record beside it. The record is a flex item,
+     so it cannot shrink below its widest content, and its table is laid out
+     at its widest line, as a code host's Markdown tables are (`width:
+     max-content`, scrolling only once something caps them). The page's
+     wrapper hides what runs past it, so the document is no wider than the
+     paper and Chromium does not shrink it to fit. At the printed width, 779px,
+     the record is about 1,100px wide: its paragraphs run past the page edge,
+     and the second column of its last section, with its heading, starts past
+     it. All of the text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/1.5 sans-serif; color: #111; background: #fff; }
+  .page { overflow: hidden; }
+  .layout { display: flex; gap: 16px; }
+  .files { flex: 0 0 120px; }
+  .record { flex: 1 1 auto; }
+  .record table { display: block; width: max-content; max-width: 100%;
+    overflow: auto; border-collapse: collapse; }
+  .record td { white-space: nowrap; padding: 4px 8px; border: 1px solid #999; }
+  .closing { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="layout">
+  <nav class="files">
+    <div>survey.csv</div>
+    <div>notes.md</div>
+  </nav>
+  <div class="record">
+    <h1>Harbor survey records</h1>
+    <p>Each survey lists the depth at every mooring of the north and south quays,
+    taken at low water by the harbor office's own launch and checked against the
+    previous season's soundings before it is filed with the port authority.</p>
+    <table>
+      <tr><td>Mooring</td><td>Depth at low water, in metres, as sounded from the launch</td><td>Change since the previous season's survey, in centimetres</td></tr>
+      <tr><td>North quay 1</td><td>6.2 metres at the seaward end of the berth</td><td>shallower by 14 centimetres after the winter storms</td></tr>
+    </table>
+    <p>Soundings that differ from the previous season by more than twenty
+    centimetres are taken again on the next low water, and both readings are
+    kept in the record with the time and the state of the tide at each.</p>
+    <div class="closing">
+      <section>
+        <h2>How to read a sounding</h2>
+        <p>A sounding is the depth below the chart datum at the moment it was
+        taken, corrected for the height of the tide.</p>
+      </section>
+      <section>
+        <h2>Further surveys and archives</h2>
+        <p>Older surveys are kept in the harbor office's archive room and can
+        be read there on any weekday morning.</p>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

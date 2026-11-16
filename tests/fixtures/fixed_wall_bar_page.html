@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A ledger under a sign-in bar</title>
+<!-- docs/09 P123-6, P124-2. A registration wall that is a bar fixed to the
+     window's bottom edge, from a vendor WebShot does not know by its markup.
+     Chromium prints a fixed box on every page at the same place, so the bar
+     is printed over the text at the foot of the first page, and its words
+     are the last the PDF prints. The layout is covering_boxes_page.html's: at
+     the default page box a page holds 1045px of layout, the bar, 100px tall,
+     covers 945-1045px of every page, and each line is 30px tall and never
+     wraps. Page one's 34 lines run to 1020px, under the bar; page two starts
+     with a page break and its ten lines stop well above it. Nothing here is
+     a region clean mode would isolate. All of the text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/30px sans-serif; color: #111; background: #fff; }
+  .column { width: 380px; margin-left: 20px; }
+  .line { height: 30px; white-space: nowrap; overflow: hidden; }
+  .second { break-before: page; }
+  .member-bar { position: fixed; left: 0; right: 0; bottom: 0; height: 100px;
+    background: #223; color: #fff; z-index: 5; }
+</style>
+</head>
+<body>
+<div class="column first"></div>
+<div class="column second"></div>
+<div class="member-bar">Already a subscriber? Sign in</div>
+<script>
+  const fill = (selector, count, from) => {
+    const block = document.querySelector(selector);
+    for (let i = 0; i < count; i++) {
+      const line = document.createElement("div");
+      line.className = "line";
+      line.textContent = `Ledger line ${from + i} records a weight.`;
+      block.appendChild(line);
+    }
+  };
+  fill(".first", 34, 1);
+  fill(".second", 10, 35);
+</script>
+</body>
+</html>

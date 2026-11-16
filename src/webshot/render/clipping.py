@@ -17,14 +17,19 @@ because the fix is different: the box has to wrap or grow, not the page.
 This module measures it *after* the render and reports it as a warning. Two
 decisions in that are deliberate:
 
-- *It warns and does not correct.* The layouts that clip are not one property
-  on one element. A pushed column, a pulled sidebar beside it, a centred
-  container that moves right as the page widens: a generic neutraliser has to
-  guess which of these to undo, and a wrong guess (a pull left in place after
-  its push was undone) stacks two columns on each other. Overlapped text is
-  inside the page, so no check here could see it — it would trade a defect
-  this module reports for one nothing reports. `--css` is the remedy, written
-  by someone who can see the page (docs/09 P16-4).
+- *It warns and, but for one shape, does not correct.* The layouts that clip
+  are not one property on one element. A pushed column, a pulled sidebar
+  beside it, a centred container that moves right as the page widens: a
+  generic neutraliser has to guess which of these to undo, and a wrong guess
+  (a pull left in place after its push was undone) stacks two columns on each
+  other. `--css` is the remedy, written by someone who can see the page
+  (docs/09 P16-4). The one shape corrected, in clean mode and before the
+  bundle, is a box that is itself wider than the page: a flex column that a
+  wide table holds open past the edge, as a code host's README was (P123-3).
+  Capping its width at its container's moves nothing sideways, so it cannot
+  stack two columns, and it is kept only where the page then cuts fewer lines
+  at the edge. Text laid over text is no longer beyond every check either:
+  `overprint.py` reads the printed page for it (P123-4).
 - *It asks Chromium for the width rather than computing it.* The paper size,
   margins and scale give a first answer, and it is wrong in two common cases:
   a page's own `@page` margin changes the width it is laid out at even when
@@ -46,7 +51,9 @@ from __future__ import annotations
 import io
 import logging
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Frame
@@ -54,7 +61,9 @@ from playwright.async_api import Page as AsyncPage
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
+from ..capture.headings import holds, words
 from ..config import CaptureOptions
+from .long_tables import printable_width_px
 from .pdf import print_geometry
 
 LOGGER = logging.getLogger("webshot")
@@ -213,6 +222,7 @@ CLIPPED_TEXT_SCRIPT = r"""([cutLeft, cutRight, viewLeft, viewRight, slack]) => {
     };
     const range = document.createRange();
     const cut = [];
+    const cutTexts = [];
     const scrolled = [];
     const cutOwners = new Set();
     const scrolledOwners = new Set();
@@ -246,7 +256,7 @@ CLIPPED_TEXT_SCRIPT = r"""([cutLeft, cutRight, viewLeft, viewRight, slack]) => {
                 if (visible === null) visible = getComputedStyle(owner).visibility === 'visible';
                 if (!visible) break;
                 if (hider) { scrolledOwners.add(owner); scrolled.push(hider.element); scrollDone = true; }
-                else { cutOwners.add(owner); cut.push(owner); edgeDone = true; }
+                else { cutOwners.add(owner); cut.push(owner); cutTexts.push(node.data); edgeDone = true; }
                 if (edgeDone && scrollDone) break;
             }
         }
@@ -264,17 +274,26 @@ CLIPPED_TEXT_SCRIPT = r"""([cutLeft, cutRight, viewLeft, viewRight, slack]) => {
         const selector = element.id || !parent || top(parent) ? step(element) : `${step(parent)} > ${step(element)}`;
         return selector.length > 160 ? `${selector.slice(0, 159)}…` : selector;
     };
-    let sample = null;
-    if (cut.length) {
-        let outer = cut[0];
+    // The outermost box running off the page around an element.
+    const outerOf = element => {
+        let outer = element;
         let running = crosses(box(outer));
         for (let node = up(outer); node && !top(node); node = up(node)) {
             if (crosses(box(node))) { outer = node; running = true; }
             else if (running) break;
         }
-        sample = describe(outer);
-    }
-    return {count: cut.length, sample, scrolled: scrolled.length,
+        return outer;
+    };
+    // Each cut element's text node and where to look, for the caller to look
+    // for in the PDF's text (docs/09 P123-7). The first 500 elements, and of
+    // each the first 4,000 characters: a text cut short cannot be cleared.
+    const cuts = cut.slice(0, 500).map((element, index) => ({
+        text: cutTexts[index].slice(0, 4000),
+        whole: cutTexts[index].length <= 4000,
+        sample: describe(outerOf(element)),
+    }));
+    return {count: cut.length, sample: cut.length ? describe(outerOf(cut[0])) : null,
+            cuts, scrolled: scrolled.length,
             scrolledSample: scrolled.length ? describe(scrolled[0]) : null};
 }"""
 
@@ -302,6 +321,10 @@ class PrintClipping:
     #: Frames from another origin whose release, checked against the print,
     #: did not hold, each with what went wrong (docs/09 P16-21).
     unheld: tuple[str, ...] = ()
+    #: The elements cut at the edge, each with its text and where to look,
+    #: for `lost_cuts`; and how many more were counted than described.
+    cuts: tuple[Mapping[str, Any], ...] = ()
+    beyond: int = 0
 
 
 def clipping_warnings(clipping: PrintClipping) -> list[str]:
@@ -368,7 +391,207 @@ async def printed_width(page: AsyncPage, options: CaptureOptions) -> int | None:
     return int(match.group(1))
 
 
-async def find_clipped_text(page: AsyncPage, options: CaptureOptions) -> PrintClipping:
+#: The attribute a box wider than the page carries once `release_wide_boxes`
+#: has capped it, for the print CSS's rule (`capture/prepare.RELEASE_PRINT_CSS`).
+REFLOWED_ATTRIBUTE = "data-webshot-reflowed"
+
+#: Mark every box wider than the printed page that a cap on its width can
+#: narrow, and answer how many. Left alone: a replaced element, which the print
+#: CSS already caps; a table, a row or a cell, whose width is its columns'; a
+#: `pre` or a code block, whose lines do not wrap; a form control; a box that
+#: clips or scrolls its own overflow, on either axis, since capping it would
+#: hide its text inside it, where no count of lines at the page edge can see
+#: the loss (a scroller is `release_wide_tables`' and the scrolling-box
+#: tally's to answer for); a box whose `position` takes it out of the flow,
+#: whose width decides nothing beside it; and a box with no text in it. So is a
+#: box wholly outside one that clips it, which the page keeps out of sight by
+#: design (a carousel's other slides).
+MARK_WIDE_BOXES_SCRIPT = r"""([edge, slack, attribute]) => {
+    const skip = new Set(['html', 'body', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
+        'caption', 'colgroup', 'col', 'pre', 'code', 'textarea', 'input', 'select', 'button',
+        'img', 'svg', 'video', 'canvas', 'iframe', 'embed', 'object', 'picture', 'math']);
+    let marked = 0;
+    for (const element of document.body ? document.body.querySelectorAll('*') : []) {
+        if (skip.has(element.localName)) continue;
+        if (element.closest('[data-webshot-hidden="true"], [data-webshot-ocr-text="true"], svg, math')) continue;
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= edge + slack) continue;
+        const style = getComputedStyle(element);
+        if (style.position === 'absolute' || style.position === 'fixed') continue;
+        if (style.overflowX !== 'visible' || style.overflowY !== 'visible') continue;
+        if (!/\S/.test(element.textContent || '')) continue;
+        let hidden = false;
+        for (let node = element.parentElement; node && node !== document.documentElement; node = node.parentElement) {
+            const clip = getComputedStyle(node).overflowX;
+            if (clip !== 'hidden' && clip !== 'clip') continue;
+            const box = node.getBoundingClientRect();
+            if (rect.right <= box.left + slack || rect.left >= box.right - slack) { hidden = true; break; }
+        }
+        if (hidden) continue;
+        element.setAttribute(attribute, 'true');
+        marked += 1;
+    }
+    return marked;
+}"""
+
+UNMARK_WIDE_BOXES_SCRIPT = r"""(attribute) => {
+    for (const element of document.querySelectorAll(`[${attribute}]`)) element.removeAttribute(attribute);
+}"""
+
+#: The first box `MARK_WIDE_BOXES_SCRIPT` marked whose content still runs past
+#: its own right edge once capped, or null. Content wider than its capped box
+#: is drawn over whatever is beside the box, which trades a line cut at the
+#: page edge for a line printed over another.
+OVERFLOWING_WIDE_BOX_SCRIPT = r"""([attribute, slack]) => {
+    for (const element of document.querySelectorAll(`[${attribute}]`)) {
+        if (element.scrollWidth > element.clientWidth + slack) {
+            const classes = [...element.classList].slice(0, 3).map(name => `.${CSS.escape(name)}`);
+            return element.localName + (element.id ? `#${CSS.escape(element.id)}` : '') + classes.join('');
+        }
+    }
+    return null;
+}"""
+
+
+@dataclass(frozen=True, slots=True)
+class WideBoxes:
+    """What `release_wide_boxes` did."""
+
+    #: Boxes capped at their container's width.
+    released: int = 0
+    #: The printed width it read with a probe print, when it printed one.
+    width: int | None = None
+
+
+async def release_wide_boxes(page: AsyncPage, options: CaptureOptions) -> WideBoxes:
+    """Cap each box wider than the printed page at its container's width, where
+    that keeps more text on the page, and count the boxes capped (docs/09 P123-3).
+
+    A code host's README sat in a flex column whose minimum width was its
+    widest table's, 1,078 px in a 780 px page: lines were cut at the edge and
+    the last two sections were lost, and `--mode faithful`, `--media screen`
+    and `--scale 0.7` were no better. The print CSS's rule for the mark caps
+    the box at its container and lets it shrink below its content's widest
+    line; the table inside it then scrolls, which `release_wide_tables`, run
+    after this, can let wrap.
+
+    The page is first laid out at the paper's nominal width
+    (`long_tables.printable_width_px`), which needs no print, and a page that
+    cuts no line there is left alone. Only one that does pays for the probe
+    print that reads the width the page really prints at (`printed_width`),
+    and is tried there: a print before the render runs the page's own print
+    handlers, and a page whose banner leaves after its first print is a
+    fixture (P97-4). The marks are kept only if the page then cuts fewer lines
+    at the edge than before, counted as the clipping check counts them, and
+    no capped box's content still runs past its own edge, which would print
+    it over what is beside the box; otherwise they are taken off, so a page
+    this cannot help prints as it would have. The viewport is put back
+    afterwards, because the bundle is extracted from this page next.
+    """
+    viewport = page.viewport_size
+    if viewport is None:
+        return WideBoxes()
+    nominal = printable_width_px(options)
+    try:
+        await page.set_viewport_size({"width": nominal, "height": viewport["height"]})
+        gate = await page.evaluate(
+            CLIPPED_TEXT_SCRIPT, [0, nominal, 0, nominal, EDGE_SLACK_PX]
+        )
+    finally:
+        await page.set_viewport_size(viewport)
+    if not gate["count"]:
+        return WideBoxes()
+    width = await printed_width(page, options)
+    if width is None:
+        return WideBoxes()
+    try:
+        await page.set_viewport_size({"width": width, "height": viewport["height"]})
+        before = await page.evaluate(
+            CLIPPED_TEXT_SCRIPT, [0, width, 0, width, EDGE_SLACK_PX]
+        )
+        if not before["count"]:
+            return WideBoxes(width=width)
+        marked = int(
+            await page.evaluate(
+                MARK_WIDE_BOXES_SCRIPT, [width, EDGE_SLACK_PX, REFLOWED_ATTRIBUTE]
+            )
+        )
+        if not marked:
+            return WideBoxes(width=width)
+        after = await page.evaluate(
+            CLIPPED_TEXT_SCRIPT, [0, width, 0, width, EDGE_SLACK_PX]
+        )
+        spilled = await page.evaluate(
+            OVERFLOWING_WIDE_BOX_SCRIPT, [REFLOWED_ATTRIBUTE, EDGE_SLACK_PX]
+        )
+        if int(after["count"]) < int(before["count"]) and spilled is None:
+            return WideBoxes(released=marked, width=width)
+        LOGGER.debug(
+            "Capping %d wide box(es) was undone: %d line(s) cut before, %d after%s.",
+            marked,
+            before["count"],
+            after["count"],
+            f", and {spilled} still overflows" if spilled else "",
+        )
+        await page.evaluate(UNMARK_WIDE_BOXES_SCRIPT, REFLOWED_ATTRIBUTE)
+        return WideBoxes(width=width)
+    finally:
+        await page.set_viewport_size(viewport)
+
+
+#: The fewest characters, spaces left out, a cut element's text must have for
+#: finding it in the PDF's text to clear it. A shorter one, a "Yes" in a
+#: table cell, may be found elsewhere on the page while its own copy is cut,
+#: so it is counted as lost (docs/09 P123-7).
+VERIFY_MIN_CHARS = 16
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", "", text).casefold()
+
+
+def lost_cuts(
+    cuts: Sequence[Mapping[str, Any]], printed: Sequence[str] | None
+) -> list[Mapping[str, Any]]:
+    """The cut elements whose text the PDF's text layer lacks (docs/09 P123-7).
+
+    The edge count is taken from the page laid out at the printed width, which
+    is the print's layout but not the print: a page's media queries see the
+    paper's width in the print and the window's here, and text a page draws
+    where no one sees it is laid out all the same. A page that cut one URL at
+    the margin was reported with ten elements cut, and the PDF's text held
+    the other nine whole. So an element is cleared when its text, all of it,
+    is in `printed`: as characters with the spaces taken out, which a line
+    broken differently does not change, or as words in order a running
+    header's length apart, for text that runs across a page break. A text sent
+    cut short, or too short to tell from a copy elsewhere
+    (`VERIFY_MIN_CHARS`), is not cleared. Without `printed` nothing is.
+    """
+    if printed is None:
+        return list(cuts)
+    flat = _squash("\n".join(printed))
+    printed_words = words("\n".join(printed))
+    lost = []
+    for cut in cuts:
+        text = str(cut.get("text") or "")
+        squashed = _squash(text)
+        if (
+            cut.get("whole")
+            and len(squashed) >= VERIFY_MIN_CHARS
+            and (squashed in flat or holds(printed_words, words(text)))
+        ):
+            continue
+        lost.append(cut)
+    return lost
+
+
+async def find_clipped_text(
+    page: AsyncPage,
+    options: CaptureOptions,
+    width: int | None = None,
+    *,
+    printed: Sequence[str] | None = None,
+) -> PrintClipping:
     """Measure which elements the printed page cuts off, at its edge or in a scrolling box.
 
     The page is laid out at the printed width by narrowing the viewport, with
@@ -377,12 +600,18 @@ async def find_clipped_text(page: AsyncPage, options: CaptureOptions) -> PrintCl
     that media queries see the width the page is laid out at, where Chromium's
     print evaluates them at the paper's width before any `@page` margin or
     shrink-to-fit. The two agree unless a breakpoint lies between them.
+
+    `width` is the printed width when the caller has already read it for the
+    page as it is now; otherwise it is read here. `printed` is the PDF's text,
+    page by page: given it, an element counts as cut at the edge only where
+    the PDF lacks its text (`lost_cuts`, docs/09 P123-7).
     """
     viewport = page.viewport_size
     if viewport is None:
         # A context without a fixed viewport cannot be narrowed and restored.
         return PrintClipping(width=None)
-    width = await printed_width(page, options)
+    if width is None:
+        width = await printed_width(page, options)
     if width is None:
         return PrintClipping(width=None)
     try:
@@ -396,10 +625,23 @@ async def find_clipped_text(page: AsyncPage, options: CaptureOptions) -> PrintCl
         return PrintClipping(width=None)
     finally:
         await page.set_viewport_size(viewport)
+    cuts = [*found["cuts"], *framed.cuts]
+    # An element past the 500 the script describes is counted, uncleared.
+    beyond = int(found["count"]) - len(found["cuts"]) + framed.beyond
+    lost = lost_cuts(cuts, printed)
+    if len(lost) < len(cuts):
+        LOGGER.debug(
+            "%d of %d element(s) with lines past the page edge have all their "
+            "text in the PDF, and are not counted as cut.",
+            len(cuts) - len(lost),
+            len(cuts),
+        )
     return PrintClipping(
         width=width,
-        elements=int(found["count"]) + framed.elements,
-        sample=found["sample"] or framed.sample,
+        elements=len(lost) + beyond,
+        sample=str(lost[0]["sample"])
+        if lost
+        else (found["sample"] if beyond else None),
         scrolled=int(found["scrolled"]) + framed.scrolled,
         scrolled_sample=found["scrolledSample"] or framed.scrolled_sample,
         unheld=framed.unheld,
@@ -449,7 +691,8 @@ async def _measure_frames(page: AsyncPage, width: int) -> PrintClipping:
     each frame is measured against the printed page's edges only where they
     fall inside its own box, and past its own box nothing counts (P16-19).
     """
-    elements = scrolled = 0
+    elements = scrolled = beyond = 0
+    cuts: list[Mapping[str, Any]] = []
     sample: str | None = None
     scrolled_sample: str | None = None
     unheld: list[str] = []
@@ -481,6 +724,10 @@ async def _measure_frames(page: AsyncPage, width: int) -> PrintClipping:
             LOGGER.debug("A frame could not be measured: %s", exc)
             continue
         elements += int(found["count"])
+        beyond += int(found["count"]) - len(found["cuts"])
+        cuts.extend(
+            {**cut, "sample": f"{cut['sample']} in {label}"} for cut in found["cuts"]
+        )
         scrolled += int(found["scrolled"])
         # A frame from another origin that `release_clamped_text` chose to
         # release is checked here against the layout that printed: its released
@@ -513,6 +760,8 @@ async def _measure_frames(page: AsyncPage, width: int) -> PrintClipping:
         scrolled=scrolled,
         scrolled_sample=scrolled_sample,
         unheld=tuple(unheld),
+        cuts=tuple(cuts),
+        beyond=beyond,
     )
 
 
