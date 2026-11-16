@@ -21974,6 +21974,233 @@ export under the root's manifest holds the tool's file and reports no leak,
 which is the silent case above. With `state()` restored to the working tree's
 manifest, the test fails at its first check of the boundary.
 
+## P120 — a page's state before it is printed: a firewall's page, closed text, a scroll that moved on (2026-11-15)
+
+
+One capture run of 44 linked web pages and two video watch pages, each made
+with the defaults, published seven pages that were not what the PDF said they
+were, at exit 0. Each fault is in what the capture does to the page before it
+prints it: the bot-check test, the closed-controls check (P102), the lazy-load
+pass (P23-8, P105) and clean mode's page chrome.
+
+### P120-1 — a firewall's block page captured as the page
+
+A government policy page answered with HTTP 200 and F5 BIG-IP's stock block
+page: title "Request Rejected", "The requested URL was rejected. Please
+consult with your administrator." and "Your support ID is: <19 digits>". The
+capture published those 126 characters as the page. Two captures in the run
+hit it independently. P78's signatures named DataDome, HUMAN and Akamai only,
+and `--require-content` would not trip: its floor is 50 characters.
+
+The page is now a bot-check page, exit 4, when its title is "Request
+Rejected", its text has the sentence, and a support ID of six or more digits
+follows "Your support ID is". Each of the three alone is a phrase a page
+could quote, as Akamai's title alone is. The message says only that the
+site's firewall rejected the request, and that if the page opens in the
+reader's own browser, the firewall refused this automated one. The page does
+not say why it rejected the request, so the message does not claim it was
+the browser.
+
+`tests/test_bot_check_pages.py` serves the page as F5 does, a page quoting it
+under another title, and a page titled "Request Rejected" with no support ID.
+Both F5 cases fail on master's code.
+
+### P120-2 — the rest of an article behind "Story Continues"
+
+A finance news page printed five paragraphs and stopped at a "Story
+Continues" button, and `content.md` stopped there too. The rest of the
+article sat in the served HTML in `div.read-more-wrapper` with an inline
+`display: none`, the wrapper's next sibling after the one holding
+`button.readmore-button`. Neither carried ARIA or Bootstrap attributes, so
+P102's check, which knows a control by those, named nothing.
+
+A control is now also closed when its whole label (`aria-label`, its text,
+or its `title`) says the article goes on: "Story continues", "Continue
+reading", "Keep reading", "Read more", "Read the full story", "Show more",
+"See more" and their variants. It must be followed by a region with no box,
+after the control itself or after one of its three nearest ancestors (two
+siblings each). A link to another page is a link, so `a[href]` counts only
+with a `#` or `javascript:` target. The whole label, so "Read more about our
+funds" is not one. Every other filter of P102 holds: 200 characters, not
+page chrome, at most half link text.
+
+### P120-3 — what the warning said of a closed `<details>`, and opening them
+
+A policy page, captured from the Internet Archive, keeps each of its ten
+sections in a closed `<details>`. The warning said of each, for example "6.
+Requirements, 6,430 characters, in the bundle but not in the PDF".
+`content.md` was 1,355 bytes, and the sections' text was in none of the
+bundle's files. The page's stylesheet hides a closed `<details>`' contents
+(`details:not([open]) > *:not(summary) { display: none }`, an old polyfill's
+rule), so the snapshot, which keeps only what is laid out, kept none of it.
+P102-1 measured a closed `<details>` with no such rule, whose contents the
+snapshot does keep, and the warning took that as true of every one.
+
+The warning now looks for three samples of each region's text in the
+bundle's `content.txt` once the bundle is built: its start, its middle and its
+end, eight words each, read from its text nodes a word apart. It says "in the
+bundle but not in the PDF" only when all three are there, "in neither" when
+they are not, and "not in the PDF" when there is no bundle. The first version
+read the first twelve words of `textContent`. The review of #367 found two
+ways that misled: a teaser that repeats the hidden text's opening put those
+words in the bundle, and minified markup ran words together ("FeesEvery")
+that `content.txt` holds apart. P102's own case page is the first shape.
+
+The warning's remedy did not work either. With a `--css` rule on
+`details:not([open])::details-content` the PDF had 21 pages, the room for the
+sections, and printed none of their 407 words. The same rule prints the
+contents of a minimal page on Chromium 156, so what held them back there was
+not established.
+
+So the capture now opens what the check would name, which P102-4 left for a
+decision of its own. `--collapsed open` does it like this:
+
+- a `<details>` gets its `open` attribute;
+- a region with no box is marked, and one rule gives it its element's default
+  display (`display: revert`), so a `<span>` stays inline; a `hidden`
+  attribute, the UA's own `display: none`, is removed;
+- YouTube's description expander has its button pressed and is waited for,
+  up to two seconds.
+
+Opening runs once the capture has hidden what it hides, and before anything
+is released, snapshotted or printed. It runs up to three rounds, since an
+opened region can hold another. Once anything was opened the wait for fonts
+and pictures runs again: it skips a picture with no box, so a lazy one in a
+region that had none was never loaded and printed blank (review of #367). A
+script, style or template after a "Read more" control is not a region. `--collapsed closed` prints the page as
+shown. Unset, the mode decides: clean mode opens, because its purpose is the
+page's text. Faithful mode does not, because it changes what the page showed
+only for consent dialogs (spec §5 item 5). The QA report records the option
+only when it was given, so a report without it keeps its bytes. The warning
+names what stayed closed. Its remedy is `--collapsed open` where nothing was
+opened, and the reader's own browser, then a stylesheet, where opening left
+a region closed.
+
+On the fixtures, `tests/test_collapsed_content.py` checks each case against
+master's code:
+
+- `collapsed_read_more_page.html`, the finance page's shape and the policy
+  page's: master named only the `<details>`, said it was in the bundle, and
+  had none of either region's text in the PDF or `content.md`. Now both are
+  printed in clean mode, and named "in neither" under `--collapsed closed`.
+- `collapsed_content_page.html`, P102's page: in clean mode the summary and
+  the `<details>` are printed, and only the expander, whose stand-in button
+  does nothing, is named.
+
+No golden case moved: no golden fixture has a closed region outside its page
+chrome.
+
+### P120-4 — a site that appends its next article
+
+A news site appends its next article as the window nears the end of one, and
+puts that article's address and title on the page with the History API. The
+lazy-load pass scrolled through ten articles, 71 pages and 31.8 MB. The report's
+`title`, its `final_url` and the running header of every page named the tenth
+article, at exit 0. `discovered_metadata.title`, read from the HTML, was the
+first one's, and nothing named the mismatch.
+
+The pass now notes the address and title at its first step. When the address
+changes outside its fragment, it stops (`ended: "navigated"`), and the page is
+given its first title and address back (`history.replaceState`) before
+anything reads them, so `page_metadata.title` and `content.html`'s `<title>`
+agree with the report (review of #367). A change of
+fragment alone is a long page marking where the reader is, and scrolling goes
+on. It also remembers the `<article>` elements the page loaded with, and
+hides each outermost `<article>` added since. The capture keeps the first
+address and title, and the warning names both addresses and how many
+articles it left out.
+
+`tests/test_scroll_pass_ends.py` captures
+`tests/fixtures/scroll_pass/appending_articles.html` from loopback. Master's
+code reported the second article's title and address with no warning; now the
+first article's are kept and the second article's text is in neither the PDF
+nor the bundle. With `#fragment`, the page rewrites only its fragment, and the
+pass runs to the bottom.
+
+The articles are marked as P128 marks what any rule leaves out, with
+`data-webshot-hidden-by="appended"`. So when a stylesheet that outranks
+WebShot's hiding rule prints one anyway, P128 takes the mark off and names it
+as "an article the page appended after the one captured". Merged without that
+reason, the warning said the box was "marked by a rule that recorded no
+reason" (`test_an_appended_article_a_stylesheet_shows_is_named_for_what_it_is`).
+
+### P120-5 — a window that could not reach the height the pass measured
+
+A policy page ran the pass to its 100-step limit, and to 300 with
+`--max-scrolls 300`, at the same height, 10,675 px. Capture time went from 28
+to 80 seconds, and the warning advised a higher `--max-scrolls`. The page was
+complete both times: 106 of its 106 source blocks were in the text layer. The
+pass ends at the bottom only when the window's bottom edge comes within 4 px
+of the height it measures. It measures the larger of `body` and the root's
+`scrollHeight`, so a page whose window can scroll less than that never ends.
+Why that page's window stopped short was not measured.
+
+The pass now also stops when, for three steps in a row, the window is where
+the last scroll left it, short of the end, and the page is no taller
+(`ended: "unmoved"`, `UNMOVED_STEPS`). The warning says how far down the
+window's bottom edge got and how tall the page measured. It also says that
+content further down, or loaded by a box of the page's own that scrolls, may
+not have loaded. `tests/fixtures/scroll_pass/window_does_not_scroll.html`
+clips the root and scrolls `body` instead. Master's code ran it 100 steps,
+27 seconds; the pass now ends at step 4.
+
+### P120-6 — a video's watch page
+
+Two watch pages printed:
+
+- the site's bar ("Skip navigation", "Sign in"), fixed to the window, over a
+  black, unloaded player;
+- a rail of related videos with blank thumbnails;
+- the description closed;
+- a date only as "2y ago".
+
+Nothing on the printed pages gave a publication or capture date. The text
+layer held 26 and 29 per cent of the bundle's text, most of the rest being
+the rail's titles.
+
+On a watch address (`/watch?v=…` on the site's hosts), clean mode now hides
+the bar, the player and its boxes, the related rail and the comments as page
+chrome (`capture/watch_page.py`). They are named by the site's own custom
+elements and ids, and only on that address, so no other page's `#player` or
+`#secondary` is touched. They count as removed for the pass's
+removed-growth rule (P23-8). The description opens with P120-3.
+
+Every page's footer then carries one line between "WebShot" and the page
+number: "Published <date> by <channel>. Captured <date>." The date and channel
+are what the page declares (`discovered_metadata`, from its schema.org data),
+and a value it does not declare is left out. Without a note the footer is
+byte for byte what it was. Faithful mode is unchanged.
+
+`tests/test_watch_page.py` serves `tests/fixtures/watch_page/watch.html` from
+a route under the site's own address, so no request leaves the machine. Clean
+mode prints the description's last sentence and the footer line on every
+page, and none of the bar's or the rail's text; faithful mode prints both and
+names the expander.
+
+The run's other watch-page warning was not reproduced: the covered-text
+check's measuring print had 5 pages and the PDF 6. It needs the live page,
+and the bar it measured is now hidden.
+
+### P120-7 — a closed `<details>` a stylesheet had shown
+
+Another week's export check found the warning naming six accordion sections
+of a page whose `--css` had shown every one. All were whole in the PDF's text
+layer. A closed `<details>` lays its contents out either way and skips
+painting them, so they have boxes, and the check tested boxes. Measured on
+Chromium 156:
+
+- a closed `<details>`' paragraph has one client rect, 18 px tall, and
+  `checkVisibility()` false;
+- with `details::details-content { content-visibility: visible }` the
+  paragraph's `checkVisibility()` is true, and it prints.
+
+A `<details>` whose non-summary children are drawn is no longer named, or
+opened. `tests/test_collapsed_content.py::test_a_details_a_stylesheet_shows_is_not_named`
+captures the read-more page under `--collapsed closed` with
+`tests/fixtures/collapsed_details_shown.css`, and fails with the check
+removed.
+
+
 ## P126 — soupsieve 4.1.1 and opentelemetry-api 1.45.2, and a Python floor of 3.11.5 (2026-11-15)
 
 The vulnerability audit of every locked pin began failing on master, and with

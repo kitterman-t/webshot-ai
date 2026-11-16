@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A page whose window does not scroll</title>
+<!-- docs/09 P120-5. The window cannot scroll: the root clips its overflow
+     and a box of the page scrolls instead, so the window stays at the top of
+     a document the pass measures as many windows tall, and the page never
+     grows. The pass used to run to its limit on such a page. All of the text
+     is invented. -->
+<style>
+  html { overflow: hidden; height: 100%; }
+  body { margin: 0; height: 100%; overflow-y: auto; font: 16px/1.6 Georgia, serif; }
+  main { max-width: 40rem; margin: 0 auto; padding: 1rem; }
+</style>
+</head>
+<body>
+<main id="text"><h1>A page whose window does not scroll</h1></main>
+<script>
+  const main = document.getElementById('text');
+  for (let n = 1; n <= 80; n++) {
+    main.insertAdjacentHTML('beforeend', `<p>Paragraph ${n} of a page that scrolls inside its own box, long
+      enough to take a few lines each time it appears on the page.</p>`);
+  }
+</script>
+</body>
+</html>

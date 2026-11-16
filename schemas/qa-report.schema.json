@@ -298,6 +298,14 @@
           "title": "Mode",
           "type": "string"
         },
+        "collapsed": {
+          "enum": [
+            "open",
+            "closed"
+          ],
+          "title": "Collapsed",
+          "type": "string"
+        },
         "selector": {
           "anyOf": [
             {

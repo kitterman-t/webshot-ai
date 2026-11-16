@@ -353,6 +353,7 @@ def test_every_setting_can_be_given_through_the_environment() -> None:
     """
     representative: dict[tuple[str, str], str] = {
         ("capture", "mode"): "faithful",
+        ("capture", "collapsed"): "open",
         ("capture", "selector"): "main",
         ("capture", "auto_selector"): "true",
         ("capture", "wait_for"): "#ready",

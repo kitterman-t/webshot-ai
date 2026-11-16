@@ -1,0 +1,4 @@
+/* docs/09 P120-7: shows a closed <details>' contents without opening it,
+   over the page's own rule that hides them. */
+details::details-content { content-visibility: visible !important; display: block !important; }
+details:not([open]) > *:not(summary) { display: block !important; }

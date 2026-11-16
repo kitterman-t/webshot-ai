@@ -83,6 +83,8 @@ class CaptureSettings(_Section):
     """`[capture]` — what to capture and how hard to try."""
 
     mode: Literal["clean", "faithful"] | None = None
+    #: `--collapsed`. Unset is the mode's choice, as on the command line.
+    collapsed: Literal["open", "closed"] | None = None
     selector: str | None = None
     auto_selector: bool | None = None
     exclude: list[str] | None = None
@@ -248,6 +250,7 @@ class SettingTarget:
 #: working.
 SETTINGS: dict[tuple[str, str], SettingTarget] = {
     ("capture", "mode"): SettingTarget("mode", "mode"),
+    ("capture", "collapsed"): SettingTarget("collapsed", "collapsed"),
     ("capture", "selector"): SettingTarget("selector", "selector"),
     ("capture", "auto_selector"): SettingTarget("auto_selector", "auto_selector"),
     ("capture", "exclude"): SettingTarget("exclude_selectors", "exclude"),

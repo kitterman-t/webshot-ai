@@ -18,6 +18,21 @@ which records the measurements behind each change.
 
 ### Added
 
+- **`--collapsed open` opens a page's closed regions before it is printed,
+  and clean mode does so by default.** The regions are closed `<details>`,
+  accordion and collapse panels, "Story continues" and "Read more" regions,
+  and a video page's description. A policy page whose sections were all
+  closed `<details>`, and a news article whose second half sat behind "Story
+  Continues", printed without that text. `--collapsed closed`, and faithful
+  mode by default, print the page as it was shown. The closed-controls
+  warning names only what stayed closed, and reads from the bundle whether
+  each region's text is in it rather than assuming. Also `[capture]
+  collapsed`. See docs/09 P120-2, P120-3, P120-7.
+- **A video's watch page prints for reading in clean mode.** The site's bar,
+  the player and the related rail are hidden as page chrome. Every page's
+  footer says when the video was published and by whom, as the page declares
+  it, and the capture's date; before, the printed pages said only "2y ago".
+  See docs/09 P120-6.
 - **A PDF that stops at a registration wall's words says so.** A business
   review's article sent its opening paragraphs and a "Sign up to keep reading
   … Already a subscriber? Sign in" box, nothing more, so the bundle held the
@@ -402,6 +417,21 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **A firewall's block page served with HTTP 200 fails the capture.** F5
+  BIG-IP's "Request Rejected" page, with its support ID, was published as
+  the page at exit 0. It is now a bot-check page, exit 4, whose message says
+  only that the site's firewall rejected the request. See docs/09 P120-1.
+- **A site that appends its next article no longer gives the capture that
+  article's title and address.** The lazy-load pass scrolled through ten
+  articles and printed them all under the tenth one's title and address.
+  It now stops when the page changes its address (a change of fragment alone
+  does not count). The capture keeps the first address and title, leaves out
+  the articles appended since, and says so. See docs/09 P120-4.
+- **The lazy-load pass stops when the window can scroll no further.** A page
+  whose window could not reach the height the pass measured ran the pass to
+  its limit, 100 steps and then 300, on a page that was complete. The pass
+  now stops after three steps without moving, and says how far it got. See
+  docs/09 P120-5.
 - **Complianz's and CookieYes' consent banners are hidden in both modes.**
   Complianz's banner printed on all 13 pages of a legal summary and over its
   text on 11; CookieYes' centred popup covered 726 characters on all 5 pages

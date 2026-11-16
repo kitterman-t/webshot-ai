@@ -516,6 +516,7 @@ LAZY_LOAD_STATE_JS = """({noise, excluded}) => {
         y: window.scrollY,
         viewport: window.innerHeight,
         height: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+        href: location.href, title: document.title,
         kept: null, keptBottom: 0, regions: {},
     };
     if (!noise.length && !excluded.length) return state;
@@ -563,6 +564,64 @@ LAZY_LOAD_STATE_JS = """({noise, excluded}) => {
 }"""
 
 
+#: How many steps in a row the window may stay where it was, short of the
+#: page's end, with the page not growing, before the pass stops: the window
+#: can scroll no further. A policy page's window stopped short of the height
+#: the pass measured, and the pass ran to its limit, 100 steps and then 300,
+#: on a page that was complete (docs/09 P120-5).
+UNMOVED_STEPS = 3
+
+#: Remembered at the pass's first step: the articles the page had as it loaded.
+KEEP_LOADED_ARTICLES_JS = """() => {
+    window.__webshotLoadedArticles = new WeakSet(document.querySelectorAll('article'));
+}"""
+
+#: Once the page has changed its address while scrolled, hides each article it
+#: added since the first step that is not inside another, and says how many.
+HIDE_LATER_ARTICLES_JS = """() => {
+    const loaded = window.__webshotLoadedArticles;
+    if (!loaded) return 0;
+    let hidden = 0;
+    for (const article of document.querySelectorAll('article')) {
+        if (loaded.has(article)) continue;
+        if (article.parentElement && article.parentElement.closest('article')) continue;
+        article.setAttribute('data-webshot-hidden', 'true');
+        article.setAttribute('data-webshot-hidden-by', 'appended');
+        hidden += 1;
+    }
+    return hidden;
+}"""
+
+
+#: Puts back the title and address the page loaded with, once it has changed
+#: them while scrolled, so every stage that reads them from the page (the
+#: snapshot's `page_metadata.title`, `content.html`'s `<title>`, discovery)
+#: names the article the capture keeps, as the report and the header do: the
+#: first fix set only those two (review of #367). The address is put back only
+#: where the History API allows, on the same origin, as the page changed it.
+RESTORE_LOADED_PAGE_JS = """([title, url]) => {
+    if (typeof title === 'string') document.title = title;
+    try {
+        if (url && location.href !== url) history.replaceState(history.state, '', url);
+    } catch (error) {}
+    return [document.title, location.href];
+}"""
+
+
+async def restore_loaded_page(page: Page, result: LazyLoadPass) -> None:
+    """After a `navigated` pass, give the page back its first title and address."""
+    if result.ended != "navigated":
+        return
+    await page.evaluate(
+        RESTORE_LOADED_PAGE_JS, [result.loaded_title, result.loaded_url]
+    )
+
+
+def _without_fragment(url: str) -> str:
+    """The address a page is at, less the fragment a scroll may change."""
+    return url.split("#", 1)[0]
+
+
 @dataclass(frozen=True, slots=True)
 class FrameStall:
     """What the page could see when no frame came within `FRAME_TIMEOUT_S` of a scroll.
@@ -599,8 +658,18 @@ class LazyLoadPass:
     #: capture removes. `limit`: `--max-scrolls` ran out first. `unrendered`:
     #: the page did not render within `FRAME_TIMEOUT_S` of a scroll.
     #: `unanswered`: the page did not answer a step's measurement or its
-    #: scroll within the pass's bound (docs/09 P100-5).
-    ended: Literal["bottom", "removed-growth", "limit", "unrendered", "unanswered"]
+    #: scroll within the pass's bound (docs/09 P100-5). `navigated`: the page
+    #: changed its address while it was scrolled (P120-4). `unmoved`: the
+    #: window could scroll no further, short of the page's end (P120-5).
+    ended: Literal[
+        "bottom",
+        "removed-growth",
+        "limit",
+        "unrendered",
+        "unanswered",
+        "navigated",
+        "unmoved",
+    ]
     #: The document's height at the last step, in CSS pixels.
     height: int
     #: Its height at the first step, so a warning can say how much the page
@@ -618,6 +687,17 @@ class LazyLoadPass:
     steady_steps: int = 0
     #: For `unrendered`: what the page could see when the wait ran out.
     stall: FrameStall | None = None
+    #: The page's address and title at the first step, before anything was
+    #: scrolled; None when the pass measured nothing.
+    loaded_url: str | None = None
+    loaded_title: str | None = None
+    #: For `navigated`: the address and title the page changed to, and how
+    #: many articles it had appended that the capture hides.
+    navigated_url: str | None = None
+    navigated_title: str | None = None
+    hidden_articles: int = 0
+    #: For `unmoved`: how far down the page the window's bottom edge got.
+    window_bottom: int = 0
 
 
 @dataclass(slots=True)
@@ -647,9 +727,23 @@ async def scroll_to_load(
     LOGGER.info("Loading lazy content (up to %d scroll steps)...", max_scrolls)
     stable_steps = 0
     previous_height = 0
-    ended: Literal["bottom", "removed-growth", "limit", "unrendered", "unanswered"] = (
-        "limit"
-    )
+    previous_y: float | None = None
+    unmoved_steps = 0
+    window_bottom = 0
+    loaded_url: str | None = None
+    loaded_title: str | None = None
+    navigated_url: str | None = None
+    navigated_title: str | None = None
+    hidden_articles = 0
+    ended: Literal[
+        "bottom",
+        "removed-growth",
+        "limit",
+        "unrendered",
+        "unanswered",
+        "navigated",
+        "unmoved",
+    ] = "limit"
     growing: tuple[tuple[str, str], ...] = ()
     steady: _Steady | None = None
     steady_steps = 0
@@ -670,20 +764,64 @@ async def scroll_to_load(
             ended = "unanswered"
             break
         height = state["height"]
+        href = state.get("href")
         if steps == 1:
             first_height = height
+            loaded_url = href
+            loaded_title = state.get("title")
+            try:
+                await asyncio.wait_for(
+                    page.evaluate(KEEP_LOADED_ARTICLES_JS), _answer_bound_s()
+                )
+            except TimeoutError:
+                ended = "unanswered"
+                break
+        elif (
+            href is not None
+            and loaded_url is not None
+            and _without_fragment(href) != _without_fragment(loaded_url)
+        ):
+            # A news site appends its next article as the window nears the end
+            # of one and puts that article's address and title on the page:
+            # the capture printed ten articles under the tenth one's title and
+            # address (docs/09 P120-4). A change of fragment alone is a page
+            # marking where the reader is, and scrolling goes on.
+            ended = "navigated"
+            navigated_url = href
+            navigated_title = state.get("title")
+            try:
+                hidden_articles = int(
+                    await asyncio.wait_for(
+                        page.evaluate(HIDE_LATER_ARTICLES_JS), _answer_bound_s()
+                    )
+                )
+            except TimeoutError:
+                hidden_articles = 0
+            break
         bottom = state["y"] + state["viewport"]
         if was_at_end and height > previous_height:
             end_growths += 1
         was_at_end = bottom >= height - state["viewport"]
         if bottom >= height - 4:
             stable_steps = stable_steps + 1 if height == previous_height else 0
+            unmoved_steps = 0
             if stable_steps >= 3:
                 ended = "bottom"
                 break
         else:
             stable_steps = 0
+            # Short of the end, where the last scroll left the window, and
+            # the page no taller: the window can go no further (P120-5).
+            if state["y"] == previous_y and height == previous_height:
+                unmoved_steps += 1
+                if unmoved_steps >= UNMOVED_STEPS:
+                    ended = "unmoved"
+                    window_bottom = int(bottom)
+                    break
+            else:
+                unmoved_steps = 0
         previous_height = height
+        previous_y = state["y"]
         # `kept` is None when the capture removes nothing: every part of the
         # page is kept, and only the rule above can end the pass.
         if state["kept"] is not None:
@@ -759,6 +897,12 @@ async def scroll_to_load(
         growing=growing,
         steady_steps=steady_steps,
         stall=stall,
+        loaded_url=loaded_url,
+        loaded_title=loaded_title,
+        navigated_url=navigated_url,
+        navigated_title=navigated_title,
+        hidden_articles=hidden_articles,
+        window_bottom=window_bottom,
     )
 
 
@@ -793,6 +937,36 @@ def lazy_load_warning(result: LazyLoadPass, max_scrolls: int) -> str | None:
         )
     if result.ended == "bottom":
         return None
+    if result.ended == "navigated":
+        named = f' ("{result.navigated_title}")' if result.navigated_title else ""
+        if result.hidden_articles:
+            count = result.hidden_articles
+            kept = (
+                f", and leaves out the {count} article"
+                f"{'' if count == 1 else 's'} the page appended while it was "
+                "scrolled"
+            )
+        else:
+            kept = (
+                ". What the page appended before the pass stopped is in it; "
+                "--no-scroll captures the page as it loaded"
+            )
+        return (
+            f"The page changed its address while it was scrolled, from "
+            f"{result.loaded_url} to {result.navigated_url}{named}, as a site "
+            "that appends its next article does, so the lazy-load pass stopped "
+            f"at step {result.steps}. The capture keeps the first address and "
+            f"title{kept}."
+        )
+    if result.ended == "unmoved":
+        return (
+            f"The lazy-load pass stopped at step {result.steps}: the window "
+            f"could scroll no further than {result.window_bottom:,} pixels down a "
+            f"page measured at {result.height:,}, and the page did not grow for "
+            f"{UNMOVED_STEPS} steps. Content below that the page loads only as it "
+            "is scrolled, or that a box of the page's own scrolls into view, may "
+            "not have loaded."
+        )
     if result.ended == "unanswered":
         # Nothing of the page is claimed: it said nothing, not even what a
         # stalled frame wait's timer reports (docs/09 P100-5).
