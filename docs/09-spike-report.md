@@ -21980,6 +21980,8 @@ The share link itself is still cut. Wrapping unbreakable text for print is a
 change to the layout of every capture that holds a long token, which P16-4
 leaves to a `--css` sheet written for the page (`a { overflow-wrap: anywhere
 }`); the warning now counts that one element, and names where it is.
+P123-10 corrects that account: the link was not one of the ten, and the warning
+said nothing of it.
 
 Fixture: `clipping_short_window_page.html`. Its cards are widened by a rule
 for windows under 1,020 px tall, which the check's 779 by 1,000 window meets
@@ -22003,6 +22005,42 @@ wall bar in both modes (P123-6), and has its capture whose PDF text cannot be
 read require the headings named in its one warning (P123-5). The merge with
 P120 adds to `tests/test_watch_page.py` a watch page whose title is in the bar
 clean mode hides there, in both modes (P123-5).
+
+### P123-10 — an address the print stylesheet draws
+
+The page in P123-7 was captured again on master, and the PDF still cut the
+link's address, 17 characters, with no clipping warning at all. The check had
+not cleared the link: it had never measured it. The ten elements it counted
+on the first capture were ten paragraphs, past the edge in the check's layout
+and whole in the print's, and P123-7 cleared all ten correctly. The address
+was in none of them. The page's print stylesheet writes each link's address
+after it, `a[href]:after { content: " (" attr(href) ")" }`, as a common CSS
+framework's print rules do. That text is drawn by `content`, and the
+clipping script walked text nodes only. In the check's layout the link ran
+to 1,365 px on a 779 px page, and nothing read it.
+
+The script now reads what an inline element's `::before` and `::after` draw.
+An inline element's line boxes hold both its own text and that drawn text,
+so a line box past the edge that its own text does not reach is drawn text
+the page cuts. The element is counted once, with the drawn text as what the
+PDF must hold for P123-7 to clear it. A block's box is its container's width
+whatever it draws, so blocks are not read, and nor is drawn text in a
+scrolling box.
+
+The page's own fix was a `--css` sheet as P123-7 says, with one more rule.
+Its text column keeps a 75 px left margin under `width: 100%`, so it is 75 px
+wider than the page; the unbreakable address made Chromium shrink the whole
+print to fit, which hid that. Breaking the address alone stopped the shrink,
+and the PDF then cut 13 elements at the right edge. Zeroing the column's margin
+and breaking links printed every word, the address included, on 10 pages
+instead of 7.
+
+Fixture: `clipping_drawn_address_page.html`, a link whose address the print
+stylesheet draws, too long for the page, beside one that fits. On master's
+code the capture says nothing; with the change, one element, `p.notice > a`.
+Tests in `tests/test_print_clipping.py`: that capture, a drawn address past
+the edge counted, one that fits not counted, and a link whose own text is cut
+counted once.
 
 ## P116: a page whose policy refuses inline style failed the whole capture (2026-11-07)
 

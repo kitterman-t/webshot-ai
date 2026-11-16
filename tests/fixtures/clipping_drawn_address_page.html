@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Harbor notices with a link whose printed address is too long</title>
+<!-- docs/09 P123-10. A print stylesheet writes each link's address after it,
+     as `a[href]::after { content: " (" attr(href) ")" }` does in a common CSS
+     framework's print rules. One link's address is a share token with no
+     break point in it, so the address runs past the right margin of the
+     printed page and the PDF loses the end of it. The address is drawn by
+     the stylesheet and is in no text node, which is all the clipping check
+     read before. The wrapper hides what runs past it, so the document is no
+     wider than the paper and Chromium does not shrink it to fit. The other
+     link's address is short and fits. All of the text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/1.5 serif; color: #111; background: #fff; }
+  .page { overflow: hidden; padding: 0 20px; }
+  @media print {
+    a[href]::after { content: " (" attr(href) ")"; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Harbor notices</h1>
+  <p class="notice">The survey slides are in the
+  <a href="https://files.harbor.test/s/EXckfpLYLRVAnz7NR5VvJZkBYsF5Rs94xo26jALMRIcjXgQwErTyUiOpAsDfGhJkLzXcVbNm1234567890HarborSurveyToken">survey folder</a>
+  for anyone who missed the meeting.</p>
+  <p class="notice">The tide tables for the winter season are on the
+  <a href="https://harbor.test/tides">harbor office page</a>, and printed copies
+  are at the office.</p>
+</div>
+</body>
+</html>

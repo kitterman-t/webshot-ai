@@ -439,6 +439,68 @@ def test_only_an_element_whose_text_the_pdf_lacks_is_counted(tmp_path: Path) -> 
     ]
 
 
+DRAWN_ADDRESS = Path(__file__).parent / "fixtures" / "clipping_drawn_address_page.html"
+
+#: A print stylesheet's rule that writes each link's address after it.
+LINK_ADDRESS_CSS = 'a[href]::after { content: " (" attr(href) ")"; }'
+
+#: A share token with no break point in it, far wider than the page.
+TOKEN = "EXckfpLYLRVAnz7NR5VvJZkBYsF5Rs94xo26jALMRIcjXg" * 3
+
+
+@pytest.mark.browser
+def test_an_address_the_print_stylesheet_draws_is_measured(tmp_path: Path) -> None:
+    """The address is the link's ::after, in no text node, and the check read
+    only text nodes: the PDF lost the end of it and nothing was said
+    (docs/09 P123-10)."""
+    pdf = tmp_path / "capture.pdf"
+    assert (
+        main([str(DRAWN_ADDRESS), "-o", str(pdf), "--no-ocr", "--mode", "faithful"])
+        == 0
+    )
+    manifest = json.loads((pdf.with_suffix(".ai") / "manifest.json").read_text("utf-8"))
+    assert manifest["warnings"] == [
+        "Text runs off the printed page: 1 element(s) have lines past the page edge "
+        "(in p.notice > a), and the PDF cuts them off, so its render and text "
+        "layer hold less than the page does. A --css stylesheet that reflows that "
+        "layout for print keeps them on the page."
+    ]
+    # The loss is real, and the short address beside it printed whole.
+    printed = "".join(page.extract_text() for page in PdfReader(pdf).pages)
+    flat = "".join(printed.split())
+    assert "HarborSurveyToken" not in flat, flat
+    assert "(https://harbor.test/tides)" in flat, flat
+
+
+@pytest.mark.browser
+def test_a_drawn_address_that_fits_is_not_a_finding() -> None:
+    body = '<p><a href="https://harbor.test/tides">the tide tables</a> are posted.</p>'
+    clipping, _ = asyncio.run(_measure(_page(LINK_ADDRESS_CSS, body=body)))
+    assert clipping.elements == 0
+
+
+@pytest.mark.browser
+def test_a_link_whose_own_text_is_cut_is_counted_once() -> None:
+    """Its text node counts it; the address it draws is not a second element."""
+    body = (
+        f'<div style="overflow:hidden"><p><a href="https://harbor.test/{TOKEN}">'
+        f"{TOKEN}</a></p></div>"
+    )
+    clipping, _ = asyncio.run(_measure(_page(LINK_ADDRESS_CSS, body=body)))
+    assert clipping.elements == 1
+
+
+@pytest.mark.browser
+def test_a_drawn_address_past_the_edge_is_counted() -> None:
+    body = (
+        f'<div style="overflow:hidden"><p>See <a href="https://harbor.test/{TOKEN}">'
+        "the survey</a> for the slides.</p></div>"
+    )
+    clipping, _ = asyncio.run(_measure(_page(LINK_ADDRESS_CSS, body=body)))
+    assert clipping.elements == 1
+    assert clipping.sample == "p > a"
+
+
 def _cut(text: str, *, whole: bool = True) -> dict[str, object]:
     return {"text": text, "whole": whole, "sample": "p"}
 
