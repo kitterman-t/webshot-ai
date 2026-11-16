@@ -501,6 +501,13 @@ which records the measurements behind each change.
   `<time>` inside a link now counts only when the link opens the page itself,
   by its canonical address or `og:url`, as a post's permalink does. That page
   now records no date, which is what it declares. See docs/09 P124-4.
+- **A table's footer rows reach the bundle.** docling-slim up to 2.142.1 left
+  the rows of a `<tfoot>` out of the table it built, so they were missing from
+  `content.md`, `content.txt`, `content.json`, `chunks.jsonl` and the
+  table's CSV, with no warning; only the PDF printed them. docling-slim
+  2.145.0, now the minimum, keeps them as the table's last rows, where a
+  browser draws them, also when the page writes the `<tfoot>` before the
+  `<tbody>`. See docs/09 P130.
 - **Clean mode hides an interstitial drawn on top across the window.** A news
   site's welcome ad printed over the first pages of its article in clean
   mode: its dialog was narrower than the size rule's 45% of the window, and
