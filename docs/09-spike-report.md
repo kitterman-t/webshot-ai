@@ -21783,3 +21783,24 @@ of a root commit. The export of that commit holds only `README.md`; the same
 export under the root's manifest holds the tool's file and reports no leak,
 which is the silent case above. With `state()` restored to the working tree's
 manifest, the test fails at its first check of the boundary.
+
+## P126 — soupsieve 4.1.1 and opentelemetry-api 1.45.2, and a Python floor of 3.11.5 (2026-11-15)
+
+The vulnerability audit of every locked pin began failing on master, and with
+it the required `vulnerability scan` on every pull request: soupsieve 2.9.2
+(CVE-2026-126190 to -126193, fixed in 2.10.0, 3.0.2 and 4.0.0) and
+opentelemetry-api 1.45.1 (CVE-2026-126360, fixed in 1.45.2).
+
+`uv lock --upgrade-package` for both took opentelemetry-api to 1.45.2 and split
+soupsieve in two: 4.1.1 for Python 3.11.5 and later, and 2.10 below it, because
+every soupsieve from 3.0.2 on declares `requires-python >=3.11.5`. 2.10 still
+carries three of the four advisories, and the audit reads every pin whatever
+interpreter it is for, so the floor moved: `requires-python = ">=3.11.5"`, and
+the lock pins soupsieve 4.1.1 alone. Python 3.11.0 to 3.11.4 are the first
+patch releases of 3.11, and CI's 3.11 job runs the newest patch release.
+
+soupsieve is beautifulsoup4's CSS selector engine, and two major versions is
+the jump the owner's standing permission for updates leaves to him; he
+approved it once the full verify passed. It did, on this machine: pytest, the
+license gate, the audit (clean), the golden corpus and its second path, and
+parity, with no golden changed.
