@@ -21991,3 +21991,74 @@ the jump the owner's standing permission for updates leaves to him; he
 approved it once the full verify passed. It did, on this machine: pytest, the
 license gate, the audit (clean), the golden corpus and its second path, and
 parity, with no golden changed.
+
+## P128 — a box WebShot marked, that the page's print CSS kept, was missing from the bundle (2026-11-15)
+
+A capture of a blog page in Blogger's Dynamic Views theme printed the post
+whole, two pages, 276 words, while the bundle held nothing: content.txt and
+content.md one byte each, chunks.jsonl empty, `text_characters: 1`,
+`items: 0`, and no warning. CONTRIBUTING rule 5 calls that silent
+degradation.
+
+### P128-1 — the cause
+
+The theme draws the open post in a panel fixed over a grid of every other
+post (`position: fixed`, `z-index: 999`, the whole window). On screen the
+grid's teasers are most of the page's text, so the panel held less than half
+of it and clean mode's size rule hid it as an interstitial
+(`data-webshot-hidden`). The theme's print stylesheet hides the grid and makes
+the panel the page with `display: block !important` under a selector more
+specific than WebShot's `[data-webshot-hidden='true'] { display: none
+!important; }`, so the panel printed. Read at the moment of the snapshot, with
+the print stylesheets adopted and print media on: the panel carried the mark,
+computed `display: block`, and its text was all of the body's (1,725
+characters). The snapshot drops a marked box whatever it computes, so the
+bundle lost the post the PDF printed. The clipping, covering and video checks
+skip a marked box the same way.
+
+### P128-2 — the fix
+
+After the print stylesheets and the media switch, `capture/marks.py` takes the
+mark off each marked box that still lays out a box, and the manifest names it:
+"WebShot marked 1 box to leave out that the page's own print stylesheet shows
+anyway: div.viewitem-panel...". Every stage after it reads what the PDF
+prints. A box the user named with `--exclude` keeps its mark. The PDF does not
+change: it printed the box before. Re-captured, the page's text layer is
+identical to before, and content.txt holds 1,739 characters in 29 items and 8
+chunks.
+
+Clean mode taking the panel for an overlay is not changed here: on screen it
+is one. Measuring the overlay rule under print media would change what every
+capture hides, and the print stylesheet already says which boxes print.
+
+`tests/test_marks.py` captures `tests/fixtures/marks/print_shows_panel.html`,
+a synthetic page of that shape. The post is in the PDF and in content.txt, the
+grid in neither, and the warning names `div.panel`; with `--exclude .panel`
+the post stays out and nothing is named. Without the fix the first test fails:
+content.txt is empty.
+
+### P128-3 — the warning named a cause it had not measured
+
+The Claude review of #370 found that the first wording, "In clean mode such
+a box was taken for an overlay or page furniture", was claimed for every
+mark. Clean mode is one of four rules that set it. The content selector
+(`--selector` or the auto-selector) marks the siblings along the path to its
+root in either mode. The consent rule marks in either mode. `--exclude`
+marks, and keeps its marks. So a sibling outside `--selector` that the page's
+print CSS shows was named as something clean mode had mistaken, in a
+faithful capture where clean mode never ran.
+
+Each rule now records why it marked a box in `data-webshot-hidden-by`:
+`selector`, `consent`, `noise`, `overlay` or `exclude`. The last rule to mark
+a box sets the reason, and `--exclude` runs last. The warning names each box
+with its reason, for example "aside.related (outside the content region
+#post)" or "div.panel (taken in clean mode for an overlay)". A mark with no
+recorded reason is called that, and no reason is guessed. The attribute
+comes off with the mark, and the snapshot already strips `data-webshot-*`
+attributes it does not own, so no bundle carries it.
+
+`tests/fixtures/marks/print_shows_sibling.html` is a faithful capture of
+`--selector #post` beside an aside that the print CSS keeps. The aside is in
+the PDF and in content.txt, and the warning names it for the selector and
+does not say clean mode. A unit test pins the wording for the consent reason
+and for an unrecorded one.
