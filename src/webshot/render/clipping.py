@@ -226,11 +226,55 @@ CLIPPED_TEXT_SCRIPT = r"""([cutLeft, cutRight, viewLeft, viewRight, slack]) => {
     const scrolled = [];
     const cutOwners = new Set();
     const scrolledOwners = new Set();
+    // Text a stylesheet draws with `content` is in no text node: a print
+    // stylesheet's `a[href]::after { content: " (" attr(href) ")" }` prints
+    // each link's address after it, and a long one runs past the edge
+    // (docs/09 P123-10). An inline element's fragments hold its own text and
+    // what its ::before and ::after draw, so a fragment past the edge that its
+    // own text does not reach is drawn text the page cuts. A block's box is
+    // its container's width whatever it draws, so only inline elements are
+    // read; drawn text in a scrolling box is not.
+    const drawn = (element, pseudo) => {
+        const style = getComputedStyle(element, pseudo);
+        if (style.display === 'none') return '';
+        const strings = (style.content || '').match(/"(?:[^"\\]|\\[\s\S])*"/g) || [];
+        return strings.map(quoted => quoted.slice(1, -1).replace(/\\([\s\S])/g, '$1')).join('');
+    };
+    const drawnCut = element => {
+        if (cutOwners.has(element) || !past(box(element))) return;
+        if (element.closest('[data-webshot-ocr-text="true"]')) return;
+        const style = getComputedStyle(element);
+        if (style.display !== 'inline' || style.visibility !== 'visible') return;
+        const text = (drawn(element, '::before') + drawn(element, '::after')).trim();
+        if (!text) return;
+        range.selectNodeContents(element);
+        let ownLeft = Infinity;
+        let ownRight = -Infinity;
+        for (const rect of range.getClientRects()) {
+            if (rect.width <= 0 || rect.height <= 0) continue;
+            ownLeft = Math.min(ownLeft, rect.left + scrollX);
+            ownRight = Math.max(ownRight, rect.right + scrollX);
+        }
+        for (const rect of element.getClientRects()) {
+            if (rect.width <= 0 || rect.height <= 0 || hiddenBy(element, rect)) continue;
+            const line = {left: rect.left + scrollX, right: rect.right + scrollX, width: rect.width};
+            if (!past(line)) continue;
+            const rightSide = line.right > hi + slack;
+            // Its own text reaches as far, and its text node is measured.
+            if (rightSide ? ownRight > hi + slack : ownLeft < lo - slack) continue;
+            if (!crosses(line) && !attached(element, rightSide)) continue;
+            cutOwners.add(element);
+            cut.push(element);
+            cutTexts.push(text);
+            return;
+        }
+    };
     const visit = root => {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
             if (node.nodeType === Node.ELEMENT_NODE) {
                 if (node.shadowRoot) visit(node.shadowRoot);
+                drawnCut(node);
                 continue;
             }
             const owner = up(node);
