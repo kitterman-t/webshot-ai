@@ -90,11 +90,12 @@ NOISE_SELECTORS = [
 #: viewport, so Chromium prints it on every page over the text beneath it, and
 #: its words are read into the bundle between the article's. Cookiebot's was
 #: measured, printed on five of six pages of one article in clean mode as well
-#: as faithful (docs/09 P79), and Osano's on two of three (P97-4); the others
-#: follow their vendors' documented markup and were not met in a capture. Each selector is a name the vendor
-#: gave its own element, so none matches a page's own box the way the noise
-#: list's `[class*='cookie-consent' i]` can, which is why that list stays
-#: clean mode's alone.
+#: as faithful (docs/09 P79), Osano's on two of three (P97-4), and Complianz's
+#: and CookieYes' on every page of two more (P124-1); the others follow their
+#: vendors' documented markup and were not met in a capture. Each selector is
+#: a name the vendor gave its own element, so none matches a page's own box the
+#: way the noise list's `[class*='cookie-consent' i]` can, which is why that
+#: list stays clean mode's alone.
 CONSENT_MANAGERS: dict[str, tuple[str, ...]] = {
     "Cookiebot": ("#CybotCookiebotDialog", "#CybotCookiebotDialogBodyUnderlay"),
     "OneTrust": ("#onetrust-consent-sdk",),
@@ -106,6 +107,27 @@ CONSENT_MANAGERS: dict[str, tuple[str, ...]] = {
     # Measured: its banner shown on load and hidden by its own script five
     # seconds later, so a quick capture printed it mid-fade (docs/09 P97-4).
     "Osano": (".osano-cm-window", ".osano-cm-dialog"),
+    # Measured: a WordPress plugin's banner, fixed to the window, printed on
+    # all 13 pages of a legal summary and over its text on 11, inside the
+    # container named first, which holds a banner per consent type with all
+    # but one kept hidden. `#cmplz-manage-consent`, the button that reopens
+    # the banner, follows the plugin's markup and was not met (docs/09
+    # P124-1).
+    "Complianz": (
+        "#cmplz-cookiebanner-container",
+        ".cmplz-cookiebanner",
+        "#cmplz-manage-consent",
+    ),
+    # Measured: its centred popup printed over 726 characters on all 5 pages
+    # of a news article. These four are the classes of the stylesheet that
+    # printed the article clean: the popup, the overlay behind it, its
+    # preferences dialog and the button that reopens it (docs/09 P124-1).
+    "CookieYes": (
+        ".cky-consent-container",
+        ".cky-overlay",
+        ".cky-modal",
+        ".cky-btn-revisit-wrapper",
+    ),
 }
 
 #: The rules that act on `release_clamped_text`'s marks. Part of the page's

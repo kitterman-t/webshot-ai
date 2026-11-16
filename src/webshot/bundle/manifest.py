@@ -55,6 +55,21 @@ def _relative_or_absent(schema: dict[str, Any]) -> None:
     schema["const"] = "relative"
 
 
+def _name_or_absent(schema: dict[str, Any]) -> None:
+    """Publish a name the writer records only when there is one as a
+    non-empty string or not at all, never as a null or an empty string.
+
+    `discovered_metadata`'s byline fields are written only for a page that
+    prints a byline (docs/09 P124-3), so a capture of any other page is byte
+    for byte what it was, and the schema should not bless a value no producer
+    emits (as `_relative_or_absent`).
+    """
+    schema.pop("anyOf", None)
+    schema.pop("default", None)
+    schema["type"] = "string"
+    schema["minLength"] = 1
+
+
 def _true_or_absent(schema: dict[str, Any]) -> None:
     """Publish an opt-in gate as `true` or not at all, never as `false`.
 
@@ -759,28 +774,39 @@ class DiscoveredMetadata(_Contract):
 
     Deliberately separate from `page_metadata`, which is the DOM's own
     declarations as the snapshot recorded them: a consumer that needs to know
-    where a value came from can tell the two apart. All four are what the
-    page declares in its markup, and each is empty when it declares none
-    WebShot reads. `title` is the page's `og:title`, `twitter:title`, the
+    where a value came from can tell the two apart. Each of the four is what
+    the page declares in its markup, except an author its printed byline
+    contradicts, and each is empty when the page declares none WebShot
+    reads. `title` is the page's `og:title`, `twitter:title`, the
     `name` or `headline` of a schema.org Article or WebPage at the top of a
     JSON-LD block, `citation_title`, `DC.title`, or else its whole `<title>`,
     as written; never a heading's text or a part of the `<title>` (docs/09
     P93). `date` is a date `<meta>`, a schema.org date in JSON-LD or
     microdata, or a `<time>`, as `YYYY-MM-DD`; never a date found in the
-    text, the URL or a heading (docs/09 P3-3, P82). `author` is the names
-    one kind of declaration gives — a schema.org `author` in JSON-LD or
+    text, the URL or a heading (docs/09 P3-3, P82), nor a `<time>` inside a
+    link to another page, a related article's card (P124-4). `author` is the
+    names one kind of declaration gives — a schema.org `author` in JSON-LD or
     microdata, `<meta name="author">`, `citation_author`, `article:author`
-    or `DC.creator` — as the page writes them, joined with "; "; never a
-    byline's text. `sitename` is
+    or `DC.creator` — as the page writes them, joined with "; ", unless the
+    page prints a byline naming other people, when it is the byline's names
+    (docs/09 P124-3). `sitename` is
     `og:site_name`, a JSON-LD `WebSite` or `publisher` name, or
     `application-name`; never a part of the `<title>` or the URL's host
     (docs/09 P88).
+
+    `byline` is the names the page prints as its byline, "By Jane Doe" just
+    after its `<h1>` or the names under an "Author(s)" heading, read by rules
+    narrow enough to refuse a listed post's or a related article's byline;
+    present only when there is one. `declared_author` is what the page's
+    declarations name when `author` is the byline instead; present only then.
     """
 
     title: str
     author: str
     date: str
     sitename: str
+    byline: str | None = Field(default=None, json_schema_extra=_name_or_absent)
+    declared_author: str | None = Field(default=None, json_schema_extra=_name_or_absent)
 
 
 class ContentDiscovery(_Contract):

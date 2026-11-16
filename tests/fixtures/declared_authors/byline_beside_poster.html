@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- The colleague who posted the article, as the site's CMS declares every
+       post's author: in <meta name="author"> and in JSON-LD (docs/09
+       P124-3). -->
+  <meta name="author" content="Sam Ellery">
+  <script type="application/ld+json">
+  {"@context": "https://schema.org", "@graph": [
+    {"@type": "Article", "headline": "Mooring Fees for the Coming Season",
+     "author": {"name": "Sam Ellery", "@id": "https://harbor-lane.example/#/person/1"}}
+  ]}
+  </script>
+  <title>Mooring Fees for the Coming Season</title>
+</head>
+<body>
+  <main>
+    <article>
+      <h1>Mooring Fees for the Coming Season</h1>
+      <p>The harbour board set next season's mooring fees on Tuesday. Visiting
+      boats pay by the night, and residents by the season, at last year's
+      rate for the third year running.</p>
+      <p>A berth on the outer pontoon costs a little more than one inside the
+      wall, because the pontoon is dredged every spring.</p>
+    </article>
+    <!-- The writer, printed under an "Author(s)" heading with a picture,
+         an address, a town and a telephone number. -->
+    <section id="people">
+      <div><h2>Author(s)</h2></div>
+      <div>
+        <div>
+          <img src="raman.png" alt="Priya Raman headshot.">
+          <h3><a href="https://harbor-lane.example/people/raman/">Priya Raman</a></h3>
+          <span><a href="mailto:p.raman@harbor-lane.example">p.raman@harbor-lane.example</a></span>
+          <div><span>North Quay</span> <a>555 0100</a></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
