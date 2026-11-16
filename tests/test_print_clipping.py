@@ -417,3 +417,64 @@ def test_the_scroll_fixture_loses_text_the_bundle_keeps(scroll_capture: Path) ->
     for hidden in ("SCROLLEDCOLUMNOMEGA", "CAROUSELHIDDENTAU"):
         assert hidden in markdown, hidden
         assert hidden not in rendered, hidden
+
+
+SHORT_WINDOW = Path(__file__).parent / "fixtures" / "clipping_short_window_page.html"
+
+
+@pytest.mark.browser
+def test_only_an_element_whose_text_the_pdf_lacks_is_counted(tmp_path: Path) -> None:
+    """The check measured three cards past the edge that the print laid out
+    whole, and one token the print cut; it said four (docs/09 P123-7)."""
+    pdf = tmp_path / "capture.pdf"
+    assert (
+        main([str(SHORT_WINDOW), "-o", str(pdf), "--no-ocr", "--mode", "faithful"]) == 0
+    )
+    manifest = json.loads((pdf.with_suffix(".ai") / "manifest.json").read_text("utf-8"))
+    assert manifest["warnings"] == [
+        "Text runs off the printed page: 1 element(s) have lines past the page edge "
+        "(in div.page > p.cite), and the PDF cuts them off, so its render and text "
+        "layer hold less than the page does. A --css stylesheet that reflows that "
+        "layout for print keeps them on the page."
+    ]
+
+
+def _cut(text: str, *, whole: bool = True) -> dict[str, object]:
+    return {"text": text, "whole": whole, "sample": "p"}
+
+
+def test_a_cut_element_whose_text_the_pdf_holds_is_cleared() -> None:
+    from webshot.render.clipping import lost_cuts
+
+    card = _cut("The pilot boat keeps its usual hours, and the night signal is shown")
+    token = _cut("shared under the token EXckfpLYLRVAnz7NR5VvJZkBYsF5Rs94xo26j")
+    printed = [
+        "The pilot boat keeps its\nusual hours, and the night\nsignal is shown",
+        "shared under the token EXckfpLYLRVAnz7NR5Vv",
+    ]
+    assert lost_cuts([card, token], printed) == [token]
+
+
+def test_text_across_a_page_break_is_found_between_the_running_lines() -> None:
+    from webshot.render.clipping import lost_cuts
+
+    cut = _cut("The north quay closes at dusk through the winter season")
+    printed = [
+        "The north quay closes at\nHarbor notices example.test WebShot Page 1 of 2",
+        "Harbor notices\ndusk through the winter season",
+    ]
+    assert lost_cuts([cut], printed) == []
+
+
+def test_a_cut_that_cannot_be_cleared_is_counted() -> None:
+    """A text sent cut short, one too short to tell from a copy elsewhere, and
+    any when the PDF's text could not be read."""
+    from webshot.render.clipping import lost_cuts
+
+    long = _cut("The north quay closes at dusk", whole=False)
+    short = _cut("Yes")
+    printed = ["The north quay closes at dusk. Yes, it does."]
+    assert lost_cuts([long, short], printed) == [long, short]
+    assert lost_cuts([_cut("The north quay closes at dusk")], None) == [
+        _cut("The north quay closes at dusk")
+    ]

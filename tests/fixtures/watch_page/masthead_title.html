@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Winter landings at the north quay</title>
+<!-- docs/09 P120-6, P123-5. A video's watch page whose only <h1> is the
+     site's name, set in the bar clean mode hides on a watch page; the
+     video's title is an <h2>. Captured with --auto-selector, WebShot
+     isolates the video's column, which leaves the bar out too. In clean
+     mode the bar is page chrome, removed whatever region is chosen, so the
+     site's name is not named as a title the region left out; in faithful
+     mode nothing removes the bar but the choice of region, so it is. The
+     document's <title> leaves the site's name out, so the running header
+     does not print it. Served from a route in the test, under the site's
+     own address. All of the text is invented. -->
+<style>
+  body { margin: 0; font: 14px/1.5 Arial, sans-serif; }
+  ytd-masthead { display: block; position: fixed; top: 0; left: 0; right: 0;
+    height: 56px; background: #fff; z-index: 2000; }
+  ytd-masthead h1 { margin: 8px 16px; font-size: 22px; }
+  #page-manager { display: block; margin-top: 64px; padding: 0 16px; }
+  #secondary { display: block; }
+</style>
+</head>
+<body>
+<ytd-masthead><h1 id="logo">Quayside Reels</h1></ytd-masthead>
+<div id="page-manager">
+  <main id="primary">
+    <h2>Winter landings at the north quay</h2>
+    <p>The harbor master walks the north quay and explains which landings the
+    ferry will use over the winter, why the outer steps close when the swell
+    runs from the east, and how the timetable changes on the days the quay is
+    shut for the repairs that follow the October storms.</p>
+    <p>The video ends at the ticket office, where the winter fares for each
+    crossing are posted, with the dates the timetable takes effect and the
+    number to call when a crossing is cancelled for the weather.</p>
+  </main>
+  <div id="secondary"><h3>Another video about the lighthouse keepers</h3></div>
+</div>
+</body>
+</html>

@@ -89,6 +89,16 @@ class Glyph:
     y: float
     #: Its baseline.
     baseline: float
+    #: The bottom, top and width of its loose box, which runs from its font's
+    #: descent to its ascent whatever the letter: the band its line takes.
+    #: 0 where PDFium gives none.
+    low: float = 0.0
+    high: float = 0.0
+    width: float = 0.0
+    #: The size of the font it is set in, in the PDF's own units, which are
+    #: the same for every character of a page: what tells two characters of
+    #: one size apart from two of different sizes. 0 where PDFium gives none.
+    size: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,6 +216,9 @@ def _read_page(document: pdfium.PdfDocument, index: int) -> PageInk:
             raw.FPDFText_GetCharBox(textpage.raw, char, left, right, bottom, top)
             x, y = ctypes.c_double(), ctypes.c_double()
             raw.FPDFText_GetCharOrigin(textpage.raw, char, x, y)
+            loose = raw.FS_RECTF()
+            if not raw.FPDFText_GetLooseCharBox(textpage.raw, char, loose):
+                loose = raw.FS_RECTF()
             generated = raw.FPDFText_IsGenerated(textpage.raw, char) == 1
             owner = (
                 None
@@ -220,6 +233,10 @@ def _read_page(document: pdfium.PdfDocument, index: int) -> PageInk:
                     x=(left.value + right.value) / 2,
                     y=(bottom.value + top.value) / 2,
                     baseline=y.value,
+                    low=min(loose.top, loose.bottom),
+                    high=max(loose.top, loose.bottom),
+                    width=abs(loose.right - loose.left),
+                    size=raw.FPDFText_GetFontSize(textpage.raw, char),
                 )
             )
         return PageInk(number=index + 1, inks=tuple(inks), glyphs=tuple(glyphs))

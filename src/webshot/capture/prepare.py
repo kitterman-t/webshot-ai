@@ -82,6 +82,10 @@ NOISE_SELECTORS = [
     "ins.adsbygoogle",  # an AdSense unit, as AdSense's tag writes it
     "[id^='div-gpt-ad']",  # a Google Publisher Tag slot, by its default id
     "[id^='google_ads_iframe']",  # the frame that slot fills
+    # Its anchor ad, fixed to the window's bottom edge: its collapse tab
+    # printed over a line of every page of a news site (measured, docs/09
+    # P123-2), where the tag had written it as `ins#gpt_unit_/<network>/anchor_0`.
+    "ins[id^='gpt_unit_'][id*='anchor']",
 ]
 
 #: Consent managers' dialogs, by vendor, as each vendor's script writes them.
@@ -195,6 +199,14 @@ RELEASE_PRINT_CSS = """/* Release text the page truncated with CSS. Only element
     overflow-x: visible !important;
 }
 [data-webshot-wrapped='true'] :is(th, td) { white-space: normal !important; }
+/* A box wider than the printed page, capped at its container's width and let
+   shrink below its content's widest line, in clean mode, where
+   `render/clipping.release_wide_boxes` measured that it keeps more text on the
+   page (docs/09 P123-3). */
+[data-webshot-reflowed='true']:not([data-webshot-hidden='true']) {
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
 """
 
 #: How recognized text rides in the print: in the text layer, and not on the

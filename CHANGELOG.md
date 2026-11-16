@@ -18,6 +18,22 @@ which records the measurements behind each change.
 
 ### Added
 
+- **A warning for text printed over other text.** Two blocks of a page's own
+  flow can print in one place, a heading over the last lines of a paragraph,
+  with no fixed box involved, and nothing said so. After the render the
+  printed characters are read with their bands, from the font's descent to
+  its ascent, and a page where a run of six or more characters of one line is
+  set over another line is named, with the count and where the first run
+  starts. Text a fixed or sticky box draws is left to the covered-text
+  warning. See docs/09 P123-4.
+- **A warning for headings the PDF does not print.** The page's title is
+  noted before anything is isolated or hidden, and its other headings before
+  the print stylesheet applies; each the PDF's text lacks is named, saying
+  whether the print stylesheet hid it (`--media screen` is offered) or the
+  layout lost it (the bundle has it). A print stylesheet that hid an
+  article's `<h1>` gave a PDF with no title and no warning. A box WebShot
+  marked that the print shows anyway (P128) has its headings checked too.
+  See docs/09 P123-5.
 - **`--collapsed open` opens a page's closed regions before it is printed,
   and clean mode does so by default.** The regions are closed `<details>`,
   accordion and collapse panels, "Story continues" and "Read more" regions,
@@ -323,6 +339,22 @@ which records the measurements behind each change.
 
 ### Changed
 
+- **Clean mode hides a fixed box measured over the page's text and prints the
+  page again.** Five captures in one week needed the `--exclude` the warning
+  offered, applied by hand. Now a fixed box whose name matches it alone, that
+  holds none of the isolated content and shows at most a quarter of the
+  page's text and 1,500 characters, is hidden on a page with no access wall
+  and whose PDF does not stop at a wall's words, and a warning names it; the
+  bundle keeps its text. Sticky boxes, a box the page's own CSS keeps
+  printing once marked (P128), and every box in faithful mode, are reported
+  as before. See docs/09 P123-6.
+- **Clean mode caps a box wider than the printed page at its container's
+  width**, before the bundle, where that cuts fewer lines at the page edge and
+  leaves no content running past a capped box. A code host's README held open
+  by its widest table lost its right edge and its last two sections. Only a
+  page that cuts a line at the paper's nominal width pays for the probe print.
+  See docs/09 P123-3.
+
 - **Python-Markdown 3.11.3.** A Markdown file's address in angle brackets,
   such as `<ssh://example.invalid/x>` or `<file:///tmp/x.pdf>`, reads as its
   text: 3.11.3 links one whatever its scheme, where 3.11.2 linked http,
@@ -417,6 +449,21 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **The covered-text check measures the boxes of the layout that prints.** It
+  found and coloured the fixed and sticky boxes at the 1440 px window, so a
+  header fixed only in a page's narrow layout printed over every page
+  unreported. The boxes are now found and marked with the window at the
+  printed width, and the window is put back before the measuring print. See
+  docs/09 P123-1.
+- **Paint inside a fixed box that the marking cannot colour counts as the
+  box's.** What a closed shadow root draws keeps its own colours, so a
+  collapsed box's tab printed over a line of every page was measured as
+  covering nothing. Two faint marks now bracket each box in paint order, and
+  what lies between them is the box's. Clean mode also hides Google
+  Publisher Tag anchor ads. See docs/09 P123-2.
+- **"Text runs off the printed page" counts only elements whose text the PDF
+  lacks.** A page with one share link cut at the margin was reported with ten
+  elements cut; the PDF held the other nine whole. See docs/09 P123-7.
 - **A firewall's block page served with HTTP 200 fails the capture.** F5
   BIG-IP's "Request Rejected" page, with its support ID, was published as
   the page at exit 0. It is now a bot-check page, exit 4, whose message says

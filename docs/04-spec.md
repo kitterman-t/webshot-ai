@@ -143,7 +143,10 @@ the manifest checksum. Schema published in `schemas/qa-report.schema.json`.
 `failed_requests` lists the first 20 distinct URLs that failed;
 `counts.failed_requests` counts every distinct one, and the manifest's
 warnings give that count by resource type, so the bundle says what was lost
-without the report (docs/09 P20-6).
+without the report (docs/09 P20-6). They cover what failed until the PDF
+delivered was printed, which in clean mode can be a second render, and
+leave out what failed while the checks on the print printed the page again
+(docs/09 P123-6).
 
 **Delivered in Phase 4** with these field names (docs/09 P4-5):
 `schema_version: "2"`, the v2.2 keys unchanged, plus `timings` (seconds per
@@ -352,8 +355,10 @@ there with its reason, and the run's job summary lists every skip.
    negative `z-index`), that is drawn on top at more than half of a 3x3 grid
    of points over it (an interstitial with its backdrop), which a manifest
    warning names; neither rule hides a box holding more than
-   half of the page's text, which is the page (docs/09 P113-4). `faithful`
-   mode hides nothing else. The number of elements hidden is logged. Capture is an act of record — what was altered must be
+   half of the page's text, which is the page (docs/09 P113-4). After the
+   render, `clean` mode also hides a fixed box measured over the page's text,
+   as item 16 bounds it, and prints the page again (docs/09 P123-6).
+   `faithful` mode hides nothing else. The number of elements hidden is logged. Capture is an act of record — what was altered must be
    declared (docs/09 P79).
 6. **Frames and shadow roots:** the snapshot is the page's flat tree. Every
    open shadow root, and the document of every frame the page can script
@@ -428,10 +433,22 @@ there with its reason, and the run's job summary lists every skip.
     MUST measure the page at the width Chromium printed it at (read back from
     Chromium, not derived from the paper: `@page` rules and shrink-to-fit both
     move it) and record a manifest warning naming how many elements have text
-    cut and where. A measurement that could not be made is itself a warning.
-    It is not an exit code: the PDF is the page less what the edge cut, and
-    the warning says so. WebShot does not reflow a layout that runs off the
-    page; `--css` is the remedy (docs/09 P16-1, P16-4). Text that an
+    cut and where. An element counts only where the PDF's text layer lacks
+    its text: the layout the check measures is the print's, not the print,
+    and an element whose text the PDF holds whole, as characters or as words
+    in order across a page break, lost nothing. A text too short to tell from
+    a copy elsewhere (under 16 characters without spaces), or one the check
+    could not read whole, counts (docs/09 P123-7). A measurement that could
+    not be made is itself a warning. It is not an exit code: the PDF is the
+    page less what the edge cut, and the warning says so. WebShot does not
+    reflow a layout that runs off the page, with one exception: in `clean`
+    mode, before the bundle, a box that is itself wider than the printed page
+    is capped at its container's width and allowed to shrink below its
+    content's widest line, where that cuts fewer lines at the edge and leaves
+    no capped box with content still running past its own edge; the capture
+    log says how many. Only a page that cuts a line at the paper's nominal
+    width pays for the probe print that decision needs (docs/09 P123-3).
+    Otherwise `--css` is the remedy (docs/09 P16-1, P16-4). Text that an
     `overflow: auto` or `scroll` box shows only when scrolled is lost the same
     way. A box capped by its own height that can grow without covering
     anything is released instead (docs/09 P16-10), and so is a pane whose
@@ -500,11 +517,18 @@ there with its reason, and the run's job summary lists every skip.
     every page and a `sticky` box where the window left it, over whatever
     text the page has there. After the render, a capture MUST measure, on the
     printed pages rather than the screen, the page text each such box is
-    drawn over, and record one manifest warning per box that covers any,
+    drawn over, the boxes and their colours being those of the page laid out
+    at the width it printed at, with the window put back before the measuring
+    print and the layout check covering that round trip (docs/09 P123-1), and
+    record one manifest warning per box that covers any,
     naming the box, the pages, the characters and lines it covers and the
     first of them. A character is covered when the box paints over its
     centre later in paint order and at least half opaque, so z-order and
-    opacity count and `pointer-events` does not. Text another fixed box draws
+    opacity count and `pointer-events` does not. A box is one stacking
+    context, so everything drawn between its first and last object in paint
+    order is its own, whatever its colour, a picture included: paint the
+    marking cannot reach, such as a closed shadow root's, is measured with
+    the box (docs/09 P123-2). Text another fixed box draws
     is page chrome and is not counted; the consent dialogs item 5 hides, and
     anything else the capture hid, have no box and are not measured. The
     measurement MUST be of the page that was printed: each page of the
@@ -515,8 +539,19 @@ there with its reason, and the run's job summary lists every skip.
     attribute holds its colour as `!important` is marked through that
     attribute and given its text back after. A measurement that could not be
     made, or a box that could not be marked for it, is itself a warning.
-    WebShot does not move or hide such a box; `--exclude` is the remedy, except
-    on a page that showed an access wall (item 18) (docs/09 P83, P97).
+    In `clean` mode a `fixed` box found over the text is then hidden and the
+    page printed again, with a manifest warning naming each box hidden, what
+    it covered, and that the bundle, taken before, keeps its text; every
+    check on the print is taken again of the new render. Only a box whose
+    name matches it alone, that holds none of the content the capture
+    isolated, and that shows at most a quarter of the page's text and 1,500
+    characters, on a page that showed no access wall and whose print does
+    not stop at a wall's words (item 18). A `sticky`
+    box prints once, in the page's flow, and is never hidden (docs/09
+    P123-6), nor is a box that still lays out once marked, because a page
+    rule outranks WebShot's hiding one (docs/09 P128). Every other box is a warning, with `--exclude` as the remedy,
+    except on a page that showed an access wall (docs/09 P83, P97). The
+    capture still exits 0.
 17. **A table too long to print whole:** Chromium's memory for printing one
     table grows with its rows and cells times its pages, and it fails at 11
     to 14 GiB. Before the render, and after the bundle, which keeps every
@@ -607,6 +642,41 @@ there with its reason, and the run's job summary lists every skip.
     `@import`: the `@import` rules at the head of a `--css` file are not
     applied, and a capture MUST record a manifest warning naming them
     (docs/09 P116).
+23. **Text printed over text:** two blocks of the page's own flow can print
+    in one place, a heading over the last lines of a paragraph, with no
+    fixed or sticky box involved. After the render, a capture MUST read the
+    printed characters and record a manifest warning naming the pages where
+    a run of at least six characters of one line is each set over a
+    character of another line, how many characters, and where the first run
+    starts. Two characters are set over each other when the centre of one
+    lies within the width of the other, their baselines are more than a
+    quarter of the shorter one's band apart, and their bands, from the
+    font's descent to its ascent, share at least 30% of the shorter, or 50%
+    for two characters of one size. Text drawn under half opaque, text item
+    16's boxes draw, and text a clip hides are left out; text printed over a
+    line on its own baseline is not told apart from it. The pages read are
+    item 16's measuring print where it matched the render, and the render
+    otherwise; a PDF that cannot be read is a warning. WebShot does not move
+    either block (docs/09 P123-4).
+24. **Headings the PDF does not print:** before the capture isolates its
+    content or hides anything, it MUST note the page's title, its first
+    visible `<h1>`; before the print stylesheet and the print media apply,
+    every heading the page shows in what it kept. After the render, a
+    capture MUST record a manifest warning for a title the PDF's text lacks,
+    saying whether the bundle has it (the print layout lost it) or not (the
+    print stylesheet hid it, and `--media screen` is the remedy), and one
+    warning naming the other headings it lacks, grouped the same way. A
+    heading counts as printed when its words are in the PDF's text in order,
+    ignoring case and punctuation, each within 40 words of the one before.
+    A title outside the region WebShot chose as the content is named, unless
+    an `<h1>` of the region printed; one outside a `--selector` the caller
+    gave, or removed with page chrome by clean mode, the consent-dialog
+    hiding or `--exclude`, whatever region was chosen, is not. Nor is a
+    heading inside a box item 16 hides after the render: the headings it
+    held are left out (docs/09 P123-6). The headings of a box the capture
+    marked whose mark came off because its print stylesheet shows it are
+    checked as the others are (docs/09 P128). Headings that could not be
+    read are a warning (docs/09 P123-5).
 
 ## 6. Security requirements (carried forward and new; all MUST)
 

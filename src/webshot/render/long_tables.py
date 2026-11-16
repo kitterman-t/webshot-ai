@@ -230,6 +230,26 @@ def printable_height_px(options: CaptureOptions) -> float:
     return max(1.0, (height - 2 * margin) * 96 / (options.scale or 1.0))
 
 
+def printable_width_px(options: CaptureOptions) -> int:
+    """The CSS pixels the paper's width holds once printed, as `print_geometry`
+    gives it: the paper's width less both margins, at 96 pixels an inch,
+    divided by the print scale.
+
+    A page's own `@page` margin and Chromium's shrink-to-fit both move the
+    width the page is really laid out at, which only a probe print reads
+    (`render/clipping.printed_width`). This is the width before either, for
+    deciding whether that probe is worth printing.
+    """
+    width, height = _PAPER_INCHES.get(options.paper_format, _PAPER_INCHES["Letter"])
+    if options.landscape:
+        width = height
+    margin = 0.0
+    found = re.fullmatch(r"(\d+(?:\.\d+)?)(px|in|cm|mm)?", options.margin)
+    if found and found.group(2):
+        margin = float(found.group(1)) * _UNIT_INCHES[found.group(2)]
+    return max(1, round((width - 2 * margin) * 96 / (options.scale or 1.0)))
+
+
 async def split_long_tables(page: Page, options: CaptureOptions) -> list[SplitTable]:
     """Split every table too costly to print whole in the page's own document.
 
