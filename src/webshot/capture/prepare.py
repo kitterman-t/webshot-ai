@@ -90,11 +90,12 @@ NOISE_SELECTORS = [
 #: viewport, so Chromium prints it on every page over the text beneath it, and
 #: its words are read into the bundle between the article's. Cookiebot's was
 #: measured, printed on five of six pages of one article in clean mode as well
-#: as faithful (docs/09 P79), and Osano's on two of three (P97-4); the others
-#: follow their vendors' documented markup and were not met in a capture. Each selector is a name the vendor
-#: gave its own element, so none matches a page's own box the way the noise
-#: list's `[class*='cookie-consent' i]` can, which is why that list stays
-#: clean mode's alone.
+#: as faithful (docs/09 P79), Osano's on two of three (P97-4), and Complianz's
+#: and CookieYes' on every page of two more (P124-1); the others follow their
+#: vendors' documented markup and were not met in a capture. Each selector is
+#: a name the vendor gave its own element, so none matches a page's own box the
+#: way the noise list's `[class*='cookie-consent' i]` can, which is why that
+#: list stays clean mode's alone.
 CONSENT_MANAGERS: dict[str, tuple[str, ...]] = {
     "Cookiebot": ("#CybotCookiebotDialog", "#CybotCookiebotDialogBodyUnderlay"),
     "OneTrust": ("#onetrust-consent-sdk",),
@@ -106,6 +107,27 @@ CONSENT_MANAGERS: dict[str, tuple[str, ...]] = {
     # Measured: its banner shown on load and hidden by its own script five
     # seconds later, so a quick capture printed it mid-fade (docs/09 P97-4).
     "Osano": (".osano-cm-window", ".osano-cm-dialog"),
+    # Measured: a WordPress plugin's banner, fixed to the window, printed on
+    # all 13 pages of a legal summary and over its text on 11, inside the
+    # container named first, which holds a banner per consent type with all
+    # but one kept hidden. `#cmplz-manage-consent`, the button that reopens
+    # the banner, follows the plugin's markup and was not met (docs/09
+    # P124-1).
+    "Complianz": (
+        "#cmplz-cookiebanner-container",
+        ".cmplz-cookiebanner",
+        "#cmplz-manage-consent",
+    ),
+    # Measured: its centred popup printed over 726 characters on all 5 pages
+    # of a news article. These four are the classes of the stylesheet that
+    # printed the article clean: the popup, the overlay behind it, its
+    # preferences dialog and the button that reopens it (docs/09 P124-1).
+    "CookieYes": (
+        ".cky-consent-container",
+        ".cky-overlay",
+        ".cky-modal",
+        ".cky-btn-revisit-wrapper",
+    ),
 }
 
 #: The rules that act on `release_clamped_text`'s marks. Part of the page's
@@ -1005,7 +1027,10 @@ async def isolate_content(page: Page, selector: str) -> None:
                 const parent = node.parentElement;
                 if (!parent) break;
                 for (const sibling of parent.children) {
-                    if (sibling !== node) sibling.setAttribute('data-webshot-hidden', 'true');
+                    if (sibling !== node) {
+                        sibling.setAttribute('data-webshot-hidden', 'true');
+                        sibling.setAttribute('data-webshot-hidden-by', 'selector');
+                    }
                 }
                 if (parent !== document.body) parent.setAttribute('data-webshot-ancestor', 'true');
                 node = parent;
@@ -1165,11 +1190,18 @@ def dropped_imports_message(imports: Sequence[str]) -> str:
     )
 
 
-async def hide_elements(page: Page, selectors: Sequence[str]) -> int:
+async def hide_elements(page: Page, selectors: Sequence[str], reason: str) -> int:
+    """Mark what `selectors` match to leave out, and record `reason` on it.
+
+    The reason is what `unmark_shown` names when the page's print CSS shows
+    a marked box anyway (docs/09 P128): `noise` for clean mode's selectors,
+    `exclude` for `--exclude`. The last rule to mark a box sets its reason,
+    and `--exclude` runs last, so the user's choice wins.
+    """
     if not selectors:
         return 0
     hidden: int = await page.evaluate(
-        """selectors => {
+        """([selectors, reason]) => {
             let count = 0;
             for (const selector of selectors) {
                 let elements;
@@ -1178,11 +1210,12 @@ async def hide_elements(page: Page, selectors: Sequence[str]) -> int:
                 for (const element of elements) {
                     if (!element.hasAttribute('data-webshot-hidden')) count++;
                     element.setAttribute('data-webshot-hidden', 'true');
+                    element.setAttribute('data-webshot-hidden-by', reason);
                 }
             }
             return count;
         }""",
-        list(selectors),
+        [list(selectors), reason],
     )
     return hidden
 
@@ -1750,6 +1783,7 @@ HIDE_CONSENT_DIALOGS_JS = """managers => {
                 if (element.hasAttribute('data-webshot-hidden')) continue;
                 if (found === null && shown(element)) found = selector;
                 element.setAttribute('data-webshot-hidden', 'true');
+                element.setAttribute('data-webshot-hidden-by', 'consent');
                 hidden++;
             }
         }
@@ -1835,6 +1869,7 @@ HIDE_OBSTRUCTIVE_OVERLAYS_JS = """([points, textShare]) => {
         const large = rect.width >= innerWidth * 0.45 && rect.height >= innerHeight * 0.08;
         if (large && Number(style.zIndex || 0) >= 10 && !isPage(element)) {
             element.setAttribute('data-webshot-hidden', 'true');
+            element.setAttribute('data-webshot-hidden-by', 'overlay');
             count++;
         }
     }
@@ -1881,6 +1916,7 @@ HIDE_OBSTRUCTIVE_OVERLAYS_JS = """([points, textShare]) => {
     for (const [root, hits] of tally) {
         if (hits < points || isPage(root)) continue;
         root.setAttribute('data-webshot-hidden', 'true');
+        root.setAttribute('data-webshot-hidden-by', 'overlay');
         count++;
         const cls = typeof root.className === 'string' ? root.className.trim().split(/\\s+/)[0] : '';
         covering.push(root.localName + (root.id ? `#${root.id}` : cls ? `.${cls}` : ''));

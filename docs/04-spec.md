@@ -343,9 +343,9 @@ there with its reason, and the run's job summary lists every skip.
 5. **Overlay policy (was undocumented in v2):** both modes hide the dialogs
    of the consent managers WebShot knows by the names their vendors give
    them (`CONSENT_MANAGERS`: Cookiebot, OneTrust, Didomi, Quantcast Choice,
-   TrustArc, Usercentrics, Sourcepoint, Osano), because a consent dialog is the
-   browser's session asking, not the page, and Chromium prints a fixed
-   dialog over the text of every page. A manifest warning names each one
+   TrustArc, Usercentrics, Sourcepoint, Osano, Complianz, CookieYes), because
+   a consent dialog is the browser's session asking, not the page, and
+   Chromium prints a fixed dialog over the text of every page. A manifest warning names each one
    that was on screen. `clean` mode also hides page chrome and large fixed
    overlays, and a box fixed to the window, not painted beneath the page (a
    negative `z-index`), that is drawn on top at more than half of a 3x3 grid
@@ -538,6 +538,18 @@ there with its reason, and the run's job summary lists every skip.
     access wall WebShot knows by its vendor's markup (`ACCESS_WALLS`: Mg2
     ConneXt, Piano), the warning names it and gives the save-it-yourself
     advice instead of `--exclude`. The capture still exits 0 (docs/09 P97).
+    A wall that keeps the article from the page itself leaves the bundle and
+    the PDF agreeing on a teaser, so when that warning is not given, a
+    capture, with a bundle or without, MUST read the PDF's text for the words
+    a registration or subscription wall prints where it stops an article
+    ("Sign up to keep reading", "Subscribe to continue reading", "This
+    article is for subscribers", "Already a member? Sign in", and their
+    like; never a bare "Subscribe" or "Sign in"), and record a manifest
+    warning quoting the last of them and its page when the PDF holds fewer
+    letters and digits after them than before. It names an `ACCESS_WALLS`
+    wall the page showed, gives the save-it-yourself advice, and the capture
+    still exits 0 (docs/09 P124-2). A PDF whose text cannot be read says so
+    in one warning, which names each check that was therefore not made.
 19. **A translucent gradient tiled across the printed page:** Chromium
     rasterizes a gradient with a translucent stop, or one it paints as a
     repeating tile, over the whole printable page, once per layer per box.

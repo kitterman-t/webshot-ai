@@ -18,6 +18,25 @@ which records the measurements behind each change.
 
 ### Added
 
+- **A PDF that stops at a registration wall's words says so.** A business
+  review's article sent its opening paragraphs and a "Sign up to keep reading
+  … Already a subscriber? Sign in" box, nothing more, so the bundle held the
+  same teaser as the PDF, the printed-text share was whole, and the capture
+  exited 0 with no warning. A capture now reads the PDF's text for a wall's
+  words ("to keep reading", "to continue reading", "for subscribers",
+  "Already a member? Sign in" and the like, never a bare "Subscribe") and
+  warns, quoting them and their page, when less of the text follows them than
+  precedes them, with or without a bundle. It names a known vendor's wall the
+  page showed and says to save the page from your own browser. It still exits
+  0, and it says nothing more when the share's own warning has spoken. Over
+  371 earlier captures, two PDFs held such words, and both were walled. See
+  docs/09 P124-2.
+- **`discovered_metadata` records the byline the page prints.** A new
+  `byline` field holds the names a page prints as "By …" just after its title
+  or under an "Author(s)" heading, read by WebShot's own rules from the text,
+  never from a class. It is written only when there is one, so a page without
+  a byline records what it always did. See docs/09 P124-3.
+
 - **`tools/coverage/printed_share.py` measures a finished PDF's printed text
   as the capture does.** Reviews measured it as the share of `content.md`'s
   word 5-grams in `pdftotext`'s output, which counts link targets and
@@ -383,6 +402,28 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **Complianz's and CookieYes' consent banners are hidden in both modes.**
+  Complianz's banner printed on all 13 pages of a legal summary and over its
+  text on 11; CookieYes' centred popup covered 726 characters on all 5 pages
+  of a news article. Nothing hid either, and only the fixed-box warning named
+  them. Both vendors are now among the consent managers whose dialogs WebShot
+  hides and names. See docs/09 P124-1.
+- **`discovered_metadata.author` is the printed byline when the declarations
+  name someone else.** A law firm's article declared the colleague who posted
+  it, in `<meta name="author">` and in JSON-LD, and printed its writer under
+  an "Author(s)" heading; the poster was recorded as the author. When the
+  page's byline names someone its declarations do not, `author` is now the
+  byline's names and the new `declared_author` keeps the declarations'. A
+  byline that names only declared people, in any order, case or punctuation,
+  changes nothing, and a name set in bold in the middle of an author's
+  biography is not read as an author.
+  See docs/09 P124-3.
+- **A related article's date is not the page's.** An announcement that
+  printed its date as text and declared none was given the date of the first
+  "Keep reading" card below it, whose `<time>` sat inside the card's link. A
+  `<time>` inside a link now counts only when the link opens the page itself,
+  by its canonical address or `og:url`, as a post's permalink does. That page
+  now records no date, which is what it declares. See docs/09 P124-4.
 - **Clean mode hides an interstitial drawn on top across the window.** A news
   site's welcome ad printed over the first pages of its article in clean
   mode: its dialog was narrower than the size rule's 45% of the window, and

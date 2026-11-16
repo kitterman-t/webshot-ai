@@ -183,7 +183,7 @@ Produced by CAPTURE, consumed by RENDER and EXTRACT. Frozen dataclass:
 
 | File | Producer | Notes |
 |---|---|---|
-| `manifest.json` | bundle/manifest | `bundle_format: 3`, provenance, auth mode, counts, warnings, checksums, PDF details, tool versions incl. upstream lib versions. Phase 3 added two additive records: `discovered_metadata` (the title, date, author and site name the page declares, as WebShot reads them, docs/09 P82, P88, P93 — kept separate from `page_metadata`, which is what the DOM snapshot recorded) and `content_discovery` (which strategy chose the content region, and what it chose) |
+| `manifest.json` | bundle/manifest | `bundle_format: 3`, provenance, auth mode, counts, warnings, checksums, PDF details, tool versions incl. upstream lib versions. Phase 3 added two additive records: `discovered_metadata` (the title, date, author and site name the page declares, as WebShot reads them, docs/09 P82, P88, P93 — kept separate from `page_metadata`, which is what the DOM snapshot recorded; a page that prints a byline adds `byline`, and when the byline names other people than the declarations, `author` is the byline's and `declared_author` keeps the declaration's, P124-3) and `content_discovery` (which strategy chose the content region, and what it chose) |
 | `content.json` | docling serializer | **lossless DoclingDocument JSON** (breaking change vs v2 — see migration in [05-implementation-plan.md](05-implementation-plan.md)) |
 | `content.md` / `content.txt` / `content.doctags` | docling serializers | Markdown keeps figures + OCR text (picture annotations print natively) |
 | `content.html` | capture/snapshot | the sanitized standalone snapshot (single producer); visible content only, asset refs rewritten to `assets/` |

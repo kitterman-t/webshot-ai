@@ -6,7 +6,10 @@ URL or a heading when the page declares none, and a capture tool that records
 a guessed date is lying about the record (docs/09 P3-3, P82). Its author can
 come from a byline's text and its site name from the URL's host, and its
 title from a heading or one side of the `<title>`, so those are read from
-the page's declarations too (P88, P93). And the strategy
+the page's declarations too (P88, P93). A byline the page prints is read
+by rules of WebShot's own, and replaces a declaration it contradicts, which
+was a CMS's record of who posted the article (P124-3); a date marked in a
+link to another page is that page's (P124-4). And the strategy
 that chose the content region has to be the one the manifest names, in all
 four of its outcomes, because that is the only way a reader can tell an
 isolated region from a whole page.
@@ -33,6 +36,7 @@ from webshot.capture.discover import (
     declared_sitename,
     declared_title,
     main_content_text,
+    printed_byline,
     read_metadata,
     read_page,
 )
@@ -152,6 +156,22 @@ def test_a_publication_beats_a_modification_that_comes_first() -> None:
     assert _dated("published_over_modified.html") == "2023-01-15"
 
 
+def test_a_related_cards_date_is_not_the_pages() -> None:
+    """An article that prints its own date as text and marks none, above a
+    "Keep reading" row of cards each linking to another article with its
+    `<time>` inside the link: the first card's date was recorded as the
+    page's (docs/09 P124-4). A comment's permalink, a link to a part of the
+    page, is not the page either."""
+    assert _dated("related_card_dates.html") == ""
+
+
+def test_a_time_in_the_pages_own_permalink_is_its_date() -> None:
+    """A blog theme marks the post's date inside the post's permalink, which
+    opens the page its canonical link names, written relative and without
+    the trailing slash. The recent post linked in the sidebar is not it."""
+    assert _dated("permalinked_time.html") == "2022-11-30"
+
+
 def test_a_declared_date_does_not_depend_on_the_calendar() -> None:
     """htmldate refuses a date later than today, so its answer for this page
     would change on 2091-01-02. The page declares the date now."""
@@ -187,6 +207,41 @@ def test_a_value_that_needs_a_guess_is_not_read() -> None:
             "2016-06-06",
         ),
         ('<span itemprop="dateCreated" content="2015-05-15">May</span>', "2015-05-15"),
+        # A date marked in a link is the date of what the link opens, unless
+        # it opens the page itself, by its canonical address or `og:url`;
+        # an `<a>` with no `href` is no link (docs/09 P124-4).
+        ('<a href="/other"><time datetime="2014-04-14">a</time></a>', ""),
+        (
+            '<a href="/other"><time datetime="2014-04-14">a</time></a>'
+            '<time datetime="2013-03-13">b</time>',
+            "2013-03-13",
+        ),
+        (
+            '<a href="/other"><time itemprop="datePublished"'
+            ' datetime="2014-04-14">a</time></a>',
+            "",
+        ),
+        ('<a name="top"><time datetime="2014-04-14">a</time></a>', "2014-04-14"),
+        (
+            '<meta property="og:url" content="https://example.org/a/">'
+            '<a href="https://example.org/a"><time datetime="2014-04-14">a</time></a>',
+            "2014-04-14",
+        ),
+        (
+            '<link rel="canonical" href="https://example.org/a/">'
+            '<a href="http://example.org/a/"><time datetime="2014-04-14">a</time></a>',
+            "2014-04-14",
+        ),
+        (
+            '<link rel="canonical" href="https://example.org/a/">'
+            '<a href="#c1"><time datetime="2014-04-14">a</time></a>',
+            "",
+        ),
+        (
+            '<link rel="canonical" href="https://example.org/a/">'
+            '<a href="/a/?page=2"><time datetime="2014-04-14">a</time></a>',
+            "",
+        ),
         # Not a key the table names, so not read, however date-like.
         ('<meta name="expires" content="2030-01-01">', ""),
         ('<meta name="pdate" content="20190301">', ""),
@@ -230,15 +285,111 @@ def _sited(name: str) -> str:
     return read_metadata(html).sitename
 
 
+def _attributed(name: str) -> DiscoveredMetadata:
+    return read_metadata((AUTHORS / name).read_text(encoding="utf-8"))
+
+
 def test_a_byline_is_not_a_declared_author() -> None:
     """Trafilatura reads "Jane Doe" from the element classed `byline`
-    (docs/09 P88)."""
-    assert _authored("byline_only.html") == ""
+    (docs/09 P88). The author is still only what the page declares, which is
+    no one; the byline is recorded as the byline, read from its text and not
+    its class (P124-3)."""
+    metadata = _attributed("byline_only.html")
+    assert metadata.author == ""
+    assert metadata.byline == "Jane Doe"
+    assert metadata.declared_author == ""
 
 
-def test_a_declared_author_beats_a_different_byline() -> None:
-    """As written: Trafilatura replaced the full stop with a space."""
-    assert _authored("meta_author_beside_byline.html") == "R. Chen"
+def test_a_printed_byline_replaces_a_declaration_it_contradicts() -> None:
+    """P88 held the declaration, "R. Chen", over the byline; a CMS that
+    declares whoever posted the article made that the wrong person, so the
+    byline the page prints is the author now, and the declaration is kept as
+    written beside it: Trafilatura replaced its full stop with a space
+    (P124-3)."""
+    metadata = _attributed("meta_author_beside_byline.html")
+    assert metadata.author == "Jane Doe"
+    assert metadata.byline == "Jane Doe"
+    assert metadata.declared_author == "R. Chen"
+    assert (
+        declared_author(
+            (AUTHORS / "meta_author_beside_byline.html").read_text(encoding="utf-8")
+        )
+        == "R. Chen"
+    )
+
+
+def test_an_author_heading_names_the_writer_over_the_poster() -> None:
+    """A law firm's article declared the colleague who posted it in
+    `<meta name="author">` and JSON-LD, and printed its writer under an
+    "Author(s)" heading with an address, a town and a telephone number, none
+    of them a name (docs/09 P124-3)."""
+    metadata = _attributed("byline_beside_poster.html")
+    assert metadata.author == "Priya Raman"
+    assert metadata.byline == "Priya Raman"
+    assert metadata.declared_author == "Sam Ellery"
+
+
+def test_a_byline_that_agrees_with_the_declaration_changes_nothing() -> None:
+    """The same people in another spelling of case and punctuation: the
+    declaration stays the author, as written, and there is no declared
+    author to record beside it."""
+    metadata = read_metadata(
+        '<meta name="author" content="R. Chen"><h1>Notes</h1><p>BY R CHEN</p>'
+    )
+    assert metadata.author == "R. Chen"
+    assert metadata.byline == "R CHEN"
+    assert metadata.declared_author == ""
+
+
+def test_a_bold_organization_in_a_biography_is_not_an_author() -> None:
+    """Under "About the author", the review the writer edits is set in bold
+    inside her biography's sentence. Only a bold run that opens its block is
+    a name, so the byline is the writer alone, the declaration's person, and
+    nothing replaces it (docs/09 P124-3)."""
+    metadata = _attributed("bio_names_an_organization.html")
+    assert metadata.byline == "Jane Doe"
+    assert metadata.author == "Jane Doe"
+    assert metadata.declared_author == ""
+
+
+def test_a_byline_naming_some_of_the_declared_people_does_not_replace_them() -> None:
+    """The second writer's surname, "Guest", is a word a role holds, so the
+    byline's reading passes her over as it passes over "Guest Contributor". A
+    byline that names no one the declaration does not is no evidence against
+    it, so the complete declaration stays the author (docs/09 P124-3)."""
+    metadata = _attributed("coauthor_named_like_a_role.html")
+    assert metadata.author == "Priya Raman; Rowan Guest"
+    assert metadata.byline == "Priya Raman"
+    assert metadata.declared_author == ""
+
+
+def test_a_byline_naming_someone_the_declaration_does_not_replaces_it() -> None:
+    """The declaration named one of the two writers; the byline names both."""
+    metadata = read_metadata(
+        '<meta name="author" content="Jane Doe"><h1>Notes</h1>'
+        "<p>By Jane Doe and John Roe</p>"
+    )
+    assert metadata.author == "Jane Doe; John Roe"
+    assert metadata.declared_author == "Jane Doe"
+
+
+def test_the_byline_fields_are_recorded_only_when_there_is_a_byline() -> None:
+    """A page without one records the four fields it always did, so no
+    manifest of such a page changes (docs/09 P124-3)."""
+    assert read_metadata(DECLARED).record() == {
+        "title": "Field Notes",
+        "author": "R. Chen",
+        "date": "2024-03-05",
+        "sitename": "",
+    }
+    assert _attributed("byline_beside_poster.html").record() == {
+        "title": "Mooring Fees for the Coming Season",
+        "author": "Priya Raman",
+        "date": "",
+        "sitename": "",
+        "byline": "Priya Raman",
+        "declared_author": "Sam Ellery",
+    }
 
 
 def test_json_ld_declares_every_author_of_the_outermost_object() -> None:
@@ -260,8 +411,119 @@ def test_a_microdata_author_item_declares_its_name() -> None:
 def test_authors_of_listed_posts_are_not_the_pages() -> None:
     """`rel="author"` links, an account in `twitter:creator`, and a profile
     URL in `article:author`: Trafilatura answered with the first listed
-    post's author."""
+    post's author. Nor does the page print a byline of its own: each listed
+    post's "by" follows its title."""
     assert _authored("listed_posts_authors.html") == ""
+    assert _attributed("listed_posts_authors.html").byline == ""
+
+
+_TITLED = "<h1>Notes on the quay</h1>"
+
+
+@pytest.mark.parametrize(
+    ("markup", "expected"),
+    [
+        # A line after the title, with a link or without, and its names.
+        (f"{_TITLED}<p>By Jane Doe</p>", "Jane Doe"),
+        (f'{_TITLED}<p>By<a href="/people/doe">Jane Doe</a></p>', "Jane Doe"),
+        (
+            f"{_TITLED}<p><strong>By</strong> <span><a>Jane Doe</a></span></p>",
+            "Jane Doe",
+        ),
+        (f"{_TITLED}<div>Written by Jane Doe and John Roe</div>", "Jane Doe; John Roe"),
+        (
+            f"{_TITLED}<p>By Jane Doe, John Roe &amp; Ann Lee</p>",
+            "Jane Doe; John Roe; Ann Lee",
+        ),
+        (f"{_TITLED}<p>BY JANE DOE</p>", "JANE DOE"),
+        (f"{_TITLED}<p>By Ludwig van Beethoven</p>", "Ludwig van Beethoven"),
+        (f"{_TITLED}<p>By María O'Neill-Díaz</p>", "María O'Neill-Díaz"),
+        # A date or a section after a bar or a spaced dash is not read, and
+        # nor is a role.
+        (f"{_TITLED}<p>By Jane Doe | March 3, 2026</p>", "Jane Doe"),
+        (f"{_TITLED}<p>By Jane Doe — Opinion</p>", "Jane Doe"),
+        (f"{_TITLED}<p>By Jane Doe, Staff Writer</p>", "Jane Doe"),
+        (
+            f'{_TITLED}<div><p>By<a href="/people/doe">Jane Doe</a><span>,</span></p>'
+            "<p>Harbor Lane Councils Member.</p></div>",
+            "Jane Doe",
+        ),
+        # A site's section or a desk is not a person, and an organization's
+        # staff are no one in particular.
+        (f'{_TITLED}<div>By <a href="/news/markets">Stock Markets</a></div>', ""),
+        (f"{_TITLED}<p>By Harbor Lane News Staff</p>", ""),
+        # A sentence that starts with "By", one word, and a date are not
+        # names.
+        (f"{_TITLED}<p>By Monday the quay was dry.</p>", ""),
+        (f"{_TITLED}<p>By Prince</p>", ""),
+        (f"{_TITLED}<p>By Jane Doe March 3, 2026</p>", ""),
+        # Nor is a title-cased phrase no name would hold, nor a subhead.
+        (f"{_TITLED}<p>By The Numbers</p>", ""),
+        (f"{_TITLED}<p>By Our Readers</p>", ""),
+        (f"{_TITLED}<h2>By Industry Sector</h2>", ""),
+        # Only near the title: no title, or far below it, is not a byline.
+        ("<p>By Jane Doe</p>", ""),
+        (f"{_TITLED}<p>{'Tide notes. ' * 200}</p><p>By Jane Doe</p>", ""),
+        # Inside a link, a menu, a sidebar, a figure's credit, a control or
+        # code, it is another thing's.
+        (f'{_TITLED}<a href="/posts/two"><span>By Jane Doe</span></a>', ""),
+        (f"{_TITLED}<nav><p>By Jane Doe</p></nav>", ""),
+        (f"{_TITLED}<aside><p>By Jane Doe</p></aside>", ""),
+        (f"{_TITLED}<figure><figcaption>By Jane Doe</figcaption></figure>", ""),
+        (f"{_TITLED}<button>By Jane Doe</button>", ""),
+        (f"{_TITLED}<script>document.write('<p>By Jane Doe</p>')</script>", ""),
+        # Two bylines that name different people are no one byline; the same
+        # people twice are.
+        (f"{_TITLED}<p>By Jane Doe</p><p>By John Roe</p>", ""),
+        (f"{_TITLED}<p>By Jane Doe</p><p>by JANE DOE</p>", "Jane Doe"),
+        # An author heading, and the names in the headings and bold text
+        # under it, up to the next heading of its rank.
+        ("<h2>Author(s)</h2><h3>Jane Doe</h3><h3>John Roe</h3>", "Jane Doe; John Roe"),
+        (
+            "<h2>About the author</h2><p><strong>Jane Doe</strong> keeps the "
+            "harbour's records.</p><h2>Related</h2><h3>Boiler Notes</h3>",
+            "Jane Doe",
+        ),
+        ("<h3>Authors:</h3><h4>Jane Doe</h4><h2>Next</h2>", "Jane Doe"),
+        # Bold text is a name only where it opens its block, or follows the
+        # heading in a block that holds both: a biography sets its subject
+        # first, and what it sets in bold inside a sentence is something
+        # else.
+        (
+            "<h2>About the authors</h2><p><strong>Jane Doe</strong> edits "
+            "<strong>Harbor Lane Review</strong>.</p><p><b>John Roe</b> keeps "
+            "its records.</p>",
+            "Jane Doe; John Roe",
+        ),
+        (
+            "<section><h2>About the author</h2><span><strong>Jane Doe</strong>"
+            "</span> edits the review.</section>",
+            "Jane Doe",
+        ),
+        (
+            "<h2>About the author</h2><p>Our editor, <strong>Jane Doe</strong>, "
+            "keeps the records.</p>",
+            "",
+        ),
+        # A long section under such a heading is a part of the article, and
+        # more than eight names a list of people.
+        (
+            f"<h2>The author</h2><p>{'A long paragraph of notes. ' * 30}</p>"
+            "<h3>Key Takeaways</h3>",
+            "",
+        ),
+        (
+            "<h2>Authors</h2>"
+            + "".join(f"<h3>Jane Doe{'e' * n}</h3>" for n in range(9)),
+            "",
+        ),
+        # Under a heading that labels nothing, names are not a byline.
+        ("<h2>Contacts</h2><h3>Jane Doe</h3>", ""),
+        ("", ""),
+    ],
+)
+def test_what_counts_as_a_printed_byline(markup: str, expected: str) -> None:
+    assert printed_byline(markup) == expected
 
 
 def test_a_page_without_a_site_name_does_not_get_the_host() -> None:

@@ -21729,6 +21729,193 @@ tests fail with exit 5. With the print CSS left out, the token's end is cut off
 at the page's edge. Fifteen cases pin what `css_imports` finds and what it
 leaves.
 
+## P124 — consent plugins, a teaser wall, a poster's name and a card's date (2026-11-15)
+
+Four faults from one capture run of 44 linked web pages, each of which exited
+0. Two consent banners printed over the text because WebShot did not know
+their vendors. An article that stopped at a registration wall had no warning.
+The manifest named the colleague who posted an article as its author, and gave
+an announcement the date of a related article.
+
+### P124-1 — two consent plugins nothing hid
+
+- **Complianz.** A legal summary's banner,
+  `div#cmplz-cookiebanner-7-optout.cmplz-cookiebanner`, inside
+  `#cmplz-cookiebanner-container`, printed on all 13 pages and over 2,860
+  characters in 79 lines on 11 of them. The fixed-box check (P83) named it,
+  and the `--exclude` it offered worked.
+- **CookieYes.** A news article's centred popup,
+  `div.cky-consent-container.cky-popup-center`, covered 726 characters in 20
+  lines on all 5 pages. A stylesheet hiding `.cky-consent-container`,
+  `.cky-overlay`, `.cky-modal` and `.cky-btn-revisit-wrapper` printed the
+  article with no fixed-box warning.
+
+Both are now in `CONSENT_MANAGERS` (spec §5 item 5), so both modes hide them
+and the manifest names each one on screen. The selectors are the ones measured,
+plus `.cmplz-cookiebanner` and Complianz's reopen button,
+`#cmplz-manage-consent`, which follow the plugin's markup and were not met.
+
+### P124-2 — a teaser that stops at a registration wall
+
+A business review's article printed a 4-page PDF that ended its text at "Sign
+up to keep reading … Become a free member … Already a subscriber? Sign in".
+The wall was a cross-origin frame after the opening paragraphs: a
+subscription vendor's inline offer, loaded from its template endpoint with
+`displayMode=inline`. The bundle held the frame's screenshot and its
+recognized text, and the site had sent no more of the article, so the bundle
+and the PDF held the same teaser. P97's printed-text share was whole and said
+nothing, and no other warning named the wall.
+
+`wall_words` (`render/text_layer.py`) reads the PDF's text for the words a
+wall prints where it stops an article: a sign-up, subscribe, sign-in,
+register or "become a member" *to keep reading* or *to continue reading*; "to
+continue reading, please sign in"; "subscribe to read the full article";
+"this article is for subscribers"; "Already a member? Sign in". It finds the
+last of them, and warns when fewer letters and digits follow them than
+precede them, because a wall stops the article and what follows it is the
+article's tags, an author's note and the site's footer. A masthead that asks
+for a sign-up above a whole article has its words near the start. A bare
+"Subscribe", "Sign in" or "Continue reading" is not one: nearly every page
+prints those.
+
+- **Measured.** Over 371 PDFs WebShot had captured before (web pages, lesson
+  pages and video pages), two held any of the words, and both were walled: this
+  article, and a professional association's members-only analysis that
+  stopped after its first section at "Unlock this exclusive content … Already a
+  member? Sign in". Both warn. None of the golden corpus's fixtures holds the
+  words.
+- **Fitted to P97.** The check runs only when P97's share warning did not,
+  since that warning has already said the PDF lacks the text, named the
+  wall, and given the same advice; the P97 fixture's wall says "to keep reading
+  this story" and still gets one warning. It runs with or without a bundle,
+  because it reads only the PDF. When it fires it asks which `ACCESS_WALLS`
+  wall the page showed, names it, and passes it on to the covered-text check,
+  which then does not offer `--exclude`. The PDF's text is read once for both
+  checks, so a PDF whose text cannot be read stops both, and one warning says
+  so: with a bundle, P97's, naming both checks; without one, the wall check's.
+  Review found the first version gave two warnings for that one failure.
+- **Not done.** The vendor's inline offer frame was not added to
+  `ACCESS_WALLS`. Its address is the vendor's, but an inline template can be a
+  newsletter offer as well as a wall, and naming a wall changes the advice of
+  two other warnings. One page is not enough to tell them apart.
+
+### P124-3 — the poster declared, the writer printed
+
+A law firm's article declared one person in `<meta name="author">` and in
+JSON-LD. It printed another under an "Author(s)" heading, as
+`<h3><a href=…>Name</a></h3>` followed by an e-mail address, a town and a
+telephone number, and named that person in a site-search vendor's own `<meta>`
+too, which WebShot does not read. P88 had made `author` the declarations
+alone, because Trafilatura read whatever an element classed as a byline held.
+
+`printed_byline` (`capture/discover.py`) reads a byline from the page's text
+by rules of WebShot's own, never from a class, and in two shapes only: a line
+"By Jane Doe" that is not a heading, within 1,500 characters after the first
+`<h1>`; and the names in the lower headings, and in the bold text that opens
+its block, under a heading whose whole text labels authors, up to the next
+heading of its rank or the end of its section, when that comes within 600
+characters. A name is two to five capitalized words, with nothing but letters,
+apostrophes, hyphens and full stops, and none of them a word such as "the",
+"our" or "of" that no name holds. A part holding a word of a role, an
+organization or a section ("Staff Writer", "Councils Member") is passed over.
+Nothing inside a link, a menu, a sidebar, a figure or a control is read, and
+two bylines that name different people are none.
+
+When the byline names someone the declarations do not, `author` is the
+byline's names and `declared_author` keeps the declarations'. `byline` is
+recorded whenever there is one. Both fields are written only when they have a
+value, so the manifest of a page without a byline is byte for byte what it was.
+No golden manifest moved.
+
+- **Measured** over the `content.html` of 88 earlier bundles, which keeps a
+  page's structure but not its `<head>`: six bylines were read. Five name the
+  declared author, and one is this article. Two shapes in those bundles are
+  refused: "By" before a link to a financial site's "Stock Markets" section,
+  and a business magazine's "… Councils Member" after the name, which the
+  first version took for a second name, so that page read no byline until
+  "member" and "council" became role words. Probing found that a title-cased
+  subhead read as a name ("By The Numbers", "By Industry Sector"), so headings
+  and those words are refused.
+- **Not measured.** The scan cannot show a replacement on a live page with its
+  `<head>`, other than this article's.
+- **Changed after review.** The first version read every bold name under an
+  author heading, and replaced any declaration the byline differed from.
+  Review found two shapes where that records an untrue author; the fixtures
+  for both are invented. A biography that set "Jane Doe" in bold at its start
+  and the review she edits in bold inside its sentence gave the byline "Jane
+  Doe; Harbor Lane Review", which replaced the declared "Jane Doe". Now bold
+  text is read only where it opens its block, or follows the heading in a
+  block that holds both, so that byline is "Jane Doe"
+  (`declared_authors/bio_names_an_organization.html`). And the role words
+  include surnames ("Guest", "Press", "Senior", "Chief", "Partner", "Fellow",
+  "Service"), so "By Priya Raman and Rowan Guest" was read as the byline
+  "Priya Raman", which replaced the complete declaration of both. Now a
+  byline replaces the declarations only when one of its names has a word that
+  no one declared value holds, so a byline naming some of the declared people
+  leaves the declaration as the author
+  (`declared_authors/coauthor_named_like_a_role.html`).
+- **Not done.** On that page `byline` still records only "Priya Raman":
+  telling a surname from a role's word takes more than a list of words, and
+  no measured page has shown which rule would. A bold name inside a
+  biography's sentence is no longer read, so a biography that names its
+  second writer there (`… with <strong>John Roe</strong>`) reads only the
+  first. An
+  organization's name that holds none of the role words, printed after "By"
+  ("By Jane Doe, Harbor Lane Review"), still reads as a name, and replaces a
+  declaration of "Jane Doe" alone.
+
+### P124-4 — a related card's date
+
+An archived company announcement printed its date as text above its `<h1>`
+and declared none. Its first `<time>` was in a "Keep reading" card further
+down, inside the card's link to another article, and `discovered_metadata.date`
+recorded that card's date.
+
+A `<time>` inside a link now counts as the page's only when the link opens
+the page itself, as its canonical link or `og:url` names it: the same host,
+the same path but for a trailing slash, the same query, any scheme. A link to
+a part of the page (`#comment-4`) opens that part, a comment's permalink, so
+its date is the comment's. This holds for a `<time>` with an `itemprop` too.
+The announcement now records no date: the issue asked for its header's date,
+but that date is text, and P82 never reads one. A blog theme that marks the
+post's date inside the post's own permalink still gives the page its date.
+
+- **Measured** over the same 88 `content.html` files, which lack the canonical
+  link and so are a stricter test than a live page: 40 were dated before and
+  38 after. The two that changed are this announcement's two captures.
+- **Not done.** `page_metadata.publishedTime` (`capture/snapshot.py`), the
+  DOM's own record as the snapshot takes it, still reads the first
+  `time[datetime]`, so it still holds the card's date. A card whose `<time>`
+  sits outside its link is not caught either.
+
+### P124-5 — the tests
+
+`tests/test_consent_dialogs.py` captures
+`tests/fixtures/consent_banner_plugins_page.html`, a Complianz banner in its
+container beside a hidden one and a CookieYes popup over its overlay, in both
+modes: neither dialog's words reach `content.md` or the PDF, and one warning
+names both. `tests/test_wall_words.py` pins the phrases, the position rule and
+the warning, and captures `tests/fixtures/registration_wall_teaser_page.html`
+with and without a bundle: one warning, no share warning, and none once
+`--exclude` takes the wall away. `tests/test_discovery.py` adds the law firm's
+shape (`declared_authors/byline_beside_poster.html`), the related cards
+(`declared_dates/related_card_dates.html`), a permalinked post
+(`declared_dates/permalinked_time.html`), and the cases for each byline rule.
+Run against master's code, 83 of the new and changed tests fail. The tests of
+`wall_words` and `printed_byline` fail because master has neither, and the
+four browser captures, the related cards, the law firm's shape and five of
+the new date cases fail on their assertions. The four that pass hold what
+master already did right: a `<time>` in the page's own permalink, or in an
+`<a>` with no `href`. All the fixtures' text is invented.
+
+Review added the two byline fixtures of P124-3's last bullets, three tests and
+three byline cases to `tests/test_discovery.py`, and to
+`tests/test_wall_words.py` a capture, with a bundle and without, whose PDF
+text cannot be read, which must give one warning naming each check it
+stopped. Against the code before the review, both fixtures' tests, two of the
+three cases and the capture with a bundle fail; the rest hold what that code
+already did right.
+
 ## P118 — a timeout test that raced the stand-in's fill timer (2026-11-08)
 
 A pull request's `tests (linux, py3.13)` job, on a self-hosted Linux runner,
@@ -21787,7 +21974,99 @@ export under the root's manifest holds the tool's file and reports no leak,
 which is the silent case above. With `state()` restored to the working tree's
 manifest, the test fails at its first check of the boundary.
 
-## P129: Python-Markdown 3.11.3 links an address in angle brackets whatever its scheme (2026-11-15)
+## P126 — soupsieve 4.1.1 and opentelemetry-api 1.45.2, and a Python floor of 3.11.5 (2026-11-15)
+
+The vulnerability audit of every locked pin began failing on master, and with
+it the required `vulnerability scan` on every pull request: soupsieve 2.9.2
+(CVE-2026-126190 to -126193, fixed in 2.10.0, 3.0.2 and 4.0.0) and
+opentelemetry-api 1.45.1 (CVE-2026-126360, fixed in 1.45.2).
+
+`uv lock --upgrade-package` for both took opentelemetry-api to 1.45.2 and split
+soupsieve in two: 4.1.1 for Python 3.11.5 and later, and 2.10 below it, because
+every soupsieve from 3.0.2 on declares `requires-python >=3.11.5`. 2.10 still
+carries three of the four advisories, and the audit reads every pin whatever
+interpreter it is for, so the floor moved: `requires-python = ">=3.11.5"`, and
+the lock pins soupsieve 4.1.1 alone. Python 3.11.0 to 3.11.4 are the first
+patch releases of 3.11, and CI's 3.11 job runs the newest patch release.
+
+soupsieve is beautifulsoup4's CSS selector engine, and two major versions is
+the jump the owner's standing permission for updates leaves to him; he
+approved it once the full verify passed. It did, on this machine: pytest, the
+license gate, the audit (clean), the golden corpus and its second path, and
+parity, with no golden changed.
+
+## P128 — a box WebShot marked, that the page's print CSS kept, was missing from the bundle (2026-11-15)
+
+A capture of a blog page in Blogger's Dynamic Views theme printed the post
+whole, two pages, 276 words, while the bundle held nothing: content.txt and
+content.md one byte each, chunks.jsonl empty, `text_characters: 1`,
+`items: 0`, and no warning. CONTRIBUTING rule 5 calls that silent
+degradation.
+
+### P128-1 — the cause
+
+The theme draws the open post in a panel fixed over a grid of every other
+post (`position: fixed`, `z-index: 999`, the whole window). On screen the
+grid's teasers are most of the page's text, so the panel held less than half
+of it and clean mode's size rule hid it as an interstitial
+(`data-webshot-hidden`). The theme's print stylesheet hides the grid and makes
+the panel the page with `display: block !important` under a selector more
+specific than WebShot's `[data-webshot-hidden='true'] { display: none
+!important; }`, so the panel printed. Read at the moment of the snapshot, with
+the print stylesheets adopted and print media on: the panel carried the mark,
+computed `display: block`, and its text was all of the body's (1,725
+characters). The snapshot drops a marked box whatever it computes, so the
+bundle lost the post the PDF printed. The clipping, covering and video checks
+skip a marked box the same way.
+
+### P128-2 — the fix
+
+After the print stylesheets and the media switch, `capture/marks.py` takes the
+mark off each marked box that still lays out a box, and the manifest names it:
+"WebShot marked 1 box to leave out that the page's own print stylesheet shows
+anyway: div.viewitem-panel...". Every stage after it reads what the PDF
+prints. A box the user named with `--exclude` keeps its mark. The PDF does not
+change: it printed the box before. Re-captured, the page's text layer is
+identical to before, and content.txt holds 1,739 characters in 29 items and 8
+chunks.
+
+Clean mode taking the panel for an overlay is not changed here: on screen it
+is one. Measuring the overlay rule under print media would change what every
+capture hides, and the print stylesheet already says which boxes print.
+
+`tests/test_marks.py` captures `tests/fixtures/marks/print_shows_panel.html`,
+a synthetic page of that shape. The post is in the PDF and in content.txt, the
+grid in neither, and the warning names `div.panel`; with `--exclude .panel`
+the post stays out and nothing is named. Without the fix the first test fails:
+content.txt is empty.
+
+### P128-3 — the warning named a cause it had not measured
+
+The Claude review of #370 found that the first wording, "In clean mode such
+a box was taken for an overlay or page furniture", was claimed for every
+mark. Clean mode is one of four rules that set it. The content selector
+(`--selector` or the auto-selector) marks the siblings along the path to its
+root in either mode. The consent rule marks in either mode. `--exclude`
+marks, and keeps its marks. So a sibling outside `--selector` that the page's
+print CSS shows was named as something clean mode had mistaken, in a
+faithful capture where clean mode never ran.
+
+Each rule now records why it marked a box in `data-webshot-hidden-by`:
+`selector`, `consent`, `noise`, `overlay` or `exclude`. The last rule to mark
+a box sets the reason, and `--exclude` runs last. The warning names each box
+with its reason, for example "aside.related (outside the content region
+#post)" or "div.panel (taken in clean mode for an overlay)". A mark with no
+recorded reason is called that, and no reason is guessed. The attribute
+comes off with the mark, and the snapshot already strips `data-webshot-*`
+attributes it does not own, so no bundle carries it.
+
+`tests/fixtures/marks/print_shows_sibling.html` is a faithful capture of
+`--selector #post` beside an aside that the print CSS keeps. The aside is in
+the PDF and in content.txt, and the warning names it for the selector and
+does not say clean mode. A unit test pins the wording for the consent reason
+and for an unrecorded one.
+
+## P129 — Python-Markdown 3.11.3 links an address in angle brackets whatever its scheme (2026-11-15)
 
 Dependabot's bump of Python-Markdown from 3.11.2 to 3.11.3 failed one test on
 all six test jobs, Linux and macOS on Python 3.11 to 3.13:

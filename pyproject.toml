@@ -11,7 +11,11 @@ name = "webshot"
 dynamic = ["version"]
 description = "Turn a web page or local document into a searchable PDF that carries an AI-ready bundle inside it."
 readme = "README.md"
-requires-python = ">=3.11"
+# 3.11.5, not 3.11: soupsieve 3.0.2 and later, the first releases out of
+# CVE-2026-126190 to -126193, need it, and with a 3.11.0 floor uv also pins
+# soupsieve 2.10 for 3.11.0-3.11.4, which the audit of every locked pin
+# fails (docs/09 P126).
+requires-python = ">=3.11.5"
 license = "Apache-2.0"
 # NOTICE as well as LICENSE: Apache-2.0 section 4(d) asks that a redistribution
 # carry the NOTICE file, and listing it here puts it in the wheel and the sdist.
