@@ -10,9 +10,10 @@ way the PDF shows less of the page than the page does, and before this check
 nothing said so (docs/09 P79-4, P83).
 
 This module measures it *after* the render, as `clipping.py` does, and warns
-once per box. It never moves or hides anything: which box is page chrome and
-which is the page is a judgement the warning leaves to the reader, who can pass
-`--exclude`.
+once per box. The measurement moves and hides nothing. In clean mode the
+pipeline may then hide a fixed box the measurement found over the text and
+print the page again (`hide_covering_boxes`, docs/09 P123-6); every other box
+is left to the reader, who can pass `--exclude`.
 
 The measurement is made on a second print, not on the screen, because the two
 lay the page out differently: pagination pushes every line that would cross a
@@ -31,6 +32,29 @@ The colours are set by a stylesheet and attributes, never in a `style`
 attribute, which a page's own rules can read (P83-4). Between marking and the
 print, a check that no element's layout moved stands guard, and the page gets
 its own styles back before anything else reads it.
+
+The boxes are found and marked at the width the page prints at. Chromium
+lays the print out at the width of the paper, where a page's media queries
+can give it another layout: a news page whose header bar is fixed only in its
+narrow layout printed that bar over the first lines of every page, while at
+the capture's 1440 px window the fixed box was a different element, and the
+check measured the wrong one (docs/09 P123-1). Its colours are another
+layout's too: a bar given its background only in the narrow layout would be
+marked with none. So the window is narrowed to the printed width, the boxes
+are found and their colours read and set there, and the window is put back
+before the measuring print. The layout check that guards the marking compares
+the page with how it was before the window was narrowed, so it covers that
+round trip too. Where the width cannot be read, the boxes are those of the
+window's width, as they were before.
+
+A box's paint is told apart by its colour, and by its place in the paint
+order. A fixed or sticky box is a stacking context, so Chromium paints all of
+it at once: everything drawn between the box's first and last object is the
+box's, whether or not its colour could be set. So paint no stylesheet reaches
+is still the box's, such as a closed shadow root's, whose contents keep their
+own colours (P123-2). Two marks bracket each box for that, a pseudo-element at
+the bottom of its stacking order and one at the top, a pixel each, drawn too
+faintly to cover anything.
 """
 
 from __future__ import annotations
@@ -69,6 +93,14 @@ COVER_ALPHA = 0.5
 
 #: The attribute each painted element of a box carries while it is measured.
 INK_ATTRIBUTE = "data-webshot-ink"
+
+#: The attribute the outermost element of each box carries while it is
+#: measured, for the two marks that bracket its paint.
+BOX_ATTRIBUTE = "data-webshot-ink-box"
+
+#: How opaque the marks that bracket a box's paint are drawn: enough for
+#: Chromium to print them, far too faint to count as covering (`COVER_ALPHA`).
+BRACKET_ALPHA = 0.02
 
 #: The colours boxes are painted in count up from this one, skipping any the
 #: page already uses, so no object of the page's own reads as a box's.
@@ -115,8 +147,24 @@ SAMPLE_CHARS = 60
 #: Every computed style is read before anything is written, then each painted
 #: colour is read back. A box whose colours did not take is reported, never
 #: measured as covering nothing. The layout of every element is recorded too,
-#: for `LAYOUT_MOVED_SCRIPT` to compare once the page has had its turn.
-MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter}) => {
+#: for `LAYOUT_MOVED_SCRIPT` to compare once the page has had its turn: the
+#: layout `RECORD_LAYOUT_SCRIPT` took before the printed-width round trip
+#: when there was one, so that round trip is held to the same test.
+#:
+#: Run with the window at the width the page prints at, so the boxes and their
+#: colours are those of the printed layout (P123-1). The outermost element of
+#: each box gets `boxAttribute` and two marks, a `::before` at the bottom of
+#: its stacking order and an `::after` at the top, each a pixel in the box's
+#: colour at `BRACKET_ALPHA`, so the PDF says where the box's paint starts and
+#: ends (P123-2). A pseudo-element the box already draws keeps its own
+#: declarations, and a replaced element has none: those boxes are bracketed by
+#: their coloured paint alone.
+#:
+#: Each record also says how much text the box holds and whether it holds the
+#: content clean mode isolated, for the decision of whether clean mode may
+#: hide it (P123-6).
+MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter,
+                         boxAttribute = 'data-webshot-ink-box', bracketAlpha = 0.02}) => {
     const up = node => node.assignedSlot || node.parentElement
         || (node.parentNode instanceof ShadowRoot ? node.parentNode.host : null);
     const top = node => node === document.body || node === document.documentElement;
@@ -190,6 +238,11 @@ MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter}) => {
     const layout = element => element instanceof HTMLElement
         ? [element.offsetLeft, element.offsetTop, element.offsetWidth, element.offsetHeight].join(',')
         : null;
+    // The layout from before the printed-width round trip, when there was
+    // one. An element that was not there then is a change in itself.
+    const before = window.__webshotLayoutBefore || null;
+    delete window.__webshotLayoutBefore;
+    const recorded = element => before ? (before.has(element) ? before.get(element) : 'new') : layout(element);
     let next = 0;
     const nextCode = () => {
         for (;;) {
@@ -295,6 +348,23 @@ MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter}) => {
             }
             elements.push({element, key, expect, own});
         }
+        // The two marks that bracket the box's paint (P123-2): absolutely
+        // placed in its middle, so they move nothing and no rounded corner
+        // clips them away.
+        const root = candidate.element;
+        if (!REPLACED.has(root.localName)) {
+            for (const [pseudo, layer] of [['::before', -2147483647], ['::after', 2147483647]]) {
+                const content = getComputedStyle(root, pseudo).content;
+                if (content !== 'none' && content !== 'normal') continue;
+                rules.push(`[${boxAttribute}="${number}"]${high}${pseudo} { ${important([
+                    'content: ""', 'display: block', 'position: absolute', 'top: 50%', 'left: 50%',
+                    'width: 1px', 'height: 1px', 'margin: 0', 'padding: 0', 'border: 0',
+                    'float: none', 'transform: none', 'filter: none', 'opacity: 1',
+                    'clip-path: none', 'visibility: visible', 'pointer-events: none',
+                    `background: ${coded(bracketAlpha)}`, `z-index: ${layer}`,
+                ])} }`);
+            }
+        }
         plans.push({candidate, code, elements});
     });
     // The page's own pictures cannot cover anything and cannot be covered:
@@ -305,17 +375,19 @@ MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter}) => {
         `:not([${attribute}]) { background-image: none !important }`);
     // Kept before the first write, so whatever happens below can be undone.
     const sheet = new CSSStyleSheet();
-    const state = {attribute, sheet, marked: [], roots: [], inlined: [], all, describe,
-                   layout: all.map(layout), measure: layout};
+    const state = {attribute, boxAttribute, sheet, marked: [], boxes: [], roots: [], inlined: [],
+                   all, describe, layout: all.map(recorded), measure: layout};
     window.__webshotInk = state;
     const adopted = new Set([document]);
-    for (const plan of plans) {
+    plans.forEach((plan, number) => {
         for (const {element, key} of plan.elements) {
             element.setAttribute(attribute, key);
             state.marked.push(element);
             adopted.add(roots.get(element) || document);
         }
-    }
+        plan.candidate.element.setAttribute(boxAttribute, String(number));
+        state.boxes.push(plan.candidate.element);
+    });
     sheet.replaceSync(rules.join('\n'));
     for (const root of adopted) {
         root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
@@ -374,14 +446,59 @@ MARK_BOXES_SCRIPT = r"""({attribute, base, noFilter}) => {
             if (matched.length === 1 && matched[0] === candidate.element) reach = 'alone';
             else if (matched.some(element => element !== candidate.element)) reach = 'shared';
         } catch (error) { reach = 'unmatched'; }
+        // The text the box shows, not what it keeps hidden: a header's closed
+        // menus are not text a reader of the page would lose with it.
+        const characters = (candidate.element.innerText || '').replace(/\s+/g, '').length;
+        const holdsContent = candidate.element.matches('[data-webshot-root="true"]')
+            || candidate.element.querySelector('[data-webshot-root="true"]') !== null;
         return {name, position: candidate.position, code, elements: elements.length,
-                unmarked, reach};
+                unmarked, reach, characters, holdsContent};
     });
 }"""
 
+#: Each element's layout, as `MARK_BOXES_SCRIPT` records it, before the window
+#: is narrowed to the printed width for the marking, so the marking's layout
+#: check compares the page put back with the page before (P123-1).
+RECORD_LAYOUT_SCRIPT = r"""() => {
+    const layout = new Map();
+    const collect = root => {
+        for (const element of root.querySelectorAll('*')) {
+            layout.set(element, element instanceof HTMLElement
+                ? [element.offsetLeft, element.offsetTop, element.offsetWidth, element.offsetHeight].join(',')
+                : null);
+            if (element.shadowRoot) collect(element.shadowRoot);
+        }
+    };
+    collect(document);
+    window.__webshotLayoutBefore = layout;
+    return layout.size;
+}"""
+
+#: A frame, or 100 ms where a page that is not being drawn never gives one
+#: (docs/09 P37), then whatever that frame queued: long enough for a resize to
+#: be laid out and for the handlers the page runs on it at once.
+SETTLE_SCRIPT = r"""async () => {
+    await Promise.race([new Promise(resolve => requestAnimationFrame(() => resolve())),
+                        new Promise(resolve => setTimeout(resolve, 100))]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+}"""
+
 #: How many fixed or sticky boxes the page has, counted as `MARK_BOXES_SCRIPT`
-#: chooses them, and nothing else: run just before the render, so the check
-#: after it knows a box was printed even when the box is gone by then.
+#: chooses them, and nothing else: run just before the
+#: render, so the check after it knows a box was printed even when the box is
+#: gone by then.
+#:
+#: At the window's width, where the marking runs at the printed width (P123-1).
+#: Reading it here would mean resizing the window, and printing a probe to
+#: learn the width, before the render; a page's resize and print handlers
+#: then run before it, and the render would no longer be of the page the
+#: bundle was taken from (docs/09 P16-1 keeps every check after the render for
+#: that reason, and a page whose banner leaves after its first print is a
+#: fixture, P97-4). The count is only ever asked one thing: whether every box
+#: has gone since the render. A box fixed at the window's width alone is
+#: counted and never marked, which costs a measuring print that finds the
+#: page unchanged; a box fixed at the printed width alone that leaves between
+#: the render and the check is the one the count cannot see.
 COUNT_BOXES_SCRIPT = r"""() => {
     const up = node => node.assignedSlot || node.parentElement
         || (node.parentNode instanceof ShadowRoot ? node.parentNode.host : null);
@@ -440,6 +557,9 @@ LAYOUT_MOVED_SCRIPT = r"""async () => {
 #: then are the sheet and the attributes removed: that change moves no colour,
 #: so nothing animates then either.
 RESTORE_BOXES_SCRIPT = r"""() => {
+    // The layout from before the window was narrowed, should the marking not
+    // have run to take it.
+    delete window.__webshotLayoutBefore;
     const state = window.__webshotInk;
     if (!state) return 0;
     delete window.__webshotInk;
@@ -450,6 +570,7 @@ RESTORE_BOXES_SCRIPT = r"""() => {
         else element.setAttribute('style', style);
     }
     for (const element of state.marked) element.removeAttribute(state.attribute);
+    for (const element of state.boxes || []) element.removeAttribute(state.boxAttribute);
     for (const root of state.roots) {
         root.adoptedStyleSheets = root.adoptedStyleSheets.filter(sheet => sheet !== state.sheet);
     }
@@ -472,6 +593,10 @@ class MarkedBox:
     #: What `name` matches as an `--exclude`: `alone` (this box and nothing
     #: else), `shared` (other elements too) or `unmatched` (no element).
     reach: str = "unmatched"
+    #: Characters of text the box holds, spaces not counted.
+    characters: int = 0
+    #: Whether the box holds the content clean mode isolated.
+    holds_content: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -494,6 +619,10 @@ class Covering:
     #: What `name` matches as an `--exclude`: `alone` (this box and nothing
     #: else), `shared` (other elements too) or `unmatched` (no element).
     reach: str = "unmatched"
+    #: Characters of text the box itself holds, spaces not counted.
+    box_characters: int = 0
+    #: Whether the box holds the content clean mode isolated.
+    holds_content: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -510,6 +639,12 @@ class CoveredText:
     unmarked: tuple[MarkedBox, ...] = ()
     #: Why nothing could be measured at all.
     unmeasured: str | None = None
+    #: The measuring print's pages, when it was made and matched the render:
+    #: the same layout, with each box's paint told apart by its colour. The
+    #: check for text printed over text reads these when it can (P123-4).
+    measured_pages: tuple[PageInk, ...] | None = None
+    #: The colours the measured boxes were painted in.
+    box_codes: frozenset[tuple[int, int, int]] = frozenset()
 
 
 async def find_covered_text(
@@ -518,6 +653,7 @@ async def find_covered_text(
     rendered: Path,
     header_footer: Mapping[str, Any] | None = None,
     boxes_at_render: int | None = None,
+    width: int | None = None,
 ) -> CoveredText:
     """Measure the page text each fixed or sticky box prints over.
 
@@ -531,17 +667,36 @@ async def find_covered_text(
     page would certify a different PDF. `boxes_at_render`, the count
     `count_printed_boxes` took before the render, makes the third check run
     when every box has gone by now (docs/09 P97-4).
+
+    `width` is the width the render was laid out at
+    (`render/clipping.printed_width`). The window is narrowed to it for the
+    marking, so the boxes and their colours are those of the printed layout,
+    and put back before the measuring print (P123-1). Without it, or without
+    a viewport to resize, the boxes are those of the window's width, as
+    before that change.
     """
     started = time.monotonic()
+    viewport = page.viewport_size
+    narrowed = width is not None and viewport is not None and width != viewport["width"]
     try:
-        marked = await page.evaluate(
-            MARK_BOXES_SCRIPT,
-            {
-                "attribute": INK_ATTRIBUTE,
-                "base": list(INK_BASE),
-                "noFilter": NO_FILTER_ID,
-            },
-        )
+        if narrowed and viewport is not None and width is not None:
+            await page.evaluate(RECORD_LAYOUT_SCRIPT)
+            await page.set_viewport_size({"width": width, "height": viewport["height"]})
+            await page.evaluate(SETTLE_SCRIPT)
+        try:
+            marked = await page.evaluate(
+                MARK_BOXES_SCRIPT,
+                {
+                    "attribute": INK_ATTRIBUTE,
+                    "base": list(INK_BASE),
+                    "noFilter": NO_FILTER_ID,
+                    "boxAttribute": BOX_ATTRIBUTE,
+                    "bracketAlpha": BRACKET_ALPHA,
+                },
+            )
+        finally:
+            if narrowed and viewport is not None:
+                await page.set_viewport_size(viewport)
     except PlaywrightError as exc:
         await _restore(page)
         return CoveredText(
@@ -559,6 +714,8 @@ async def find_covered_text(
             ),
             unmarked=record["unmarked"],
             reach=str(record["reach"]),
+            characters=int(record["characters"]),
+            holds_content=bool(record["holdsContent"]),
         )
         for record in marked
     ]
@@ -573,13 +730,21 @@ async def find_covered_text(
         moved = await page.evaluate(LAYOUT_MOVED_SCRIPT)
         if moved["moved"]:
             await _restore(page)
+            # Said of both steps when both ran: the layout compared is the
+            # one from before the printed-width round trip (P123-1).
+            done = (
+                "laying the page out at its printed width, marking the boxes there "
+                "and putting the window back"
+                if narrowed
+                else "marking the boxes"
+            )
             return CoveredText(
                 boxes=len(boxes),
                 unmarked=unmarked,
                 unmeasured=(
                     "the marks were gone before the measuring print"
                     if moved["moved"] < 0
-                    else f"marking the boxes moved {moved['moved']} element(s) of the "
+                    else f"{done} moved {moved['moved']} element(s) of the "
                     f"page, the first {moved['first']}"
                 ),
             )
@@ -642,6 +807,8 @@ async def find_covered_text(
         pages=len(pages),
         coverings=measure(pages, boxes),
         unmarked=unmarked,
+        measured_pages=pages,
+        box_codes=frozenset(box.code for box in boxes if box.unmarked is None),
     )
 
 
@@ -734,6 +901,12 @@ def measure(
     drawn at less than `COVER_ALPHA`, such as the invisible text layer WebShot
     adds for recognized text, cannot be covered, because they cannot be read
     in the first place.
+
+    An object drawn between a box's first and last object is the box's too,
+    whatever its colour: a box is a stacking context, painted all at once, and
+    what lies between is paint the marking could not colour, such as a closed
+    shadow root's (P123-2). Such an object covers like any of the box's, a
+    picture included, since nothing else of the box draws one.
     """
     by_code = {
         box.code: index for index, box in enumerate(boxes) if box.unmarked is None
@@ -743,13 +916,18 @@ def measure(
     for page in pages:
         regions: dict[int, list[Ink]] = {}
         drawn_by: dict[int, tuple[int | None, float]] = {}
+        spans = box_spans(page, by_code)
         for ink in page.inks:
             owner = by_code.get(ink.color) if ink.color is not None else None
+            between = False
+            if owner is None:
+                owner = _within(spans, ink.order)
+                between = owner is not None
             if ink.kind == "text":
                 drawn_by[ink.order] = (owner, ink.alpha)
             if (
                 owner is not None
-                and ink.kind in ("text", "path")
+                and (ink.kind in ("text", "path") or (between and ink.kind == "image"))
                 and ink.alpha >= COVER_ALPHA
                 and _area(ink.box) > 0
             ):
@@ -794,9 +972,33 @@ def measure(
                 ),
                 sample=_sample(hits),
                 reach=box.reach,
+                box_characters=box.characters,
+                holds_content=box.holds_content,
             )
         )
     return tuple(found)
+
+
+def box_spans(
+    page: PageInk, by_code: Mapping[tuple[int, int, int], int]
+) -> dict[int, tuple[int, int]]:
+    """Each box's first and last object on the page, by its colour."""
+    spans: dict[int, tuple[int, int]] = {}
+    for ink in page.inks:
+        owner = by_code.get(ink.color) if ink.color is not None else None
+        if owner is None:
+            continue
+        first, last = spans.get(owner, (ink.order, ink.order))
+        spans[owner] = (min(first, ink.order), max(last, ink.order))
+    return spans
+
+
+def _within(spans: Mapping[int, tuple[int, int]], order: int) -> int | None:
+    """The box whose paint `order` falls strictly inside, or `None`."""
+    for owner, (first, last) in spans.items():
+        if first < order < last:
+            return owner
+    return None
 
 
 def _sample(hits: Sequence[tuple[int, Glyph, tuple[Glyph, ...]]]) -> str:
@@ -862,6 +1064,127 @@ def _pages(numbers: Sequence[int], total: int) -> str:
 
 def _boxes(count: int) -> str:
     return f"{count} fixed or sticky box{'' if count == 1 else 'es'}"
+
+
+#: How much of the text the page shows a box may itself show for clean mode to
+#: hide it once it has been measured over the page's text, as a share and in
+#: characters without spaces. A site's header bar, a cookie notice, an ad
+#: anchor or a decorative panel shows a few hundred characters; a box past
+#: either bound may be the page's own content, laid over a page behind it, and
+#: is only reported. A page whose text is all in one fixed box, a notice
+#: centred in the window, is one where hiding the box would leave nothing
+#: (docs/09 P123-6).
+HIDEABLE_SHARE = 0.25
+HIDEABLE_CHARACTERS = 1500
+
+PAGE_CHARACTERS_SCRIPT = r"""() => ((document.body && document.body.innerText) || '').replace(/\s+/g, '').length"""
+
+#: Hide each named box that its name matches alone, as `hide_elements` hides
+#: what it matches; answer, for each, whether it was hidden. A box that still
+#: lays out once marked was not: a page rule that outranks WebShot's hiding
+#: one keeps it printing (docs/09 P128). `unmark_shown` takes such a mark off
+#: before the bundle, and this one is set after the first render, where it
+#: cannot reach, so the mark comes off here, and the box is reported as
+#: faithful mode reports it. A mark it finds already set is left alone: one
+#: that survived `unmark_shown` is `--exclude`'s. The mark records no
+#: `data-webshot-hidden-by`: one that stays is on a box with no layout, which
+#: `unmark_shown` would not name even if it ran again.
+HIDE_BOXES_SCRIPT = r"""(names) => names.map(name => {
+    let matched;
+    try { matched = document.querySelectorAll(name); } catch (error) { return false; }
+    if (matched.length !== 1) return false;
+    const box = matched[0];
+    const marked = box.getAttribute('data-webshot-hidden') === 'true';
+    box.setAttribute('data-webshot-hidden', 'true');
+    if (box.getClientRects().length === 0) return true;
+    if (!marked) box.removeAttribute('data-webshot-hidden');
+    return false;
+})"""
+
+
+def hideable(result: CoveredText, shown: int) -> list[Covering]:
+    """The boxes over the page's text that clean mode may hide, of a page
+    showing `shown` characters (docs/09 P123-6).
+
+    A fixed box only: Chromium repeats one on every page, so whatever it is
+    on screen it is chrome on paper, while a sticky box prints once, in the
+    page's flow, and is the page (a table's header row). Its name must match
+    it alone, so it is the box that is hidden. And it must show no more text
+    than `HIDEABLE_SHARE` and `HIDEABLE_CHARACTERS` allow, and hold none of the
+    content the capture isolated, so it is not the page's own content.
+    """
+    bound = min(HIDEABLE_CHARACTERS, HIDEABLE_SHARE * shown)
+    chosen: list[Covering] = []
+    for covering in result.coverings:
+        if (
+            covering.position == "fixed"
+            and covering.reach == "alone"
+            and not covering.holds_content
+            and covering.box_characters <= bound
+            and covering.name not in {box.name for box in chosen}
+        ):
+            chosen.append(covering)
+    return chosen
+
+
+async def hide_covering_boxes(
+    page: AsyncPage, result: CoveredText, walls: Sequence[str] = ()
+) -> list[Covering]:
+    """Hide the fixed boxes clean mode may remove once measured over the page's
+    text, and return them (docs/09 P123-6).
+
+    Five captures in one week printed a fixed box over their text, a header
+    bar, a decorative panel, a cookie bar, and each time the `--exclude` the
+    warning offered was the right fix, applied by hand. Clean mode removes page
+    chrome it knows by name before the bundle; a fixed box the measurement
+    finds over the text is page chrome it did not know, so it is removed too,
+    and the caller prints the page again. Only the boxes `hideable` allows,
+    and only on a page that showed no access wall (`walls`), since a box over
+    the text may be part of the wall, and hiding it cannot bring back what
+    the site keeps under it. Any other box is reported, as before.
+
+    The bundle was taken before this, so it keeps the box's text; the warning
+    the caller writes says so. A page whose text cannot be read hides nothing,
+    and its boxes are reported.
+    """
+    if walls or not result.coverings:
+        return []
+    try:
+        shown = int(await page.evaluate(PAGE_CHARACTERS_SCRIPT))
+    except PlaywrightError as exc:
+        LOGGER.debug("Reading the page's text length failed: %s", exc)
+        return []
+    chosen = hideable(result, shown)
+    if not chosen:
+        return []
+    try:
+        hidden = await page.evaluate(
+            HIDE_BOXES_SCRIPT, [covering.name for covering in chosen]
+        )
+    except PlaywrightError as exc:
+        LOGGER.debug("Hiding the boxes over the page's text failed: %s", exc)
+        return []
+    return [covering for covering, done in zip(chosen, hidden, strict=True) if done]
+
+
+def hidden_boxes_message(boxes: Sequence[Covering]) -> str:
+    """The manifest warning for the boxes `hide_covering_boxes` hid."""
+    named = "; ".join(
+        f"{box.name}, over {_plural(box.characters, 'character')} of the page's "
+        f"text on {_plural(len(box.pages), 'page')}"
+        for box in boxes
+    )
+    one = len(boxes) == 1
+    subject = "a fixed box" if one else f"{len(boxes)} fixed boxes"
+    them = "it" if one else "them"
+    whose = "the box's" if one else "the boxes'"
+    return (
+        f"Clean mode hid {subject} that printed over the page's text, and printed "
+        f"the page again without {them}: {named}. Chromium prints a fixed box on "
+        "every page, so in a PDF it is page chrome, which clean mode removes. The "
+        f"bundle was taken before, so it still holds {whose} text; --mode faithful "
+        f"prints the page with {them} and names {them} in a warning instead."
+    )
 
 
 def covered_text_warnings(result: CoveredText, walls: Sequence[str] = ()) -> list[str]:

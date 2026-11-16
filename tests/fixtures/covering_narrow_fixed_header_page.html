@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A tide table under a header fixed only when narrow</title>
+<!-- docs/09 P123-1. Two header bars, as a news site had: the wide one fixed at
+     a wide window and gone at a narrow one, and the compact one in the flow at
+     a wide window and fixed at a narrow one. The page is printed at 779px
+     (Letter, 0.6in margins, scale 0.9), where the compact bar is the fixed
+     one: it prints at the top of every page, over the first line of each.
+     At the capture's 1440px window the wide bar is the fixed one, and it does
+     not print at all. Each line is 30px tall and never wraps, and the second
+     page starts with a page break, so the line under the bar is the first of
+     each page whatever font draws it. All of the text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/30px sans-serif; color: #111; background: #fff; }
+  .column { width: 380px; margin-left: 20px; }
+  .line { height: 30px; white-space: nowrap; overflow: hidden; }
+  .second { break-before: page; }
+  .wide-bar { position: fixed; top: 0; left: 0; right: 0; height: 40px;
+    background: #345; color: #fff; z-index: 20; }
+  .compact-bar { display: none; }
+  @media (max-width: 1000px) {
+    .wide-bar { display: none; }
+    .compact-bar { display: block; position: fixed; top: 0; left: 0; right: 0;
+      height: 40px; background: #234; color: #fff; z-index: 20; }
+  }
+</style>
+</head>
+<body>
+<div class="wide-bar">Tide office: wide header</div>
+<div class="compact-bar">Tide office</div>
+<div class="column">
+  <div class="line">Under the compact bar, page one</div>
+  <div class="line">Clear of the bar, page one</div>
+  <div class="line">High water at the north quay, 06:12.</div>
+</div>
+<div class="column second">
+  <div class="line">Under the compact bar, page two</div>
+  <div class="line">Clear of the bar, page two</div>
+  <div class="line">High water at the south quay, 06:40.</div>
+</div>
+</body>
+</html>

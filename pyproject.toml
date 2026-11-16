@@ -67,12 +67,12 @@ dependencies = [
     # give. The covered-text check needs both from the PDF Chromium printed
     # (docs/09 P83). In the tree already through OCRmyPDF; direct because
     # WebShot now calls it, through render/pdfium_bridge.py alone.
-    "pypdfium2>=5.14.0,<6",
+    "pypdfium2>=5.15.0,<6",
     "pydantic>=2.14.3,<3",
     # Every name here is written as PyPI normalizes it. Written `Markdown`,
     # Dependabot found nothing to rewrite and never proposed 3.11 (docs/09
     # P84-5); tests/test_dependency_names.py holds the rule.
-    "markdown>=3.11.2,<4",
+    "markdown>=3.11.3,<4",
     # Pillow 12.3 carries 41 known advisories, fixed in 13.0.0 (pip-audit/OSV,
     # Oct 2026); the protected path feeds it page images, so the floor is the
     # fixed release. 13 needs docling-core 2.104, the first to support it.
@@ -83,7 +83,7 @@ dependencies = [
     # 17.x is also what sets requires-python above (P1-1). They replace the
     # hand-built reportlab sandwich, which is why reportlab is gone.
     "img2pdf>=0.6,<1",
-    "ocrmypdf>=17.13.0,<18",
+    "ocrmypdf>=17.14.0,<18",
     # Phase 2 extraction stack, pinned at or above the spike-verified versions
     # (docs/09 S3-S5): nh3 sanitizes the snapshot; docling-slim's HTML backend
     # builds the DoclingDocument (no torch — CI asserts it); chonkie
@@ -95,7 +95,7 @@ dependencies = [
     # imports both at module import even when only HierarchicalChunker (no
     # tokenizer, no network) is used. Nothing is ever downloaded. Recorded as
     # a Phase 2 correction (docs/09 P2-2).
-    "tree-sitter>=0.26.0",
+    "tree-sitter>=0.26.1",
     "huggingface-hub>=2.4.0",
     # Phase 3 adapters/discovery stack, at the spike-verified versions (docs/09
     # S5): MarkItDown converts every non-Markdown local data format to
@@ -145,11 +145,11 @@ mcp = ["mcp>=2.3.0,<3"]
 # `src/webshot` imports it, and CI builds the site with `--strict`.
 docs = [
     "mkdocs>=1.6,<2",
-    "mkdocs-material>=9.8.0,<10",
+    "mkdocs-material>=9.8.1,<10",
 ]
 dev = [
     "pytest>=9.2.0",
-    "ruff>=0.17.4",
+    "ruff>=0.17.5",
     "mypy>=2.4.1",
     "pip-licenses>=5",
     "pip-audit>=2.7",

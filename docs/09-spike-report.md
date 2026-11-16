@@ -15758,6 +15758,9 @@ paragraph `alpha <a href="T">T</a> omega` followed by another paragraph:
 | `style`, `script` | everything after it in the document gone |
 | `https://example.invalid/marrowby` | a link: the one target the shortcut was meant for |
 
+*Python-Markdown 3.11.3 links any `scheme://` address, so the `file:` target
+keeps its text through the shortcut since P129.*
+
 Every target but the https one read wrong the same way in a heading, a list
 item, a table cell, a quotation, a definition and bold text. It is the P28 class, a document's text written as
 markup, by the writer P28 gave a text-safe `escape`: markdownify's own markup
@@ -21610,6 +21613,397 @@ faithful mode, `--no-header-footer`, and the `!important` limit.
 No golden fixture has an `@page` rule. The rule leaves a page without one
 unchanged, so no golden should move.
 
+## P123: print layout and the checks on the printed page (2026-11-15)
+
+A week's capture of 44 linked web pages found six faults in how WebShot lays a
+page out for print and in the checks it runs on the printed PDF, and a
+verification of another week found a seventh. Each is below with what was
+measured, what changed, and what was left. The pages are described by shape;
+the fixtures are invented stand-ins served from disk.
+
+### P123-1 — a header fixed only at the printed width
+
+A news article's PDF printed "DONATE" and a language menu over the first
+lines of every page, and nothing was reported. The page has two header bars:
+one fixed in its wide layout and hidden in its narrow one, and one in the
+flow in its wide layout and fixed in its narrow one. The capture's window is
+1440 px wide and the page prints at 779 px, so the print used the narrow
+layout, while the covered-text check (P83) found and marked its boxes at the
+window's width, where the fixed bar is the one that does not print.
+
+Marking at the printed width needs the colours of that width too. The first
+fix took only the narrow layout's positions and kept marking at the window's
+width, and the stand-in fixture showed why that is not enough: its narrow bar
+has a background only in the narrow layout, so the marking read a transparent
+background, wrote the box's colour at alpha 0 over it, and the measuring print
+showed the bar's text alone over the line, 6 of each line's 26 characters
+covered instead of all of them. So the window is narrowed to the printed
+width (read back from Chromium, as the clipping check reads it), the boxes
+are found and their colours read and written there, and the window is put
+back before the measuring print. The layout of every element is recorded
+before the window is narrowed and compared after it is put back, so a page
+whose resize handlers moved anything is reported as one that could not be
+measured.
+
+The count taken just before the render, which tells the check a box was
+printed even when it has gone since (P97-4), stays at the window's width.
+Taking it at the printed width would mean resizing the window, and printing a
+probe to learn the width, before the render: the page's resize and print
+handlers would run first, and the render would no longer be of the page the
+bundle was taken from. The P97-4 fixture is such a page, a banner that leaves
+after its first print. The count is only asked whether every box has gone.
+What it cannot see is a box fixed at the printed width alone that leaves
+between the render and the check.
+
+Fixture: `covering_narrow_fixed_header_page.html`. On master's code no warning;
+with the change, the compact bar over 52 characters, 26 on each page.
+
+### P123-2 — a fixed box's paint that the marking could not colour
+
+Three articles from one news site printed an ad anchor's collapse tab, a white
+tab with a shadow and a chevron, over a line of every page, and nothing was
+reported. The anchor was fixed to the window's foot at z-index 2147483647 and
+named `ins#gpt_unit_/<network>/anchor_0`, as Google's Publisher Tag writes an
+anchor ad. The saved evidence holds the PDFs and a page image, not the page's
+DOM, so what drew the tab could not be read back. Reading the check's code
+found two ways a box's paint goes unmeasured, and the tab fits either:
+
+- **Paint the marking cannot colour.** The marking recolours every element of
+  a box through an adopted sheet, in the document and in open shadow roots. A
+  closed shadow root is out of reach, so what it draws keeps its own colours,
+  and a host that paints nothing of its own (an anchor collapsed to no height)
+  is then measured as covering nothing.
+- **A box fixed only at the printed width**, P123-1.
+
+The second is fixed above. For the first, a fixed or sticky box is a stacking
+context, so Chromium paints all of it at once: whatever is drawn between the
+box's first and last object in paint order is the box's own, whatever its
+colour. Each box is now bracketed by two marks, a `::before` at the bottom of
+its stacking order and an `::after` at the top, each a pixel in the box's
+colour at alpha 0.02, too faint to cover anything. An object between the two
+marks covers what lies under it like any of the box's, a picture included,
+and text drawn there is the box's text, not page text it covers. The size of
+the tab was not the cause: the measurement counts every covered character,
+however small the box.
+
+Clean mode also hides an anchor ad of that tag before anything else, by its
+id's shape (`ins[id^="gpt_unit_"][id*="anchor"]`), with the tag's other slots
+left to the selectors that already name them.
+
+Fixture: `covering_closed_shadow_tab_page.html`, a collapsed box whose tab is
+drawn in a closed shadow root. On master's code no warning; with the change,
+the box over 50 characters, 25 on each page.
+
+### P123-3 — a box wider than the printed page
+
+A code host's repository page printed its README with every line cut at the
+right edge ("being used to contro") and without its last two sections, which
+the bundle had. The README sat in a flex item, whose automatic minimum width
+is its widest content: a table laid out at its widest line, 1,078 px in a
+780 px page. A wrapper hid what ran past it, so the document was no wider than
+the paper and Chromium's shrink-to-fit did not apply. `--mode faithful`,
+`--media screen` and `--scale 0.7` were no better; a `--css` sheet giving the
+boxes `min-width: 0` and `max-width: 100%` fixed it.
+
+P16-4 keeps WebShot from reflowing a layout that runs off the page, because a
+wrong guess stacks two columns and nothing reported overlapped text. This one
+shape is now corrected, in clean mode and before the bundle: a box that is
+itself wider than the printed page is marked, and the print CSS caps it at its
+container's width and lets it shrink below its widest line. Capping moves
+nothing sideways, so it cannot stack two columns. The marks are kept only
+where the page then cuts fewer lines at the edge, counted as the clipping
+check counts them, and no capped box's content still runs past its own edge,
+which would print it over what is beside the box; otherwise they come off. A
+table left scrolling inside a capped box is then the wide-table release's to
+wrap (P16-11). Overlapped text is no longer beyond every check either
+(P123-4).
+
+The decision is measured at the printed width, which takes a probe print. A
+print before the render runs the page's print handlers (P123-1), so the page
+is first laid out at the paper's nominal width, which needs no print, and
+only a page that cuts a line there pays for the probe.
+
+Fixture: `wide_flex_column_page.html`. Clean mode prints the record whole with
+no warning; faithful mode prints it cut, with the clipping warning and the
+lost heading named (P123-5). On master's code, the clipping warning alone, in
+both modes.
+
+### P123-4 — text printed over text
+
+A consulting firm's article, laid out in floated full-width grid columns,
+printed a "Related insights" heading over the last two lines of a paragraph
+at a page break, and the Share and Request-a-meeting icons over another
+paragraph. Nothing was reported: no fixed box was involved. A `--css` sheet
+unfloating the grid's columns fixed it.
+
+A new check reads the printed characters and reports a page where a run of at
+least six characters of one line is each set over a character of another
+line. Two characters are, when the centre of one lies within the width of the
+other, their baselines are apart, and their bands, from the font's descent to
+its ascent (PDFium's loose character box), share at least 30% of the shorter
+band, or 50% for two characters of one size. Text drawn under half opaque,
+text a fixed or sticky box draws (the covered-text check names the box), and
+text a clip hides are left out. The check reads the covered-text check's
+measuring print when it matched the render, where each box's paint is told
+apart, and the render otherwise.
+
+Two first versions were wrong, and the real captures showed it:
+
+- A glyph's centre inside another text object's box found nothing. These
+  PDFs draw one character per text object, and each object's box is that
+  glyph's ink, so a heading set between two lines sits in the gaps between
+  their letters while plainly overlapping them.
+- The distance between baselines, against the larger character's em, flagged
+  a 40 px two-line title over the 16 px line under it: the title's font has a
+  tall descent, so its em was larger than the room the layout left, and the
+  lines did not touch.
+
+Run over the week's 86 captured PDFs, the check fired on the consulting
+firm's page (page 7, and on two variants of it), on a video news page whose
+link text was printed twice over itself, and on a tech news page whose
+"IMAGE CREDITS" caption sat over its text. Every other finding was text a
+fixed box drew, a header or a consent banner, which the pipeline leaves to
+the covered-text check. The "Events & Webcasts" heading the issue list also
+named sits on the line above with no room between, touching but not over it,
+and is not reported. Text printed over a line on its own baseline is not told
+apart from that line, and a limit stacked under a summation sign is three
+characters, under the run of six.
+
+The issue list asked to unfloat the grid's columns in clean mode. That was
+not done. The grid system gives a full-width column and a half-width column
+the same base class (`aem-GridColumn`, with the width in a modifier), so a
+rule that unfloats one stacks the other, and no fixture or saved evidence can
+show which pages lay columns side by side on purpose. The warning names the
+overlap; `--css` is the remedy.
+
+Fixture: `overprinted_blocks_page.html`, a notice block pulled over a
+paragraph's last lines by a negative margin, beside a drop cap, a footnote
+marker, a badge in a line and a heading set tight, none of which is reported.
+
+### P123-5 — headings the PDF does not print
+
+A consulting firm's print stylesheet hid its article's `<h1>`: the PDF began
+at its first section, with no title, in clean and faithful mode. Nothing
+said so. The bundle is taken under the same print stylesheet, so the printed
+share (P97) had nothing to miss. `--media screen` printed the title. And the
+code host's page (P123-3) lost two whole sections, headings and all, with
+only the clipping count to show for it.
+
+The page's title, its first visible `<h1>`, is now noted before the capture
+isolates its content or hides anything, and every heading the page shows in
+what it kept is read before the print stylesheet and the print media apply.
+After the render each is looked for in the PDF's text and in the bundle's: in
+neither, the print stylesheet hid it, and `--media screen` is offered; in the
+bundle only, the layout lost it. The title has a warning of its own. A
+heading counts as printed when its words are in the text in order, ignoring
+case and punctuation, each within 40 words of the one before, so a print
+stylesheet's capitals, a line break and a page's running header and footer
+do not read as missing. A title outside the region WebShot chose as the
+content is named, unless an `<h1>` of that region printed: the PDF then has a
+title, and the page's first `<h1>` is taken for a site's name in its header.
+One outside a `--selector` the caller gave, or removed with page chrome (a
+logo set in an `<h1>` inside the header) by clean mode, the consent-dialog
+hiding or `--exclude`, is what was asked for and is not named, whether or
+not the region chosen leaves it out as well.
+
+Fixture: `print_hidden_title_page.html`. On master's code no warning; with the
+change, the title named in clean and faithful mode, and nothing under
+`--media screen`.
+
+The review of the change found the region rule wrong twice. The title's fate
+was tested for the region before the chrome, so a logo `<h1>` in `body >
+header` was always "outside the region WebShot chose" once anything was
+isolated, though clean mode removes that header whatever the region. The
+order alone could not be the fix: isolation marks what it leaves out with
+the attribute the chrome's removal uses, so the two are now told apart by the
+selectors that removed the chrome. And a logo `<h1>` before an article with
+an `<h1>` of its own was named, "so the PDF has no title", over a PDF whose
+article title printed. Fixtures: `isolated_logo_title_page.html`, named in
+both modes before and in neither now; `isolated_chrome_title_page.html`, an
+article with no `<h1>`, named in clean mode before and not now, and named in
+faithful mode, which removes no chrome, before and now.
+
+A PDF whose text cannot be read stops this check too. It had a warning of its
+own when there was no bundle, beside the one P124-2 gives for the wall's
+words, so one failure was said twice; merged with P124, the headings are
+named in that one warning instead, with or without a bundle.
+
+Merged with P128, the read leaves out a heading in a box the capture had
+marked, and P128 then takes the mark off a box the page's print stylesheet
+shows anyway, so the PDF and the bundle hold it. Its headings went
+unchecked, and its title, read as removed by the capture, was not named:
+clean mode marked a post's fixed panel as an overlay, the print stylesheet
+showed the panel and hid its `<h1>`, and faithful mode named the missing
+title over the same PDF and bundle while clean mode said nothing. The read
+now keeps those headings aside, and once P128 has taken marks off, the ones
+in an unmarked box join the check in document order, and a title in one is
+shown or outside the region as if it had never been marked; a box
+`--exclude` named keeps its mark, and its headings stay out. Fixture:
+`marks/print_shows_panel_hides_title.html`
+(`test_a_title_hidden_in_a_box_the_print_shows_despite_its_mark_is_named`):
+before, the title named in faithful mode alone, and now in both.
+
+Merged with P120, clean mode hides more page chrome on a video's watch page
+(its bar, player and related rail, P120-6), and the read was still given
+only the selectors every page's chrome is hidden by. A site's name set in an
+`<h1>` in the bar, with `--auto-selector` isolating the video's column, was
+named as a title the region left out. The read is now given the selectors
+clean mode hid on that page. Fixture: `watch_page/masthead_title.html`
+(`test_a_title_in_the_bar_clean_mode_hides_is_not_named`): before, named in
+both modes; now in faithful mode alone, which hides no bar. The read already
+came after P120-3 opens a page's closed regions, so a heading in a closed
+`<details>` clean mode opens is looked for; measured on a page whose print
+stylesheet hides an `<h2>` in one, it is named in clean mode and not read in
+faithful mode, where the `<details>` stays closed.
+
+### P123-6 — clean mode hides a fixed box over the text
+
+Five captures in the week printed a fixed box over their text: a site header,
+a decorative panel, a cookie bar, a masthead, an archived page's header and
+cookie bar. Each time the warning offered an `--exclude` and each time it was
+the right fix, applied by hand and the page captured again. The issue list
+asked for that to happen on its own in clean mode, or for a `--strict` flag
+that exits non-zero.
+
+Clean mode now hides such a box and prints the page again. The reasoning:
+
+- **The capture knows the answer.** The measurement names the box, proves it
+  covers text, and offers the exclusion that was right five times in five. A
+  `--strict` exit would make each of those a failed run, to be repeated by
+  hand with the same exclusion: the same toil, moved to a non-zero exit.
+- **Clean mode already removes page chrome.** It hides navigation, ads,
+  consent dialogs and overlays it knows by name before the bundle. A box
+  Chromium repeats on every page is page chrome on paper whatever it is on
+  screen; this is page chrome found by measurement instead of by name.
+- **Nothing is lost silently.** The bundle was taken before, so it keeps the
+  box's text, and a warning names each box hidden, what it covered, and that
+  `--mode faithful` keeps it.
+- **An exit code is for a capture that is not what was asked.** The §3
+  taxonomy fails a capture that could not be made or is not the page. A PDF
+  with a box over some lines still holds the text in its text layer, and the
+  warning says where.
+
+It hides only what is safe to judge from the measurement: a `fixed` box (a
+`sticky` box prints once, in the page's flow, such as a table's header row,
+and is the page), whose name matches it alone (so it is that box that is
+hidden), holding none of the content the capture isolated, and showing at
+most a quarter of the page's text and 1,500 characters (a notice centred in
+the window that is the whole page keeps it), on a page that showed no access
+wall (a box over the text may be part of the wall, and hiding it would not
+bring back what the site keeps under it). The text a box shows is its
+`innerText`, so a header's closed menus do not count. Every check on the
+print is taken again of the new render, which costs a second render and a
+second measuring print on the pages that need it. Any other box is reported,
+as before. Faithful mode hides nothing.
+
+Fixture: `covering_boxes_page.html` in clean mode: the notice bar hidden and
+named, its two lines now printed clear, the bar's text still in the bundle;
+the sticky masthead, the badge in the gutter, the tint and the layer that
+paints nothing are left alone.
+
+The review of the change found two records that still described the first
+render:
+
+- **The headings.** They are read before the first render (P123-5), while the
+  box shows. A heading inside a box hidden here, a site's name set in an
+  `<h1>` in a fixed masthead, was then missing from the second PDF and
+  present in the bundle, and was reported as lost by the printed layout,
+  beside the warning saying clean mode hid it. The read now keeps each
+  heading it found, and once a box is hidden the check leaves out those
+  inside one: page chrome clean mode removed, which that warning names. A
+  page that no longer holds what was read leaves its headings unchecked, and
+  says so. Fixture: `covering_masthead_title_page.html`; before, the title
+  named as lost by the layout, and now the hidden box's warning alone.
+- **The failed requests (P20-6).** Counting stopped when the first render was
+  printed, so a request that failed before the second render, the PDF
+  delivered, was not counted. Counting now pauses while the checks print the
+  page again, whose narrower window can fetch what the printed page never
+  asks for, and stops after the last render. Fixture:
+  `covering_watched_bar_page.html`, whose script, as an ad-block detector
+  does, asks for an image once its bar is hidden; before, no failure counted,
+  and now that one.
+
+Merged with P124, a print that stops at a wall's words (P124-2) is a page
+that showed a wall too, whether or not WebShot knows the wall's vendor, and
+it hides nothing. A wall can be a bar fixed to the window's edge, which
+Chromium prints over the text like any other fixed box. Hidden, it took its
+words out of the second render, and with them the only warning that the site
+may have sent the article's opening alone. Such a box is now reported, with
+`--exclude`, beside the wall's warning, as faithful mode reports it. Fixture:
+`fixed_wall_bar_page.html`; with the two merged as they were, clean mode hid
+the bar and named no wall, and now both modes name the bar and the wall.
+
+Merged with P128, the hiding meets the fault P128 found: a page rule that
+outranks WebShot's hiding one keeps a marked box printing. `unmark_shown`
+takes such marks off before the bundle, and this mark is set after the first
+render, out of its reach. So clean mode said it had hidden the box and
+printed the page again without it, beside the second measurement's warning
+that the same box printed over the text, and the second PDF still printed
+the box. The hiding now takes its own mark off a box that still lays out as
+it sets it, and reports the box as faithful mode does, without a second
+render; the mark records no reason (`data-webshot-hidden-by`), since one
+that stays is on a box with no layout, which no unmarking names. The merge
+also renames P128's result in the pipeline: it was called `shown`, the name
+the headings read for P123-5 already held, and kept as it was it would have
+replaced them before the headings check. Fixture: `covering_boxes_page.html`
+in clean mode with a `--css` rule that shows the notice bar
+(`test_a_box_a_stylesheet_keeps_on_the_page_is_not_said_to_be_hidden`);
+before, both warnings and the bar in the PDF, and now the faithful-mode
+warning alone.
+
+### P123-7 — the edge count counted what the PDF printed
+
+A verification of another week's export found one printed share link cut at
+the right margin, 17 characters lost from the page while the link kept its
+target, and the warning said "10 element(s) have lines past the page edge".
+A word-by-word comparison of the bundle with the PDF found nothing else
+missing: one element had lost text, and nine had not. The saved evidence (the
+PDF, the bundle and the report) shows that the check's layout and the print's
+differed, since the print set the content column well inside the margins
+while the check found it crossing the edge, but not why. The check lays the
+page out by narrowing the window to the printed width; the print lays it out
+on a page, with no resize, no window height and pagination, and a page can
+tell the two apart.
+
+So the count now asks the PDF. The clipping check's script returns, with each
+element it counts as cut, the whole text node it found a line of past the
+edge, and an element is cleared when the PDF's text layer holds that text
+whole: as
+characters with the spaces taken out, which a line broken elsewhere does not
+change, or as words in order a running header's length apart, for text that
+runs across a page break. A text under 16 characters without spaces is too
+short to tell from a copy elsewhere on the page, and is counted; so is one the
+script could not send whole, and every one when the PDF's text could not be
+read. The warning's wording is unchanged; its count is what the PDF lost.
+
+The share link itself is still cut. Wrapping unbreakable text for print is a
+change to the layout of every capture that holds a long token, which P16-4
+leaves to a `--css` sheet written for the page (`a { overflow-wrap: anywhere
+}`); the warning now counts that one element, and names where it is.
+
+Fixture: `clipping_short_window_page.html`. Its cards are widened by a rule
+for windows under 1,020 px tall, which the check's 779 by 1,000 window meets
+and the print's 1,045 px page does not, and its token has no break point. On
+master's code the warning counts four elements; with the change, one.
+
+### P123-8 — tests
+
+New: `tests/test_overprint.py`, `tests/test_missing_headings.py`,
+`tests/test_wide_box_release.py`; additions to `tests/test_covered_text.py`,
+`tests/test_print_clipping.py` and `tests/test_ad_units.py`. Three covered-text
+tests that hold the measurement itself (a box whose inline `!important`
+colour beat the sheet, a filtered box, a box added after preparation) now run
+in faithful mode: in clean mode the box is hidden and the page printed again,
+which `test_clean_mode_hides_the_box_over_text_and_prints_again` holds. The
+test that ran the notice-bar fixture in both modes is two tests, one per mode.
+The review's corrections (P123-5, P123-6) are held by additions to
+`tests/test_missing_headings.py` and `tests/test_failed_requests.py`. The
+merge with P124 adds to `tests/test_wall_words.py` a capture of the fixed
+wall bar in both modes (P123-6), and has its capture whose PDF text cannot be
+read require the headings named in its one warning (P123-5). The merge with
+P120 adds to `tests/test_watch_page.py` a watch page whose title is in the bar
+clean mode hides there, in both modes (P123-5).
+
 ## P116: a page whose policy refuses inline style failed the whole capture (2026-11-07)
 
 P115-4 found it while fixing the running header's margin. A capture of any
@@ -21971,6 +22365,233 @@ export under the root's manifest holds the tool's file and reports no leak,
 which is the silent case above. With `state()` restored to the working tree's
 manifest, the test fails at its first check of the boundary.
 
+## P120 — a page's state before it is printed: a firewall's page, closed text, a scroll that moved on (2026-11-15)
+
+
+One capture run of 44 linked web pages and two video watch pages, each made
+with the defaults, published seven pages that were not what the PDF said they
+were, at exit 0. Each fault is in what the capture does to the page before it
+prints it: the bot-check test, the closed-controls check (P102), the lazy-load
+pass (P23-8, P105) and clean mode's page chrome.
+
+### P120-1 — a firewall's block page captured as the page
+
+A government policy page answered with HTTP 200 and F5 BIG-IP's stock block
+page: title "Request Rejected", "The requested URL was rejected. Please
+consult with your administrator." and "Your support ID is: <19 digits>". The
+capture published those 126 characters as the page. Two captures in the run
+hit it independently. P78's signatures named DataDome, HUMAN and Akamai only,
+and `--require-content` would not trip: its floor is 50 characters.
+
+The page is now a bot-check page, exit 4, when its title is "Request
+Rejected", its text has the sentence, and a support ID of six or more digits
+follows "Your support ID is". Each of the three alone is a phrase a page
+could quote, as Akamai's title alone is. The message says only that the
+site's firewall rejected the request, and that if the page opens in the
+reader's own browser, the firewall refused this automated one. The page does
+not say why it rejected the request, so the message does not claim it was
+the browser.
+
+`tests/test_bot_check_pages.py` serves the page as F5 does, a page quoting it
+under another title, and a page titled "Request Rejected" with no support ID.
+Both F5 cases fail on master's code.
+
+### P120-2 — the rest of an article behind "Story Continues"
+
+A finance news page printed five paragraphs and stopped at a "Story
+Continues" button, and `content.md` stopped there too. The rest of the
+article sat in the served HTML in `div.read-more-wrapper` with an inline
+`display: none`, the wrapper's next sibling after the one holding
+`button.readmore-button`. Neither carried ARIA or Bootstrap attributes, so
+P102's check, which knows a control by those, named nothing.
+
+A control is now also closed when its whole label (`aria-label`, its text,
+or its `title`) says the article goes on: "Story continues", "Continue
+reading", "Keep reading", "Read more", "Read the full story", "Show more",
+"See more" and their variants. It must be followed by a region with no box,
+after the control itself or after one of its three nearest ancestors (two
+siblings each). A link to another page is a link, so `a[href]` counts only
+with a `#` or `javascript:` target. The whole label, so "Read more about our
+funds" is not one. Every other filter of P102 holds: 200 characters, not
+page chrome, at most half link text.
+
+### P120-3 — what the warning said of a closed `<details>`, and opening them
+
+A policy page, captured from the Internet Archive, keeps each of its ten
+sections in a closed `<details>`. The warning said of each, for example "6.
+Requirements, 6,430 characters, in the bundle but not in the PDF".
+`content.md` was 1,355 bytes, and the sections' text was in none of the
+bundle's files. The page's stylesheet hides a closed `<details>`' contents
+(`details:not([open]) > *:not(summary) { display: none }`, an old polyfill's
+rule), so the snapshot, which keeps only what is laid out, kept none of it.
+P102-1 measured a closed `<details>` with no such rule, whose contents the
+snapshot does keep, and the warning took that as true of every one.
+
+The warning now looks for three samples of each region's text in the
+bundle's `content.txt` once the bundle is built: its start, its middle and its
+end, eight words each, read from its text nodes a word apart. It says "in the
+bundle but not in the PDF" only when all three are there, "in neither" when
+they are not, and "not in the PDF" when there is no bundle. The first version
+read the first twelve words of `textContent`. The review of #367 found two
+ways that misled: a teaser that repeats the hidden text's opening put those
+words in the bundle, and minified markup ran words together ("FeesEvery")
+that `content.txt` holds apart. P102's own case page is the first shape.
+
+The warning's remedy did not work either. With a `--css` rule on
+`details:not([open])::details-content` the PDF had 21 pages, the room for the
+sections, and printed none of their 407 words. The same rule prints the
+contents of a minimal page on Chromium 156, so what held them back there was
+not established.
+
+So the capture now opens what the check would name, which P102-4 left for a
+decision of its own. `--collapsed open` does it like this:
+
+- a `<details>` gets its `open` attribute;
+- a region with no box is marked, and one rule gives it its element's default
+  display (`display: revert`), so a `<span>` stays inline; a `hidden`
+  attribute, the UA's own `display: none`, is removed;
+- YouTube's description expander has its button pressed and is waited for,
+  up to two seconds.
+
+Opening runs once the capture has hidden what it hides, and before anything
+is released, snapshotted or printed. It runs up to three rounds, since an
+opened region can hold another. Once anything was opened the wait for fonts
+and pictures runs again: it skips a picture with no box, so a lazy one in a
+region that had none was never loaded and printed blank (review of #367). A
+script, style or template after a "Read more" control is not a region. `--collapsed closed` prints the page as
+shown. Unset, the mode decides: clean mode opens, because its purpose is the
+page's text. Faithful mode does not, because it changes what the page showed
+only for consent dialogs (spec §5 item 5). The QA report records the option
+only when it was given, so a report without it keeps its bytes. The warning
+names what stayed closed. Its remedy is `--collapsed open` where nothing was
+opened, and the reader's own browser, then a stylesheet, where opening left
+a region closed.
+
+On the fixtures, `tests/test_collapsed_content.py` checks each case against
+master's code:
+
+- `collapsed_read_more_page.html`, the finance page's shape and the policy
+  page's: master named only the `<details>`, said it was in the bundle, and
+  had none of either region's text in the PDF or `content.md`. Now both are
+  printed in clean mode, and named "in neither" under `--collapsed closed`.
+- `collapsed_content_page.html`, P102's page: in clean mode the summary and
+  the `<details>` are printed, and only the expander, whose stand-in button
+  does nothing, is named.
+
+No golden case moved: no golden fixture has a closed region outside its page
+chrome.
+
+### P120-4 — a site that appends its next article
+
+A news site appends its next article as the window nears the end of one, and
+puts that article's address and title on the page with the History API. The
+lazy-load pass scrolled through ten articles, 71 pages and 31.8 MB. The report's
+`title`, its `final_url` and the running header of every page named the tenth
+article, at exit 0. `discovered_metadata.title`, read from the HTML, was the
+first one's, and nothing named the mismatch.
+
+The pass now notes the address and title at its first step. When the address
+changes outside its fragment, it stops (`ended: "navigated"`), and the page is
+given its first title and address back (`history.replaceState`) before
+anything reads them, so `page_metadata.title` and `content.html`'s `<title>`
+agree with the report (review of #367). A change of
+fragment alone is a long page marking where the reader is, and scrolling goes
+on. It also remembers the `<article>` elements the page loaded with, and
+hides each outermost `<article>` added since. The capture keeps the first
+address and title, and the warning names both addresses and how many
+articles it left out.
+
+`tests/test_scroll_pass_ends.py` captures
+`tests/fixtures/scroll_pass/appending_articles.html` from loopback. Master's
+code reported the second article's title and address with no warning; now the
+first article's are kept and the second article's text is in neither the PDF
+nor the bundle. With `#fragment`, the page rewrites only its fragment, and the
+pass runs to the bottom.
+
+The articles are marked as P128 marks what any rule leaves out, with
+`data-webshot-hidden-by="appended"`. So when a stylesheet that outranks
+WebShot's hiding rule prints one anyway, P128 takes the mark off and names it
+as "an article the page appended after the one captured". Merged without that
+reason, the warning said the box was "marked by a rule that recorded no
+reason" (`test_an_appended_article_a_stylesheet_shows_is_named_for_what_it_is`).
+
+### P120-5 — a window that could not reach the height the pass measured
+
+A policy page ran the pass to its 100-step limit, and to 300 with
+`--max-scrolls 300`, at the same height, 10,675 px. Capture time went from 28
+to 80 seconds, and the warning advised a higher `--max-scrolls`. The page was
+complete both times: 106 of its 106 source blocks were in the text layer. The
+pass ends at the bottom only when the window's bottom edge comes within 4 px
+of the height it measures. It measures the larger of `body` and the root's
+`scrollHeight`, so a page whose window can scroll less than that never ends.
+Why that page's window stopped short was not measured.
+
+The pass now also stops when, for three steps in a row, the window is where
+the last scroll left it, short of the end, and the page is no taller
+(`ended: "unmoved"`, `UNMOVED_STEPS`). The warning says how far down the
+window's bottom edge got and how tall the page measured. It also says that
+content further down, or loaded by a box of the page's own that scrolls, may
+not have loaded. `tests/fixtures/scroll_pass/window_does_not_scroll.html`
+clips the root and scrolls `body` instead. Master's code ran it 100 steps,
+27 seconds; the pass now ends at step 4.
+
+### P120-6 — a video's watch page
+
+Two watch pages printed:
+
+- the site's bar ("Skip navigation", "Sign in"), fixed to the window, over a
+  black, unloaded player;
+- a rail of related videos with blank thumbnails;
+- the description closed;
+- a date only as "2y ago".
+
+Nothing on the printed pages gave a publication or capture date. The text
+layer held 26 and 29 per cent of the bundle's text, most of the rest being
+the rail's titles.
+
+On a watch address (`/watch?v=…` on the site's hosts), clean mode now hides
+the bar, the player and its boxes, the related rail and the comments as page
+chrome (`capture/watch_page.py`). They are named by the site's own custom
+elements and ids, and only on that address, so no other page's `#player` or
+`#secondary` is touched. They count as removed for the pass's
+removed-growth rule (P23-8). The description opens with P120-3.
+
+Every page's footer then carries one line between "WebShot" and the page
+number: "Published <date> by <channel>. Captured <date>." The date and channel
+are what the page declares (`discovered_metadata`, from its schema.org data),
+and a value it does not declare is left out. Without a note the footer is
+byte for byte what it was. Faithful mode is unchanged.
+
+`tests/test_watch_page.py` serves `tests/fixtures/watch_page/watch.html` from
+a route under the site's own address, so no request leaves the machine. Clean
+mode prints the description's last sentence and the footer line on every
+page, and none of the bar's or the rail's text; faithful mode prints both and
+names the expander.
+
+The run's other watch-page warning was not reproduced: the covered-text
+check's measuring print had 5 pages and the PDF 6. It needs the live page,
+and the bar it measured is now hidden.
+
+### P120-7 — a closed `<details>` a stylesheet had shown
+
+Another week's export check found the warning naming six accordion sections
+of a page whose `--css` had shown every one. All were whole in the PDF's text
+layer. A closed `<details>` lays its contents out either way and skips
+painting them, so they have boxes, and the check tested boxes. Measured on
+Chromium 156:
+
+- a closed `<details>`' paragraph has one client rect, 18 px tall, and
+  `checkVisibility()` false;
+- with `details::details-content { content-visibility: visible }` the
+  paragraph's `checkVisibility()` is true, and it prints.
+
+A `<details>` whose non-summary children are drawn is no longer named, or
+opened. `tests/test_collapsed_content.py::test_a_details_a_stylesheet_shows_is_not_named`
+captures the read-more page under `--collapsed closed` with
+`tests/fixtures/collapsed_details_shown.css`, and fails with the check
+removed.
+
+
 ## P126 — soupsieve 4.1.1 and opentelemetry-api 1.45.2, and a Python floor of 3.11.5 (2026-11-15)
 
 The vulnerability audit of every locked pin began failing on master, and with
@@ -21991,6 +22612,7 @@ the jump the owner's standing permission for updates leaves to him; he
 approved it once the full verify passed. It did, on this machine: pytest, the
 license gate, the audit (clean), the golden corpus and its second path, and
 parity, with no golden changed.
+
 
 ## P128 — a box WebShot marked, that the page's print CSS kept, was missing from the bundle (2026-11-15)
 
@@ -22062,6 +22684,73 @@ attributes it does not own, so no bundle carries it.
 the PDF and in content.txt, and the warning names it for the selector and
 does not say clean mode. A unit test pins the wording for the consent reason
 and for an unrecorded one.
+
+## P129 — Python-Markdown 3.11.3 links an address in angle brackets whatever its scheme (2026-11-15)
+
+Dependabot's bump of Python-Markdown from 3.11.2 to 3.11.3 failed one test on
+all six test jobs, Linux and macOS on Python 3.11 to 3.13:
+`tests/test_bare_links.py::test_the_shortcut_lost_every_target_but_an_address[file]`,
+with `AssertionError: alpha file:///tmp/tarnby.pdf omega`. It passes on
+master's lock and fails on the bump's, with the same source tree.
+
+### P129-1 — the upstream change
+
+3.11.3 widens `AUTOLINK_RE` in `markdown/inlinepatterns.py`:
+
+```diff
+-AUTOLINK_RE = r'<((?:[Ff]|[Hh][Tt])[Tt][Pp][Ss]?://[^<>]*)>'
++AUTOLINK_RE = r'<([A-Za-z][A-Za-z0-9+.-]*://[^<>]*)>'
+```
+
+`<…>` is now a link when it holds `scheme://` for any scheme. 3.11.2 linked
+http, https, ftp and ftps alone and read any other `<word…>` as an inline
+HTML tag. A target with no `://`, `<report.pdf>` among them, is still a tag.
+
+### P129-2 — what it changes for WebShot
+
+**The writer, nothing.** `_TextMarkdownify` writes every link
+`[text](target)` (P75-2), so no converted document reaches Python-Markdown as
+`<target>`. On the bump's head the golden corpus and parity passed in CI, and
+every test but this one.
+
+**The failing test pinned a fact about Python-Markdown.** It holds what the
+old `autolinks` shortcut did to each target (P75-5), and its set of targets
+the shortcut got right named only `https`. Through the shortcut,
+`file:///tmp/tarnby.pdf` read `alpha  omega` on 3.11.2 and reads
+`alpha file:///tmp/tarnby.pdf omega` on 3.11.3. Its page is now the writer's
+byte for byte, `<a rel="noopener noreferrer">` with the target nh3 drops, in
+all nine blocks of the test file; on 3.11.2 all nine differed. So `file`
+joins `https` in `AUTOLINKED`, and the test now checks that the page of each
+target there is the writer's page, which is what that set's comment claims.
+
+**A Markdown file's own `<scheme://…>` keeps its text.** Through
+`_render_markdown_document`'s path, `See <file:///tmp/tarnby.pdf> now`
+rendered `<p>See  now</p>` on 3.11.2, as did `ssh://` and `javascript://`
+addresses. On 3.11.3 each is a link, and nh3 keeps its text and drops the
+target, since no scheme outside spec §6.5's `URL_SCHEMES` survives. The
+`javascript://` link the new pattern forms therefore ends where
+`[text](javascript:…)` always did. P75-4's `See <report.pdf> now` still reads
+`See  now`.
+
+3.11.3 also changes hash headings, reference and footnote definitions, the
+toc extension's tag stripping and ids, code spans after an unmatched backtick
+run, emphasis pairing (CommonMark's rule of 3), attr_list's valueless
+attributes and codehilite's language class. This entry measured none of them
+beyond the test suite, the golden corpus and parity passing on the bump.
+
+### P129-3 — the tests
+
+- `test_the_shortcut_lost_every_target_but_an_address` takes
+  `AUTOLINKED = {"https", "file"}` and asserts each one's page equals the
+  writer's.
+- `test_a_markdown_files_own_address_reads_as_its_text` renders an https,
+  ftp, `file`, ssh and `javascript` address in angle brackets: each reads as
+  its text, only the https one keeps a target, and `<report.pdf>` still loses
+  its text.
+
+With markdown 3.11.2 both fail, on the `file` target and on the Markdown
+file's `file:` address, and the module's other 67 tests pass. With 3.11.3 all
+70 pass.
 
 ## P130 — docling-slim 2.145 keeps a table's `<tfoot>` rows (2026-11-15)
 

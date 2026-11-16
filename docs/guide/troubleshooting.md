@@ -251,16 +251,23 @@ page's own margins in force.
 
 ### A warning says the page keeps text behind a closed control
 
-A "show more" button, an accordion or a `<details>` the page shows closed
-keeps its text out of the PDF: WebShot records the page as it was shown and
-does not press anything. The warning names each control, the region it opens
-and how many characters that region holds, and says where the text is: in
-neither the PDF nor the bundle when the page does not lay the region out at
-all, in the bundle but not the PDF for a closed `<details>`, and nowhere yet
-when the page fetches the text only once the control is pressed, as a video
-page's description does. To capture the text, open the control in your own
-browser and save the page there, or show the region with a `--css`
-stylesheet, for example `#summaryFull { display: block !important; }`.
+A "show more" or "Story continues" button, an accordion or a `<details>` the
+page shows closed keeps its text out of the PDF. In clean mode WebShot opens
+them before printing, so the warning names only what stayed closed: a region
+inside part of the page that is hidden as a whole, or a control whose page
+did not answer when it was pressed. In faithful mode, or with `--collapsed
+closed`, nothing is opened, and `--collapsed open` opens them.
+
+The warning names each control, the region it opens and how many characters
+that region holds, and says where the text is, as read from the bundle: in
+the bundle but not the PDF, in neither, or nowhere yet when the page fetches
+the text only once the control is pressed, as a video page's description
+does. For what stays closed, open the control in your own browser and save
+the page there, or show the region with a `--css` stylesheet, for example
+`#summaryFull { display: block !important; }`, or for a closed `<details>`
+`details::details-content { content-visibility: visible !important; }`. A
+stylesheet is the less sure of the two: on one page such a rule reserved the
+space and printed none of the text.
 
 ### A warning says the text layer has ligature characters
 

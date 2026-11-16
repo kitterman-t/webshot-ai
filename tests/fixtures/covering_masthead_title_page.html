@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mooring notices for the winter</title>
+<!-- docs/09 P123-5 and P123-6. A site's name set in an <h1> inside a bar
+     fixed to the top of the window, as a masthead often is. Chromium prints
+     the bar on every page over the first lines, so clean mode hides it and
+     prints the page again. The headings were read while the bar still
+     showed, so the site's name is the page's first visible <h1>, its title;
+     clean mode removed it with the bar, on purpose, and the printed layout
+     did not lose it. The document's <title> leaves the site's name out, so
+     the running header does not print it. All of the text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/30px sans-serif; color: #111; background: #fff; }
+  .masthead { position: fixed; top: 0; left: 0; right: 0; height: 60px;
+    background: #223; color: #fff; z-index: 5; }
+  .masthead h1 { margin: 0; padding-left: 20px; font-size: 24px; line-height: 60px; }
+  .column { width: 380px; margin-left: 20px; }
+  .column h2 { margin: 0; font-size: 18px; line-height: 30px; }
+  .line { height: 30px; white-space: nowrap; overflow: hidden; }
+</style>
+</head>
+<body>
+<div class="masthead"><h1>Port office</h1></div>
+<div class="column">
+  <h2>Mooring notices for the winter</h2>
+  <div class="first"></div>
+  <h2>Pilotage after dark</h2>
+  <div class="rest"></div>
+</div>
+<script>
+  // Two printed pages of lines, so the bar lies over text on each.
+  const fill = (selector, count, from) => {
+    const block = document.querySelector(selector);
+    for (let i = 0; i < count; i++) {
+      const line = document.createElement("div");
+      line.className = "line";
+      line.textContent = `Mooring line ${from + i} is let for the season.`;
+      block.appendChild(line);
+    }
+  };
+  fill(".first", 30, 1);
+  fill(".rest", 30, 31);
+</script>
+</body>
+</html>

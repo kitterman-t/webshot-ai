@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A tide table under a docked tab</title>
+<!-- docs/09 P123-2. A box fixed to the window's bottom edge at the highest
+     z-index, collapsed to no height, whose collapse tab is drawn in a closed
+     shadow root: a white tab with a shadow and a chevron, standing 40px above
+     the box. No stylesheet of the page's document reaches into a closed
+     shadow root, so the tab keeps its own colours when the boxes are marked,
+     and the box itself paints nothing. The page is printed at 779px wide and
+     1045px tall (Letter, 0.6in margins, scale 0.9), so the tab covers
+     1005-1045px of every page, where one line sits under it. Each line is
+     30px tall and never wraps, and the second page starts with a page break.
+     All of the text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/30px sans-serif; color: #111; background: #fff; }
+  .column { width: 380px; margin-left: 20px; }
+  .line { height: 30px; white-space: nowrap; overflow: hidden; }
+  .gap { height: 1005px; }
+  .second { break-before: page; }
+  .dock { position: fixed; left: 0; right: 0; bottom: 0; height: 0;
+    z-index: 2147483647; }
+</style>
+</head>
+<body>
+<div class="column">
+  <div class="gap"></div>
+  <div class="line">Under the docked tab, page one</div>
+</div>
+<div class="column second">
+  <div class="gap"></div>
+  <div class="line">Under the docked tab, page two</div>
+</div>
+<div class="dock"></div>
+<script>
+  document.querySelector('.dock').attachShadow({mode: 'closed'}).innerHTML =
+    '<style>.tab { position: absolute; left: 20px; bottom: 0; width: 360px; height: 40px;' +
+    ' background: #fff; border-radius: 8px 8px 0 0; box-shadow: 0 0 6px rgba(0, 0, 0, 0.4); }' +
+    ' svg { display: block; margin: 8px auto; }</style>' +
+    '<div class="tab"><svg width="24" height="24" viewBox="0 0 24 24">' +
+    '<path d="M6 9l6 6 6-6" fill="none" stroke="#444" stroke-width="3"/></svg></div>';
+</script>
+</body>
+</html>

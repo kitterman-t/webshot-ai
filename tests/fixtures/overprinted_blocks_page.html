@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A notice with a block laid over its last lines</title>
+<!-- docs/09 P123-4. A consulting firm's article printed a "Related insights"
+     block over the last line of a paragraph at a page break, and nothing said
+     so: no fixed box was involved, so the covered-text check did not look.
+     Here the block is pulled up over the paragraph's last two lines by a
+     negative margin, which overlaps them at any width and in any font. Around
+     it, text that sits close to other text without being printed over it:
+     a footnote marker, a drop cap, bold and italic runs in one line, a badge
+     in a line, and a heading set tight. All of the text is invented. -->
+<style>
+  body { font: 16px/24px serif; color: #111; background: #fff; margin: 0 20px; }
+  h1 { font-size: 40px; line-height: 0.95; }
+  .drop::first-letter { float: left; font-size: 64px; line-height: 1; margin-right: 6px; }
+  .badge { display: inline-block; font: bold 11px/1 sans-serif; padding: 2px 4px;
+    border: 1px solid #555; vertical-align: middle; }
+  .related { margin-top: -48px; font: bold 18px/24px sans-serif; background: transparent; }
+</style>
+</head>
+<body>
+<h1>Harbor notice for the winter season, set in a tight heading over two lines</h1>
+<p class="drop">During the winter the north quay closes at dusk, and vessels
+waiting for a berth anchor in the outer roads until the harbor master calls
+them in.<sup>1</sup> The pilot boat keeps its <b>usual hours</b> and its
+<i>usual channel</i>, and the <span class="badge">NEW</span> night signal is
+shown from the breakwater light.</p>
+<p>Vessels leaving after dark report to the harbor office by radio before they
+cast off, and again once they are clear of the breakwater, so that the office
+knows which berths are free for the morning tide and which pilots to call.</p>
+<div class="related">Related notices from the harbor office this season</div>
+<p>The south quay is open as usual.</p>
+<p><sup>1</sup> The outer roads are marked on the harbor chart.</p>
+</body>
+</html>

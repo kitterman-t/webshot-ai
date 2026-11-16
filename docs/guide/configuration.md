@@ -35,6 +35,7 @@ a usage error — exit `2`, with the file and the key named.
 
 [capture]
 mode = "clean"                 # or "faithful"
+collapsed = "open"             # or "closed"; unset: open in clean mode, closed in faithful
 auto_selector = true
 exclude = [".newsletter", "aside.promo"]
 delay = 1.0                    # seconds after load

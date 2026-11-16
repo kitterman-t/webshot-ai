@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Harbor ferry fares rise for the winter season</title>
+<!-- docs/09 P120-2 and P120-3. Two shapes of closed text that P102's check
+     missed or misdescribed. A news article whose rest sits in a wrapper with
+     an inline `display: none`, after a "Story Continues" button in a wrapper
+     of its own, with no ARIA or Bootstrap attribute to say so. And an
+     ordinance whose sections are closed <details> whose contents the page's
+     own stylesheet hides, as an old polyfill does, so they are in neither the
+     PDF nor the bundle. All of the text is invented. -->
+<style>
+  body { font: 16px/1.5 Georgia, serif; margin: 0 auto; max-width: 42rem; padding: 1rem; }
+  details:not([open]) > *:not(summary) { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Harbor ferry fares rise for the winter season</h1>
+  <p>The ferry company will raise its winter fares by a tenth from the first
+     of December, the harbor office said on Tuesday, after a summer in which
+     the crossing ran at a loss for the first time in eleven years.</p>
+  <p>The company blamed the price of fuel and the cost of repairing the north
+     landing, which the October storms left without its outer rail.</p>
+  <div class="readmore">
+    <button class="readmore-button" aria-label="Story Continues" title="Story Continues">
+      <span>Story Continues</span>
+    </button>
+  </div>
+  <div class="read-more-wrapper" style="display: none" data-testid="read-more">
+    <p>Season tickets bought before the end of November keep the old price,
+       and children under twelve still cross free with an adult. The harbor
+       office will publish the new timetable beside the fares on the notice
+       board at the south landing and in the weekly paper.</p>
+    <p>Residents who cross every day have asked the town council for a
+       commuter fare, and the council has said it will hear them at its next
+       meeting. The lighthouse keepers' association has asked for the same.</p>
+    <p>The council meets again in March, when the bookbinder's petition about
+       the ledger will be read as well.</p>
+  </div>
+  <h2>The fares ordinance</h2>
+  <details class="section">
+    <summary><h3>1. Who pays the winter fare</h3></summary>
+    <section>
+      <p>Every passenger over twelve pays the winter fare on every crossing
+         made between the first of December and the last day of February,
+         whatever landing the crossing starts from, unless a season ticket
+         bought before the first of December covers the crossing, in which
+         case the summer fare printed on the ticket applies until it ends.</p>
+    </section>
+  </details>
+</main>
+</body>
+</html>

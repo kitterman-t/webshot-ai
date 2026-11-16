@@ -24,7 +24,7 @@ import tempfile
 import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
@@ -44,8 +44,24 @@ from .bundle.localpaths import LocalPathRecorder
 from .bundle.manifest import BUNDLE_FORMAT
 from .bundle.publish import announce_replacements, publish_ai_bundle, sha256_file
 from .bundle.videos import VideoEnrichment, enrich_with_videos
-from .capture.collapsed import collapsed_content, collapsed_content_warning
+from .capture.collapsed import (
+    Collapsed,
+    Opened,
+    collapsed_content,
+    collapsed_content_warning,
+    open_collapsed,
+    open_collapsed_failure,
+    opening_state,
+)
 from .capture.discover import read_page
+from .capture.headings import (
+    hidden_since,
+    missing_headings,
+    missing_headings_warnings,
+    shown_headings,
+    title_heading,
+    unmarked_since,
+)
 from .capture.landing import (
     WallCheck,
     access_walls,
@@ -64,6 +80,7 @@ from .capture.media_controls import settle_media_controls
 from .capture.prepare import (
     BASE_PRINT_CSS,
     CLEAN_PRINT_CSS,
+    CONSENT_MANAGERS,
     NOISE_SELECTORS,
     LazyLoadPass,
     TextWait,
@@ -84,12 +101,14 @@ from .capture.prepare import (
     release_clamped_text,
     release_wide_tables,
     rendered_text_message,
+    restore_loaded_page,
     scroll_to_load,
     select_main_content,
     text_wait_bound,
     wait_for_rendered_text,
 )
 from .capture.session import CrashWatch, launch_context
+from .capture.watch_page import WATCH_PAGE_NOISE, is_watch_page, watch_page_note
 from .config import CaptureOptions, CaptureResult
 from .errors import (
     AuthenticationError,
@@ -108,11 +127,21 @@ from .ocr.engine import OcrEngine, resolve_engine
 from .outputlock import OutputLock
 from .protected.assemble import build_protected_viewer_artifacts
 from .protected.viewer import capture_sharepoint_pdf_viewer
-from .render.clipping import clipping_warnings, find_clipped_text, printed_width
+from .render.clipping import (
+    WideBoxes,
+    clipping_warnings,
+    find_clipped_text,
+    printed_width,
+    release_wide_boxes,
+)
 from .render.covering import (
+    CoveredText,
+    Covering,
     count_printed_boxes,
     covered_text_warnings,
     find_covered_text,
+    hidden_boxes_message,
+    hide_covering_boxes,
 )
 from .render.embed import collect_payloads, embed_bundle
 from .render.frames import fit_frames
@@ -124,9 +153,11 @@ from .render.ligatures import (
     suppress_ligatures,
 )
 from .render.long_tables import SplitTable, split_long_tables, split_tables_warning
+from .render.overprint import find_overprinted_text
 from .render.pdf import header_footer_options, is_tagged, render_pdf, validate_pdf
 from .render.pdfium_bridge import PdfInkError, page_texts
 from .render.text_layer import (
+    WallWords,
     printed_share,
     printed_text_warning,
     wall_words,
@@ -153,9 +184,13 @@ class RequestFailures:
     (docs/09 P20-6). The list stays a sample, for `--report` and the MCP
     result; the count and the kinds cover every failure.
 
-    Counting stops at `close()`, once the PDF is printed: a request that fails
-    after that changes nothing the capture holds, and a count that went on
-    moving would disagree with the warning the manifest already carries.
+    Counting pauses while the checks print the page again (`paused`), whose
+    narrower window can fetch what the printed page never asked for, and
+    stops at `close()`, once the last render is printed: clean mode can print
+    the page a second time, and that PDF is the one delivered (docs/09
+    P123-6). A request that fails after that changes nothing the capture
+    holds, and a count that went on moving would disagree with the warning
+    the manifest already carries.
     """
 
     def __init__(self) -> None:
@@ -165,14 +200,24 @@ class RequestFailures:
         self.kinds: dict[str, int] = {}
         self._seen: set[str] = set()
         self._closed = False
+        self._paused = False
 
     @property
     def count(self) -> int:
         return len(self._seen)
 
+    @contextmanager
+    def paused(self) -> Iterator[None]:
+        """Count nothing that fails inside the block."""
+        self._paused = True
+        try:
+            yield
+        finally:
+            self._paused = False
+
     def record(self, request: object) -> None:
         """The `requestfailed` handler."""
-        if self._closed:
+        if self._closed or self._paused:
             return
         url = getattr(request, "url", "unknown request")
         if url in self._seen:
@@ -487,6 +532,35 @@ Stage = Literal[
 ]
 
 
+@dataclass
+class _PrintChecks:
+    """What the checks on one render found, before its clipping check.
+
+    Kept together because clean mode may hide a box and render again, and
+    then every one of them is taken again of the new render (docs/09 P123-6).
+    """
+
+    #: Each page's text, or `None` when the PDF could not be read.
+    texts: tuple[str, ...] | None = None
+    #: Why the PDF's text could not be read.
+    unreadable: str | None = None
+    #: The printed-text share's warning, when it has one.
+    unprinted: str | None = None
+    #: The wall-words check's warning, or the one that says the PDF's text
+    #: could not be read when there is no share to say it (docs/09 P124-2).
+    walled: str | None = None
+    #: Where the print stops at a wall's words, which keeps clean mode from
+    #: hiding a box over the text: it may be the wall (docs/09 P123-6).
+    stopped: WallWords | None = None
+    #: The access walls the page showed, when the share or the wall-words
+    #: check asked.
+    walls: tuple[str, ...] = ()
+    #: The width the page was printed at, for the covered-text and clipping
+    #: checks.
+    width: int | None = None
+    covering: CoveredText = field(default_factory=CoveredText)
+
+
 class _StageClock:
     """Wall-clock seconds per pipeline stage, for the QA report (docs/04 §2.3).
 
@@ -576,6 +650,17 @@ async def capture_open_page(
     crash = CrashWatch(page)
     lazy: LazyLoadPass | None = None
     split: list[SplitTable] = []
+    # A video's watch page, printed for reading in clean mode: the site's
+    # bar, the player and the related rail are hidden as page chrome, and
+    # the footer says when the video was published (docs/09 P120-6).
+    watch_page = (
+        source_kind == "web" and options.mode == "clean" and is_watch_page(page.url)
+    )
+    noise: tuple[str, ...] = (
+        (*NOISE_SELECTORS, *(WATCH_PAGE_NOISE if watch_page else ()))
+        if options.mode == "clean"
+        else ()
+    )
     try:
         if options.scroll:
             crash.step = "loading the page's lazy content"
@@ -585,7 +670,7 @@ async def capture_open_page(
                 options.scroll_delay_s,
                 # What the capture will hide below, so that a feed growing only
                 # there does not hold the pass to --max-scrolls (docs/09 P23-8).
-                noise=NOISE_SELECTORS if options.mode == "clean" else (),
+                noise=noise,
                 excluded=options.exclude_selectors,
             )
             lazy_message = lazy_load_warning(lazy, options.max_scrolls)
@@ -602,7 +687,9 @@ async def capture_open_page(
             refusal = await bot_check_page(page)
             if refusal.check:
                 raise AuthenticationError(
-                    bot_check_page_message(options.source, refusal.check),
+                    bot_check_page_message(
+                        options.source, refusal.check, firewall=refusal.firewall
+                    ),
                     http_status=http_status,
                     final_url=page.url,
                 )
@@ -611,12 +698,27 @@ async def capture_open_page(
 
         crash.step = "preparing the page for print"
         warnings.extend(await _wait_for_fonts_and_images(page))
+        # A page that changed its address while it was scrolled, as a site
+        # appending its next article does, is captured under the address and
+        # title it loaded with (docs/09 P120-4).
+        navigated = lazy is not None and lazy.ended == "navigated"
         title = (
             options.document_title
-            or (await page.title()).strip()
+            or (
+                (lazy.loaded_title or "").strip()
+                if navigated and lazy is not None
+                else (await page.title()).strip()
+            )
             or "Untitled web page"
         )
-        final_url = page.url if source_kind == "web" else options.source
+        landed = (
+            lazy.loaded_url
+            if navigated and lazy is not None and lazy.loaded_url
+            else page.url
+        )
+        final_url = landed if source_kind == "web" else options.source
+        if navigated and lazy is not None:
+            await restore_loaded_page(page, lazy)
 
         # One read of the post-JS DOM feeds both discovery questions
         # (docs/05 task 3.4), before anything is isolated or hidden: the
@@ -624,6 +726,11 @@ async def capture_open_page(
         # the page as it loaded, not of what capture kept.
         reading = await asyncio.to_thread(read_page, await page.content())
         discovered = reading.metadata
+        footer_note = (
+            watch_page_note(discovered, datetime.now(UTC).date())
+            if watch_page
+            else None
+        )
         selection = await select_main_content(
             page, options.selector, reading.article, auto=options.auto_selector
         )
@@ -644,6 +751,10 @@ async def capture_open_page(
             warnings.append(
                 "No substantial main content region was detected; using the full page."
             )
+        # Before isolation and before anything is hidden, so whether the
+        # capture left the page's title out is known as well as whether the
+        # print lost it (docs/09 P123-5).
+        page_title = await title_heading(page)
         selector = selection.selector
         if selector:
             await isolate_content(page, selector)
@@ -657,7 +768,7 @@ async def capture_open_page(
         if consent.shown:
             warnings.append(consent_dialogs_message(consent.shown))
         if options.mode == "clean":
-            hidden += await hide_elements(page, NOISE_SELECTORS, "noise")
+            hidden += await hide_elements(page, noise, "noise")
             overlays = await hide_obstructive_overlays(page)
             hidden += overlays.hidden
             if overlays.covering:
@@ -669,6 +780,29 @@ async def capture_open_page(
         if hidden:
             LOGGER.info("Removed %d non-document element(s).", hidden)
 
+        # After everything the capture hides, which is not the page keeping
+        # it closed, and before the release, the snapshot and every print, so
+        # all of them see the regions open (docs/09 P120-3).
+        opening: Opened | None = None
+        if options.opens_collapsed:
+            crash.step = "opening the page's closed controls"
+            opening = await open_collapsed(page)
+            failure = open_collapsed_failure(opening)
+            if failure:
+                warnings.append(failure)
+            elif opening.opened:
+                LOGGER.info(
+                    "Opened %d closed region(s) of the page's content for print.",
+                    opening.opened,
+                )
+                # The image wait ran on the page as it loaded, and skips an
+                # image with no box, so a lazy picture inside a region that
+                # was closed then was never made eager or waited for, and
+                # printed blank (review of #367).
+                warnings.extend(await _wait_for_fonts_and_images(page))
+            crash.step = "preparing the page for print"
+        opened = opening_state(options.opens_collapsed, opening)
+
         # Before the CSS, because the CSS targets the marks this leaves.
         released = await release_clamped_text(page)
         if released:
@@ -676,6 +810,22 @@ async def capture_open_page(
                 "Released %d element(s) whose CSS truncated their own text.",
                 released,
             )
+        # As a reader saw the page: after the capture isolated and hid what it
+        # removes, before any print stylesheet or the print media, which can
+        # hide a heading from the print and the bundle alike (docs/09 P123-5).
+        # After the closed regions are opened, which clean mode prints, so a
+        # heading inside one is looked for too (P120-3). With the selectors of the chrome hidden above, which tell a title
+        # removed with it from one the chosen region left out: `noise`, which
+        # on a watch page holds its bar, player and rail too (docs/09 P120-6).
+        shown = await shown_headings(
+            page,
+            page_title,
+            chrome=[
+                *(name for names in CONSENT_MANAGERS.values() for name in names),
+                *noise,
+                *options.exclude_selectors,
+            ],
+        )
 
         # Adopted, not `<style>` elements: a page whose `style-src` allows no
         # inline style refused those, and the capture ended with exit 5
@@ -707,18 +857,43 @@ async def capture_open_page(
             )
         # After the print stylesheets and the media switch, which decide what
         # prints; before every stage that reads the marks as the answer --
-        # the bundle's snapshot first among them (docs/09 P128).
-        shown = await unmark_shown(page, options.exclude_selectors)
-        if shown:
-            warnings.append(shown_despite_marking_message(shown, selector))
+        # the wide boxes' release below and the bundle's snapshot among them
+        # (docs/09 P128). Not `shown`: that is the headings read above, which
+        # the headings check after the render compares with the PDF.
+        unmarked = await unmark_shown(page, options.exclude_selectors)
+        if unmarked:
+            warnings.append(shown_despite_marking_message(unmarked, selector))
+            # The headings were read while the marks were on: those the boxes
+            # held print now, and are checked as the others are (P123-5).
+            shown = await unmarked_since(page, shown)
+        # A box wider than the printed page, capped in clean mode where that
+        # keeps more of its text on the page (docs/09 P123-3). At the printed
+        # width and before the bundle, for the reason the tables below are;
+        # before them, because a capped box can leave a wide table scrolling
+        # inside it, which they may then let wrap. Only a page that cuts a
+        # line at the paper's nominal width pays for the probe print.
+        wide = WideBoxes()
+        if options.mode == "clean":
+            wide = await release_wide_boxes(page, options)
+            if wide.released:
+                LOGGER.info(
+                    "Capped %d box(es) wider than the printed page at their "
+                    "container's width.",
+                    wide.released,
+                )
         # At the printed width, so after the print CSS and the media switch;
         # before the bundle, so the layout it records is the one printed
         # (docs/09 P16-11). Only a page with a table in a sideways scroller
-        # pays for the probe print. A width that cannot be read releases
+        # pays for the probe print, unless the boxes above were measured at
+        # the width of this same layout. A width that cannot be read releases
         # nothing, and the clipping check after the render says it could not
         # measure.
         if await has_scrolling_tables(page):
-            width = await printed_width(page, options)
+            width = (
+                wide.width
+                if wide.width and not wide.released
+                else await printed_width(page, options)
+            )
             wrapped = await release_wide_tables(page, width) if width else 0
             if wrapped:
                 LOGGER.info(
@@ -739,13 +914,16 @@ async def capture_open_page(
         # otherwise catch a video's controls mid-spinner (docs/09 P66).
         await settle_media_controls(page)
         # As the page will print and be read: after the print CSS and the media
-        # switch, which can hide or show a region, and before the bundle, whose
-        # holding or lacking the text the warning states (docs/09 P102).
-        folded = collapsed_content_warning(
-            await collapsed_content(page), bundle=options.ai_bundle
-        )
-        if folded:
-            warnings.append(folded)
+        # switch, which can hide or show a region, and before the bundle is
+        # built from it (docs/09 P102). The warning waits for the bundle, whose
+        # holding or lacking each region's text it states (P120-3).
+        folded_regions: Collapsed = await collapsed_content(page)
+        if not options.ai_bundle:
+            folded = collapsed_content_warning(
+                folded_regions, bundle_text=None, opening=opened
+            )
+            if folded:
+                warnings.append(folded)
         clock.mark("capture")
 
         # How the bundle spells this machine's paths. Inactive, and so the
@@ -793,6 +971,12 @@ async def capture_open_page(
             bundle_text = (ai_result.staging_directory / "content.txt").read_text(
                 encoding="utf-8"
             )
+            folded = collapsed_content_warning(
+                folded_regions, bundle_text=bundle_text, opening=opened
+            )
+            if folded:
+                warnings.append(folded)
+                ai_result.warnings.append(folded)
             clock.mark("extract")
 
         if ai_result and options.videos:
@@ -877,116 +1061,126 @@ async def capture_open_page(
                 untiled,
             )
 
-        # Just before the render, so the covered-text check knows what it
-        # printed even of a box gone by the time it looks (docs/09 P97-4).
-        boxes_at_render = await count_printed_boxes(page)
-        crash.step = "rendering the PDF"
+        # Set by each render, for the covered-text check after it.
+        boxes_at_render: int | None = None
 
-        await render_pdf(
-            page,
-            options,
-            temporary_output,
-            title=title,
-            final_url=final_url,
-            # Chromium bakes `totalPages` in while printing and the
-            # appendix is merged on afterwards, so a footer that names a
-            # total would be naming a different document (docs/09 P8-68).
-            appendix_expected=bool(enrichment.walkthroughs),
-        )
-        # The file as Chromium printed it, before anything is appended to it
-        # or embedded in it, and before the checks that read it: a picture's
-        # printed size is known only here (docs/09 P80). In a thread, because
-        # it decodes and re-encodes pictures that can be tens of megabytes.
-        crash.step = "reducing pictures printed finer than paper shows"
-        reduction = await asyncio.to_thread(reduce_oversized_images, temporary_output)
-        if reduction.reduced:
-            LOGGER.info(
-                "Reduced %d oversized picture(s) for print.", len(reduction.reduced)
-            )
-        for message in image_reduction_warnings(reduction):
+        def record(message: str) -> None:
             warnings.append(message)
             if ai_result:
                 ai_result.warnings.append(message)
-        # Before embedding, which copies the warnings into `capture.json`, and
-        # before the clipping check, whose narrower viewport can fetch images
-        # the printed page never asked for.
-        failed = failed_requests.close()
-        if failed:
-            warnings.append(failed)
-            if ai_result:
-                ai_result.warnings.append(failed)
-        # The PDF's text as printed, before the appendix, read once for the two
-        # checks on it that follow. In a thread: it reads every page.
-        crash.step = "reading the printed text"
-        printed_pages: tuple[str, ...] | None = None
-        unread = ""
-        try:
-            printed_pages = await asyncio.to_thread(page_texts, temporary_output)
-        except PdfInkError as exc:
-            unread = str(exc)
-        # Against the bundle's text from before the videos; first of the checks
-        # on the print, so a wall it names is said before the boxes the wall is
-        # made of (docs/09 P97).
-        walls: tuple[str, ...] = ()
-        unprinted: str | None = None
-        if ai_result and bundle_text is not None:
-            crash.step = "comparing the printed text with the bundle's"
-            if printed_pages is None:
-                # Both checks on the print, named in one warning: one failure
-                # stopped them, and the wall's check below does not run after
-                # this one says something.
-                unprinted = (
-                    "WebShot could not read the PDF's text to compare it with the "
-                    f"bundle's ({unread}), so whether the PDF shows the page's "
-                    "text, and whether it stops at the words of a registration or "
-                    "subscription wall, were not checked."
+
+        async def render_once() -> list[str]:
+            """Render the page to `temporary_output`, and reduce its pictures.
+
+            Returns the reduction's warnings, for the caller to record: a
+            second render replaces the first's (docs/09 P123-6).
+            """
+            nonlocal boxes_at_render
+            # Just before the render, so the covered-text check knows what it
+            # printed even of a box gone by the time it looks (docs/09 P97-4).
+            boxes_at_render = await count_printed_boxes(page)
+            crash.step = "rendering the PDF"
+            await render_pdf(
+                page,
+                options,
+                temporary_output,
+                title=title,
+                final_url=final_url,
+                # Chromium bakes `totalPages` in while printing and the
+                # appendix is merged on afterwards, so a footer that names a
+                # total would be naming a different document (docs/09 P8-68).
+                appendix_expected=bool(enrichment.walkthroughs),
+                # A watch page's note, on every render, so a second render
+                # keeps the footer the measuring print is given (P120-6).
+                footer_note=footer_note,
+            )
+            # The file as Chromium printed it, before anything is appended to
+            # it or embedded in it, and before the checks that read it: a
+            # picture's printed size is known only here (docs/09 P80). In a
+            # thread, because it decodes and re-encodes pictures that can be
+            # tens of megabytes.
+            crash.step = "reducing pictures printed finer than paper shows"
+            reduction = await asyncio.to_thread(
+                reduce_oversized_images, temporary_output
+            )
+            if reduction.reduced:
+                LOGGER.info(
+                    "Reduced %d oversized picture(s) for print.", len(reduction.reduced)
                 )
-            else:
-                printed = printed_share(bundle_text, printed_pages)
-                unprinted = printed_text_warning(printed)
-                if unprinted:
-                    walls = await access_walls(page)
-                    unprinted = printed_text_warning(printed, walls)
-            if unprinted:
-                warnings.append(unprinted)
-                ai_result.warnings.append(unprinted)
-        # A wall can hold the article back from the page itself, so the bundle
-        # and the PDF agree on a teaser and the share above is whole: what is
-        # left to see is the wall's own words where the text stops (docs/09
-        # P124-2). With or without a bundle, since it reads only the PDF. Not
-        # after the share's warning, which has said the PDF lacks the text and
-        # named the wall the page showed, with the same advice; nor after its
-        # warning that the PDF's text could not be read, which names this
-        # check too.
-        crash.step = "reading the printed text for a wall's words"
-        walled: str | None = None
-        if unprinted is None:
-            if printed_pages is None:
-                walled = (
-                    f"WebShot could not read the PDF's text ({unread}), so whether "
-                    "it stops at the words of a registration or subscription wall "
-                    "was not checked."
-                )
-            else:
-                stopped = wall_words(printed_pages)
-                if stopped is not None:
-                    walls = await access_walls(page)
-                    walled = wall_words_warning(
-                        stopped, walls, bundle=options.ai_bundle
+            return image_reduction_warnings(reduction)
+
+        async def check_print() -> _PrintChecks:
+            """The checks on the print that come before its clipping check."""
+            checks = _PrintChecks()
+            # Read once, for the printed share, the wall's words, the headings
+            # and the clipping check, which counts only text the PDF lacks
+            # (P123-7). In a thread: it reads every page.
+            crash.step = "reading the printed text"
+            try:
+                checks.texts = await asyncio.to_thread(page_texts, temporary_output)
+            except PdfInkError as exc:
+                checks.unreadable = str(exc)
+            # The PDF as printed, before the appendix, against the bundle's
+            # text from before the videos; first of the checks on the print,
+            # so a wall it names is said before the boxes the wall is made of
+            # (docs/09 P97).
+            if ai_result and bundle_text is not None:
+                crash.step = "comparing the printed text with the bundle's"
+                if checks.texts is None:
+                    # Every check on the print's text, named in one warning:
+                    # one failure stopped them all. The wall's check below
+                    # does not run after this one speaks, and the headings'
+                    # needs the text.
+                    checks.unprinted = (
+                        "WebShot could not read the PDF's text to compare it with "
+                        f"the bundle's ({checks.unreadable}), so whether the PDF "
+                        "shows the page's text, whether it stops at the words of a "
+                        "registration or subscription wall, and whether it lacks a "
+                        "heading the page showed, were not checked."
                     )
-        if walled:
-            warnings.append(walled)
-            if ai_result:
-                ai_result.warnings.append(walled)
-        # After the render, which it measures by printing the page again with
-        # its fixed and sticky boxes in colours of their own, and first of the
-        # checks that follow it: the clipping check narrows the viewport, which
-        # can load images and move the layout this one must match. Before
-        # embedding, which copies the warnings into `capture.json` (docs/09
-        # P83).
-        crash.step = "checking the printed page for boxes over its text"
-        for covered in covered_text_warnings(
-            await find_covered_text(
+                else:
+                    printed = printed_share(bundle_text, checks.texts)
+                    checks.unprinted = printed_text_warning(printed)
+                    if checks.unprinted:
+                        checks.walls = await access_walls(page)
+                        checks.unprinted = printed_text_warning(printed, checks.walls)
+            # A wall can hold the article back from the page itself, so the
+            # bundle and the PDF agree on a teaser and the share above is
+            # whole: what is left to see is the wall's own words where the
+            # text stops (docs/09 P124-2). With or without a bundle, since it
+            # reads only the PDF. Not after the share's warning, which has said
+            # the PDF lacks the text and named the wall the page showed, with
+            # the same advice; nor after its warning that the PDF's text could
+            # not be read, which names this check too.
+            crash.step = "reading the printed text for a wall's words"
+            if checks.unprinted is None:
+                if checks.texts is None:
+                    checks.walled = (
+                        "WebShot could not read the PDF's text "
+                        f"({checks.unreadable}), so whether it stops at the words "
+                        "of a registration or subscription wall, and whether it "
+                        "lacks a heading the page showed, were not checked."
+                    )
+                else:
+                    checks.stopped = wall_words(checks.texts)
+                    if checks.stopped is not None:
+                        checks.walls = await access_walls(page)
+                        checks.walled = wall_words_warning(
+                            checks.stopped, checks.walls, bundle=options.ai_bundle
+                        )
+            # Read once, for the covered-text check, which lays the page out
+            # at this width to learn its boxes there (P123-1), and for the
+            # clipping check, which measures the page there.
+            checks.width = await printed_width(page, options)
+            # After the render, which it measures by printing the page again
+            # with its fixed and sticky boxes in colours of their own, and
+            # before the clipping check, which narrows the viewport and can
+            # load images and move the layout this one must match; its own
+            # round trip to the printed width is held to its layout check.
+            # Before embedding, which copies the warnings into `capture.json`
+            # (docs/09 P83).
+            crash.step = "checking the printed page for boxes over its text"
+            checks.covering = await find_covered_text(
                 page,
                 options,
                 temporary_output,
@@ -995,23 +1189,91 @@ async def capture_open_page(
                     title=title,
                     final_url=final_url,
                     appendix_expected=bool(enrichment.walkthroughs),
+                    footer_note=footer_note,
                 ),
                 boxes_at_render,
-            ),
-            walls,
+                width=checks.width,
+            )
+            return checks
+
+        reduced = await render_once()
+        # Not counting the failed requests while the checks print the page
+        # again: the covered-text check's narrower viewport can fetch images
+        # the printed page never asked for.
+        with failed_requests.paused():
+            checks = await check_print()
+        hidden_boxes: list[Covering] = []
+        walls = checks.walls
+        if (
+            options.mode == "clean"
+            and checks.covering.coverings
+            # A print that stops at a wall's words showed a wall whether or
+            # not WebShot knows its vendor, and the box over the text may be
+            # that wall: hidden, it would take its words, and the warning that
+            # names them, out of the PDF while the site still keeps the
+            # article back (docs/09 P123-6, P124-2).
+            and checks.stopped is None
         ):
-            warnings.append(covered)
-            if ai_result:
-                ai_result.warnings.append(covered)
+            # A fixed box measured over the page's text is page chrome that
+            # clean mode did not know by name: hidden, and the page printed
+            # again without it, where it may be hidden safely (docs/09
+            # P123-6). The walls are read here whatever the printed share
+            # said: a box over the text may be part of one.
+            walls = walls or await access_walls(page)
+            hidden_boxes = await hide_covering_boxes(page, checks.covering, walls)
+            if hidden_boxes:
+                reduced = await render_once()
+                with failed_requests.paused():
+                    checks = await check_print()
+                # The headings were read while the boxes showed: one they held
+                # is chrome clean mode removed, not one the layout lost.
+                shown = await hidden_since(page, shown)
+        # After the last render, the PDF delivered, so what failed before it
+        # is counted (docs/09 P123-6); before embedding, which copies the
+        # warnings into `capture.json`, and before the clipping check, whose
+        # narrower viewport can fetch images the printed page never asked for.
+        failed = failed_requests.close()
+        for message in reduced:
+            record(message)
+        if failed:
+            record(failed)
+        if checks.unprinted:
+            record(checks.unprinted)
+        if checks.walled:
+            record(checks.walled)
+        if hidden_boxes:
+            record(hidden_boxes_message(hidden_boxes))
+        if checks.texts is not None:
+            for message in missing_headings_warnings(
+                missing_headings(
+                    shown,
+                    "\n".join(checks.texts),
+                    bundle_text if ai_result else None,
+                ),
+                media=options.media,
+                explicit_selector=selection.strategy == "explicit",
+            ):
+                record(message)
+        # With the walls read for the hiding too: a box that may be part of
+        # one is not given `--exclude` as its remedy.
+        for covered in covered_text_warnings(checks.covering, checks.walls or walls):
+            record(covered)
+        # On the measuring print when there is one that matched the render,
+        # so text a box draws is left to the warning above; on the render
+        # itself otherwise (docs/09 P123-4).
+        crash.step = "checking the printed page for text over text"
+        overprinted = await find_overprinted_text(checks.covering, temporary_output)
+        if overprinted:
+            record(overprinted)
         # After the render, so the check cannot move what it checks: it prints
         # the page a second time and narrows the viewport, and the PDF is
         # already written. Before embedding, which copies the warnings into
         # `capture.json` (docs/09 P16-1).
         crash.step = "checking the printed page for clipped text"
-        for clipped in clipping_warnings(await find_clipped_text(page, options)):
-            warnings.append(clipped)
-            if ai_result:
-                ai_result.warnings.append(clipped)
+        for clipped in clipping_warnings(
+            await find_clipped_text(page, options, checks.width, printed=checks.texts)
+        ):
+            record(clipped)
         if enrichment.walkthroughs:
             # Between printing and embedding: the appendix changes the
             # file's page count and its bytes, and both are measured below.

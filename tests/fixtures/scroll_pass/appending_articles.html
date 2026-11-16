@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The harbor office opens a winter timetable</title>
+<!-- docs/09 P120-4. A news site that appends its next article as the window
+     nears the end of one, and puts that article's address and title on the
+     page with history.replaceState. With the fragment "#fragment" the page
+     only marks where the reader is, in the address's fragment, as a long
+     documentation page does, and appends nothing. All of the text is
+     invented. -->
+<style>
+  body { font: 16px/1.6 Georgia, serif; margin: 0 auto; max-width: 40rem; padding: 1rem; }
+  p { margin: 0 0 1.4rem; }
+</style>
+</head>
+<body>
+<main id="feed">
+  <article id="first">
+    <h1>The harbor office opens a winter timetable</h1>
+  </article>
+</main>
+<script>
+  const paragraph = n => `<p>Paragraph ${n} of the story, about the ferry that crosses the
+     harbor in all weathers, and the office that keeps its timetable, written
+     long enough to fill a few lines of the page each time it appears.</p>`;
+  const fill = (element, count) => {
+    for (let n = 1; n <= count; n++) element.insertAdjacentHTML('beforeend', paragraph(n));
+  };
+  fill(document.getElementById('first'), 30);
+  document.getElementById('first').insertAdjacentHTML('beforeend',
+    '<p>The first story ends with the harbor master reading the new times aloud.</p>');
+  const fragmentOnly = location.hash === '#fragment';
+  let appended = false;
+  addEventListener('scroll', () => {
+    if (fragmentOnly) {
+      history.replaceState(null, '', `#part-${Math.round(scrollY / 400)}`);
+      return;
+    }
+    const near = scrollY + 2 * innerHeight >= document.documentElement.scrollHeight;
+    if (appended || !near) return;
+    appended = true;
+    const next = document.createElement('article');
+    next.id = 'second';
+    next.innerHTML = '<h1>The ferry company counts its summer passengers</h1>';
+    fill(next, 30);
+    next.insertAdjacentHTML('beforeend',
+      '<p>The second story ends with the ledger closed for the season.</p>');
+    document.getElementById('feed').append(next);
+    history.replaceState(null, '', '/the-ferry-company-counts.html');
+    document.title = 'The ferry company counts its summer passengers';
+  }, {passive: true});
+</script>
+</body>
+</html>

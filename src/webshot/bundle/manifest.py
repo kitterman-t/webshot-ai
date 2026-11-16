@@ -82,6 +82,19 @@ def _true_or_absent(schema: dict[str, Any]) -> None:
     schema["const"] = True
 
 
+def _open_closed_or_absent(schema: dict[str, Any]) -> None:
+    """Publish `collapsed` as `open` or `closed`, never as a null.
+
+    The report writes the key only when `--collapsed` was given, so a run
+    that left it to the mode is byte for byte what it was before the option
+    existed (as `_relative_or_absent`).
+    """
+    schema.pop("anyOf", None)
+    schema.pop("default", None)
+    schema["type"] = "string"
+    schema["enum"] = ["open", "closed"]
+
+
 # --------------------------------------------------------------------------- #
 # Web path — content.json
 # --------------------------------------------------------------------------- #
@@ -1038,6 +1051,12 @@ class ResolvedOptions(_Contract):
     """
 
     mode: str
+    #: `--collapsed` as given: `open` or `closed`, and absent when it was left
+    #: to the mode, which opens the page's closed regions in clean mode and
+    #: leaves them closed in faithful mode (docs/09 P120-3).
+    collapsed: Literal["open", "closed"] | None = Field(
+        default=None, json_schema_extra=_open_closed_or_absent
+    )
     selector: str | None
     auto_selector: bool
     exclude: list[str]
@@ -1107,7 +1126,7 @@ class ResolvedOptions(_Contract):
     def _drop_unset_later_options(
         self, handler: SerializerFunctionWrapHandler
     ) -> dict[str, Any]:
-        """Serialize `local_paths` and `require_content` only when they say something.
+        """Serialize `local_paths`, `collapsed` and `require_content` only when they say something.
 
         Absent means the default, so every report written before the options
         existed, and every one written without them, keeps its exact bytes.
@@ -1115,6 +1134,8 @@ class ResolvedOptions(_Contract):
         written: dict[str, Any] = dict(handler(self))
         if written.get("local_paths") is None:
             written.pop("local_paths", None)
+        if written.get("collapsed") is None:
+            written.pop("collapsed", None)
         if not written.get("require_content"):
             written.pop("require_content", None)
         return written

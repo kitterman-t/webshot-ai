@@ -1,13 +1,16 @@
 """Boxes WebShot marked to leave out that the page's own print CSS shows anyway.
 
-Four rules mark what they leave out with `data-webshot-hidden`: the content
-selector (`--selector` or the auto-selector) marks the siblings along the
-path to its root, the consent rule marks consent dialogs in either mode, clean
-mode marks page furniture and what it takes for an overlay, and `--exclude`
-marks what the user named. Each records which it was in
-`data-webshot-hidden-by`. The print stylesheet hides a marked box with
-`display: none !important`, and a page's own `!important` rule of higher
-specificity wins that tie, so the box prints. Every later stage takes the mark
+Six rules mark what they leave out with `data-webshot-hidden`. Five mark
+before this module runs: the content selector (`--selector` or the
+auto-selector) marks the siblings along the path to its root, the consent rule
+marks consent dialogs in either mode, clean mode marks page furniture and what
+it takes for an overlay, the lazy-load pass marks the articles a page appended
+once it changed its address (docs/09 P120-4), and `--exclude` marks what the
+user named. Each records which it was in `data-webshot-hidden-by`. The sixth
+marks after this module has run, as the last paragraph says. The print
+stylesheet hides a marked box with `display: none !important`, and a page's
+own `!important` rule of higher specificity wins that tie, so the box prints.
+Every later stage takes the mark
 as the answer: the snapshot drops a marked box from every text surface, and
 the clipping, covering and video checks skip it. So a box the PDF printed was
 missing from the bundle, with nothing saying so.
@@ -23,6 +26,12 @@ that still lays out a box is not left out, and the mark that says it is comes
 off, so the bundle and the checks read what the PDF prints, and the manifest
 names the box and the rule that marked it. A box the user named with
 `--exclude` keeps its mark: that is the user's choice, not WebShot's guess.
+
+The sixth rule marks after this has run: clean mode hides a fixed box it
+measured over the text of the first render, and prints the page again
+(`render/covering.hide_covering_boxes`, docs/09 P123-6). It records no
+`data-webshot-hidden-by`, and takes its own mark off a box that still lays out
+as it sets it, for the same reason.
 """
 
 from __future__ import annotations
@@ -62,6 +71,7 @@ REASONS = {
     "overlay": "taken in clean mode for an overlay",
     "noise": "taken in clean mode for page furniture",
     "consent": "taken for a consent dialog",
+    "appended": "an article the page appended after the one captured",
 }
 
 

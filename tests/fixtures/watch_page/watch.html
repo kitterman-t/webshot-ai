@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The harbor ferry's winter timetable, explained - VideoSite</title>
+<!-- docs/09 P120-6. A video's watch page in the shape the site lays one
+     out: a bar fixed to the window with "Skip navigation" and "Sign in", a
+     player that prints black, a rail of related videos, a description
+     expander whose text is filled in only once its button is pressed, and the
+     publication date declared only in the page's schema.org data, while the
+     page itself prints "2y ago". Served from a route in the test, under the
+     site's own address, so no request leaves the machine. All of the text is
+     invented. -->
+<meta itemprop="datePublished" content="2024-11-12T16:14:55-08:00">
+<script type="application/ld+json">
+{"@context": "https://schema.org", "@type": "VideoObject",
+ "name": "The harbor ferry's winter timetable, explained",
+ "uploadDate": "2024-11-12T16:14:55-08:00", "author": "Harbor Town Council",
+ "description": ""}
+</script>
+<style>
+  body { margin: 0; font: 14px/1.5 Arial, sans-serif; }
+  ytd-masthead { display: block; position: fixed; top: 0; left: 0; right: 0;
+    height: 56px; background: #fff; z-index: 2000; font-size: 16px; }
+  #page-manager { display: block; margin-top: 64px; padding: 0 16px; }
+  ytd-watch-flexy { display: flex; gap: 24px; }
+  #primary { flex: 1; min-width: 0; }
+  #player, ytd-player { display: block; }
+  ytd-player { height: 320px; background: #000; }
+  #secondary { display: block; width: 300px; }
+  ytd-text-inline-expander, ytd-watch-next-secondary-results-renderer { display: block; }
+  #snippet { max-height: 4.5em; overflow: hidden; }
+</style>
+</head>
+<body>
+<ytd-masthead><a id="skip-navigation" href="#content">Skip navigation</a>
+  <a href="#sign-in">Sign in</a></ytd-masthead>
+<div id="page-manager"><ytd-watch-flexy>
+  <div id="primary">
+    <div id="player"><ytd-player><div class="poster">Player</div></ytd-player></div>
+    <h1>The harbor ferry's winter timetable, explained</h1>
+    <div id="owner">Harbor Town Council</div>
+    <div id="info">66 views 2y ago</div>
+    <ytd-text-inline-expander id="description-inline-expander">
+      <div id="snippet">The harbor master explains the winter timetable, the fares for
+        each crossing and the landings the ferry will use while the north one is</div>
+      <div id="expanded"></div>
+      <button id="expand">…more</button>
+    </ytd-text-inline-expander>
+  </div>
+  <div id="secondary"><ytd-watch-next-secondary-results-renderer>
+    <h3>Another video about the lighthouse keepers</h3>
+    <h3>Another video about the bookbinder's workshop</h3>
+    <h3>Another video about the tide tables</h3>
+  </ytd-watch-next-secondary-results-renderer></div>
+</ytd-watch-flexy></div>
+<script>
+  // The site fetches the rest of the description when the button is pressed.
+  document.getElementById('expand').addEventListener('click', () => {
+    setTimeout(() => {
+      document.getElementById('expanded').textContent = 'The harbor master explains '
+        + 'the winter timetable, the fares for each crossing and the landings the '
+        + 'ferry will use while the north one is repaired after the October storms. '
+        + 'The description ends with the timetable\'s effective date.';
+      document.getElementById('snippet').hidden = true;
+      document.getElementById('expand').hidden = true;
+      document.getElementById('description-inline-expander').setAttribute('is-expanded', '');
+    }, 300);
+  });
+</script>
+</body>
+</html>

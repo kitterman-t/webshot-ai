@@ -41,6 +41,7 @@ Settings can also come from a TOML file and from the environment, in the order
 | `-s`, `--selector` | `SELECTOR` |  | CSS selector for the content to keep |
 | `--auto-selector` | — | off | automatically isolate the most substantial semantic content region |
 | `--mode` | `clean` \| `faithful` | `clean` | clean removes common page chrome; faithful preserves the page structure |
+| `--collapsed` | `open` \| `closed` |  | open the closed <details>, accordion, collapse and read-more regions of the page's content before printing (open), or print them as the page showed them (closed); default: open in clean mode, closed in faithful mode |
 | `--exclude` | `SELECTOR` |  | CSS selector to omit (repeatable) |
 | `--wait-for` | `SELECTOR` |  | wait for an element before capture |
 | `--delay` | `DELAY` | `1.0` | seconds to wait after initial load |

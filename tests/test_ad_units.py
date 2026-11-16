@@ -79,3 +79,41 @@ def test_faithful_mode_keeps_the_ad_units(tmp_path: Path) -> None:
     """The rule is clean mode's: a faithful capture records the page as it was."""
     text, _ = capture(tmp_path, "faithful")
     assert "My Latest Videos" in text and "Sponsored offer text" in text
+
+
+#: A Publisher Tag anchor ad as the tag writes it, fixed to the window's foot,
+#: beside a slot of the same tag that is not an anchor and an article element
+#: whose id only mentions an anchor.
+ANCHOR_PAGE = """<!doctype html><html><body>
+  <p id="anchor-notes">The harbor anchor is lowered at dawn.</p>
+  <ins id="gpt_unit_/6978/anchor_0" style="position: fixed; bottom: 0; left: 0; right: 0; height: 50px">anchor ad</ins>
+  <ins id="gpt_unit_/6978/leaderboard_0">leaderboard ad</ins>
+</body></html>"""
+
+
+@pytest.mark.browser
+def test_clean_mode_hides_a_publisher_tag_anchor_ad() -> None:
+    """Its collapse tab printed over a line of every page of a news site
+    (docs/09 P123-2). Only the anchor: a slot of the same tag elsewhere is
+    left to the selectors that name slots."""
+    import asyncio
+
+    from playwright.async_api import async_playwright
+
+    from webshot.capture.prepare import NOISE_SELECTORS, hide_elements
+
+    async def run() -> list[str]:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            try:
+                page = await browser.new_page()
+                await page.set_content(ANCHOR_PAGE)
+                await hide_elements(page, NOISE_SELECTORS, "noise")
+                return await page.evaluate(
+                    "() => [...document.querySelectorAll('[data-webshot-hidden]')]"
+                    ".map(element => element.id)"
+                )
+            finally:
+                await browser.close()
+
+    assert asyncio.run(run()) == ["gpt_unit_/6978/anchor_0"]

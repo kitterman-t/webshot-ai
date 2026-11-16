@@ -60,6 +60,7 @@ def resolved_options(options: CaptureOptions) -> ResolvedOptions:
     """Everything the run was configured with, minus the credential paths."""
     return ResolvedOptions(
         mode=options.mode,
+        collapsed=options.collapsed,
         selector=options.selector,
         auto_selector=options.auto_selector,
         exclude=list(options.exclude_selectors),

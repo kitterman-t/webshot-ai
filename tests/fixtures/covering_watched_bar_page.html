@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A ledger under a watched notice bar</title>
+<!-- docs/09 P20-6 and P123-6. A bar fixed to the window's bottom edge, over
+     a line of text on every printed page, so clean mode hides it and prints
+     the page again. A script watches the bar, as an ad-block detector
+     watches its slot, and once something hides it asks the server for an
+     image. The test's server closes that request unanswered, so it fails
+     after the first render and before the second, which is the PDF
+     delivered. All of the text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/30px sans-serif; color: #111; background: #fff; }
+  .column { width: 380px; margin-left: 20px; }
+  .line { height: 30px; white-space: nowrap; overflow: hidden; }
+  .notice-bar { position: fixed; left: 0; right: 0; bottom: 0; height: 100px;
+    background: #223; color: #fff; z-index: 5; }
+</style>
+</head>
+<body>
+<div class="column"></div>
+<div class="notice-bar">Notice: the weighing office is closed on Friday.</div>
+<script>
+  // Two printed pages of lines, so the bar lies over text on each.
+  const column = document.querySelector(".column");
+  for (let i = 1; i <= 64; i++) {
+    const line = document.createElement("div");
+    line.className = "line";
+    line.textContent = `Ledger line ${i} records a weight.`;
+    column.appendChild(line);
+  }
+  const bar = document.querySelector(".notice-bar");
+  let asked = false;
+  new MutationObserver(() => {
+    if (asked || getComputedStyle(bar).display !== "none") return;
+    asked = true;
+    new Image().src = "/broken/notice-bar-hidden.png";
+  }).observe(bar, { attributes: true });
+</script>
+</body>
+</html>
