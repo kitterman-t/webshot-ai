@@ -434,7 +434,7 @@ def read_metadata(html: str) -> DiscoveredMetadata:
     """
     reader = _read_declarations(html)
     declared = _author(reader)
-    byline = _byline(reader)
+    byline = _byline(reader, declared)
     # The byline replaces a declaration when it names someone the
     # declaration does not: what the page prints is what its reader is told,
     # and the declaration was a CMS's record of who posted it (docs/09
@@ -567,16 +567,21 @@ def printed_byline(html: str) -> str:
     full stops, and none of them a word such as "the", "our" or "of" that no
     name holds.  A part holding a word of a role, an organization or a
     section (`_ROLE_WORDS`: "Staff Writer", "Harbor Lane News") is not a name
-    and is passed over, and so is a name that holds one ("Rowan Guest"), so
-    the byline can name fewer people than the page prints; an organization's
-    name that holds none ("Harbor Lane Review") reads as a name.  Text inside a
+    and is passed over, and so is a name that holds one ("Rowan Guest"),
+    unless the page's declarations name it by its words and a byline prints
+    it beside a plain name, either after "and" or "&" or with the
+    declarations naming that byline's plain names too: then it is a name in
+    every byline that prints it (docs/09 P124-6).  Without that, the byline
+    can name fewer people than the page prints; an organization's name that
+    holds none ("Harbor Lane Review") reads as a name.  Text inside a
     link, a menu, a sidebar, a figure or its caption, a form or a control is
     never a byline, and nor is code.  More than eight names under one heading
     is a list of people, not a byline.  Every byline the page prints must
     name the same people, in any order and spelling of case and punctuation:
     a page with two that differ prints no one byline, and none is read.
     """
-    return _byline(_read_declarations(html))
+    reader = _read_declarations(html)
+    return _byline(reader, _author(reader))
 
 
 def declared_sitename(html: str) -> str:
@@ -632,15 +637,58 @@ def _author(reader: _Declarations | None) -> str:
     return AUTHOR_SEPARATOR.join(_first_kind(declarations))
 
 
-def _byline(reader: _Declarations | None) -> str:
-    if reader is None or not reader.bylines:
+def _byline(reader: _Declarations | None, declared: str) -> str:
+    if reader is None:
         return ""
-    first = reader.bylines[0]
-    if any(
-        not _same_people("; ".join(names), "; ".join(first)) for names in reader.bylines
-    ):
+    # Who is a person is settled once, from every byline's evidence, and then
+    # holds in each: confirmed in one byline and passed over in another, one
+    # co-author would make the page's two bylines disagree (docs/09 P124-6).
+    people = _confirmed(reader.bylines, declared)
+    bylines = [
+        names
+        for names in (
+            tuple(
+                name.text
+                for name in byline
+                if not name.doubtful
+                or any(_same_people(name.text, person) for person in people)
+            )
+            for byline in reader.bylines
+        )
+        if names
+    ]
+    if not bylines:
+        return ""
+    first = bylines[0]
+    if any(not _same_people("; ".join(names), "; ".join(first)) for names in bylines):
         return ""
     return AUTHOR_SEPARATOR.join(first)
+
+
+def _confirmed(bylines: list[tuple[_BylineName, ...]], declared: str) -> list[str]:
+    """The names holding a role's word that are people: the page's
+    declarations name them by the same words, and a byline that prints them
+    beside a plain name either prints them after "and" or "&" or names no one
+    else the declarations do not.  A publisher declared as the author and
+    printed after a comma, "By Jane Doe, Harbor Lane News", is the writer's
+    organization, not a second writer; and a byline of nothing but such
+    names, "By Harbor Lane News", names no one for certain, since
+    "declared" is then all that is known of them (docs/09 P124-6)."""
+    values = _declared_values(declared)
+    people: list[str] = []
+    for byline in bylines:
+        plain = [name for name in byline if not name.doubtful]
+        if not plain:
+            continue
+        every_one = all(_is_declared(name.text, values) for name in plain)
+        people.extend(
+            name.text
+            for name in byline
+            if name.doubtful
+            and _is_declared(name.text, values)
+            and (name.joined or every_one)
+        )
+    return people
 
 
 def _same_people(one: str, other: str) -> bool:
@@ -660,32 +708,52 @@ def _names_someone_else(byline: str, declared: str) -> bool:
     words of one declared value.  One value can hold several names
     ("Jane Doe and John Roe") or one written surname first ("Doe, Jane"),
     which is why a name is looked for among a value's words."""
-    values = [set(_words(value)) for value in declared.split(AUTHOR_SEPARATOR)]
+    values = _declared_values(declared)
     return any(
-        not any(set(_words(name)) <= words for words in values)
-        for name in byline.split(AUTHOR_SEPARATOR)
+        not _is_declared(name, values) for name in byline.split(AUTHOR_SEPARATOR)
     )
+
+
+def _declared_values(declared: str) -> list[set[str]]:
+    """The words of each declared value."""
+    return [set(_words(value)) for value in declared.split(AUTHOR_SEPARATOR)]
+
+
+def _is_declared(name: str, values: list[set[str]]) -> bool:
+    """Whether a name's words, whatever their case and punctuation, are all
+    among the words of one declared value."""
+    words = set(_words(name))
+    return bool(words) and any(words <= value for value in values)
 
 
 def _words(names: str) -> list[str]:
     return _WORD.findall(names.casefold())
 
 
-def _byline_names(text: str) -> list[str]:
+def _byline_names(text: str) -> list[_BylineName]:
     """The names in what follows "By", or none when any part of it is neither
     a name nor holds a role's word.  A part that holds one is passed over as
-    a role, and so is a name that holds one, "Rowan Guest" say (`_ROLE_WORDS`):
-    the names returned can be fewer than the page prints."""
-    names: list[str] = []
-    for part in _NAME_SEPARATOR.split(_BYLINE_END.split(text, maxsplit=1)[0]):
-        if not part:
-            continue
-        if _is_role(part):
-            continue
-        if not _is_name(part):
-            return []
-        if part not in names:
-            names.append(part)
+    a role, unless it reads as a name, "Rowan Guest" say (`_ROLE_WORDS`):
+    that is kept as doubtful, for the declarations to confirm or not
+    (`_confirmed`), with whether "and" or "&" came before it."""
+    line = _BYLINE_END.split(text, maxsplit=1)[0]
+    names: list[_BylineName] = []
+    start, before = 0, ""
+    for separator in [*_NAME_SEPARATOR.finditer(line), None]:
+        part = line[start : separator.start() if separator else len(line)]
+        if separator is not None:
+            start, after = separator.end(), separator.group()
+        if part and all(name.text != part for name in names):
+            joined = before.strip().casefold() in ("and", "&")
+            if _is_role(part):
+                if _name_shaped(part):
+                    names.append(_BylineName(part, doubtful=True, joined=joined))
+            elif _is_name(part):
+                names.append(_BylineName(part, joined=joined))
+            else:
+                return []
+        if separator is not None:
+            before = after
     return names
 
 
@@ -694,6 +762,12 @@ def _is_role(part: str) -> bool:
 
 
 def _is_name(part: str) -> bool:
+    return _name_shaped(part) and not _is_role(part)
+
+
+def _name_shaped(part: str) -> bool:
+    """Two to five capitalized words a name could hold, whether or not one
+    of them is a role's."""
     words = part.split()
     if not 2 <= len(words) <= 5 or len(part) > 60:
         return False
@@ -707,7 +781,7 @@ def _is_name(part: str) -> bool:
             for character in word
         ):
             return False
-    return not _is_role(part)
+    return True
 
 
 def _sitename(reader: _Declarations | None) -> str:
@@ -812,6 +886,21 @@ class _Line:
     near_title: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class _BylineName:
+    """A name a byline prints."""
+
+    text: str
+    #: It reads as a name but holds a role's word, so that only the page's
+    #: declarations can tell a writer ("Rowan Guest") from a role or an
+    #: organization ("Guest Contributor", "Harbor Lane News") (docs/09
+    #: P124-6).
+    doubtful: bool = False
+    #: It follows "and" or "&", which join a writer to a writer; a comma also
+    #: sets a role or an organization after a name.
+    joined: bool = False
+
+
 @dataclass(eq=False, slots=True)
 class _Label:
     """An author heading, and the names after it so far."""
@@ -819,7 +908,7 @@ class _Label:
     rank: int
     #: The section, article or aside around the heading, whose end ends it.
     within: _Element | None
-    names: list[str] = field(default_factory=list)
+    names: list[_BylineName] = field(default_factory=list)
     #: Characters of text since the heading.
     text: int = 0
     #: More names than `_MAX_BYLINE_NAMES`, or more text than
@@ -873,7 +962,7 @@ class _Declarations(HTMLParser):
         #: it: a `<time>` in a link to it is the page's date (docs/09 P124-4).
         self.own_addresses: list[str] = []
         #: Each byline the page prints, as its names (`printed_byline`).
-        self.bylines: list[tuple[str, ...]] = []
+        self.bylines: list[tuple[_BylineName, ...]] = []
         #: The elements whose text is being read for a byline, innermost last.
         self._lines: list[_Line] = []
         #: Open elements whose text is code or is not shown, and open asides.
@@ -1048,9 +1137,13 @@ class _Declarations(HTMLParser):
         if self._label is not None and (
             (rank is not None and rank > self._label.rank) or element.leads
         ):
-            if _is_name(text) and text not in self._label.names:
-                self._label.names.append(text)
-                if len(self._label.names) > _MAX_BYLINE_NAMES:
+            shaped = _name_shaped(text)
+            if shaped and all(name.text != text for name in self._label.names):
+                self._label.names.append(_BylineName(text, doubtful=_is_role(text)))
+                # A role set as a subhead under each writer ("Staff Writer")
+                # is no more people.
+                sure = sum(not name.doubtful for name in self._label.names)
+                if sure > _MAX_BYLINE_NAMES:
                     self._label.crowded = True
         if rank is not None and _AUTHOR_LABEL.fullmatch(text.rstrip(":").strip()):
             self._end_label()

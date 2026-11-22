@@ -1,6 +1,6 @@
 {
   "schema_name": "DoclingDocument",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "name": "content",
   "origin": {
     "mimetype": "text/html",
@@ -172,8 +172,8 @@
       "content_layer": "body",
       "label": "text",
       "prov": [],
-      "orig": "Touring Your Project Workspace ·",
-      "text": "Touring Your Project Workspace ·"
+      "orig": "Touring Your Project Workspace · ",
+      "text": "Touring Your Project Workspace · "
     },
     {
       "self_ref": "#/texts/5",
@@ -317,8 +317,8 @@
       "content_layer": "body",
       "label": "text",
       "prov": [],
-      "orig": "Raise a project issue for anything the consultants need to answer, or read the",
-      "text": "Raise a project issue for anything the consultants need to answer, or read the"
+      "orig": "Raise a project issue for anything the consultants need to answer, or read the ",
+      "text": "Raise a project issue for anything the consultants need to answer, or read the "
     },
     {
       "self_ref": "#/texts/15",
@@ -342,8 +342,8 @@
       "content_layer": "body",
       "label": "text",
       "prov": [],
-      "orig": ". The",
-      "text": ". The"
+      "orig": ". The ",
+      "text": ". The "
     },
     {
       "self_ref": "#/texts/17",
@@ -354,8 +354,8 @@
       "content_layer": "body",
       "label": "text",
       "prov": [],
-      "orig": "module checklist",
-      "text": "module checklist",
+      "orig": "module checklist ",
+      "text": "module checklist ",
       "hyperlink": "checklist.html"
     },
     {

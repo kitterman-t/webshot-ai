@@ -46,10 +46,8 @@ from webshot.extract import docling_bridge
 from webshot.extract.chunks import build_chunk_records
 from webshot.extract.docling_bridge import (
     _JOINED_TAGS,
-    JOINED_AFTER,
-    JOINED_BEFORE,
     extract,
-    mark_inline_joins,
+    space_inline_gaps,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -360,7 +358,7 @@ def test_whitespace_the_page_has_keeps_the_parts_apart(space: str) -> None:
         f"<mark {_TOUCHING}>delta</mark>{space}epsilon and zeta{space}"
         f"<small {_TOUCHING}>eta</small></p>"
     )
-    assert mark_inline_joins(_page(body)) == _page(body)
+    assert space_inline_gaps(_page(body)) == _page(body)
     assert _line(body) == "alpha beta gamma and delta epsilon and zeta eta"
 
 
@@ -431,25 +429,26 @@ def test_the_snapshot_facts_read_the_page_as_the_backend_did() -> None:
     """A caption and a chrome region join where the backend's items do."""
     page = _snapshot(FIXTURE.read_text(encoding="utf-8"), touching=True)
     facts = docling_bridge._SnapshotFacts(clean=lambda text: text)
-    facts.feed(mark_inline_joins(page))
+    facts.feed(space_inline_gaps(page))
     assert facts.table_captions == ["Tabrelwick"]
     assert facts.chrome_regions == ["Gorvane and Module 3"]
 
 
 def test_content_json_keeps_every_item_and_carries_no_marker(monkeypatch) -> None:
     """The DoclingDocument stays docling's: the same items with the same
-    formatting and the page's own origin hash. The only change is a space
-    docling put inside a string it merged or flattened, which the page never
-    had, so the lossless record now holds the page's words."""
+    formatting and the page's own origin hash. The only change is the space
+    the bridge writes where the page draws two texts apart that its markup
+    runs together, so the lossless record holds the page's words and each
+    run the whitespace the page shows at its edges (docs/09 P131)."""
     result = _fixture_result()
     surfaces = [result.document_json, result.markdown, result.text, result.doctags]
     surfaces += [seed.text for seed in result.chunk_seeds]
     for surface in surfaces:
-        assert JOINED_BEFORE not in surface
-        assert JOINED_AFTER not in surface
+        assert "\ufdd0" not in surface
+        assert "\ufdd1" not in surface
         assert "\N{ZERO WIDTH NO-BREAK SPACE}" not in surface
 
-    monkeypatch.setattr(docling_bridge, "mark_inline_joins", lambda html: html)
+    monkeypatch.setattr(docling_bridge, "space_inline_gaps", lambda html: html)
     unmarked = json.loads(_fixture_result().document_json)
     document = json.loads(result.document_json)
     assert document["origin"] == unmarked["origin"]

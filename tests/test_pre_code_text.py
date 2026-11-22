@@ -64,8 +64,21 @@ NOT_A_GUTTER = "A table of two cells that is not a line-number table"
 #: The sections docling lays out on its own. Since docling-core 2.103.1 it
 #: fences code with more backticks than any run inside it (docling-core #867),
 #: and this section's `<pre>` holds nothing else the bridge reads for it
-#: (docs/09 P95-1).
-DOCLING_READS_IT = {"A run of four backticks"}
+#: (docs/09 P95-1). Since docling-slim 2.147 the backend takes a `<pre>`'s
+#: text as it is, and since 2.149 keeps the `<code>` elements a `<pre>`
+#: holds in one block, so highlighted code whose every token is an element
+#: is laid out too (docs/09 P131).
+DOCLING_READS_IT = {
+    "A comment in the code",
+    "A run of four backticks",
+    "An indented first line and fence lines",
+    "GitHub",
+    "Prism, a fence in the code",
+    "Pygments",
+    "Pygments with line numbers inline",
+    "Shiki",
+    "highlight.js",
+}
 
 
 def _laid_out() -> dict[str, Any]:
@@ -322,9 +335,10 @@ def test_without_the_backends_module_hooks_code_is_read_as_docling_reads_it(
         (*docling_bridge._BACKEND_MODULE_HOOKS, "_a_name_docling_renamed"),
     )
     written = extract(FIXTURE.read_text("utf-8"), [])
+    # A section docling does not lay out on its own (`DOCLING_READS_IT`).
     assert (
-        _blocks(written.markdown)["An indented first line and fence lines"]
-        != (_expected()["An indented first line and fence lines"])
+        _blocks(written.markdown).get("One element a line")
+        != (_expected()["One element a line"])
     )
     assert any("docs/09 P50, P55" in warning for warning in written.warnings)
 

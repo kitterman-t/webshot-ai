@@ -243,8 +243,11 @@ Five fields are worth knowing about:
   the first of these the page uses: a schema.org `author` in JSON-LD (a name,
   a Person's or an Organization's `name`, or a list), microdata
   `itemprop="author"`, `<meta name="author">`, `citation_author`,
-  `article:author`, then `DC.creator`. A web address is not a name, and a
-  byline's text, `rel="author"` and `twitter:creator` are not read. The
+  `article:author`, then `DC.creator`. A web address is not a name, and
+  `rel="author"` and `twitter:creator` are not read. The names the page
+  prints as its byline are `byline`, written only when there is one; when
+  they name someone the declarations do not, `author` is the byline's names
+  and `declared_author`, written only then, keeps the declarations'. The
   `sitename` is the first of `og:site_name`, a JSON-LD `WebSite`'s `name`, a
   JSON-LD `publisher`'s name and `<meta name="application-name">`, and never
   a part of the `<title>` or the URL's host name.

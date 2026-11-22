@@ -41,10 +41,8 @@ from webshot.extract import docling_bridge
 from webshot.extract.chunks import build_chunk_records
 from webshot.extract.docling_bridge import (
     _JOINED_TAGS,
-    JOINED_AFTER,
-    JOINED_BEFORE,
     extract,
-    mark_inline_joins,
+    space_inline_gaps,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -192,7 +190,7 @@ def test_whitespace_the_page_has_keeps_the_parts_apart(space: str) -> None:
         f"<p>alpha{space}<b>beta</b>{space}gamma and <i>delta</i>{space}epsilon "
         f"and zeta{space}<a href='#x'>eta</a></p>"
     )
-    assert mark_inline_joins(_page(body)) == _page(body)
+    assert space_inline_gaps(_page(body)) == _page(body)
     assert _line(body) == "alpha beta gamma and delta epsilon and zeta eta"
 
 
@@ -233,22 +231,22 @@ def test_the_joined_elements_are_those_docling_formats_or_links() -> None:
     assert MEASURED_INLINE_TAGS == INLINE_TAGS - _JOINED_TAGS - {"wbr"}
 
 
-def _marked_by_slicing(html: str, marks: set[tuple[int, str]]) -> str:
-    """P14-56's insertion, one slice of the whole page per marker."""
-    marked = html
-    for offset, mark in sorted(marks, reverse=True):
-        marked = marked[:offset] + mark + marked[offset:]
-    return "﻿" + marked
+def _spaced_by_slicing(html: str, gaps: list[int]) -> str:
+    """P14-56's insertion, one slice of the whole page per gap."""
+    spaced = html
+    for offset in sorted(gaps, reverse=True):
+        spaced = spaced[:offset] + " " + spaced[offset:]
+    return spaced
 
 
-def test_markers_are_placed_as_before_in_one_pass() -> None:
-    """The page is assembled once now, with the same markers in the same
-    places: slicing per marker was quadratic in a page with many links."""
+def test_gaps_are_spaced_in_one_pass() -> None:
+    """The page is assembled once, with each space where the parser says:
+    slicing per insertion was quadratic in a page with many of them (P48)."""
     pages = [
         FIXTURE.read_text(encoding="utf-8"),
         _page(
             "".join(
-                f"<p>w{index}<a href='#{index}'>x</a>, H<sub>{index}</sub>O</p>"
+                f"<p>w{index}<span>x</span>, H<sub>{index}</sub>O<img src='i.png'>z</p>"
                 for index in range(300)
             )
         ),
@@ -258,22 +256,24 @@ def test_markers_are_placed_as_before_in_one_pass() -> None:
         parser.feed(page)
         parser.close()
         assert parser.marks
-        assert mark_inline_joins(page) == _marked_by_slicing(page, parser.marks)
+        assert parser.gaps()
+        assert space_inline_gaps(page) == _spaced_by_slicing(page, parser.gaps())
 
 
 def test_content_json_keeps_every_item_and_carries_no_marker(monkeypatch) -> None:
     """The DoclingDocument stays docling's: the same items with the same
-    formatting and the page's own origin hash. The only change is a space
-    docling put inside a string it flattened, a heading or a table cell."""
+    formatting and the page's own origin hash. The only change is the space
+    the bridge writes where the page draws two texts apart that its markup
+    runs together: here the padded inline code (docs/09 P131)."""
     result = _fixture_result()
     surfaces = [result.document_json, result.markdown, result.text, result.doctags]
     surfaces += [seed.text for seed in result.chunk_seeds]
     for surface in surfaces:
-        assert JOINED_BEFORE not in surface
-        assert JOINED_AFTER not in surface
+        assert "\ufdd0" not in surface
+        assert "\ufdd1" not in surface
         assert "﻿" not in surface
 
-    monkeypatch.setattr(docling_bridge, "mark_inline_joins", lambda html: html)
+    monkeypatch.setattr(docling_bridge, "space_inline_gaps", lambda html: html)
     unmarked = json.loads(_fixture_result().document_json)
     document = json.loads(result.document_json)
     assert document["origin"] == unmarked["origin"]

@@ -352,15 +352,154 @@ def test_a_bold_organization_in_a_biography_is_not_an_author() -> None:
     assert metadata.declared_author == ""
 
 
-def test_a_byline_naming_some_of_the_declared_people_does_not_replace_them() -> None:
-    """The second writer's surname, "Guest", is a word a role holds, so the
-    byline's reading passes her over as it passes over "Guest Contributor". A
-    byline that names no one the declaration does not is no evidence against
-    it, so the complete declaration stays the author (docs/09 P124-3)."""
+def test_a_coauthor_whose_surname_a_role_holds_is_read_when_the_page_declares_her() -> (
+    None
+):
+    """The second writer's surname, "Guest", is a word a role holds ("Guest
+    Contributor"), so the byline's reading passed her over and recorded only
+    "Priya Raman" (docs/09 P124-3). The page declares her by those words, so
+    she is a person the page names, not a role (P124-6), and the byline names
+    both. It names no one the declaration does not, so the declaration stays
+    the author."""
     metadata = _attributed("coauthor_named_like_a_role.html")
     assert metadata.author == "Priya Raman; Rowan Guest"
-    assert metadata.byline == "Priya Raman"
+    assert metadata.byline == "Priya Raman; Rowan Guest"
     assert metadata.declared_author == ""
+
+
+@pytest.mark.parametrize(
+    ("markup", "byline", "author", "declared"),
+    [
+        # Declared alone, joined with "and": the byline names both, and the
+        # one the declaration left out joins the author.
+        (
+            '<meta name="author" content="Rowan Guest">'
+            "<h1>Notes</h1><p>By Jane Doe and Rowan Guest</p>",
+            "Jane Doe; Rowan Guest",
+            "Jane Doe; Rowan Guest",
+            "Rowan Guest",
+        ),
+        # Both declared, joined with a comma.
+        (
+            '<meta name="author" content="Jane Doe; Rowan Guest">'
+            "<h1>Notes</h1><p>By Jane Doe, Rowan Guest</p>",
+            "Jane Doe; Rowan Guest",
+            "Jane Doe; Rowan Guest",
+            "",
+        ),
+        # Under an author heading, both declared.
+        (
+            '<meta name="author" content="Priya Raman">'
+            '<meta name="author" content="Rowan Guest">'
+            "<h2>Authors</h2><h3>Priya Raman</h3><h3>Rowan Guest</h3>",
+            "Priya Raman; Rowan Guest",
+            "Priya Raman; Rowan Guest",
+            "",
+        ),
+        # Not declared: nothing tells the surname from a role's word, and
+        # the byline names fewer people than the page prints, as before.
+        (
+            '<meta name="author" content="Jane Doe">'
+            "<h1>Notes</h1><p>By Jane Doe and Rowan Guest</p>",
+            "Jane Doe",
+            "Jane Doe",
+            "",
+        ),
+        # A publisher declared as the author and printed after a comma is
+        # the writer's organization, not a second writer: the byline is the
+        # writer, who replaces it, as before.
+        (
+            '<meta name="author" content="Harbor Lane News">'
+            "<h1>Notes</h1><p>By Jane Doe, Harbor Lane News</p>",
+            "Jane Doe",
+            "Jane Doe",
+            "Harbor Lane News",
+        ),
+        # A role the page declares nobody by stays a role.
+        (
+            '<meta name="author" content="Jane Doe">'
+            "<h1>Notes</h1><p>By Jane Doe, Staff Writer</p>",
+            "Jane Doe",
+            "Jane Doe",
+            "",
+        ),
+        # A byline of nothing but such names names no one for certain: the
+        # declaration is all that is known of them, and an organization or a
+        # role is declared as often as a person, so there is no byline.
+        (
+            '<meta name="author" content="Harbor Lane News">'
+            "<h1>Notes</h1><p>By Harbor Lane News</p>",
+            "",
+            "Harbor Lane News",
+            "",
+        ),
+        (
+            '<meta name="author" content="Guest Contributor">'
+            "<h1>Notes</h1><p>By Guest Contributor</p>",
+            "",
+            "Guest Contributor",
+            "",
+        ),
+        (
+            '<meta name="author" content="Harbor Lane News">'
+            "<h1>Notes</h1><p>By Staff Writer, Harbor Lane News</p>",
+            "",
+            "Harbor Lane News",
+            "",
+        ),
+        # A header byline and an author box name the same two writers. The
+        # header's "and" confirms the one declared, and she is a person in
+        # the box too, so the two bylines agree rather than cancel out.
+        (
+            '<meta name="author" content="Rowan Guest">'
+            "<h1>Notes</h1><p>By Jane Doe and Rowan Guest</p>"
+            "<p>The harbor dues rise this winter.</p>"
+            "<section><h2>About the authors</h2>"
+            "<h3>Jane Doe</h3><p>Jane covers the port.</p>"
+            "<h3>Rowan Guest</h3><p>Rowan covers shipping.</p></section>",
+            "Jane Doe; Rowan Guest",
+            "Jane Doe; Rowan Guest",
+            "Rowan Guest",
+        ),
+        # The box confirms her, its other writer being declared; the header
+        # prints only one writer, so the bylines differ, as they would for
+        # any co-author the header leaves out, and none is read.
+        (
+            '<meta name="author" content="Jane Doe; Rowan Guest">'
+            "<h1>Notes</h1><p>By Jane Doe</p>"
+            "<p>The harbor dues rise this winter.</p>"
+            "<section><h2>Authors</h2>"
+            "<h3>Jane Doe</h3><h3>Rowan Guest</h3></section>",
+            "",
+            "Jane Doe; Rowan Guest",
+            "",
+        ),
+        # Roles set as subheads under eight writers are not a ninth and
+        # tenth person, so the eight are still a byline.
+        (
+            "<h2>Authors</h2>"
+            + "".join(
+                f"<h3>Jane Doe{'e' * n}</h3><h4>{role}</h4>"
+                for n, role in enumerate(
+                    ["Staff Writer", "Senior Editor", "Guest Contributor"] + [""] * 5
+                )
+            ),
+            "; ".join(f"Jane Doe{'e' * n}" for n in range(8)),
+            "",
+            "",
+        ),
+    ],
+)
+def test_a_name_holding_a_role_s_word_is_read_when_the_page_declares_it(
+    markup: str, byline: str, author: str, declared: str
+) -> None:
+    """docs/09 P124-6."""
+    metadata = read_metadata(markup)
+    assert (metadata.byline, metadata.author, metadata.declared_author) == (
+        byline,
+        author,
+        declared,
+    )
 
 
 def test_a_byline_naming_someone_the_declaration_does_not_replaces_it() -> None:

@@ -134,6 +134,26 @@ def test_a_title_hidden_in_a_box_the_print_shows_despite_its_mark_is_named(
 
 @pytest.mark.browser
 @pytest.mark.parametrize("mode", ["clean", "faithful"])
+def test_a_first_h1_the_print_hides_beside_one_that_prints_is_not_the_missing_title(
+    tmp_path: Path, mode: str
+) -> None:
+    """A banner's `<h1>` comes first in the content and the print stylesheet
+    hides it; the article's `<h1>` prints, so the PDF has a title. The
+    banner's heading is named as one the print lost, and nothing says the PDF
+    has no title (docs/09 P123-9)."""
+    warnings = _warnings(
+        tmp_path, "--mode", mode, fixture=FIXTURES / "print_hidden_first_h1_page.html"
+    )
+    assert warnings == [
+        "1 heading the page showed is in neither the PDF's text nor the bundle's: "
+        '"Port office notices". The page\'s print stylesheet, or its print layout, '
+        "hides it, and the sections under it may be gone too. --media screen "
+        "captures the page as the screen shows it."
+    ], warnings
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("mode", ["clean", "faithful"])
 def test_a_site_s_name_outside_the_region_is_not_named_when_the_region_has_a_title(
     tmp_path: Path, mode: str
 ) -> None:
@@ -230,6 +250,34 @@ def test_a_region_s_own_title_the_print_hid_leaves_the_pdf_without_one() -> None
     assert found.title == Heading(1, "Port office")
     assert found.title_kind == "isolated"
     assert found.hidden == (Heading(1, "Winter dues"),)
+
+
+def test_a_title_the_print_hid_beside_an_h1_that_printed_is_named_as_a_heading() -> (
+    None
+):
+    """The page's first `<h1>` is in the content, and its print stylesheet
+    hides it; the article's own `<h1>` prints. The PDF has a title, so "the
+    PDF has no title" would be false: the hidden one is named with the other
+    headings the print lost (docs/09 P123-9)."""
+    shown = ShownHeadings(
+        headings=(
+            Heading(1, "Port office notices"),
+            Heading(1, "Winter dues"),
+            Heading(2, "What changes"),
+        ),
+        title=Heading(1, "Port office notices"),
+        title_fate="shown",
+    )
+    text = "Winter dues. What changes"
+    found = missing_headings(shown, text, text)
+    assert found.title is None
+    assert found.hidden == (Heading(1, "Port office notices"),)
+    assert missing_headings_warnings(found, media="print") == [
+        "1 heading the page showed is in neither the PDF's text nor the bundle's: "
+        '"Port office notices". The page\'s print stylesheet, or its print layout, '
+        "hides it, and the sections under it may be gone too. --media screen "
+        "captures the page as the screen shows it."
+    ]
 
 
 def test_headings_a_box_hidden_since_held_are_left_out() -> None:

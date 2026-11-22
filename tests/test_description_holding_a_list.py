@@ -294,7 +294,8 @@ def test_content_json_holds_each_description_over_its_list(result: Any) -> None:
             if group["name"] == "descriptions"
             else None
         )
-        text = item["text"] or " ".join(
+        # A group's runs carry the whitespace at their edges (docs/09 P131).
+        text = item["text"] or "".join(
             by_ref[part["$ref"]]["text"]
             for child in item["children"]
             if kind(child["$ref"]) == "group"
@@ -613,7 +614,7 @@ def test_text_of_its_own_is_the_text_of_docling_s_item(
 
     def written(item: dict[str, Any]) -> str:
         """The item's text, or its inline group's, as content.md writes it."""
-        return item["text"] or " ".join(
+        return item["text"] or "".join(
             by_ref[part["$ref"]]["text"]
             for child in item["children"]
             if by_ref[child["$ref"]].get("name") == "group"
