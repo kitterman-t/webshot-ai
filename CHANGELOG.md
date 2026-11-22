@@ -339,6 +339,31 @@ which records the measurements behind each change.
 
 ### Changed
 
+- **docling-core 2.107.1 and docling-slim 2.150.1, and `content.json` keeps
+  their inline whitespace contract.** docling-core 2.106 stamps a document
+  schema 1.11, under which each run of an inline group carries the
+  whitespace the page has at its edges and every serializer joins runs with
+  nothing between; docling-slim 2.147 is the first backend that writes runs
+  that way. Bumped alone, docling-core stamped WebShot's stripped runs
+  1.11.0, so a reader that loaded `content.json` and exported it with
+  docling's defaults read `See the[project documentation](…)for context.`
+  Each run now carries the page's whitespace, with the space the bridge
+  writes where the page draws apart two texts its markup runs together (a
+  link drawn apart by its icon, spans no snapshot measured), so docling-core's
+  own exports read as `content.md` does, and a join such as `H<sub>2</sub>O`
+  or `un<b>break</b>able` is one word to them too. In the golden corpus
+  `content.md`, `content.txt`, `chunks.jsonl` and the PDF's text do not
+  change. On real pages some do, each a correction: two elements of one
+  format side by side keep their own emphasis, code or link markers
+  (`` `isna()` `DataFrame` ``), a `<br><br>` before formatted text ends a
+  paragraph, two spaces read as one, a table cell gains the space the page
+  draws after a link, and an article header's language links are page
+  chrome. 73 of 377 saved captures and 14 of 190 pages from WebShot PDFs
+  move on a text surface (docs/09 P131-4).
+  `content.json` also hangs a picture's caption under its picture
+  (docling-slim 2.149). A page holding U+FDD0 or U+FDD1 no longer gets a
+  warning: the bridge no longer marks joins with those characters. See
+  docs/09 P131.
 - **Clean mode hides a fixed box measured over the page's text and prints the
   page again.** Five captures in one week needed the `--exclude` the warning
   offered, applied by hand. Now a fixed box whose name matches it alone, that
@@ -449,6 +474,21 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **A print-hidden first `<h1>` beside one that prints is not "the PDF has
+  no title".** A banner's `<h1>` came first in the content and the page's
+  print stylesheet hid it, while the article's own `<h1>` printed; the
+  headings warning still said the PDF had no title. When another `<h1>` of
+  the content prints, the hidden one is now named with the other headings
+  the print lost. See docs/09 P123-9.
+- **A co-author whose surname is a role's word is in the byline when the
+  page declares her.** "By Priya Raman and Rowan Guest" recorded the byline
+  "Priya Raman", because "Guest" is a word a role holds. A name holding a
+  role's word is now kept when the page's declarations name it by its words,
+  its byline prints a plain name too, and it follows "and" or "&" or the
+  declarations name the byline's other people too. A name confirmed in one
+  of the page's bylines is a person in each of them. A publisher declared as
+  the author and printed after a comma is still the writer's organization,
+  and "By Harbor Lane News" alone is still no byline. See docs/09 P124-6.
 - **The covered-text check measures the boxes of the layout that prints.** It
   found and coloured the fixed and sticky boxes at the 1440 px window, so a
   header fixed only in a page's narrow layout printed over every page

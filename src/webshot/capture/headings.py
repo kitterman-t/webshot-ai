@@ -412,23 +412,33 @@ def missing_headings(
     title: Heading | None = None
     title_kind: str | None = None
     seen: set[str] = set()
+    headings = shown.headings
     if shown.title is not None and shown.title_fate in ("shown", "isolated"):
-        seen.add(" ".join(words(shown.title.text)))
-        # The region WebShot chose has a title of its own when one of its
-        # `<h1>`s printed, so the PDF has one, and "the PDF has no title"
-        # would be false: the page's first `<h1>`, which the region leaves
-        # out, is then taken for a site's name in its header (P123-5).
-        titled = shown.title_fate == "isolated" and any(
-            heading.level == 1 and holds(printed_words, words(heading.text))
+        title_key = " ".join(words(shown.title.text))
+        # Another `<h1>` of the content printed, so the PDF has a title, and
+        # "the PDF has no title" would be false.  Outside the region WebShot
+        # chose, the page's first `<h1>` is then taken for a site's name in
+        # its header, and not named (P123-5).  Inside it, it is a heading of
+        # the content, looked for with the others, and named with them if the
+        # print lost it (P123-9).
+        titled = any(
+            heading.level == 1
+            and " ".join(words(heading.text)) != title_key
+            and holds(printed_words, words(heading.text))
             for heading in shown.headings
         )
-        if not titled and not holds(printed_words, words(shown.title.text)):
-            title = shown.title
-            title_kind = (
-                "isolated" if shown.title_fate == "isolated" else kind(shown.title)
-            )
+        if titled and shown.title_fate == "shown":
+            if all(" ".join(words(h.text)) != title_key for h in headings):
+                headings = (shown.title, *headings)
+        else:
+            seen.add(title_key)
+            if not titled and not holds(printed_words, words(shown.title.text)):
+                title = shown.title
+                title_kind = (
+                    "isolated" if shown.title_fate == "isolated" else kind(shown.title)
+                )
     groups: dict[str, list[Heading]] = {"hidden": [], "lost": [], "unprinted": []}
-    for heading in shown.headings:
+    for heading in headings:
         key = " ".join(words(heading.text))
         if not key or key in seen:
             continue

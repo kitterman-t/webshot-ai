@@ -245,7 +245,9 @@ def test_the_fixture_reads_as_its_page_does() -> None:
         group
         for group in document["groups"]
         if any(
-            by_ref[child["$ref"]].get("text") in {"Alpha", "Third step", "Terms"}
+            # A run carries the whitespace at its edges (docs/09 P131).
+            (by_ref[child["$ref"]].get("text") or "").strip()
+            in {"Alpha", "Third step", "Terms"}
             for child in group["children"]
         )
     ]

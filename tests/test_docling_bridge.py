@@ -416,8 +416,9 @@ def test_a_script_with_its_own_link_or_emphasis_keeps_it() -> None:
 def test_content_json_keeps_the_script_and_carries_no_marker(monkeypatch) -> None:
     """The DoclingDocument stays the lossless record: the subscript is still
     its own item with its formatting, the origin hash is the page's own, and
-    the only change from docling's document is a space docling put inside a
-    string it flattened. No join marker reaches any surface."""
+    the only change from docling's document is the space the bridge writes
+    where the page keeps two texts apart that the markup runs together. No
+    character of WebShot's reaches any surface (docs/09 P131)."""
     from webshot.extract import docling_bridge
 
     result = _script_page_result()
@@ -425,16 +426,16 @@ def test_content_json_keeps_the_script_and_carries_no_marker(monkeypatch) -> Non
     surfaces += [seed.text for seed in result.chunk_seeds]
     surfaces += [cell for grid in result.tables for row in grid for cell in row]
     for surface in surfaces:
-        assert docling_bridge.JOINED_BEFORE not in surface
-        assert docling_bridge.JOINED_AFTER not in surface
+        assert "\ufdd0" not in surface
+        assert "\ufdd1" not in surface
         assert "\ufeff" not in surface
 
-    monkeypatch.setattr(docling_bridge, "mark_inline_joins", lambda html: html)
-    unmarked = json.loads(_script_page_result().document_json)
+    monkeypatch.setattr(docling_bridge, "space_inline_gaps", lambda html: html)
+    unspaced = json.loads(_script_page_result().document_json)
     document = json.loads(result.document_json)
-    assert document["origin"] == unmarked["origin"]
-    assert len(document["texts"]) == len(unmarked["texts"])
-    for item, plain in zip(document["texts"], unmarked["texts"], strict=True):
+    assert document["origin"] == unspaced["origin"]
+    assert len(document["texts"]) == len(unspaced["texts"])
+    for item, plain in zip(document["texts"], unspaced["texts"], strict=True):
         assert item.get("formatting") == plain.get("formatting")
         assert item["text"].replace(" ", "") == plain["text"].replace(" ", "")
     subscripts = [
@@ -443,30 +444,36 @@ def test_content_json_keeps_the_script_and_carries_no_marker(monkeypatch) -> Non
         if item["label"] == "text"
         and (item.get("formatting") or {}).get("script") == "sub"
     ]
-    assert subscripts == ["0", "a", "0", "1"]
+    # The last carries the space after it, before " keep" (docs/09 P131).
+    assert subscripts == ["0", "a", "0", "1 "]
 
 
-def test_a_page_without_scripts_is_parsed_as_given() -> None:
+def test_a_page_without_gaps_is_parsed_as_given() -> None:
     page = (FIXTURES / "empty_section_heading.html").read_text(encoding="utf-8")
-    from webshot.extract.docling_bridge import mark_inline_joins
+    from webshot.extract.docling_bridge import space_inline_gaps
 
-    assert mark_inline_joins(page) is page
+    assert space_inline_gaps(page) is page
 
 
-def test_a_page_carrying_the_markers_keeps_docling_spacing_and_says_so() -> None:
-    """A page with U+FDD0 of its own cannot be marked without losing it."""
+def test_a_page_carrying_the_old_markers_reads_as_any_other() -> None:
+    """Until docs/09 P131 the bridge carried each join through the backend as
+    U+FDD0 or U+FDD1, so a page with one of its own kept docling's spacing
+    and said so. The backend keeps the page's whitespace now and the bridge
+    writes only spaces, so the page's character is text like any other."""
     page = (
         '<html><head><meta charset="utf-8"></head><body><h1>T</h1>'
         "<p>H<sub>0</sub> and \ufdd0 kept</p></body></html>"
     )
     result = extract(page, [])
-    assert "H 0 and \ufdd0 kept" in result.text
-    assert any("U+FDD0" in warning for warning in result.warnings)
+    assert "H0 and \ufdd0 kept" in result.text
+    assert result.warnings == []
 
 
 @pytest.mark.parametrize(
-    ("reference", "character"),
+    ("reference", "read"),
     [
+        # Each spelling of the characters the bridge once used as markers,
+        # which it removed from the page's own text (docs/09 P54).
         ("&#xFDD0;", "\ufdd0"),
         ("&#xfdd0;", "\ufdd0"),
         ("&#XfDd0;", "\ufdd0"),
@@ -479,31 +486,13 @@ def test_a_page_carrying_the_markers_keeps_docling_spacing_and_says_so() -> None
         ("&#64977;", "\ufdd1"),
         ("&#xfdd1", "\ufdd1"),
         ("&#64977", "\ufdd1"),
-    ],
-)
-def test_a_page_carrying_a_marker_as_a_reference_keeps_it_and_says_so(
-    reference: str, character: str
-) -> None:
-    """The backend reads `&#xFDD0;` as U+FDD0, which was removed as a marker."""
-    page = (
-        '<html><head><meta charset="utf-8"></head><body><h1>T</h1>'
-        f"<p>H<sub>0</sub> and {reference} kept</p></body></html>"
-    )
-    result = extract(page, [])
-    assert f"H 0 and {character} kept" in result.text
-    assert any("U+FDD0" in warning for warning in result.warnings)
-
-
-@pytest.mark.parametrize(
-    ("reference", "read"),
-    [
         ("&#xFDD0A;", "\U000fdd0a"),
         ("&#649760;", "\U0009ea20"),
         ("&amp;#xFDD0;", "&#xFDD0;"),
         ("&#xFDD2;", "\ufdd2"),
     ],
 )
-def test_a_reference_to_another_character_leaves_the_page_marked(
+def test_a_character_reference_reads_as_its_character(
     reference: str, read: str
 ) -> None:
     page = (

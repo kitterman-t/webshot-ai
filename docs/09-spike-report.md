@@ -21801,6 +21801,7 @@ stylesheet's capitals, a line break and a page's running header and footer
 do not read as missing. A title outside the region WebShot chose as the
 content is named, unless an `<h1>` of that region printed: the PDF then has a
 title, and the page's first `<h1>` is taken for a site's name in its header.
+(P123-9 applies the same test inside the region.)
 One outside a `--selector` the caller gave, or removed with page chrome (a
 logo set in an `<h1>` inside the header) by clean mode, the consent-dialog
 hiding or `--exclude`, is what was asked for and is not named, whether or
@@ -22005,6 +22006,29 @@ wall bar in both modes (P123-6), and has its capture whose PDF text cannot be
 read require the headings named in its one warning (P123-5). The merge with
 P120 adds to `tests/test_watch_page.py` a watch page whose title is in the bar
 clean mode hides there, in both modes (P123-5).
+
+### P123-9 — a first `<h1>` the print hid, beside one that printed (2026-11-16)
+
+P123-5 took a title outside the region WebShot chose for a site's name when
+an `<h1>` of the region printed, since the PDF then has a title. Inside the
+region the rule did not apply: a banner's `<h1>`, the page's first, hidden by
+its print stylesheet, was named "so the PDF has no title" over a PDF whose
+article `<h1>` printed. That clause was false.
+
+When another `<h1>` of the content prints, the page's first is now a heading
+of the content like the rest. It is looked for with them, and named with them
+when the print lost it ("1 heading the page showed is in neither the PDF's
+text nor the bundle's"), saying what hid it and offering `--media screen`.
+Nothing says the PDF has no title. The region rule of P123-5 is unchanged,
+except that an `<h1>` with the title's own words no longer counts as another.
+
+- **Fixture:** `print_hidden_first_h1_page.html`
+  (`test_a_first_h1_the_print_hides_beside_one_that_prints_is_not_the_missing_title`,
+  in both modes), with a unit case in `tests/test_missing_headings.py`. On
+  master's code both modes give the title warning; with the change, the
+  heading warning.
+- **Not measured** on a live page: the fault was found by reading the rule,
+  and no saved capture has the shape.
 
 ### P123-10 — an address the print stylesheet draws
 
@@ -22285,7 +22309,8 @@ No golden manifest moved.
   (`declared_authors/coauthor_named_like_a_role.html`).
 - **Not done.** On that page `byline` still records only "Priya Raman":
   telling a surname from a role's word takes more than a list of words, and
-  no measured page has shown which rule would. A bold name inside a
+  no measured page has shown which rule would. (P124-6 reads her, since the
+  page declares her.) A bold name inside a
   biography's sentence is no longer read, so a biography that names its
   second writer there (`… with <strong>John Roe</strong>`) reads only the
   first. An
@@ -22344,6 +22369,80 @@ text cannot be read, which must give one warning naming each check it
 stopped. Against the code before the review, both fixtures' tests, two of the
 three cases and the capture with a bundle fail; the rest hold what that code
 already did right.
+
+### P124-6 — a co-author whose surname a role holds (2026-11-16)
+
+"By Priya Raman and Rowan Guest" recorded the byline "Priya Raman" (P124-3,
+`declared_authors/coauthor_named_like_a_role.html`): "Guest" is one of the
+role words, so the byline's reading passed her over as it passes over "Guest
+Contributor". A list of words cannot tell the two apart. The page can: it
+declares her.
+
+A part of a byline that reads as a name but holds a role's word is now kept
+as doubtful, and the declarations decide. It is a name when one declared
+value holds all its words, and the byline that prints it also prints a plain
+name, and either it follows "and" or "&", which join a writer to a writer, or
+the declarations name the byline's plain names too. A name under an author
+heading has no "and" before it, so only the second rule applies there.
+Otherwise it is passed over, as before. The comma rule matters: a news page
+that declares its publisher as the author and prints "By Jane Doe, Harbor
+Lane News" is naming the writer's organization, not a second writer, and its
+byline stays "Jane Doe", which replaces the declaration as it did.
+
+The review of the first version found two holes in that rule, and both are
+closed:
+- **A byline of nothing but doubtful names was confirmed.** "Its other
+  people are declared" held vacuously when it had no other people. So "By
+  Harbor Lane News" over a declaration of Harbor Lane News recorded the
+  publisher as the byline. "By Guest Contributor" and "By Staff Writer,
+  Harbor Lane News" did the same. Master records no byline for these, and
+  that is right: an organization or a role is declared as often as a person,
+  so the declaration alone does not make one a person. The plain name is now
+  required, and for the "and" rule too.
+- **A page's bylines were confirmed apart, so they could disagree.** On a
+  page that prints "By Jane Doe and Rowan Guest" under its title, sets each
+  writer as a subhead in an "About the authors" box, and declares only Rowan
+  Guest:
+  - the header confirmed her by its "and";
+  - the box has no "and", and does not declare Jane Doe, so it passed her
+    over;
+  - the two bylines then differed, so none was read, and the author fell
+    back to the declaration alone.
+
+  Master read "Jane Doe" from both. Now the doubtful names are settled once,
+  from every byline's evidence, and a name confirmed in one byline is a
+  person in each byline that prints it. The two then agree, on "Jane Doe;
+  Rowan Guest". Bylines that name different people still cancel out, as
+  they do for any name: a header that prints only Jane Doe beside a box that
+  prints both writers gives no byline.
+
+A doubtful name is kept only where a declaration names it, so it never makes
+a byline name someone the declarations do not, and never on its own replaces
+them. It can complete a byline that does: "By Jane Doe and Rowan Guest" over a
+declaration of Rowan Guest alone gave the author "Jane Doe", and now gives
+"Jane Doe; Rowan Guest", with `declared_author` "Rowan Guest".
+
+- **Measured** over the `content.html` of 398 saved bundles, which keep a
+  page's body but not its `<head>`: six bylines were read, and none of the
+  398 records changed. After the review's fixes, over the 397 still there,
+  none changed against master or against the first version.
+- **Not done.** A page that declares no one, or declares someone else, still
+  gets the shorter byline: nothing on it tells "Rowan Guest" from "Guest
+  Contributor".
+- **Tests:** `tests/test_discovery.py` now requires both names on the fixture's
+  page, and seven cases pin the rule: declared alone after "and", both
+  declared after a comma, both declared under an author heading, not
+  declared, a publisher declared after a comma, a role, and roles set as
+  subheads under eight writers, which do not make the heading's names a list
+  of more than eight people. On master's code the fixture's test and the
+  first three cases fail; the other four hold what master already did right,
+  the last of them against a first version of this change, which counted the
+  roles. Five more cases come from the review:
+  - three bylines of nothing but doubtful names, which fail on the first
+    version;
+  - the header byline with the author box, which fails on the first version;
+  - the header that leaves out a writer the box prints, which holds that
+    bylines naming different people still cancel out.
 
 ## P118 — a timeout test that raced the stand-in's fill timer (2026-11-08)
 
@@ -22852,3 +22951,310 @@ install off the old backend.
 `git grep -il "<tfoot"` finds only the long-table fixture, and no golden case
 captures it, so no golden is expected to move. The golden corpus was not run
 for this entry; CI runs it.
+
+## P131 — docling-core 2.107.1, docling-slim 2.150.1, and the inline whitespace contract (2026-11-16)
+
+Dependabot's bump of docling-core alone, from `>=2.105.0` to `>=2.106.0`
+(webshot-ai#125, docling-slim staying at 2.142.1), failed only the golden
+corpus, in 24 cases. In each one `bundle/content.json` changed `"version":
+"1.10.0"` to `"1.11.0"` and `bundle/manifest.json` changed that file's
+sha256; no other byte moved. Re-recording those goldens would have shipped a
+defect, so the bump is landed here with docling-slim, and the bridge writes
+what the new stamp promises.
+
+### P131-1 — the upstream change
+
+**docling-core 2.106** (its #693) makes the serializers join the runs of an
+`InlineGroup` with nothing between, so each run must carry its own boundary
+whitespace. That is schema 1.11. A document stamped earlier is migrated on
+load by `_migrate_legacy_inline_separators`, with a `UserWarning`, and
+`compat.project_to` projects a 1.11 document back to 1.10 by stripping its
+runs. `MarkdownDocSerializer.hoist_decoration_whitespace` moves a run's edge
+whitespace outside its emphasis and link markers, so `**bold **` is never
+written. A nested table's flattened text joins an inline group's parts with
+nothing, and the list-item path puts a space between a text item's own text
+and an inline group it holds. `doctags.py` did not change.
+
+**docling-slim 2.147** (its #3891) is the backend that writes runs that way,
+and the first release that requires docling-core 2.106 (2.143 to 2.146
+require 2.103.1). Its HTML backend collapses whitespace without trimming
+each text node, normalizes each block's runs once (`normalize_whitespace`:
+one space at a boundary, carried by the run before it, or by the run after
+it where the run before is code, or as a run of its own between two code
+runs), joins same-format runs and flattened texts verbatim, stops stripping
+in `_resolve_line_breaks`, and takes a `<pre>`'s text verbatim. Its release
+note says what the pair is for: an older docling-core with these backends
+doubles spaces, and a newer docling-core under older backends merges words.
+
+Also between 2.142.1 and 2.150.1: 2.145 keeps a table's `<tfoot>` rows
+(P130); 2.149 hangs a picture's caption under its picture (#5037) and keeps
+the `<code>` siblings of a `<pre>` in one block (#4998); 2.150.1 makes the
+unclosed-`<p>` fix-up independent of the hash seed (#5048). docling-core
+2.107 adds `formatting_fallback_mode` (default `none`, which writes what was
+written before), keeps the edge spaces of inline code, gives a heading-only
+chunk the document's origin (WebShot does not read it), and writes a
+floating item's footnotes in DocTags.
+
+### P131-2 — the bump alone, and the bump under the old bridge
+
+**docling-core alone.** WebShot's backend, docling-slim 2.142, stripped every
+run, so content.json was stamped 1.11.0 with runs that carry no whitespace.
+Loaded with docling-core 2.106 and exported with `export_to_markdown()`'s
+defaults, the markdown-report golden read `See the[project
+documentation](https://example.com/docs)for context.` and lms-module `…or
+read the[knowledge base article…`. The same JSON stamped 1.10.0 was migrated
+and read correctly. WebShot's own surfaces did not move, because the bridge
+replaces docling's inline serializer with `_JoinedInline`, which joined runs
+with a space itself (P14-56, P48, P70).
+
+**Both bumped, the bridge as it was.** Over the 24 golden cases and the 101
+HTML fixtures run straight through the bridge, 19 cases' content.md moved
+(one of them for the `<tfoot>` rows of P130):
+
+- Every run boundary doubled its space, since the runs now carry it and
+  `_JoinedInline` added another: `See the  [project documentation](…)  for
+  context.`
+- Every list item merged its words: `- Your**null hypothesis (H0):**the
+  program`. `_keep_line_break_marks` puts a function in place of the
+  backend's `_resolve_line_breaks` (P96-1), and it stripped its text, which
+  2.147 now runs on each run of an item's line.
+- Text the page draws apart and the markup runs together was joined: two
+  spans no snapshot measured (`Slotted title: named slot text.Slotted body`),
+  and a link the snapshot measured drawn apart (P70-11). The bridge had kept
+  those apart by leaving the backend's space; the backend no longer adds one.
+- A nav list whose item holds a linked logo moved to the body (`-   Harbour`
+  at the head of content.md). The caption the backend makes of the logo's alt
+  text now hangs under its picture, inside the list, so the list's text held
+  "Harbour", which no text of the nav holds.
+- A `<figcaption>` of only whitespace stopped captioning its figure with the
+  image's alt text. 2.147 keeps a run of only whitespace, so the caption is
+  no longer empty to the backend, which captions a figure with the alt text
+  only when the `<figcaption>` holds nothing.
+
+**Real captures, after the first fix.** With the first seven points of P131-3
+the fixtures and goldens read as before, and the saved captures (P131-4) did
+not. Four more of the backend's readings merged or doubled what the page
+draws:
+
+- A text of only line endings between two elements is skipped by the
+  backend's walk (`node_text.strip("\n\r") == ""`), and the snapshot's
+  parser, bs4's `html.parser`, makes every whitespace text holding a line
+  ending exactly "\n". So `<span>Harrowgate</span>`, a line ending, and
+  `<a>555.010.4477</a>` read "Harrowgate555.010.4477"; on the saved pages, a
+  contact card, a print bar's links and a date line's spans.
+- A space only an `aria-hidden` element holds is hidden with it, so two
+  boxes it alone kept apart touched: "1.2M2w ago".
+- Two runs of one formatting that each keep a space at the edge they share
+  are joined verbatim before the backend normalizes whitespace, so the
+  space doubled inside one run: "5 minute read  12 Oct 2026", and a
+  checkbox's "- [x]  answer".
+- An empty `<div>` inside an inline element ended no line to the backend
+  but did to the bridge, which therefore wrote no gap: "Tessaly Clipsand 2
+  more".
+
+And one reading of the first fix's own: a book's cover above a product
+page's first heading, in a list, went back to the body by where it stands
+(P71), and its alt-text caption, now inside that list, took the list's
+furniture layer with it, so the page lost its title line from content.md.
+
+### P131-3 — the fix
+
+Each run of content.json carries the whitespace the page shows at its edges.
+That is the contract the 1.11.0 stamp promises, so the stamp stays.
+Projecting content.json to 1.10.0 with `project_to` was the fallback, and
+was not needed.
+
+- **The bridge writes the page's gaps as spaces** (`space_inline_gaps`, in
+  place of `mark_inline_joins`). Where an inline element joins the text it
+  touches is decided as before (`_InlineJoins.marks`, P48, P70). The parser
+  also records each place two texts meet with no whitespace between them in
+  the markup, and writes a space at the start of the second unless an edge
+  between them joins the two. Something drawn between them always gets one:
+  an image, a form control, an element laid out as a box of its own. A block
+  or a line break separates by itself, so it gets none
+  (`_LINE_SEPARATING_TAGS`), and nothing is written in a `<pre>`, which the
+  bridge reads as the page lays it out (P55). The backend then keeps every
+  space it is given and adds none. A `<wbr>` or a comment between two texts
+  is no gap: nothing is drawn there, and the backend's join is the page's.
+- **No marker character is left.** U+FDD0 and U+FDD1 no longer pass through
+  the backend. So a page that holds one reads as any other, and the warning
+  about such a page (P54) and the check for a marker that leaked into a
+  field it was not taken out of are gone.
+- **`_JoinedInline`** reads two parts as touching where neither carries
+  whitespace at the boundary, and joins every part with nothing between. A
+  touching run is still wrapped once, keeping the whitespace outside its
+  first and last part where the serializer wrote it.
+- **`_SnapshotFacts`** joins a caption's or a chrome region's texts as the
+  backend joins an item's: each as it is, with a space at each element
+  outside `INLINE_TAGS`.
+- **`_kept_line_break_marks`** returns the text unchanged, as 2.147's own
+  function no longer strips. A line break in a part of an item's line becomes
+  a space, and `_respaced_parts` spaces the line's parts again by
+  `normalize_whitespace`'s rules, so `**Bold**<br>*italic*` keeps its space
+  and the line keeps no edge space.
+- **The furniture test** reads a block's inline parts as they are joined
+  (`_block_text`). A caption the backend hangs under its picture or table is
+  no part of a block (`_floating_caption`): it is decided by its own text,
+  as it was when it hung off the body, and it says nothing of where an
+  empty list item stands. So a nav's logo caption, which no text of the nav
+  holds, does not send the nav to the body, and a cover's caption above the
+  first heading still reaches content.md.
+- **`drop_lone_line_breaks`** takes a caption's whitespace out with its line
+  breaks when it holds no text, so an empty `<figcaption>` reads empty again.
+- **The gap parser reads the page as the backend does.** Text in an element
+  the backend hides (`hidden`, `aria-hidden`, a hiding inline style) is not
+  a text either side of a gap, and nothing in such an element, nor a block
+  inside an inline element, ends a line. A whitespace text of line endings
+  between two texts of one line is written as one space (`blanks`), except
+  in a table cell, where the backend reads a line ending as the end of one
+  of the cell's paragraphs, as it always has.
+- **Two spaces in one run** are written as one in every text but code and
+  formulas, as a browser draws them.
+
+### P131-4 — what moved
+
+**Goldens.** Each moved golden is rebuilt from `git show HEAD:` and the
+bridge's own output on the golden's `content.html` and `assets.json`, so no
+raster digest or OCR confidence of this machine enters it (P16-7), and the
+golden check then compares them with a fresh capture. 24 cases move, in
+`bundle/content.json` and `bundle/manifest.json` only:
+
+- all 24: `"version": "1.10.0"` becomes `"1.11.0"`;
+- lms-module and lms-module-videos: four runs carry the space after them, in
+  `text` and `orig`: `Touring Your Project Workspace · `, `…or read the `,
+  `. The ` and `module checklist `;
+- markdown-report: two, `See the ` and `project documentation `;
+- the eight article-* cases, svg-chart and markdown-report: a picture's
+  caption hangs under its picture, not the body (docling-slim 2.149);
+- `manifest.json`: content.json's `bytes` and `sha256`.
+
+content.md, content.txt, chunks.jsonl, content.doctags, the tables, the PDF's
+text and every other file are unchanged in all 26 cases.
+
+**Fixtures.** The 101 HTML fixtures under `tests/fixtures/`, run straight
+through the bridge (not captured, so with no snapshot's measurements), read
+as on master on every text surface but four:
+
+- `span_joins`: the CSV reads `Ter ma sh` and `sko val der`, as content.md
+  always did, where it ran the spans no snapshot measured into one word.
+- `inline_joins`: between `<code>vrin</code>`, a `<br>` and
+  `<code>tosk</code>` in a cell, the backend keeps a run of only whitespace,
+  its form for a boundary between two code runs. content.json has the item,
+  content.doctags an empty `<text></text>` for it, and the chunks' doc_items
+  after it are numbered one higher; content.md does not change.
+- `line_breaks`: `long<wbr>word` reads "longword", as the page draws it and
+  the snapshot writes it (`test_snapshot_line_breaks`), where docling's join
+  read "long word". Nothing is drawn at a `<wbr>`, so the bridge writes no
+  gap there.
+- `long_table`: its `<tfoot>` row (P130).
+
+**Real captures.** The 377 distinct `content.html` files of the saved
+captures (P48-5's set, grown), each the bridge's exact input, extracted with
+master's bridge on docling-slim 2.142.1 and docling-core 2.105.0 and with
+this one: 304 are the same on every text surface (content.md, content.txt,
+chunks, doctags, tables and warnings), and content.json differs beyond its
+stamp on 351, by the runs' whitespace and the captions' parent. Of the 73
+that move:
+
+- 27 change only where content.md writes emphasis, code and link markers:
+  their content.txt, and their content.md with the markers taken out, are
+  unchanged. Two elements of one formatting or link with whitespace between
+  them, `<code>isna()</code> <code>DataFrame</code>`, were one run to the old
+  backend, which dropped the whitespace text and joined the two with a
+  space; 2.147 reads that whitespace as a plain run, so each element is its
+  own run and keeps its own markers: `` `isna()` `DataFrame` `` for
+  `` `isna() DataFrame` ``, `*info()* *(your answer)*` for
+  `*info() (your answer)*`. That is the page's markup, and what
+  docling-core's own export of content.json writes; the old run put a space
+  that was not code inside a code span. One page also has a link's leading
+  space outside its brackets, by the serializer's hoisting.
+- 3 split a paragraph at a `<br><br>` before formatted text, where the old
+  backend ran on: 2.147 ends a paragraph there, as both versions already did
+  before plain text. 9 more pages' chunks split at such a break, as their
+  items now do, with content.md and content.txt unchanged.
+- 2 read two spaces in an image's alt text or a caption as one.
+- 1 files an article header's "Also available in" language links as page
+  chrome, as everything in a `<header>` above the first heading is (P71).
+  The furniture test compared a block's text joined with a space between
+  every item to the region's, read with the joins, so a block holding a
+  touching link never matched its region and reached the body.
+- 21 have table cells that gained a space and nothing else, 117 cells in
+  all, where the page draws a link and the label after it apart: the CSV
+  ran them into one word (`…its titleLink · completed`) that content.md kept
+  apart.
+- 17 renumber the chunks' doc_items after a run of only whitespace between
+  two code runs, 8 of them among the 21, and 1 differs only in its doctags.
+
+No page's warnings change.
+
+**The Drive's WebShot PDFs.** 516 WebShot PDFs under the Drive folder P60-4
+scanned, read only, embed a `content.html`; 190 of those are not among the
+377, and were extracted the same two ways. 176 are the same on every text
+surface and no page's warnings change. Of the 14 that move:
+
+- 3 read two spaces as one: a social link's label, a byline's two names,
+  and a formula written as TeX text (`\approx  \frac`), which TeX reads
+  the same either way.
+- 1 is an article header's language links again, now chrome.
+- 4 have table cells that gained a space and nothing else, 20 in all.
+- 2 split chunks at a `<br><br>`, with content.md and content.txt
+  unchanged, and the rest differ only in their doctags or in the chunks'
+  doc_items references, for the reasons above.
+
+### P131-5 — the tests
+
+- `tests/test_inline_whitespace_contract.py`, on
+  `tests/fixtures/inline_whitespace_contract.html` (made-up words): links and
+  emphasis mid-sentence, touching sub- and superscripts and a formatted part
+  of a word, a link the snapshot measured drawn apart, spans it did not
+  measure, a list item's parts with a `<br>`, and each case of P131-2's
+  captures. It loads content.json with docling-core and exports it with the
+  defaults: the stamp is 1.11.0 with no migration warning, the runs carry
+  the page's whitespace on one side of each boundary, no word merges and no
+  space doubles, the touching joins are one word, and content.md and
+  content.txt are those exports line for line. A unit test holds the
+  line-ending blanks to one line: a cell's and a `<pre>`'s are left alone.
+  A second fixture, `picture_caption_layer.html`, has a nav's logo and a
+  cover above the first heading: the cover's caption reaches content.md,
+  and neither the logo's caption nor the nav does. With master's bridge
+  all five fail on this change's pair (`Read the  [quarvel guide](…)
+  before`, `- See the[moltrin list]…`, `The vashtel dashboard[Open in a
+  new tab]`, the nav in content.md), and the first four on docling-slim
+  2.142.1 with docling-core 2.106.0, webshot-ai#125's pair (`Read
+  the[quarvel guide](…)before the*stendrik*review`).
+- The marker tests are now tests of the gaps: `space_inline_gaps` leaves a
+  page with whitespace at every edge as it is and writes its spaces in one
+  pass, the documents with and without the gaps hold the same items, and a
+  page holding U+FDD0 or U+FDD1, by itself or as any character reference,
+  reads as any other with no warning.
+- Tests that read content.json's runs join them as docling-core does, with
+  nothing between, or compare their text stripped.
+- `test_pre_code_text`'s list of sections docling lays out on its own grows
+  from one to nine, since 2.147 reads a `<pre>`'s text verbatim and 2.149
+  keeps its `<code>` siblings in one block; the bridge still reads the other
+  eleven, and the module-hook test now checks one of those.
+
+### P131-6 — a line ending either side of a hidden element
+
+The Claude review of this change found a breadcrumb reading as one word.
+`<a>Home</a>`, a line ending, `<span aria-hidden="true">/</span>`, a line
+ending and `<a>Docs</a>` read "HomeDocs", where master's bridge read "Home
+Docs". The backend skips both line endings, since each is a text of only
+line endings between two elements, and reads nothing of the hidden span.
+`_InlineJoins` left the first line ending pending as a blank to write as a
+space. The second then reached it with no word before it, since the text
+before was the first line ending, and dropped that blank without starting
+its own, so no space was written.
+
+The blank now stays pending across another text of line endings on the
+same line, so its one space stands for the whole run up to the next word.
+A whitespace text that is not only line endings is one the backend reads,
+and a line or block crossed between them still drops the blank, as before.
+
+The fixture gains the breadcrumb with made-up words ("Quenmoor Valdrith"),
+and the line-ending unit test the reviewer's own case. Against the bridge
+before this fix three of the five tests fail and with it all pass. The 377
+saved captures and the 190 pages from WebShot PDFs of P131-4, extracted
+with the bridge before this fix and with it, are the same on every text
+surface and in content.json: no saved page has the pattern, which is why
+the scan did not find it.

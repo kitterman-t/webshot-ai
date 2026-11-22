@@ -20,19 +20,34 @@ versions rather than assumed (docs/09 S3 and the Phase 2 corrections):
 - The backend does not record image URIs on `PictureItem`s, so pictures are
   matched to harvested assets by document order, with a hard count check —
   a mismatch raises rather than mis-attributing OCR text.
-- The backend strips every text node and keeps no record of where the source
-  had whitespace, and docling-core's serializers join the parts of an inline
-  group with a space, so "H<sub>0</sub>" reached every text surface as "H 0"
-  and "un<b>break</b>able" as "un break able"; it merges a `<span>`'s text
-  with the text beside it with a space too, so "un<span>break</span>able" read
-  the same. Where an inline element touches the text beside it is carried
-  through the backend as two marker characters (docs/09 P14-56, P48), for a
-  span and the rest only where the snapshot measured the page drawing the two
-  touching (P70).
+- Until docling-slim 2.147 the backend stripped every text node, and until
+  docling-core 2.106 the serializers joined the parts of an inline group with
+  a space, so "H<sub>0</sub>" reached every text surface as "H 0" and
+  "un<b>break</b>able" as "un break able"; the bridge carried each join
+  through the backend as a marker character (docs/09 P14-56, P48). Now each
+  run keeps the whitespace the source has at its edges, the inline
+  whitespace contract of docling-core's schema 1.11, and the serializers join
+  runs with nothing between, so text the markup runs together is one word.
+  The page does not always draw it so: a span's margins, a link's icon, a box
+  of its own or an image keep apart two texts that touch in the markup. The
+  bridge writes the space the page shows there before the backend reads the
+  page: at an edge the snapshot measured drawn apart, at a span's edge it
+  did not measure (P70), and beside a box, an image or a control. It writes
+  one too where the backend would lose the page's own: a line ending it
+  skips between two elements, and a space only a hidden element holds. So
+  each run of `content.json` carries what the page shows at its edges
+  (docs/09 P131).
+- docling-slim 2.149 hangs a picture's caption under its picture, inside
+  the list or block the picture stands in. The caption, often made of an
+  image's alt text, which no text of the page holds, is no part of that
+  block: it is decided by its own text, as it was when it hung off the
+  body. And since 2.147 a `<figcaption>` of only whitespace is a caption to
+  the backend, which no longer captions its figure with the image's alt
+  text, so the bridge takes that whitespace out first (docs/09 P131).
 - The backend makes no item of an `<li>` with no text of its own, so a list
   that item holds hangs straight off the outer list, the item has no line in
   content.md, and an ordered list given a start number counts the items after
-  it one short. A third marker character stands in for the item's text until
+  it one short. A marker character stands in for the item's text until
   the document is built (docs/09 P45). A picture or a table that is all an
   item holds was dropped with it, from every surface (docs/09 P52).
 - The backend reads a `<pre>` in a list item into the item's line with its
@@ -63,7 +78,7 @@ versions rather than assumed (docs/09 S3 and the Phase 2 corrections):
   never visits what it holds, so a picture, a table or a list in a term was
   dropped from every surface. The conversion drives a subclass of the backend
   that visits a term as the backend visits a list item, and a term with no
-  text of its own takes the third marker character as a list item does
+  text of its own takes that marker character as a list item does
   (docs/09 P60).
 - docling-slim 2.132's backend read only a description list's own `<dt>` and
   `<dd>` children, so a `<div>` grouping a term with its descriptions, which
@@ -92,6 +107,7 @@ import warnings
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
+from enum import IntEnum
 from functools import cache
 from html.parser import HTMLParser
 from io import BytesIO
@@ -237,11 +253,13 @@ class _SnapshotFacts(HTMLParser):
     element with one of their landmark roles) — the one kind of content that
     legitimately lands on the furniture layer.
 
-    It reads the page the backend parsed, join markers and all, and takes the
-    markers out of a caption's or a region's text as `extract` takes them out
-    of the items: a nav's `<span>Module 1</span><span>Overview</span>` is one
-    item, "Module 1Overview", which a region spelled "Module 1 Overview" did
-    not hold, so the item was filed in the body (docs/09 P70).
+    It reads the page the backend parsed, with the spaces `space_inline_gaps`
+    wrote, and joins a caption's or a region's texts as the backend joins an
+    item's: each as it is, with a space where an element outside
+    `INLINE_TAGS` stands. A nav's `<span>Module 1</span><span>Overview</span>`
+    that the page draws touching is one item, "Module 1Overview", which a
+    region spelled "Module 1 Overview" did not hold, so the item was filed in
+    the body (docs/09 P70).
 
     `clean` writes text as the backend writes an item's text. Chrome text is
     compared that way, because that is how every item's text arrives: the
@@ -287,7 +305,19 @@ class _SnapshotFacts(HTMLParser):
             furniture=not self._headed or bool(self._footer_depth),
         )
 
+    def _separate(self, tag: str) -> None:
+        """An element outside `INLINE_TAGS` separates the texts either side."""
+        if tag in INLINE_TAGS:
+            return
+        if self._caption_depth:
+            self._caption_parts.append(" ")
+        # Inside a `<pre>` too: its text joins the region when it ends, and a
+        # space before it is a space at its edge.
+        if self._chrome_depth:
+            self._chrome_parts.append(" ")
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._separate(tag)
         if self._pre_depth and (tag == "br" or tag in _PRE_LINE_TAGS):
             self._pre_parts.append(" ")
         if tag == "pre":
@@ -334,11 +364,11 @@ class _SnapshotFacts(HTMLParser):
                 self._pre_parts = []
         elif self._pre_depth and tag in _PRE_LINE_TAGS:
             self._pre_parts.append(" ")
+        # After a `<pre>`'s text, which it ends.
+        self._separate(tag)
         if tag == "caption" and self._caption_depth:
             self._caption_depth -= 1
-            self.table_captions[-1] = " ".join(
-                unmark_joins(" ".join(self._caption_parts)).split()
-            )
+            self.table_captions[-1] = " ".join("".join(self._caption_parts).split())
         # The end tag closes the innermost element of its name, and every
         # element still open inside it; one that closes nothing open is ignored.
         for index in range(len(self._open) - 1, -1, -1):
@@ -353,7 +383,7 @@ class _SnapshotFacts(HTMLParser):
                 self._chrome_depth -= 1
                 if not self._chrome_depth:
                     self.chrome_regions.append(
-                        self._normalized(unmark_joins(" ".join(self._chrome_parts)))
+                        self._normalized("".join(self._chrome_parts))
                     )
 
     def handle_data(self, data: str) -> None:
@@ -365,8 +395,9 @@ class _SnapshotFacts(HTMLParser):
             self._chrome_data(data)
 
     def _chrome_data(self, data: str) -> None:
-        if self._chrome_depth and data.strip():
-            self._chrome_parts.extend(data.split())
+        # Whitespace too: between two inline elements it is what keeps them apart.
+        if self._chrome_depth:
+            self._chrome_parts.append(data)
 
     def _normalized(self, text: str) -> str:
         # Cleaned before it is split: a soft hyphen or a zero-width space is
@@ -392,20 +423,10 @@ class _SnapshotFacts(HTMLParser):
         )
 
 
-#: Two Unicode noncharacters, which the standard keeps for a program's internal
-#: use: the first opens an inline element's text that touches the text before
-#: it, the second closes one that touches the text after it.
-JOINED_BEFORE = "\ufdd0"
-JOINED_AFTER = "\ufdd1"
-_JOIN_MARKS = (JOINED_BEFORE, JOINED_AFTER)
-#: A marker as a character reference, which the backend's parser reads as the
-#: character and `html.unescape` drops, as it drops every noncharacter.
-_JOIN_MARK_REF_RE = re.compile(
-    r"&#[xX]0*[fF][dD][dD][01](?![0-9a-fA-F])|&#0*6497[67](?![0-9])"
-)
-#: A marker with the space the backend put beside it, which the source never
-#: had: a marker is written only where no whitespace separated the two.
-_JOIN_MARK_RE = re.compile(f" ?{JOINED_BEFORE}|{JOINED_AFTER} ?")
+#: The two edges of an inline element's text, as `_InlineJoins` records where
+#: one joins the text beside it.
+_BEFORE = "before"
+_AFTER = "after"
 
 #: The backend method `extract` overrides to keep a footer's content in the
 #: footer. It is private to docling, so `extract` checks it is still there.
@@ -421,8 +442,9 @@ _VOID_INLINE_TAGS = frozenset({"wbr"})
 #: The elements whose text the backend gives a formatting or a link of its
 #: own: its `_FORMAT_TAG_MAP` (emphasis, strong, strikethrough, underline,
 #: sub/superscript, inline code) and `a`. Their text becomes an item apart
-#: from the text beside it, which every serializer joins to the next with a
-#: space, so "un<b>break</b>able" read "un **break** able" (docs/09 P48).
+#: from the text beside it, which every serializer joined to the next with a
+#: space before docling-core 2.106, so "un<b>break</b>able" read
+#: "un **break** able" (docs/09 P48).
 #: One joins the text it touches only at an edge the snapshot measured the
 #: page drawing touching (`TOUCH_ATTRIBUTE`): a link's icon or a padded code
 #: span is drawn apart from the word it runs into (P70-11). One that carries
@@ -432,6 +454,21 @@ _VOID_INLINE_TAGS = frozenset({"wbr"})
 #: measured edge, and without the attribute nowhere (`MEASURED_INLINE_TAGS`,
 #: docs/09 P70).
 _JOINED_TAGS = INLINE_TAGS - MEASURED_INLINE_TAGS - _VOID_INLINE_TAGS
+
+
+class _Separation(IntEnum):
+    """What stands between two texts the markup runs together, weakest first."""
+
+    #: Nothing: a `<wbr>`, a comment, or text the parser read in two pieces.
+    NONE = 0
+    #: An inline element's edge, which joins the two or keeps them apart.
+    EDGE = 1
+    #: Something drawn between the two: an image, a form control, an element
+    #: of `INLINE_TAGS` the page lays out as a box of its own.
+    BESIDE = 2
+    #: An element that ends a line or stands on lines of its own, so the
+    #: backend reads the text either side into separate lines or items.
+    LINE = 3
 
 
 @dataclass(slots=True)
@@ -454,29 +491,44 @@ class _OpenInline:
 
 
 class _InlineJoins(HTMLParser):
-    """Where each inline element touches the text beside it, as insertions.
+    """Where an inline element's text joins the text beside it, and where the
+    page keeps apart two texts its markup runs together.
 
     An element of `INLINE_TAGS` whose text starts with no whitespace between
-    it and the text before it gets `JOINED_BEFORE` at the start of its text;
-    one whose text ends with no whitespace before the text after it gets
-    `JOINED_AFTER` at the end. Offsets are into the parsed string, and a
-    marker goes inside the element's innermost text, never into a text node
-    of its own, which the backend would make an item of.
+    it and the text before it joins that text at its start; one whose text
+    ends with no whitespace before the text after it joins it at its end, as
+    `marks` records. Offsets are into the parsed string.
 
-    The text of an element the backend formats or links (`_JOINED_TAGS`)
-    becomes an item apart from the text beside it, which the serializers join
-    to the next with a space, so "un<b>break</b>able" read "un **break** able"
-    (docs/09 P48); the inline serializer joins the items at a marked edge.
-    The text of any other, a `<span>`, a `<mark>`, a `<small>`, is merged with
-    the text beside it into one item, with a space, so
-    "un<span>break</span>able" read "un break able"; the marker sits inside
-    that one string, and `extract` takes the space out with it. Either kind
-    is marked only where the snapshot measured the page drawing the two
-    glyphs touching (`TOUCH_ATTRIBUTE`): touching in the markup, a date
-    line's spans are drawn apart by their margins (docs/09 P70), and a link
-    by its icon (P70-11). An element of `_JOINED_TAGS` without the
-    attribute, from a snapshot that did not measure it, is marked wherever
-    the markup touches, as P48 marked it.
+    docling-slim's HTML backend keeps the whitespace the source has at the
+    edges of each run of text since 2.147, and docling-core's serializers
+    join the runs with nothing between since 2.106, so text the markup runs
+    together reaches every surface as one word: "un<b>break</b>able" reads
+    "unbreakable", as the page does (docs/09 P48, P131). The page does not
+    always draw it so. Touching in the markup, a date line's spans are drawn
+    apart by their margins (docs/09 P70), a link by its icon (P70-11), an
+    element the page's CSS lays out as a box of its own by its box, and the
+    text beside an image or a form control by the control. `gaps` gives the
+    start of each text the page keeps apart from the text before it, where
+    the markup has no whitespace between them, so `space_inline_gaps` can
+    write the space the page shows there.
+
+    An element is joined only where the snapshot measured the page drawing the
+    two glyphs touching (`TOUCH_ATTRIBUTE`). An element the backend formats or
+    links (`_JOINED_TAGS`) without the attribute, from a snapshot that did not
+    measure it, joins wherever the markup touches, as P48 joined it; any other
+    element of `INLINE_TAGS` without it joins nowhere, as P70 kept it.
+    Inside a `<pre>`, the bridge reads the text as the page lays it out
+    (docs/09 P55), so no gap is written there, and a block or a line break
+    separates the text either side of it by itself.
+
+    Two of the backend's readings need the same: it reads nothing of an
+    element it hides (`hidden`, `aria-hidden`, a hiding inline style), so
+    text there is not the text either side of a gap; and it skips a text of
+    only line endings between two elements, which is how the snapshot's
+    parser leaves the whitespace between two lines of markup, so
+    `<span>Harrowgate</span>`, a line ending and `<a>555.010.4477</a>` read
+    "Harrowgate555.010.4477". `blanks` gives each such whitespace between two
+    texts of one line, for `space_inline_gaps` to write as a space.
     """
 
     def __init__(self, source: str) -> None:
@@ -490,6 +542,45 @@ class _InlineJoins(HTMLParser):
         #: Where a closed element's text ended, until the next character says
         #: whether the element touches it.
         self._after_at: int | None = None
+        #: The last character of the text before, whatever stood between, and
+        #: the strongest separation between it and the next text so far.
+        self._text_last = ""
+        self._crossed = _Separation.NONE
+        #: Each place two texts meet with no whitespace between them in the
+        #: markup and no line between them: how they are separated, where the
+        #: first ends, and where the second starts.
+        self._meetings: list[tuple[_Separation, int, int]] = []
+        self._pre_depth = 0
+        #: The open elements, innermost last, each with whether the backend
+        #: hides what it holds.
+        self._elements: list[tuple[str, bool]] = []
+        #: Where the last text the backend reads ended.
+        self._visible_end = 0
+        self._visible_open = False
+        #: A whitespace text of line endings after a word, where it starts and
+        #: the end the next event gives it, until the next word says whether
+        #: one line runs through it.
+        self._blank: list[int] | None = None
+        self._blank_open = False
+        self.blanks: list[tuple[int, int]] = []
+
+    def gaps(self) -> list[int]:
+        """Where a text starts that the page keeps apart from the text before it.
+
+        Beside an image, a control or a box, always; at an inline element's
+        edge, unless the element joins the two there.
+        """
+        return sorted(
+            {
+                start
+                for separation, end, start in self._meetings
+                if separation == _Separation.BESIDE
+                or (
+                    (start, _BEFORE) not in self.marks
+                    and (end, _AFTER) not in self.marks
+                )
+            }
+        )
 
     def _event(self) -> int:
         line, column = self.getpos()
@@ -498,7 +589,57 @@ class _InlineJoins(HTMLParser):
             # Text runs up to the next event, so this is where it ended.
             self._text_end = offset
             self._text_open = False
+        if self._visible_open:
+            self._visible_end = offset
+            self._visible_open = False
+        if self._blank_open and self._blank is not None:
+            self._blank.append(offset)
+            self._blank_open = False
         return offset
+
+    def _hidden(self) -> bool:
+        return any(hidden for _, hidden in self._elements)
+
+    def _enter(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in _VOID_TAGS:
+            return
+        values = {name: value or "" for name, value in attrs}
+        style = re.sub(r"\s+", "", values.get("style", "").lower())
+        hidden = (
+            "hidden" in values
+            or values.get("aria-hidden", "").strip().lower() in {"true", "1", "yes"}
+            or "display:none" in style
+            or "visibility:hidden" in style
+            or "visibility:collapse" in style
+            or bool(re.search(r"opacity:0(?:;|$)", style))
+        )
+        self._elements.append((tag, hidden))
+
+    def _leave(self, tag: str) -> None:
+        for index in range(len(self._elements) - 1, -1, -1):
+            if self._elements[index][0] == tag:
+                del self._elements[index:]
+                return
+
+    def _cross(self, separation: _Separation) -> None:
+        self._crossed = max(self._crossed, separation)
+
+    def _cross_element(self, tag: str) -> None:
+        """An element outside `INLINE_TAGS` starts or ends here.
+
+        A block inside an inline element ends no line to the backend, which
+        reads all an inline element holds as one line: a video site's
+        `<span>Tessaly Clips</span><span><div></div></span><span>and 2
+        more</span>` was "Tessaly Clipsand 2 more". A line break still
+        ends one. Nothing in an element the backend hides ends one either,
+        since it reads none of it, while the page draws the element's box.
+        """
+        line = (
+            tag in _LINE_SEPARATING_TAGS
+            and not self._hidden()
+            and (not self._open or tag in {"br", "pre"})
+        )
+        self._cross(_Separation.LINE if line else _Separation.BESIDE)
 
     def _separate(self) -> None:
         self._last = ""
@@ -511,10 +652,15 @@ class _InlineJoins(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self._event()
+        self._enter(tag, attrs)
+        if tag == "pre":
+            self._pre_depth += 1
         if tag not in INLINE_TAGS:
+            self._cross_element(tag)
             self._separate()
             return
         if tag in _VOID_INLINE_TAGS:
+            # A line may break at a `<wbr>`, and nothing is drawn at one.
             return
         # A formula's holder touches the text beside it wherever the page
         # draws the formula itself too: MathJax's own rendering of 22/40
@@ -522,7 +668,10 @@ class _InlineJoins(HTMLParser):
         # joined read as one number (docs/09 P70).
         box = any(name in (DISPLAY_ATTRIBUTE, MATH_ATTRIBUTE) for name, _ in attrs)
         if box:
+            self._cross(_Separation.BESIDE)
             self._separate()
+        else:
+            self._cross(_Separation.EDGE)
         measured = [value or "" for name, value in attrs if name == TOUCH_ATTRIBUTE]
         if tag in _JOINED_TAGS and not measured:
             # A snapshot from before docs/09 P70-11 measured no formatted
@@ -530,9 +679,9 @@ class _InlineJoins(HTMLParser):
             joins_before = joins_after = True
         else:
             # Only the edges the snapshot measured touching: a span that
-            # names none, as no snapshot did before docs/09 P70, keeps
-            # docling's space at both, and so does a link it measured drawn
-            # apart, which it records as an empty attribute.
+            # names none, as no snapshot did before docs/09 P70, keeps its
+            # text apart at both, and so does a link it measured drawn apart,
+            # which it records as an empty attribute.
             touches = set(" ".join(measured).split())
             joins_before, joins_after = "before" in touches, "after" in touches
         self._open.append(
@@ -548,13 +697,20 @@ class _InlineJoins(HTMLParser):
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self._event()
         if tag not in INLINE_TAGS:
+            self._cross_element(tag)
             self._separate()
 
     def handle_endtag(self, tag: str) -> None:
         self._event()
         if tag not in INLINE_TAGS:
+            if tag == "pre" and self._pre_depth:
+                self._pre_depth -= 1
+            # Before the element is left: its own end is inside it.
+            self._cross_element(tag)
+            self._leave(tag)
             self._separate()
             return
+        self._leave(tag)
         depth = next(
             (
                 index
@@ -568,8 +724,10 @@ class _InlineJoins(HTMLParser):
         element = self._open[depth]
         del self._open[depth:]
         if element.box:
+            self._cross(_Separation.BESIDE)
             self._separate()
             return
+        self._cross(_Separation.EDGE)
         if element.first is None:
             return
         offset, character = element.first
@@ -579,7 +737,7 @@ class _InlineJoins(HTMLParser):
             and not element.before.isspace()
             and not character.isspace()
         ):
-            self.marks.add((offset, JOINED_BEFORE))
+            self.marks.add((offset, _BEFORE))
         # Set, never cleared: an element inside this one that ends at the same
         # character may already have, and both are read off the same two
         # glyphs.
@@ -592,58 +750,97 @@ class _InlineJoins(HTMLParser):
             return
         if self._after_at is not None:
             if not data[0].isspace():
-                self.marks.add((self._after_at, JOINED_AFTER))
+                self.marks.add((self._after_at, _AFTER))
             self._after_at = None
+        if not self._pre_depth and not self._hidden():
+            self._read(data, offset)
         for element in self._open:
             if element.first is None:
                 element.first = (offset, data[0])
         self._text_open = True
         self._last = data[-1]
 
+    def _read(self, data: str, offset: int) -> None:
+        """Note a text the backend reads, outside a `<pre>`."""
+        one_line = self._crossed < _Separation.LINE
+        word_before = bool(self._text_last) and not self._text_last.isspace()
+        if not data.strip():
+            parent = self._elements[-1][0] if self._elements else ""
+            line_ending = "\n" in data or "\r" in data
+            if self._blank is not None and not word_before and one_line and line_ending:
+                # Another text of line endings after the blank, with only an
+                # element the backend hides between: the backend skips this
+                # one too, so the blank still stands for all of it, and its
+                # one space is the only one between the two words.
+                # `<a>Home</a>`, a line ending, `<span aria-hidden>/</span>`,
+                # a line ending and `<a>Docs</a>` read "HomeDocs" when the
+                # second line ending dropped the blank (docs/09 P131-6).
+                self._read_done(data)
+                return
+            self._blank = None
+            if one_line and word_before and line_ending and parent not in {"td", "th"}:
+                # A line ending in a cell ends a paragraph of it to the
+                # backend, as it always has, so a cell's is left to it.
+                self._blank = [offset]
+                self._blank_open = True
+        else:
+            blank = self._blank
+            if blank is not None and len(blank) == 2 and one_line:
+                self.blanks.append((blank[0], blank[1]))
+            self._blank = None
+            if (
+                self._crossed in (_Separation.EDGE, _Separation.BESIDE)
+                and word_before
+                and not data[0].isspace()
+            ):
+                self._meetings.append((self._crossed, self._visible_end, offset))
+        self._read_done(data)
+
+    def _read_done(self, data: str) -> None:
+        self._crossed = _Separation.NONE
+        self._text_last = data[-1]
+        self._visible_open = True
+
     def handle_comment(self, data: str) -> None:
         self._event()
 
 
-def mark_inline_joins(html: str) -> str:
-    """`html` with each inline element's touching edges marked for the backend.
+def space_inline_gaps(html: str) -> str:
+    """`html` with a space wherever the page keeps two texts apart that touch in it.
 
-    The backend normalizes every text node with `" ".join(text.split())`,
-    which drops the one fact the serializers would need: whether "un" and its
-    bold "break" had whitespace between them. Characters survive it, so the
-    fact travels as one, and `extract` removes every marker once the document
-    is built. A marked page opens with a byte-order mark: given bytes with no
-    declared encoding, the backend's charset detection read the markers' bytes
-    as cp775 or cp949 and garbled the text around them.
+    The backend keeps the whitespace the source has between two runs of text
+    and adds none, which is right wherever the page runs the two together and
+    wrong wherever the page draws them apart without whitespace in the markup
+    (`_InlineJoins`). The space written there is what every text surface and
+    `content.json`'s runs then carry, so each run holds the whitespace the
+    page shows at its edges, the inline whitespace contract of docling-core's
+    schema 1.11 (docs/09 P131).
     """
     parser = _InlineJoins(html)
     parser.feed(html)
     parser.close()
-    if not parser.marks:
+    # Each gap is an empty span to write a space into, each blank a span of
+    # whitespace to write as one; the two never meet, since a gap is where
+    # the markup has no whitespace.
+    edits = sorted([*((offset, offset) for offset in parser.gaps()), *parser.blanks])
+    if not edits:
         return html
-    # Assembled once: inserting each marker by slicing the whole page copied
-    # it once per marker, and a page has a marker for nearly every link
-    # followed by a comma (docs/09 P48).
-    pieces = ["\ufeff"]
+    # Assembled once: inserting each space by slicing the whole page copied
+    # it once per space, and a page has a gap beside nearly every image or
+    # span (docs/09 P48).
+    pieces: list[str] = []
     start = 0
-    for offset, mark in sorted(parser.marks):
-        pieces += (html[start:offset], mark)
-        start = offset
+    for begin, end in edits:
+        pieces += (html[start:begin], " ")
+        start = end
     pieces.append(html[start:])
     return "".join(pieces)
 
 
-def _marked(text: str) -> bool:
-    return JOINED_BEFORE in text or JOINED_AFTER in text
-
-
-def unmark_joins(text: str) -> str:
-    """`text` with each join marker, and the space the backend put beside it, removed."""
-    return _JOIN_MARK_RE.sub("", text)
-
-
-#: A third noncharacter: the text of a list item or a description-list term
-#: that has none of its own but holds a list, a picture or a table, so the
-#: backend makes an item of it (docs/09 P45, P52, P60).
+#: A Unicode noncharacter, which the standard keeps for a program's internal
+#: use: the text of a list item or a description-list term that has none of
+#: its own but holds a list, a picture or a table, so the backend makes an
+#: item of it (docs/09 P45, P52, P60).
 EMPTY_ITEM = "\ufdd2"
 #: The stand-in as a character reference, which the backend's parser reads as
 #: the character and `html.unescape` drops, as it drops every noncharacter.
@@ -801,7 +998,9 @@ def mark_empty_items(html: str) -> str:
     else. The backend then makes an item of it, numbered among its siblings,
     with what it holds inside it (a term's, as `_reading_terms` reads them),
     and `extract` empties its text once the document is built. A marked page
-    opens with a byte-order mark, as `mark_inline_joins` explains.
+    opens with a byte-order mark: given bytes with no declared encoding, the
+    backend's charset detection read a noncharacter's bytes as cp775 or cp949
+    and garbled the text around it (docs/09 P48).
     """
     lowered = html.lower()
     if "<li" not in lowered and "<dt" not in lowered:
@@ -811,8 +1010,7 @@ def mark_empty_items(html: str) -> str:
     parser.close()
     if not parser.marks:
         return html
-    # Built in one pass: slicing the page once per mark, as the join markers
-    # are inserted, copies it each time, and 2,000 items on a 1.1 MB page took
+    # Built in one pass: slicing the page once per mark copies it each time, and 2,000 items on a 1.1 MB page took
     # 1.5 s (docs/09 P45-3).
     pieces: list[str] = []
     start = 0
@@ -889,8 +1087,9 @@ _LINE_BREAK_REF_RE = re.compile(r"&#[xX]0*[eE]000(?![0-9a-fA-F])|&#0*57344(?![0-
 def write_line_breaks(text: str, *, lines: bool) -> str:
     """`text` with each line break the backend left in it written out.
 
-    The backend joins the runs of a text with a space, so a line break
-    arrives with one either side of it, and those go with it. In a block of
+    A line break can arrive with a space either side of it, the page's or,
+    before docling-slim 2.147, the one the backend joined runs with, and
+    those go with it. In a block of
     code (`lines`) each one is a line ending, as a paragraph's is. Anywhere
     else the backend reads the text onto one line, joining each run of
     whitespace in it into a space, and a line break is whitespace there too.
@@ -929,7 +1128,8 @@ _OWN_TEXT_SKIPS = frozenset({"ul", "ol", "dl", "table"})
 @dataclass(slots=True)
 class _Holder:
     caption: bool
-    #: Where each of its own `<br>` tags starts and ends.
+    #: Where each of its own `<br>` tags starts and ends, and in a caption
+    #: each of its texts of only whitespace too.
     breaks: list[tuple[int, int]] = field(default_factory=list)
     text: bool = False
     #: How many lists or tables of its own are open, whose text is theirs.
@@ -942,7 +1142,11 @@ class _LoneBreaks(HTMLParser):
     What counts as an element's text is what the backend reads as it: a list
     item's, term's or description's leaves out the lists and tables it holds,
     and a caption's is all of it. The page's own U+E000 is no text, as the
-    backend deletes it.
+    backend deletes it. A caption's whitespace goes with its line breaks:
+    since docling-slim 2.147 the backend keeps a run of only whitespace, and
+    a `<figcaption>` holding one is a caption to it, so the figure was no
+    longer captioned with its image's alt text, as an empty one is (docs/09
+    P131).
     """
 
     def __init__(self, source: str) -> None:
@@ -953,12 +1157,24 @@ class _LoneBreaks(HTMLParser):
         #: whose own text it is left out of.
         self._open: list[tuple[str, _Holder | None, _Holder | None]] = []
         self._holders: list[_Holder] = []
+        #: A caption's text of only whitespace, where it starts, until the
+        #: next event says where it ends.
+        self._blank: tuple[_Holder, int] | None = None
+        self._length = len(source)
+
+    def _offset(self) -> int:
+        line, column = self.getpos()
+        offset = self._line_starts[line - 1] + column
+        if self._blank is not None:
+            holder, start = self._blank
+            holder.breaks.append((start, offset))
+            self._blank = None
+        return offset
 
     def _line_break(self) -> None:
         holder = self._holders[-1] if self._holders else None
         if holder is not None and not holder.skipping:
-            line, column = self.getpos()
-            start = self._line_starts[line - 1] + column
+            start = self._offset()
             holder.breaks.append((start, start + len(self.get_starttag_text() or "")))
 
     def _within(self, tag: str) -> str:
@@ -977,6 +1193,7 @@ class _LoneBreaks(HTMLParser):
         return self._open[depth - 1][0] if depth else ""
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._offset()
         if tag == "br":
             self._line_break()
         if tag in _VOID_TAGS:
@@ -998,10 +1215,12 @@ class _LoneBreaks(HTMLParser):
         self._open.append((tag, opened, skipped))
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._offset()
         if tag == "br":
             self._line_break()
 
     def handle_endtag(self, tag: str) -> None:
+        self._offset()
         if all(open_tag != tag for open_tag, _, _ in self._open):
             return
         while self._open:
@@ -1019,15 +1238,27 @@ class _LoneBreaks(HTMLParser):
             skipped.skipping -= 1
 
     def handle_data(self, data: str) -> None:
+        start = self._offset()
         if not data.replace(LINE_BREAK, "").strip():
+            holder = self._holders[-1] if self._holders else None
+            if data and holder is not None and holder.caption:
+                self._blank = (holder, start)
             return
         for holder in reversed(self._holders):
             if holder.skipping:
                 break
             holder.text = True
 
+    def handle_comment(self, data: str) -> None:
+        self._offset()
+
     def close(self) -> None:
         super().close()
+        # Text that runs to the end of the page ends there.
+        if self._blank is not None:
+            holder, start = self._blank
+            holder.breaks.append((start, self._length))
+            self._blank = None
         while self._open:
             _, opened, skipped = self._open.pop()
             self._close(opened, skipped)
@@ -1042,9 +1273,10 @@ def drop_lone_line_breaks(html: str) -> str:
     `<li><br><ul>` an item holding the list, where `<li></li>` is none and
     the list it holds is the outer list's. Without its line breaks such an
     element reads as it does empty, numbered, nested and captioned as the
-    backend does that (docs/09 P56).
+    backend does that (docs/09 P56). A caption with no text loses its
+    whitespace too (docs/09 P131).
     """
-    if "<br" not in html:
+    if "<br" not in html and "caption" not in html:
         return html
     parser = _LoneBreaks(html)
     parser.feed(html)
@@ -1062,8 +1294,11 @@ def drop_lone_line_breaks(html: str) -> str:
 
 def _kept_line_break_marks(text: str) -> str:
     """What the backend made of a one-paragraph text before docling-slim
-    2.140: the text stripped, its `<br>` characters left in."""
-    return text.strip()
+    2.140: its `<br>` characters left in. Not stripped, as the backend's own
+    function does not strip one since 2.147: it runs on each run of an item's
+    line too, whose edge whitespace is the boundary between it and the next,
+    and the backend trims the line's edges itself (docs/09 P131)."""
+    return text
 
 
 @cache
@@ -1087,6 +1322,75 @@ def _keep_line_break_marks() -> None:
         html_backend._resolve_line_breaks = _kept_line_break_marks
 
 
+#: Two spaces or more, which a browser draws as one outside preformatted text.
+_SPACE_RUN_RE = re.compile(" {2,}")
+#: A run of line breaks with the spaces beside them, which on one line of text
+#: is one space.
+_LINE_BREAK_RUN_RE = re.compile(f" *{LINE_BREAK}[ {LINE_BREAK}]*")
+
+
+def _respaced_parts(parts: list[Any], *, is_code: Callable[[Any], bool]) -> list[Any]:
+    """The parts of one line, spaced as the backend spaces them; those it empties.
+
+    The backend's `normalize_whitespace`, run again once a line break in a
+    part has become a space: each boundary between two parts is one space at
+    most, carried by the part before it, or by the one after where the part
+    before is code, since a serializer writes a code part's whitespace inside
+    its backticks; the line's own edges have none. A part left with no text
+    goes, but one of only whitespace between two code parts is that boundary,
+    as the backend keeps one. An item that is not a text (a formula, a group)
+    is a boundary of its own and is left as it is.
+    """
+    gone: list[Any] = []
+    kept: list[Any] = []
+    pending = False
+    spacer: Any = None
+
+    def set_text(part: Any, text: str) -> None:
+        lead = text[: len(text) - len(text.lstrip())]
+        trail = text[len(text.rstrip()) :] if text.strip() else ""
+        part.text = text
+        orig = part.orig.strip()
+        part.orig = f"{lead}{orig}{trail}" if orig else text
+
+    for part in parts:
+        if not isinstance(getattr(part, "text", None), str):
+            kept, pending, spacer = [], False, None
+            continue
+        text = part.text
+        core = text.strip()
+        if not core:
+            pending = pending or bool(text)
+            if spacer is None and kept and text:
+                spacer = part
+            else:
+                set_text(part, "")
+                gone.append(part)
+            continue
+        if (pending or text[:1].isspace()) and kept:
+            left = kept[-1]
+            if spacer is not None and is_code(left) and is_code(part):
+                set_text(spacer, " ")
+                spacer = None
+            elif not is_code(left) or is_code(part):
+                set_text(left, left.text.rstrip() + " ")
+            else:
+                core = " " + core
+        if spacer is not None:
+            set_text(spacer, "")
+            gone.append(spacer)
+            spacer = None
+        pending = text[-1:].isspace()
+        set_text(part, core)
+        kept.append(part)
+    if kept:
+        set_text(kept[-1], kept[-1].text.rstrip())
+    if spacer is not None:
+        set_text(spacer, "")
+        gone.append(spacer)
+    return gone
+
+
 def _write_document_line_breaks(document: Any) -> None:
     """Every line break the backend left in `document`'s texts, written out.
 
@@ -1099,6 +1403,11 @@ def _write_document_line_breaks(document: Any) -> None:
     breaks had them taken out before the backend read it
     (`drop_lone_line_breaks`), so one that comes here empty is one that
     function did not foresee, and goes as the backend makes none.
+
+    A part of a line carries the whitespace at its edges since docling-slim
+    2.147 (docs/09 P131), so a line break there is the space between it and
+    the next part, and the line's parts are spaced again as the backend
+    spaces them (`_respaced_parts`): `**Bold**<br>*italic*` keeps its space.
     """
     from docling_core.types.doc.document import CodeItem, InlineGroup, ListItem
     from docling_core.types.doc.labels import DocItemLabel
@@ -1107,6 +1416,7 @@ def _write_document_line_breaks(document: Any) -> None:
         return item.parent.resolve(document) if item.parent else None
 
     gone: list[Any] = []
+    lines_of_parts: dict[int, Any] = {}
     for item in document.texts:
         if LINE_BREAK not in item.text and LINE_BREAK not in item.orig:
             continue
@@ -1114,12 +1424,22 @@ def _write_document_line_breaks(document: Any) -> None:
         part = isinstance(holder, InlineGroup)
         in_item_line = part and isinstance(parent_of(holder), ListItem)
         lines = isinstance(item, CodeItem) and not in_item_line
+        if part and not lines:
+            item.text = _LINE_BREAK_RUN_RE.sub(" ", item.text)
+            item.orig = _LINE_BREAK_RUN_RE.sub(" ", item.orig)
+            lines_of_parts[id(holder)] = holder
+            continue
         item.text = write_line_breaks(item.text, lines=lines)
         item.orig = write_line_breaks(item.orig, lines=lines)
         if not (item.text or item.children) and (
             part or isinstance(item, ListItem) or item.label == DocItemLabel.CAPTION
         ):
             gone.append(item)
+    for holder in lines_of_parts.values():
+        gone += _respaced_parts(
+            [child.resolve(document) for child in holder.children],
+            is_code=lambda part: isinstance(part, CodeItem),
+        )
     # An inline group, and a list item whose text was all its line's parts,
     # go with the last of the parts they held.
     refs = {item.self_ref for item in gone}
@@ -1925,6 +2245,36 @@ _PRE_LINE_TAGS = frozenset(
         "ul",
     }
 )
+#: The elements outside `INLINE_TAGS` that end a line or stand on lines of
+#: their own, so the backend reads the text either side of one as separate
+#: lines or items, or within one item with a space of its own between (its
+#: `_PARA_BREAKERS`): the blocks above, the parts of a table and a form, and
+#: a line break. Every other element is drawn beside the text it stands in,
+#: an image or a control, whose own text (a `<select>`'s options, a
+#: `<textarea>`'s) the backend reads into the line too, so `_InlineJoins`
+#: keeps the text either side of it apart.
+_LINE_SEPARATING_TAGS = _PRE_LINE_TAGS | frozenset(
+    {
+        "body",
+        "br",
+        "caption",
+        "center",
+        "col",
+        "colgroup",
+        "fieldset",
+        "form",
+        "head",
+        "hgroup",
+        "html",
+        "legend",
+        "tbody",
+        "td",
+        "tfoot",
+        "th",
+        "thead",
+        "title",
+    }
+)
 #: The backend methods `_code_block_backend` overrides or calls. They are
 #: private to docling, so `extract` checks they are still there.
 _BACKEND_HOOKS = (
@@ -2477,6 +2827,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         DoclingDocument,
         FloatingItem,
         Formatting,
+        FormulaItem,
         GroupItem,
         InlineGroup,
         ListItem,
@@ -2504,21 +2855,6 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     # ours — body markup cannot contain <title>, it is not in the sanitizer's
     # allowlist).
     docling_html = TITLE_ELEMENT_RE.sub("", sanitized_html, count=1)
-    # A page that carries the markers itself would have its own characters
-    # read as joins and removed, so it keeps the backend's spacing instead.
-    # It carries one written as a reference too: the backend reads `&#xFDD0;`
-    # as the character (docs/09 P54).
-    markable = not any(
-        mark in docling_html for mark in _JOIN_MARKS
-    ) and not _JOIN_MARK_REF_RE.search(docling_html)
-    if not markable:
-        extraction_warnings.append(
-            "the page contains U+FDD0 or U+FDD1, the characters WebShot uses to "
-            "keep the text of an inline element (a link, emphasis, inline code, "
-            "a subscript or superscript, a span) joined to the text it touches, "
-            "so content.md, content.txt and chunks.jsonl separate each such part "
-            "from its neighbours with a space (docs/09 P14-56, P48, P70)."
-        )
     # Likewise a page carrying the stand-in for an item's missing text.
     items_markable = EMPTY_ITEM not in docling_html and not _EMPTY_ITEM_REF_RE.search(
         docling_html
@@ -2677,13 +3013,13 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             backend=backend,
             filename="content.html",
         )
-        parsed = drop_lone_line_breaks(docling_html)
-        if markable:
-            parsed = mark_inline_joins(parsed)
-        # The snapshot's facts are read off the text the backend reads, join
-        # markers and all, before the empty items' stand-ins, which no region
-        # or caption of the page holds (docs/09 P45, P70).
-        joins_marked = parsed
+        # The space the page draws between two texts its markup runs
+        # together, which the backend then keeps (docs/09 P70, P131).
+        parsed = space_inline_gaps(drop_lone_line_breaks(docling_html))
+        # The snapshot's facts are read off the text the backend reads, gaps
+        # and all, before the empty items' stand-ins, which no region or
+        # caption of the page holds (docs/09 P45, P70).
+        gaps_spaced = parsed
         # After the lone line breaks are out: an item whose only content
         # beside its lists was `<br>`s holds only its lists (docs/09 P45, P56).
         if items_markable:
@@ -2707,24 +3043,14 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
     held = {id(item) for _, items in _item_lists(document) for item in items}
     in_footer = {item.self_ref for item in made_in_footer if id(item) in held}
 
-    # Take the join markers back out before anything reads a text, keeping
-    # which items they opened or closed. A marker inside a text, where the
-    # backend flattened an element into one string (a heading, a table cell)
-    # or merged a span's text with the text beside it, takes the backend's
-    # space with it, which joins those two in place.
-    joined_before: set[str] = set()
-    joined_after: set[str] = set()
-    if markable:
-        for item in document.texts:
-            if item.text.startswith(JOINED_BEFORE):
-                joined_before.add(item.self_ref)
-            if item.text.endswith(JOINED_AFTER):
-                joined_after.add(item.self_ref)
-            item.text = unmark_joins(item.text)
-            item.orig = unmark_joins(item.orig)
-        for table in document.tables:
-            for cell in table.data.table_cells:
-                cell.text = unmark_joins(cell.text)
+    # The backend collapses each text node's whitespace and then joins runs
+    # of one formatting verbatim, so two that each kept a space at the edge
+    # they share, `<span>5 minute read </span><span> 12 Oct</span>`, read
+    # with two spaces, which no page draws outside preformatted text: a
+    # browser collapses the two (docs/09 P131). Code and formulas keep theirs.
+    for item in document.texts:
+        if not isinstance(item, CodeItem | FormulaItem) and "  " in item.text:
+            item.text = _SPACE_RUN_RE.sub(" ", item.text)
 
     # Each stand-in becomes what the page had, an item with no text. Chunking
     # and content.md put it back while they write the item's line.
@@ -2777,7 +3103,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         return cleaned.replace(_BR_SENTINEL, " ")
 
     facts = _SnapshotFacts(clean=as_the_backend_writes)
-    facts.feed(joins_marked)
+    facts.feed(gaps_spaced)
 
     # The backend files everything before the first heading on the furniture
     # layer, which serializers and the chunker skip. That is right for page
@@ -2839,6 +3165,43 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             pending += (ref.resolve(document) for ref in reversed(current.children))
         return found
 
+    def _floating_caption(node: NodeItem) -> bool:
+        """Whether `node` is a caption the backend hung under its picture or table.
+
+        docling-slim 2.149 hangs a picture's caption under its picture, where
+        it hung off the body before. It is not a block's text then: the
+        backend makes one of an image's alt text, which no text of the page
+        holds, so a nav whose logo it captioned read as body. Nor does it
+        take its block's layer: it is decided by its own text, as before, so
+        a cover's caption above the first heading stays in content.md and a
+        site's logo named in its chrome stays out (docs/09 P131).
+        """
+        holder = node.parent.resolve(document) if node.parent else None
+        return (
+            isinstance(node, TextItem)
+            and node.label == DocItemLabel.CAPTION
+            and isinstance(holder, FloatingItem)
+        )
+
+    def _block_text(block: list[NodeItem]) -> str:
+        """A block's text as the backend reads it, to compare with the page's.
+
+        The parts of one inline group meet as they are, each with the
+        whitespace at its edges, and every other text is a line of its own
+        (docs/09 P131).
+        """
+        pieces: list[str] = []
+        group_before: str | None = None
+        for node in block:
+            if not isinstance(node, TextItem):
+                continue
+            holder = node.parent.resolve(document) if node.parent else None
+            group = holder.self_ref if isinstance(holder, InlineGroup) else None
+            joined = group is not None and group == group_before
+            pieces.append(node.text if joined else f" {node.text}")
+            group_before = group
+        return "".join(pieces)
+
     decided: set[str] = set()
     for child in document.body.children:
         group = child.resolve(document)
@@ -2851,10 +3214,10 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         block = [
             node
             for node in (group, *_descendants(group))
-            if node.self_ref not in in_footer
+            if node.self_ref not in in_footer and not _floating_caption(node)
         ]
         decided.update(node.self_ref for node in block)
-        block_text = " ".join(node.text for node in block if isinstance(node, TextItem))
+        block_text = _block_text(block)
         if not block_text.strip():
             continue
         layer = (
@@ -2883,9 +3246,12 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         if empty.content_layer == ContentLayer.FURNITURE and any(
             item.content_layer == ContentLayer.BODY
             for item, _ in document.iterate_items(
-                root=empty, included_content_layers=set(ContentLayer)
+                root=empty,
+                included_content_layers=set(ContentLayer),
             )
-            if item is not empty
+            # A picture's caption is decided by its own text, so it says
+            # nothing of where the item stands (docs/09 P131).
+            if item is not empty and not _floating_caption(item)
         ):
             empty.content_layer = ContentLayer.BODY
     # An item with no text that holds its code has no text to tell chrome by,
@@ -2929,7 +3295,6 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             continue
         for item in outside:
             item.content_layer = ContentLayer.BODY
-
     # Attach <table><caption> text the backend did not keep.
     aligned_tables = _aligned(document.tables, facts.table_captions)
     for table, caption in aligned_tables or []:
@@ -3097,19 +3462,28 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         return (prefix, suffix) if found else ("", "")
 
     def _touching(left: SerializationResult, right: SerializationResult) -> bool:
+        """Whether two parts of an inline group meet with no whitespace between.
+
+        Each run carries the whitespace the page has at its edges, which the
+        serializer writes outside its emphasis and link, so two parts the page
+        keeps apart end and start with it (docs/09 P131).
+        """
         return bool(
-            (left.spans and left.spans[-1].item.self_ref in joined_after)
-            or (right.spans and right.spans[0].item.self_ref in joined_before)
+            left.text
+            and right.text
+            and not left.text[-1].isspace()
+            and not right.text[0].isspace()
         )
 
     def _unwrapped(
-        part: SerializationResult, serializer: Any
+        part: SerializationResult, serializer: Any, text: str
     ) -> tuple[tuple[Formatting, Any, str], str, bool] | None:
         """A part's wrapping, the text inside it, and whether it is a script.
 
         The wrapping is its emphasis, its link, and an inline code item's
-        backticks. None for a part that is not one plain text or code item,
-        which is kept whole.
+        backticks, read off `text`, the part's text without the whitespace
+        outside its wrapping. None for a part that is not one plain text or
+        code item, which is kept whole.
         """
         source = part.spans[0].item if len(part.spans) == 1 else None
         # A heading, list item or formula is a TextItem too, and none of them
@@ -3124,7 +3498,6 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         )
         prefix, suffix = _wrapper(serializer, source.formatting, source.hyperlink)
         prefix, suffix = prefix + ticks, ticks + suffix
-        text = part.text
         if (
             len(text) < len(prefix) + len(suffix)
             or not text.startswith(prefix)
@@ -3150,12 +3523,26 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         text it touches, and each stretch of one wrapping is wrapped once.
         Wrapping each part on its own gives "**(H**0" or "`a``1`", where no
         reader sees one word. A part with a wrapping of its own keeps it, and
-        meets its neighbours with nothing between: "un**break**able".
+        meets its neighbours with nothing between: "un**break**able". The
+        whitespace before the run's first part and after its last stays
+        outside it, where the serializer wrote it.
         """
         if len(run) == 1:
             whole: str = run[0].text
             return whole
-        pieces = [(_unwrapped(part, serializer), part.text) for part in run]
+        first: str = run[0].text
+        last: str = run[-1].text
+        lead = first[: len(first) - len(first.lstrip())]
+        trail = last[len(last.rstrip()) :]
+        texts = [part.text for part in run]
+        texts[0], texts[-1] = (
+            texts[0][len(lead) :],
+            texts[-1][: len(texts[-1]) - len(trail)],
+        )
+        pieces = [
+            (_unwrapped(part, serializer, text), text)
+            for part, text in zip(run, texts, strict=True)
+        ]
         wrappings = [found[0] if found else None for found, _ in pieces]
         plain = (Formatting(), None, "")
         for index, (found, _) in enumerate(pieces):
@@ -3183,18 +3570,20 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
             else:
                 stretch.append(found[1])
                 current = wrapping
-        return "".join(out)
+        return lead + "".join(out) + trail
 
     class _JoinedInline(MarkdownInlineSerializer):
-        """docling's inline group, without the space it puts beside formatted text.
+        """docling's inline group, each run of touching parts wrapped as one word.
 
-        docling-core joins an inline group's parts with a space. Where the
-        source had none, beside a link, emphasis, inline code or a
-        sub/superscript, the parts join with nothing, so "H<sub>0</sub>" reads
-        "H0" and "un<b>break</b>able" reads "unbreakable" in content.md,
-        content.txt and chunks.jsonl, as they do on the page and in the PDF's
-        text layer (docs/09 P14-56, P48). A group with no such join is joined
-        exactly as docling joins it.
+        docling-core joins an inline group's parts with nothing between, each
+        carrying the whitespace the page has at its edges (schema 1.11), so
+        "H<sub>0</sub>" reads "H0" and "un<b>break</b>able" "un**break**able"
+        in content.md, content.txt and chunks.jsonl, as they do on the page and
+        in the PDF's text layer (docs/09 P14-56, P48, P131). Where touching
+        parts each carry a wrapping, a plain sub/superscript takes its
+        neighbour's, and a stretch of one wrapping is wrapped once
+        (`_joined_text`). A group with no touching parts is joined exactly as
+        docling joins it.
         """
 
         def serialize(
@@ -3221,7 +3610,7 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
                 else:
                     runs.append([part])
             return create_ser_result(
-                text=" ".join(_joined_text(run, doc_serializer) for run in runs),
+                text="".join(_joined_text(run, doc_serializer) for run in runs),
                 span_source=parts,
             )
 
@@ -3373,38 +3762,6 @@ def extract(sanitized_html: str, assets: list[VisualAsset]) -> ExtractionResult:
         [[cell.text for cell in row] for row in table.data.grid]
         for table in document.tables
     ]
-    if markable:
-        # Only the text items and table cells had their markers taken out. One
-        # that reached any other field never joined anything, so it goes, and
-        # the record says where, rather than deliver a character the page
-        # never had.
-        leaked = [name for name, value in surfaces.items() if _marked(value)]
-        if any(_marked(cell) for grid in tables for row in grid for cell in row):
-            leaked.append("tables")
-        if any(
-            _marked(seed.text) or any(map(_marked, seed.headings)) for seed in seeds
-        ):
-            leaked.append("chunks.jsonl")
-        if leaked:
-            surfaces = {name: unmark_joins(value) for name, value in surfaces.items()}
-            tables = [
-                [[unmark_joins(cell) for cell in row] for row in grid]
-                for grid in tables
-            ]
-            seeds = [
-                replace(
-                    seed,
-                    text=unmark_joins(seed.text),
-                    headings=tuple(map(unmark_joins, seed.headings)),
-                )
-                for seed in seeds
-            ]
-            extraction_warnings.append(
-                "an inline element's join marker reached a field WebShot does not "
-                f"rejoin ({', '.join(leaked)}); it was removed there, and that "
-                "text may separate the element's text from its neighbours with a "
-                "space (docs/09 P14-56, P48, P70)."
-            )
     if items_markable:
         # The stand-in was taken out of its item, the cells, and the item's
         # line. One anywhere else stood in for no item there, so it goes too,

@@ -1,6 +1,6 @@
 {
   "schema_name": "DoclingDocument",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "name": "content",
   "origin": {
     "mimetype": "text/html",
@@ -22,9 +22,6 @@
       },
       {
         "$ref": "#/texts/1"
-      },
-      {
-        "$ref": "#/texts/4"
       }
     ],
     "content_layer": "body",
@@ -126,7 +123,7 @@
     {
       "self_ref": "#/texts/4",
       "parent": {
-        "$ref": "#/body"
+        "$ref": "#/pictures/0"
       },
       "children": [],
       "content_layer": "body",
@@ -144,8 +141,8 @@
       "content_layer": "body",
       "label": "text",
       "prov": [],
-      "orig": "See the",
-      "text": "See the"
+      "orig": "See the ",
+      "text": "See the "
     },
     {
       "self_ref": "#/texts/6",
@@ -156,8 +153,8 @@
       "content_layer": "body",
       "label": "text",
       "prov": [],
-      "orig": "project documentation",
-      "text": "project documentation",
+      "orig": "project documentation ",
+      "text": "project documentation ",
       "hyperlink": "https://example.com/docs"
     },
     {
@@ -195,7 +192,11 @@
       "parent": {
         "$ref": "#/texts/3"
       },
-      "children": [],
+      "children": [
+        {
+          "$ref": "#/texts/4"
+        }
+      ],
       "content_layer": "body",
       "label": "picture",
       "prov": [],
