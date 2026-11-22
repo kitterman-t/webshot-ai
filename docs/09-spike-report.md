@@ -23258,3 +23258,4 @@ saved captures and the 190 pages from WebShot PDFs of P131-4, extracted
 with the bridge before this fix and with it, are the same on every text
 surface and in content.json: no saved page has the pattern, which is why
 the scan did not find it.
+
