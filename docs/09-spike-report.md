@@ -21086,6 +21086,25 @@ already-untiled boxes left as they were.
 - **The layers this pass keeps** (dashed or translucent borders, real
   patterns, offset tiles) still print as pages of tiles.
 
+### P103-5 — Chromium 159 gives a computed repeat list as declared
+
+The Playwright 1.65.2 bump (webshot-ai#141, 2026-11-23) moved Chromium from
+156.0.8078.4 to 159.0.8154.6 and failed two of the three tests above on every
+test job, macOS and Linux. The pass was not what moved. For a box with two
+`background-image` layers and one declared `background-repeat`,
+`getComputedStyle(...).backgroundRepeat` read `repeat, repeat` on 156 and
+reads `repeat` on 159: the list as declared, not repeated out to the layer
+count. The boxes the pass untiles still read `no-repeat, no-repeat`, because
+it writes one entry per layer, and the untiled count was unchanged (2 in the
+kept fixture, 0 and 1 in the canvas one). The pass already reads every
+per-layer list cyclically (`at()` in `render/gradients.py`), as CSS
+Backgrounds 3 §2.1 defines it, so it reads the same layers on both builds.
+
+The tests now compare each layer's repeat, read the same cyclic way against
+the `background-image` layer count, instead of the serialized string. On
+Chromium 159 all three pass, and the golden corpus and parity passed on the
+bump unchanged.
+
 ## P102: text a page keeps behind a closed control, named (2026-10-25)
 
 

@@ -98,6 +98,30 @@ def test_no_button_prints_a_page_of_tiles(printed: dict[str, Path]) -> None:
     assert max(shares, default=0.0) <= MOST_COVERED, sorted(shares, reverse=True)
 
 
+#: Each layer's repeat: `background-repeat`'s computed list read the way the
+#: pass reads it, one entry per `background-image` layer, the list repeated as
+#: needed (CSS Backgrounds 3, 2.1). Chromium 156 serialized the computed list
+#: repeated out to the layer count; 159 (Playwright 1.65) gives it as declared,
+#: so one `no-repeat` over two layers reads `no-repeat`. Comparing the layers,
+#: not the string, keeps the check on what is painted.
+PER_LAYER_REPEAT = r"""style => {
+    const layers = value => {
+        const out = [];
+        let depth = 0, start = 0;
+        for (let i = 0; i < value.length; i++) {
+            const c = value[i];
+            if (c === '(') depth++;
+            else if (c === ')') depth--;
+            else if (c === ',' && depth === 0) { out.push(value.slice(start, i).trim()); start = i + 1; }
+        }
+        out.push(value.slice(start).trim());
+        return out;
+    };
+    const repeats = layers(style.backgroundRepeat);
+    return layers(style.backgroundImage).map((_, i) => repeats[i % repeats.length]).join(', ');
+}"""
+
+
 async def _repeats_after_untiling() -> tuple[int, dict[str, str]]:
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch()
@@ -107,11 +131,14 @@ async def _repeats_after_untiling() -> tuple[int, dict[str, str]]:
             await page.emulate_media(media="print")
             count = await untile_gradients(page)
             repeats = await page.evaluate(
-                """() => Object.fromEntries([...document.querySelectorAll('a.swatch')].map(a => [
-                    a.textContent,
-                    a.classList.contains('untiled-before')
-                        ? getComputedStyle(a, '::before').backgroundRepeat
-                        : getComputedStyle(a).backgroundRepeat]))"""
+                f"""() => {{
+                    const repeat = {PER_LAYER_REPEAT};
+                    return Object.fromEntries([...document.querySelectorAll('a.swatch')].map(a => [
+                        a.textContent,
+                        repeat(a.classList.contains('untiled-before')
+                            ? getComputedStyle(a, '::before')
+                            : getComputedStyle(a))]));
+                }}"""
             )
             return count, repeats
         finally:
@@ -147,8 +174,8 @@ async def _canvas_repeats(root_color: str | None) -> tuple[int, str, str]:
             await page.emulate_media(media="print")
             count = await untile_gradients(page)
             html, body = await page.evaluate(
-                "() => [document.documentElement, document.body].map("
-                "e => getComputedStyle(e).backgroundRepeat)"
+                f"() => [document.documentElement, document.body].map("
+                f"e => ({PER_LAYER_REPEAT})(getComputedStyle(e)))"
             )
             return count, html, body
         finally:
