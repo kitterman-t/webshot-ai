@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A harbor report with a chart that asks for a service worker</title>
+<!-- docs/09 P135-3. The chart's script asks for a service worker before it
+     draws, and reads what it is given at once, as an embedded chart did: a
+     browser that will not start the worker rejects the call, and the chart
+     draws itself anyway. WebShot refuses service workers. Refused with a
+     promise that resolves to nothing, the script threw reading `.active`, and
+     the page printed its placeholder. All of the text is invented. -->
+<style>
+  body { font: 16px/1.5 sans-serif; color: #111; background: #fff; margin: 40px; }
+  #chart { border: 1px solid #999; padding: 12px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>Harbor report</h1>
+<p>The harbor office counts the boats that come back to the inner quay when a
+squall is forecast, and the chart below shows the last count.</p>
+<div id="chart">Loading the chart</div>
+<p>The count is taken by the watch on the north pier.</p>
+<script>
+  const draw = () => {
+    document.getElementById("chart").textContent =
+      "Chart: twelve boats returned before the squall.";
+  };
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("chart-worker.js").then((registration) => {
+      if (registration.active) registration.active.postMessage("ready");
+      draw();
+    }, () => draw());
+  } else {
+    draw();
+  }
+</script>
+</body>
+</html>

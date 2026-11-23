@@ -14,6 +14,11 @@ each used to exit 0 with no warning (docs/09 P14-1, P22, P78):
   page in place of the page asked for, which §5 item 4 makes exit 4, as it
   does a 403 that names its bot check.
 
+And three that say less than they should: a 403 whose page is the site's own
+"not found" page, which is a dead link and not a refusal (P132-5); a page
+that declares an article its capture does not hold (`capture/headings`,
+P132-4); and a page that hides its article after its wall's marker (P132-7).
+
 Detection only. Nothing here signs in, retries, waits longer or changes what
 the page is sent; a wall is reported to the person who can sign in, which is
 the line docs/11 draws around access controls.
@@ -30,6 +35,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from playwright.async_api import Error as PlaywrightError
+
+from .prepare import CLASS_WORD_JS
 
 LOGGER = logging.getLogger("webshot")
 
@@ -239,6 +246,12 @@ SAVE_IT_YOURSELF = (
 #:   page, 126 characters with exit 0, by two captures in one run (docs/09
 #:   P120-1). As with Akamai, the title and the support ID are both required,
 #:   and the sentence too: each alone is a phrase a page could quote.
+#: - Imperva's Incapsula answers a browser it has not yet cleared with a page
+#:   whose whole content is a script from its own path, `/_Incapsula_Resource`,
+#:   and blocks one with a page whose whole content is a frame from that path
+#:   (its query naming the incident). The script is on every page Incapsula
+#:   serves, the article as well (docs/09 P132-3), so only a page that shows
+#:   nothing else counts: no text, and no box but the frame's.
 #:
 #: The answer is `[vendor, detail]`, or null when no signature is present.
 _BOT_CHECK_PAGE = r"""() => {
@@ -271,6 +284,26 @@ _BOT_CHECK_PAGE = r"""() => {
             document.body.innerText
         );
         if (reference) return ['akamai', reference[1]];
+    }
+    if (document.body && !document.body.innerText.trim()) {
+        const own = element => {
+            try {
+                return new URL(element.getAttribute('src'), document.baseURI).pathname
+                    === '/_Incapsula_Resource';
+            } catch (error) { return false; }
+        };
+        const drawn = [...document.body.querySelectorAll('*')].filter(element =>
+            !['script', 'noscript', 'style', 'template'].includes(element.localName)
+            && element.getClientRects().length > 0 && shown(element));
+        const frame = drawn.find(element => element.localName === 'iframe' && own(element));
+        if (frame && drawn.every(element => element === frame || frame.contains(element))) {
+            const incident = new URL(frame.getAttribute('src'), document.baseURI)
+                .searchParams.get('incident_id');
+            return ['incapsula-block', incident || ''];
+        }
+        if (!drawn.length && [...document.querySelectorAll('script[src]')].some(own)) {
+            return ['incapsula', '/_Incapsula_Resource'];
+        }
     }
     if (document.title.trim().toLowerCase() === 'request rejected' && document.body) {
         const said = document.body.innerText.replace(/\s+/g, ' ');
@@ -310,6 +343,17 @@ def _bot_check_name(vendor: str, detail: str) -> str:
             f'the "Request Rejected" page of F5 BIG-IP\'s application firewall '
             f"(support ID {detail})"
         )
+    if vendor == "incapsula":
+        return (
+            "the challenge page of Imperva's bot protection, Incapsula (a page "
+            f"holding nothing but its script from {detail})"
+        )
+    if vendor == "incapsula-block":
+        incident = f", incident ID {detail}" if detail else ""
+        return (
+            "the block page of Imperva's application firewall, Incapsula (a "
+            f"frame from /_Incapsula_Resource{incident})"
+        )
     return f'Akamai\'s "Access Denied" page (Reference #{detail})'
 
 
@@ -336,7 +380,8 @@ async def bot_check_page(page: Any) -> BotCheckPage:
             return BotCheckPage()
         vendor, detail = found
         return BotCheckPage(
-            check=_bot_check_name(str(vendor), str(detail)), firewall=vendor == "f5"
+            check=_bot_check_name(str(vendor), str(detail)),
+            firewall=vendor in ("f5", "incapsula-block"),
         )
     return BotCheckPage(
         unread=(
@@ -385,6 +430,138 @@ async def access_walls(page: Any) -> tuple[str, ...]:
         LOGGER.debug("Reading the page for access walls failed: %s", exc)
         return ()
     return tuple(str(vendor) for vendor in found)
+
+
+#: The words a page names its wall's place with, in a class name, matched as
+#: whole words of it as clean mode's `NOISE_CLASS_WORDS` are. A business
+#: magazine marks where its "halfway hardwall" goes with an empty element,
+#: `halfway-hardwall-insertion-point`, and its own stylesheet hides every
+#: section after the one holding it; an archived copy printed the opening,
+#: four pages that ended at the site's footer, with no warning (docs/09
+#: P132-7). The others are the same thing's other names.
+WALL_MARKER_WORDS: tuple[str, ...] = ("hardwall", "paywall", "regwall")
+
+#: The least text the page must hide after its wall marker to be reported:
+#: `collapsed.MIN_CHARACTERS`, about thirty words.
+WALLED_CHARACTERS = 200
+
+#: The first element named as a wall that the page hides more text after,
+#: in the article or main region around it, than it shows before it: no box,
+#: outside the page's header, navigation, footer, asides and dialogs, and
+#: outside what the capture hid itself. `{marker, hidden, shown}`, counted in letters and
+#: digits, or null.
+_HIDDEN_AFTER_WALL = (
+    r"""({words, minimum}) => {"""
+    + CLASS_WORD_JS
+    + r"""
+    const wanted = new Set(words);
+    const unrendered = 'script, style, noscript, template';
+    // A dialog the page keeps closed (a sign-up form, a cookie policy) is not
+    // the article either.
+    const chrome = 'header, nav, footer, aside, dialog, [role="banner"], [role="navigation"], '
+        + '[role="contentinfo"], [role="complementary"], [role="dialog"], '
+        + '[role="alertdialog"], [aria-modal="true"]';
+    const marked = element => element.closest('[data-webshot-hidden="true"]') !== null;
+    const letters = (root, visible) => {
+        let count = 0;
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const parent = node.parentElement;
+            if (!parent || parent.closest(unrendered)) continue;
+            if (visible && !visible(node, parent)) continue;
+            count += node.data.replace(/[^\p{L}\p{N}]/gu, '').length;
+        }
+        return count;
+    };
+    const named = element => {
+        const cls = (element.getAttribute('class') || '').trim().split(/\s+/)[0];
+        return element.localName + (element.id ? `#${element.id}` : cls ? `.${cls}` : '');
+    };
+    for (const marker of document.querySelectorAll('[class]')) {
+        if (!classWord(marker, wanted) || marked(marker) || marker.closest(chrome)) continue;
+        const region = marker.closest('article, main, [role="main"], [data-webshot-root="true"]')
+            || document.body;
+        let hidden = 0;
+        for (let node = marker; node && node !== region; node = node.parentElement) {
+            for (let next = node.nextElementSibling; next; next = next.nextElementSibling) {
+                if (next.matches(unrendered) || next.matches(chrome) || marked(next)) continue;
+                if (next.getClientRects().length > 0) continue;
+                hidden += letters(next, null);
+            }
+        }
+        if (hidden < minimum) continue;
+        const shown = letters(region, (node, parent) =>
+            (marker.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_PRECEDING) !== 0
+            && !parent.closest(chrome)
+            && parent.checkVisibility({checkOpacity: true, checkVisibilityCSS: true}));
+        if (hidden > shown) return {marker: named(marker), hidden, shown};
+    }
+    return null;
+}"""
+)
+
+
+@dataclass(frozen=True, slots=True)
+class HiddenAfterWall:
+    """Text the page hides after an element it names as its wall."""
+
+    #: The element, as `element#id` or `element.class`.
+    marker: str
+    #: Letters and digits hidden after it, and shown before it.
+    hidden: int
+    shown: int
+
+
+async def hidden_after_wall(page: Any) -> HiddenAfterWall | None:
+    """Whether the page hides most of its article after its wall's marker.
+
+    Detection only: the text is in the document and the page's own CSS hides
+    it, and nothing is shown that the page does not show (docs/11). A page
+    that cannot be read names nothing; the printed share and the wall's words
+    still say what they measure.
+    """
+    try:
+        found = await page.evaluate(
+            _HIDDEN_AFTER_WALL,
+            {"words": list(WALL_MARKER_WORDS), "minimum": WALLED_CHARACTERS},
+        )
+    except PlaywrightError as exc:
+        LOGGER.debug("Reading the page for text hidden after a wall failed: %s", exc)
+        return None
+    if not found:
+        return None
+    return HiddenAfterWall(
+        marker=str(found["marker"]),
+        hidden=int(found["hidden"]),
+        shown=int(found["shown"]),
+    )
+
+
+def _archived(url: str) -> bool:
+    try:
+        host = (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return False
+    return host == "web.archive.org"
+
+
+def hidden_after_wall_message(found: HiddenAfterWall, source: str) -> str:
+    """The manifest warning for `hidden_after_wall` (docs/09 P132-7)."""
+    archived = (
+        " This is a web archive's copy: a snapshot saved before the site added "
+        "its wall may hold the whole article."
+        if _archived(source)
+        else ""
+    )
+    return (
+        f"The page hides {found.hidden:,} letters and digits of text after an "
+        f"element it names as a wall ({found.marker}), more than the "
+        f"{found.shown:,} it shows before it, so the PDF and the bundle hold only "
+        "what comes before the wall: the article's opening. WebShot does not "
+        "show what the page hides. The site may show the rest only to readers "
+        "who sign in or subscribe: open the page in your own browser, signed in "
+        f"if you have an account, and save it from there.{archived}"
+    )
 
 
 def bot_check_page_message(source: str, check: str, *, firewall: bool = False) -> str:
@@ -454,6 +631,55 @@ def refused_status_message(source: str, status: int, headers: Mapping[str, str])
     )
 
 
+#: What a page's title or first `<h1>` says when the page asked for does not
+#: exist. A news site's missing page came back as a 403, because a storage
+#: bucket behind its CDN refuses a key it does not hold, and its body was the
+#: site's own "404 / Page Not Found" page; WebShot said a sign-in or a bot
+#: check refused the browser (docs/09 P132-5). Read only on that path, a
+#: refused status, so a page about a 404 is never asked.
+_NOT_FOUND = re.compile(
+    r"\b404\b|\bnot found\b"
+    r"|\b(?:can['\u2019]?t|cannot|could(?: not|n['\u2019]?t)|unable to) find\b"
+    r"|\b(?:does(?: not|n['\u2019]?t)|no longer) exists?\b",
+    re.IGNORECASE,
+)
+
+#: The page's title and the text of its first `<h1>` that has any.
+_TITLE_AND_HEADING = r"""() => {
+    const tidy = text => (text || '').replace(/\s+/g, ' ').trim();
+    const heading = [...document.querySelectorAll('h1')]
+        .map(element => tidy(element.innerText || element.textContent)).find(Boolean) || '';
+    return [tidy(document.title), heading];
+}"""
+
+
+async def not_found_page(page: Any) -> str | None:
+    """What the page on screen says that tells the page asked for is not
+    there, its title or its first `<h1>`, or None when neither says so or the
+    page could not be read."""
+    try:
+        said = await page.evaluate(_TITLE_AND_HEADING)
+    except PlaywrightError as exc:
+        LOGGER.debug("Reading a refused page's title failed: %s", exc)
+        return None
+    for text in said:
+        if isinstance(text, str) and text and _NOT_FOUND.search(text):
+            return text[:120]
+    return None
+
+
+def not_found_status_message(source: str, status: int, said: str) -> str:
+    """What exit 3 says about a refused status whose page says the page is
+    not there (`not_found_page`)."""
+    return (
+        f"The server returned HTTP {status} for {source}, and the page it sent "
+        f'reads "{said}": the site says the page is not there, so the link is '
+        "most likely dead or the page has moved, rather than one that needs a "
+        "sign-in. Use --allow-http-errors only if that page is intentional; a "
+        "web archive may hold a copy of the page."
+    )
+
+
 def empty_capture_message(
     *,
     page_text_characters: int,
@@ -461,6 +687,7 @@ def empty_capture_message(
     videos: int,
     required: bool,
     waited_s: float | None = None,
+    cleaned: str | None = None,
 ) -> str | None:
     """What an empty capture says: a warning, or under `required` the failure.
 
@@ -475,7 +702,9 @@ def empty_capture_message(
     content is a video. `waited_s` is the time the capture gave a page that
     showed no text for its script to render some (`wait_for_rendered_text`)
     when that wait ran out with none, or None; it is said so the reader does
-    not wait as long again by hand.
+    not wait as long again by hand. `cleaned` is a sentence saying what
+    clean mode hid that showed text, or None: a rule that took the page's
+    content for chrome leaves the capture empty too (docs/09 P132-1).
     """
     if visuals or videos or page_text_characters >= NEAR_EMPTY_CHARACTERS:
         return None
@@ -496,9 +725,10 @@ def empty_capture_message(
         if waited_s is not None
         else ""
     )
+    hid = f" {cleaned}" if cleaned else ""
     return (
         f"The capture is {'empty' if page_text_characters == 0 else 'nearly empty'}: "
-        f"content.txt holds {held}, and there is no image and no video.{waited} "
+        f"content.txt holds {held}, and there is no image and no video.{waited}{hid} "
         "A page shows this when the browser had no session, when its script had "
         "not rendered the content yet, or when --selector matched an empty "
         "element. --storage-state or --auth-profile supplies a session, and "

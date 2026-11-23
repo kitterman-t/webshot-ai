@@ -9,6 +9,12 @@ told from a sign-in refusal, so its message gives both readings.
 
 The failure report also said `http_status: null` and `final_url: null` for a
 status it had read.
+
+A 403 that names nothing in its headers can still say what it is in its page:
+a news site's missing page came back as a 403 whose body was the site's own
+"404" page, and was called a sign-in or a bot check (docs/09 P132-5); a
+firewall's block page served with 403 is named as the same page served with
+200 is (P132-3).
 """
 
 from __future__ import annotations
@@ -35,6 +41,28 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     "/datadome": (403, {"Server": "DataDome", "x-datadome": "protected"}, ""),
     "/forbidden": (403, {}, "<title>403 Forbidden</title><h1>Forbidden</h1>"),
     "/gone": (404, {}, "<title>Not found</title>"),
+    # As a storage bucket behind a CDN answers a key it does not hold, with
+    # the site's own error page as the body: no title, an <h1> of "404".
+    "/missing": (
+        403,
+        {"x-cache": "Error from cloudfront"},
+        "<header><p>Harbor Weekly</p></header><main><h1>404</h1>"
+        "<h2>Page Not Found</h2><p>We can't find the page you're looking for.</p>"
+        "</main>",
+    ),
+    "/missing-titled": (
+        403,
+        {},
+        "<title>Page not found | Harbor Weekly</title><p>Sorry.</p>",
+    ),
+    "/incapsula-block": (
+        403,
+        {"x-iinfo": "0-00000000-0 0NNN RT(0 0) q(0 -1 -1 -1) r(0 -1)"},
+        '<html style="height:100%"><body style="margin:0;height:100%"><iframe '
+        'src="/_Incapsula_Resource?CWUDNSAI=9&amp;incident_id=0000-1111" '
+        'width="100%" height="100%">Request unsuccessful. Incapsula incident ID: '
+        "0000-1111</iframe></body></html>",
+    ),
 }
 
 
@@ -42,7 +70,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
 def site() -> Iterator[str]:
     class _Refuses(http.server.BaseHTTPRequestHandler):
         def do_GET(self) -> None:
-            status, headers, body = ROUTES[self.path]
+            status, headers, body = ROUTES.get(self.path, (404, {}, ""))
             payload = body.encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -56,7 +84,7 @@ def site() -> Iterator[str]:
         def version_string(self) -> str:
             # `send_response` writes `Server` itself; a route that names one
             # answers as that server, and no other route names any.
-            return ROUTES[self.path][1].get("Server", "loopback")
+            return ROUTES.get(self.path, (404, {}, ""))[1].get("Server", "loopback")
 
         def log_message(self, *args: object) -> None:
             pass
@@ -132,3 +160,33 @@ def test_any_refused_status_is_in_the_report(tmp_path: Path, site: str) -> None:
     code, report = _run(tmp_path, f"{site}/gone")
     assert code == 3
     assert report["http_status"] == 404 and report["final_url"] == f"{site}/gone"
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize(
+    ("path", "said"),
+    [("/missing", "404"), ("/missing-titled", "Page not found | Harbor Weekly")],
+)
+def test_a_403_whose_page_says_not_found_is_a_dead_link(
+    tmp_path: Path, site: str, path: str, said: str
+) -> None:
+    """Exit 3, as a 404 is: the page never became available to capture, and
+    no sign-in would make it (docs/04-spec.md §3)."""
+    code, report = _run(tmp_path, f"{site}{path}")
+    assert code == 3 and report["exit_code"] == 3
+    error = str(report["error"])
+    assert f'reads "{said}": the site says the page is not there' in error
+    assert "--storage-state" not in error and "bot check" not in error
+    assert report["http_status"] == 403 and report["final_url"] == f"{site}{path}"
+
+
+@pytest.mark.browser
+def test_a_403_whose_page_is_a_firewall_block_page_names_it(
+    tmp_path: Path, site: str
+) -> None:
+    code, report = _run(tmp_path, f"{site}/incapsula-block")
+    assert code == 4
+    error = str(report["error"])
+    assert "the block page of Imperva's application firewall, Incapsula" in error
+    assert "incident ID 0000-1111" in error and "not a sign-in page" in error
+    assert "--storage-state" not in error

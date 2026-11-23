@@ -18,6 +18,30 @@ which records the measurements behind each change.
 
 ### Added
 
+- **A warning for a page that declares an article the capture does not
+  hold.** A page served without its article still declares it in JSON-LD: a
+  think tank's post and a compliance article each printed a newsletter popup,
+  exit 0. When neither the PDF's text nor the bundle's holds a declared
+  article's `headline` or `name`, in order or by half of its longer words, a
+  warning names it. Not for a region `--selector` chose. See docs/09 P132-4.
+- **A warning for text a page hides after its wall's marker.** An archived
+  magazine article printed its opening and its footer: the site's own CSS
+  hid every section after an empty `halfway-hardwall-insertion-point`. When
+  a page hides more text after an element named as a wall (hardwall,
+  paywall, regwall) than it shows before it, a warning names the marker and
+  both counts, and for a web archive's copy offers an earlier snapshot.
+  Nothing hidden is shown. See docs/09 P132-7.
+- **Imperva Incapsula's challenge and block pages are named as a bot check's
+  page.** A page showing nothing but Incapsula's own script or frame exits
+  4 with the save-it-yourself advice; its script alone, which is on every
+  page Incapsula serves, is not a signature. A 403 whose headers name no bot
+  check has its page read for these signatures too. See docs/09 P132-3.
+- **A warning for text printed in columns.** A print stylesheet that set an
+  article in two columns gave a PDF whose text, read line by line across the
+  page, joined each line of one column to the line beside it. The layout is
+  kept; each block of 400 characters or more the page prints in columns is
+  named, with its columns and the `--css` rule that prints it in one. See
+  docs/09 P135-5.
 - **A warning for text printed over other text.** Two blocks of a page's own
   flow can print in one place, a heading over the last lines of a paragraph,
   with no fixed box involved, and nothing said so. After the render the
@@ -339,6 +363,12 @@ which records the measurements behind each change.
 
 ### Changed
 
+- **When the fixed-box check cannot measure, clean mode hides a site's header
+  or footer bar by its shape.** A fixed box at least half the window wide, at
+  most a third of it tall, along its top or bottom edge, held to the bounds a
+  measured box is, is hidden and the page printed again, with a warning
+  naming each bar. The "could not check" warning now names every box the
+  marking found. See docs/09 P135-1.
 - **docling-core 2.107.1 and docling-slim 2.150.1, and `content.json` keeps
   their inline whitespace contract.** docling-core 2.106 stamps a document
   schema 1.11, under which each run of an inline group carries the
@@ -474,6 +504,66 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **Clean mode no longer hides the content it was asked to keep.** A theme
+  classed the wrapper around its article and sidebar `sidebar`, and the
+  `.sidebar` rule hid the article, with or without `--selector`, leaving an
+  empty page. Clean mode's rules now keep an element that holds the content
+  region, or that holds a visible `<h1>` and more than half of the text the
+  page would print with it; a comment feed holds no `<h1>` and is still
+  removed. An empty capture names what clean mode hid that showed text, and
+  the rule. See docs/09 P132-1.
+- **Clean mode matches "newsletter" and "subscribe" as words of a class
+  name.** `[class*='subscribe' i]` matched a CMS's tag class
+  `tag-…-subscriber-only` on the section holding an article, and hid it.
+  The words are now matched whole, in kebab, snake, BEM or camel case, and a
+  `tag-`, `category-` or `term-` class is passed over. See docs/09 P132-2.
+- **A 403 whose page says the page is not there exits 3, as a 404 does.** A
+  news site's missing page came back as a 403 with its own "404" page as the
+  body, and was called a sign-in or a bot check. See docs/09 P132-5.
+- **A closed Adobe Experience Manager accordion is opened, or named.** A
+  site's variant gave its button no ARIA and hid a wrapper around each
+  panel, so its endnotes were in neither the PDF nor the bundle and nothing
+  said so. Its `data-cmp-hook-accordion` hooks are a closed-control shape
+  now, and opening a region gives its box back to each wrapper around it
+  that has none. See docs/09 P132-6.
+- **The fixed-box check runs on a page that rebuilds itself when the window
+  is resized.** A news article's site header printed over the top of all ten
+  pages, and the check said only that putting the window back had moved 120
+  elements. It now waits up to 2 s for the page to move back, does not count
+  elements the page made for the narrow width and removed again, and takes a
+  removed element replaced by one of its tag and class where it was for the
+  page laid out as it was. Clean mode hides the box it measured rather than
+  whatever its name matches later, and a box is named by the fewest of its
+  first classes that name it alone, so a header named by its state classes is
+  hidden, and the `--exclude` offered matches it next time. See docs/09
+  P135-1.
+- **Headings the PDF prints in display type are no longer named as missing.**
+  PDFium ran the words of a tightly set heading together, and split a widely
+  set one into letters, so the headings check named headings the PDF held. A
+  heading now also counts as printed when its letters run together are in
+  the PDF's text, from a word's start to a word's end. See docs/09 P135-2.
+- **Embedded charts that ask for a service worker draw themselves.**
+  Playwright's service-worker block answers `register` with a promise that
+  resolves to nothing, and a chart that read `.active` off it threw and
+  printed a loading spinner. Workers stay blocked; `register` is now refused
+  with a rejected promise, as a browser refuses it. See docs/09 P135-3.
+- **The OCR text layer reads as one line of whole words.** Recognized lines
+  set 0.1px apart were read as one line with their words interleaved, and a
+  page's letter spacing set each letter apart, and at 0.1px PDFium, which
+  WebShot's checks read with, left out every thin glyph ("Tde tab es").
+  The layer now holds one line, 0.5px tall in a regular sans-serif with its
+  own spacing, and the clipping check reads the PDF's text without it, so a
+  frame's layer recognized at the window's width does not answer for text
+  the print cut. See docs/09 P135-4.
+- **A reading the OCR engine doubts stays out of the PDF's text layer.** A
+  watch page's headshot was read as "me)" and an icon as "(9)", and a search
+  of the PDF found them as page text. A reading under 70% mean confidence
+  now stays in `assets.json`, and a warning names each such asset with its
+  confidence. See docs/09 P135-7.
+- **A recorded live stream's watch page no longer prints an empty box over
+  its first page.** The chat replay's frame, which the printed layout puts
+  above the title, is hidden in clean mode with the rest of the site's
+  chrome. See docs/09 P135-7.
 - **A print-hidden first `<h1>` beside one that prints is not "the PDF has
   no title".** A banner's `<h1>` came first in the content and the page's
   print stylesheet hid it, while the article's own `<h1>` printed; the

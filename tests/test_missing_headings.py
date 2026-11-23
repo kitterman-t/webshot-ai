@@ -393,3 +393,55 @@ def test_headings_that_could_not_be_read_are_said_to_be_unchecked() -> None:
         "WebShot could not read the page's headings (Target closed), so whether "
         "the PDF lacks one the page showed was not checked."
     ]
+
+
+# P135-2: PDFium reads a heading set in display type with its words run
+# together, or with a word per letter.
+
+
+@pytest.mark.parametrize(
+    ("heading", "printed"),
+    [
+        (
+            "Why the north quay fills so early",
+            "tide tables.\r\nWhythe north quay fills so early\r\nAs the boats",
+        ),
+        (
+            "Current mooring fees for winter berths may be too low to cover",
+            "Currentmooring fees for winter berthsmay be too low to cover",
+        ),
+        ("Quiet harbor tides turn early", "Quietharbortidesturnearly"),
+        ("Ferry times", "the pier.\r\nF e r r y t i m e s\r\nThe morning"),
+    ],
+    ids=["two-run-together", "two-pairs", "all-run-together", "a-word-per-letter"],
+)
+def test_a_heading_whose_words_pdfium_ran_together_is_printed(
+    heading: str, printed: str
+) -> None:
+    assert missing_headings(_shown(heading), printed, None) == MissingHeadings()
+
+
+def test_letters_run_together_match_only_from_a_word_s_edge_to_a_word_s_edge() -> None:
+    """A heading is not found inside a longer word, nor across one's middle."""
+    found = missing_headings(_shown("Art"), "the quarterly report", None)
+    assert [heading.text for heading in found.unprinted] == ["Art"]
+    found = missing_headings(_shown("Tide tables"), "riptide tablesaw", None)
+    assert [heading.text for heading in found.unprinted] == ["Tide tables"]
+    assert missing_headings(_shown("Tide tables"), "the tidetables", None) == (
+        MissingHeadings()
+    )
+
+
+@pytest.mark.browser
+def test_headings_in_display_type_the_pdf_prints_are_not_named(
+    tmp_path: Path,
+) -> None:
+    """One heading set tight and one set wide are in the PDF, though PDFium
+    reads the first as one word and the second as a word per letter; the one
+    the print stylesheet hides is still named."""
+    assert _warnings(tmp_path, fixture=FIXTURES / "glued_heading_words_page.html") == [
+        "1 heading the page showed is in neither the PDF's text nor the bundle's: "
+        '"Winter berth fees". The page\'s print stylesheet, or its print layout, '
+        "hides it, and the sections under it may be gone too. --media screen "
+        "captures the page as the screen shows it."
+    ]

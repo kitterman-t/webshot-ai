@@ -53,6 +53,10 @@ if str(REPO_ROOT) not in sys.path:  # allow `python tools/golden/check.py`
     sys.path.insert(0, str(REPO_ROOT))
 
 from tools.golden.corpus import CASES_BY_ID, CORPUS, GoldenCase  # noqa: E402
+from webshot.capture.visuals import (  # noqa: E402
+    DOUBTFUL_TEXT_CONFIDENCE_RE,
+    DOUBTFUL_TEXT_LIST_RE,
+)
 from webshot.extract.docling_bridge import OCR_CONFIDENCE_IN_READING_RE  # noqa: E402
 from webshot.render.pdf import is_tagged  # noqa: E402
 
@@ -849,6 +853,20 @@ def comparable(
     return {name: _mask_ocr_engine_versions(text) for name, text in files.items()}
 
 
+def _mask_doubtful_confidences(match: re.Match[str]) -> str:
+    """The doubtful-reading warning with each asset's confidence masked.
+
+    The warning names every asset kept out of the text layer with the
+    recognizer's mean confidence, so a newer Tesseract moved the figure
+    (57% to 58%) and failed `lms-module` on a portable run while every other
+    confidence was already masked.
+    """
+    listed = DOUBTFUL_TEXT_CONFIDENCE_RE.sub(
+        rf"\g<1>{MASKED_OCR_CONFIDENCE}\g<3>", match.group(2)
+    )
+    return f"{match.group(1)}{listed}{match.group(3)}"
+
+
 def portable(files: dict[str, str], *, ocr_pdf_text: bool = False) -> dict[str, str]:
     """Reduce a snapshot to what is stable across Tesseract/Chromium versions.
 
@@ -890,6 +908,7 @@ def portable(files: dict[str, str], *, ocr_pdf_text: bool = False) -> dict[str, 
         text = OCR_CONFIDENCE_IN_READING_RE.sub(
             rf"\g<1>{MASKED_OCR_CONFIDENCE}\g<3>", text
         )
+        text = DOUBTFUL_TEXT_LIST_RE.sub(_mask_doubtful_confidences, text)
         text = SKIA_RE.sub("Skia/PDF <VERSION>", text)
         return _mask_ocr_engine_versions(text)
 

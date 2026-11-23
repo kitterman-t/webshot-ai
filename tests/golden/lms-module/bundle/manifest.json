@@ -81,8 +81,8 @@
   },
   "files": {
     "accessibility.yaml": {
-      "bytes": 1835,
-      "sha256": "03e577598030818dd254b190bd90312f409ee1141695d3d993fa0872d5003017"
+      "bytes": 1751,
+      "sha256": "739427dcaafd226c139b960e60bcd8aec6de33792e48ac025c6dacb19ebbbbb9"
     },
     "assets.json": {
       "bytes": 1834,
@@ -134,7 +134,8 @@
     }
   },
   "warnings": [
-    "asset-002 is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing."
+    "asset-002 is a video. Its current visual frame was preserved; temporal and audio content require a source transcript or separate media processing.",
+    "The text recognized in a visual asset is not in the PDF's text layer: asset-002 (57%). The OCR engine's mean confidence in it was under 70%, as it is in a reading of a photograph or an icon rather than of words, which a search of the PDF would find as the page's text. assets.json keeps it with its confidence."
   ],
   "ocr_notice": "OCR is machine-generated and may contain errors. Inspect the corresponding asset for authoritative visual context."
 }

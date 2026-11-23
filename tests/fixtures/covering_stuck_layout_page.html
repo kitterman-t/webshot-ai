@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A tide table that keeps its narrow layout once it has had one</title>
+<!-- docs/09 P135-1. Each time the window is made narrow, the page's script
+     adds 10px above its text and never takes it away, as a catalog page kept
+     its narrow layout after the window was widened again. So every
+     round trip of the covered-text check to the printed width moves the page
+     for good, and the measurement cannot be made, however many narrowings
+     came before it. A header bar fixed along the top of the window prints
+     over the first line of every page; a round button fixed in the bottom
+     corner sits in the margin beside the text. All of the text is
+     invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/30px sans-serif; color: #111; background: #fff; }
+  .column { width: 380px; margin-left: 20px; }
+  .spacer { height: 10px; }
+  .line { height: 30px; white-space: nowrap; overflow: hidden; }
+  .second { break-before: page; }
+  .tide-bar { position: fixed; top: 0; left: 0; right: 0; height: 40px;
+    background: #234; color: #fff; z-index: 20; }
+  .ask-button { position: fixed; right: 12px; bottom: 12px; width: 48px; height: 48px;
+    border-radius: 24px; background: #c40; color: #fff; z-index: 20; }
+</style>
+</head>
+<body>
+<div class="tide-bar">Tide office</div>
+<div class="column">
+  <div class="line">Under the tide bar, page one</div>
+  <div class="line">High water at the north quay, 06:12.</div>
+</div>
+<div class="column second">
+  <div class="line">Under the tide bar, page two</div>
+  <div class="line">High water at the south quay, 06:40.</div>
+</div>
+<div class="ask-button">Ask</div>
+<script>
+  window.addEventListener("resize", () => {
+    if (window.innerWidth >= 1000) return;
+    const spacer = document.createElement("div");
+    spacer.className = "spacer";
+    document.body.prepend(spacer);
+  });
+</script>
+</body>
+</html>

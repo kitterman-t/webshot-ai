@@ -7,9 +7,10 @@ check only from a 403's headers, and this response had none. The page is read
 now, for signatures that are each a vendor naming itself: DataDome's frame
 from its own host, HUMAN's `#px-captcha`, and Akamai's "Access Denied" title
 with a reference in its format, and F5 BIG-IP's "Request Rejected" page with
-its support ID (P120-1). The pages here are served as each check serves
-its own, and DataDome's frame host is answered by a route, so no request leaves
-the machine.
+its support ID (P120-1), and Imperva Incapsula's challenge and block pages,
+each a page holding nothing but Incapsula's own script or frame (P132-3). The
+pages here are served as each check serves its own, and DataDome's frame host
+is answered by a route, so no request leaves the machine.
 
 A news page that failed with `net::ERR_HTTP2_PROTOCOL_ERROR` opened in an
 ordinary browser a minute later, and the message said only that it could not
@@ -104,6 +105,30 @@ PAGES: dict[str, str] = {
         '<iframe src="https://geo.captcha-delivery.com/captcha/" style="display:none"></iframe>'
         '<div id="px-captcha" hidden></div>'
     ),
+    # Incapsula's challenge page, as a plain request is answered: a script
+    # from its own path and an empty body. Its script 404s here, as it would
+    # for a browser it never clears.
+    "/incapsula": (
+        '<html><head><META NAME="robots" CONTENT="noindex,nofollow">'
+        '<script src="/_Incapsula_Resource?SWJIYLWA=0000000000000000,1111111111111111">'
+        "</script><body></body></html>"
+    ),
+    # Its block page: a frame from that path over an empty body, the
+    # frame's fallback text naming the incident.
+    "/incapsula-block": (
+        '<html style="height:100%"><head><META NAME="ROBOTS" CONTENT="NOINDEX, NOFOLLOW">'
+        '</head><body style="margin:0px;height:100%"><iframe id="main-iframe" '
+        'src="/_Incapsula_Resource?CWUDNSAI=9&amp;incident_id=000000000000000000-1111111111111111&amp;edet=12" '
+        'frameborder=0 width="100%" height="100%">Request unsuccessful. Incapsula '
+        "incident ID: 000000000000000000-1111111111111111</iframe></body></html>"
+    ),
+    # A page Incapsula serves once it has cleared the browser carries the same
+    # script, beside the article (P132-3).
+    "/incapsula-article": (
+        "<title>An article</title>"
+        '<script src="/_Incapsula_Resource?SWJIYLWA=0000000000000000&amp;ns=4&amp;cb=1">'
+        f"</script>{ARTICLE}"
+    ),
 }
 
 
@@ -111,6 +136,12 @@ PAGES: dict[str, str] = {
 def site() -> Iterator[str]:
     class _Pages(http.server.BaseHTTPRequestHandler):
         def do_GET(self) -> None:
+            if self.path not in PAGES:
+                # A vendor's own resource, which nothing here serves.
+                self.send_response(404)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             payload = PAGES[self.path].encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -192,6 +223,17 @@ def _run(tmp_path: Path, source: str) -> tuple[int, dict[str, Any]]:
             'the "Request Rejected" page of F5 BIG-IP\'s application firewall '
             "(support ID 8502708388980510717)",
         ),
+        (
+            "/incapsula",
+            "the challenge page of Imperva's bot protection, Incapsula (a page "
+            "holding nothing but its script from /_Incapsula_Resource)",
+        ),
+        (
+            "/incapsula-block",
+            "the block page of Imperva's application firewall, Incapsula (a frame "
+            "from /_Incapsula_Resource, incident ID "
+            "000000000000000000-1111111111111111)",
+        ),
     ],
 )
 def test_a_bot_check_page_served_200_fails(
@@ -222,7 +264,9 @@ def test_a_firewall_page_claims_no_more_than_a_rejection(
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("path", ["/quotes", "/hidden", "/rejected-title"])
+@pytest.mark.parametrize(
+    "path", ["/quotes", "/hidden", "/rejected-title", "/incapsula-article"]
+)
 def test_a_page_that_names_the_signatures_is_captured(
     tmp_path: Path, site: str, vendor_host: list[str], path: str
 ) -> None:

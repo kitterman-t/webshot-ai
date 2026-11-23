@@ -192,17 +192,24 @@ _META_TITLE_KEYS = {
     "dcterms.title": _DC_TITLE,
 }
 
-#: The schema.org types whose `name`, or else `headline`, is a title: Article
-#: and WebPage, and every type schema.org defines beneath them.  A Product's,
-#: an Event's or an Organization's name names the thing, not the page.
-_JSON_LD_TITLED_TYPES = frozenset(
+#: Article and every type schema.org defines beneath it: what
+#: `declared_article_titles` reads as an article the page declares.
+_JSON_LD_ARTICLE_TYPES = frozenset(
     (
         "Article AdvertiserContentArticle NewsArticle AnalysisNewsArticle "
         "AskPublicNewsArticle BackgroundNewsArticle OpinionNewsArticle "
         "ReportageNewsArticle ReviewNewsArticle Report SatiricalArticle "
         "ScholarlyArticle MedicalScholarlyArticle SocialMediaPosting "
         "BlogPosting LiveBlogPosting DiscussionForumPosting TechArticle "
-        "APIReference "
+        "APIReference"
+    ).split()
+)
+
+#: The schema.org types whose `name`, or else `headline`, is a title: Article
+#: and WebPage, and every type schema.org defines beneath them.  A Product's,
+#: an Event's or an Organization's name names the thing, not the page.
+_JSON_LD_TITLED_TYPES = _JSON_LD_ARTICLE_TYPES | frozenset(
+    (
         "WebPage AboutPage CheckoutPage CollectionPage MediaGallery "
         "ImageGallery VideoGallery ContactPage FAQPage ItemPage "
         "MedicalWebPage ProfilePage QAPage RealEstateListing SearchResultsPage"
@@ -366,6 +373,10 @@ class PageReading:
     #: The article's text, or None when the page has no main region worth
     #: isolating.  A probe for the DOM search, never published.
     article: str | None
+    #: The titles of each article the page declares in JSON-LD
+    #: (`declared_article_titles`), for the check that the capture holds one
+    #: of them.  Never published.
+    article_titles: tuple[tuple[str, ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -422,7 +433,12 @@ class DiscoveredMetadata:
 
 def read_page(html: str) -> PageReading:
     """Both readings of one page, in one blocking call."""
-    return PageReading(metadata=read_metadata(html), article=main_content_text(html))
+    reader = _read_declarations(html)
+    return PageReading(
+        metadata=_metadata(reader),
+        article=main_content_text(html),
+        article_titles=_article_titles(reader),
+    )
 
 
 def read_metadata(html: str) -> DiscoveredMetadata:
@@ -432,7 +448,29 @@ def read_metadata(html: str) -> DiscoveredMetadata:
     where htmldate found a date and its host where Trafilatura found a site
     name (docs/09 P82, P88), and neither is a declaration.
     """
-    reader = _read_declarations(html)
+    return _metadata(_read_declarations(html))
+
+
+def declared_article_titles(html: str) -> tuple[tuple[str, ...], ...]:
+    """The titles of each article the page declares, in document order.
+
+    An article is a schema.org Article, or a type beneath it
+    (`_JSON_LD_ARTICLE_TYPES`), at the top of a JSON-LD block as
+    `declared_title` reads one, and its titles are its `headline` and its
+    `name`, those it states, as it writes them with each run of white space
+    made one space.  Both, because a news site's `headline` is the one it
+    prints and an encyclopedia's is a one-line description beside the `name`
+    it prints (`_json_ld_titles`).  A WebPage is not an article: its `name`
+    is often the site's.
+    """
+    return _article_titles(_read_declarations(html))
+
+
+def _article_titles(reader: _Declarations | None) -> tuple[tuple[str, ...], ...]:
+    return tuple(reader.article_titles) if reader is not None else ()
+
+
+def _metadata(reader: _Declarations | None) -> DiscoveredMetadata:
     declared = _author(reader)
     byline = _byline(reader, declared)
     # The byline replaces a declaration when it names someone the
@@ -945,6 +983,8 @@ class _Declarations(HTMLParser):
         self.microdata_authors: list[tuple[int, int, str]] = []
         self.sitenames: list[tuple[int, str]] = []
         self.titles: list[tuple[int, str]] = []
+        #: Each declared article's titles (`declared_article_titles`).
+        self.article_titles: list[tuple[str, ...]] = []
         #: The open `<time>` whose text is its value, and that text so far.
         self._time: tuple[int, list[str]] | None = None
         #: The document's `<title>` while it is open, and its text so far.
@@ -1286,6 +1326,7 @@ class _Declarations(HTMLParser):
             (_JSON_LD_PUBLISHER, name) for name in _outermost(data, _json_ld_publisher)
         )
         self.titles.extend((_JSON_LD_TITLE, title) for title in _json_ld_titles(data))
+        self.article_titles.extend(_json_ld_article_titles(data))
 
     def _end_element(self, element: _Element) -> None:
         self._end_line(element)
@@ -1446,6 +1487,28 @@ def _json_ld_titles(data: list[object]) -> list[str]:
                     titles.append(value)
                     break
     return titles
+
+
+def _json_ld_article_titles(data: list[object]) -> list[tuple[str, ...]]:
+    """The `headline` and `name` of each article at the top of one JSON-LD
+    block, as `_json_ld_titles` finds its top."""
+    found: list[tuple[str, ...]] = []
+    for node in _objects(data):
+        graph = node.get("@graph")
+        nodes = _objects([graph]) if isinstance(graph, (list, dict)) else []
+        for top in [node, *nodes]:
+            if not _is_a(top, _JSON_LD_ARTICLE_TYPES):
+                continue
+            titles: list[str] = []
+            for key in ("headline", "name"):
+                value = top.get(key)
+                if isinstance(value, str) and value.strip():
+                    title = " ".join(value.split())
+                    if title not in titles:
+                        titles.append(title)
+            if titles:
+                found.append(tuple(titles))
+    return found
 
 
 def _is_a(node: dict[str, object], types: frozenset[str]) -> bool:

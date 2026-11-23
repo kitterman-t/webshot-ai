@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Harbor Office — Notices</title>
+<!-- docs/09 P135-4. A logo inside a link the page spaces wide, as a site's
+     header spaces its menu: 2px between letters and 6px between words. The
+     capture's OCR text layer sits beside the logo and inherits that spacing,
+     so its 0.1px letters were set 20 letters' width apart, and a text reader
+     took each for a word. The engine in the test recognizes three lines, which
+     the layer, set 0.1px apart, gave a text reader as one line with the words
+     of all three in turn. A caption set 45% opaque is the page's own text,
+     however faint the recognized-text layer is drawn. -->
+<style>
+  body { font: 16px/1.6 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+         color: #1d2738; margin: 0 1rem; }
+  .brand { display: inline-block; position: relative; letter-spacing: 2px;
+           word-spacing: 6px; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<p>OCRLAYERBASELINE: the harbor office posts its notices here, beside its logo.</p>
+<a class="brand" href="#top"><img alt="" width="240" height="60" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='60'%3E%3Crect width='240' height='60' fill='%23234'/%3E%3C/svg%3E"></a>
+<p>The office is open on weekdays.</p>
+<p style="color: rgba(29, 39, 56, 0.45)">MUTEDCAPTION set at 45 per cent.</p>
+</body>
+</html>

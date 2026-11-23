@@ -899,3 +899,259 @@ def test_a_page_whose_text_is_all_in_the_box_keeps_it() -> None:
 
     whole = _hideable(box_characters=200)
     assert hideable(CoveredText(boxes=1, pages=1, coverings=(whole,)), 200) == []
+
+
+# P135-1: a page whose layout moves when the window is resized, and the
+# fallback when the measurement cannot be made.
+
+REBUILD = Path(__file__).parent / "fixtures" / "covering_resize_rebuild_page.html"
+STUCK = Path(__file__).parent / "fixtures" / "covering_stuck_layout_page.html"
+STATE_CLASS = Path(__file__).parent / "fixtures" / "covering_state_class_bar_page.html"
+
+TIDE_BAR = (
+    "A fixed box, div.tide-bar, prints over "
+    f"{len('Underthetidebar,pageone') + len('Underthetidebar,pagetwo')} characters "
+    "of the page's text in 2 lines on both pages, starting \"Under the tide bar, "
+    "page one\". The text stays in the PDF's text layer, but on the page the box "
+    'is drawn over it. Pass --exclude "div.tide-bar" to capture the page without '
+    "the box."
+)
+
+HIDDEN_TIDE_BAR = (
+    "Clean mode hid a fixed box that printed over the page's text, and printed "
+    "the page again without it: div.tide-bar, over "
+    f"{len('Underthetidebar,pageone') + len('Underthetidebar,pagetwo')} "
+    "characters of the page's text on 2 pages. Chromium prints a fixed box on "
+    "every page, so in a PDF it is page chrome, which clean mode removes. The "
+    "bundle was taken before, so it still holds the box's text; --mode faithful "
+    "prints the page with it and names it in a warning instead."
+)
+
+
+@pytest.mark.browser
+def test_a_page_that_rebuilds_its_layout_after_a_resize_is_measured(
+    tmp_path: Path,
+) -> None:
+    """The byline was rebuilt for the narrow window at once and for the wide one
+    400 ms after the window was put back, so one frame later the page was 40px
+    taller and its narrow byline, made at the printed width, was gone by the
+    time it was compared. The check said it could not measure; it now waits for
+    the page to move back, and a new element of the removed one's tag and class
+    where it was is the page laid out as it was."""
+    warnings, _ = _capture_file(tmp_path, REBUILD, *FAITHFUL)
+    assert warnings == [TIDE_BAR]
+
+
+@pytest.mark.browser
+def test_clean_mode_hides_the_bar_of_a_page_that_rebuilds_itself(
+    tmp_path: Path,
+) -> None:
+    warnings, text = _capture_file(tmp_path, REBUILD, "--mode", "clean")
+    assert warnings == [HIDDEN_TIDE_BAR]
+    assert "Tide office" not in text
+    assert "Under the tide bar, page one" in text
+
+
+@pytest.mark.browser
+def test_a_bar_named_by_its_state_classes_is_named_by_its_first_and_hidden(
+    tmp_path: Path,
+) -> None:
+    """Marked with the window narrowed, the bar had a class it drops once the
+    window is wide again. Named by it, clean mode's hiding matched nothing and
+    the bar printed on every page, and the --exclude offered would have
+    matched nothing on the next capture (P135-1)."""
+    faithful, _ = _capture_file(tmp_path / "faithful", STATE_CLASS, *FAITHFUL)
+    assert faithful == [TIDE_BAR]
+    clean, text = _capture_file(tmp_path / "clean", STATE_CLASS, "--mode", "clean")
+    assert clean == [HIDDEN_TIDE_BAR]
+    assert "Tide office" not in text
+    excluded, _ = _capture_file(
+        tmp_path / "excluded", STATE_CLASS, *FAITHFUL, "--exclude", "div.tide-bar"
+    )
+    assert excluded == []
+
+
+#: What the stuck page's round trip leaves: 10px more above its text, for
+#: good, on each narrowing.
+STUCK_REASON = (
+    "WebShot could not check whether a fixed or sticky box prints over the page's "
+    "text (laying the page out at its printed width, marking the boxes there and "
+    "putting the window back moved "
+)
+
+
+@pytest.mark.browser
+def test_boxes_that_could_not_be_measured_are_named(tmp_path: Path) -> None:
+    """A catalog page's round trip moved it for good, and the warning said it
+    could not check without naming its logo bar or its chat button (P135-1)."""
+    warnings, text = _capture_file(tmp_path, STUCK, *FAITHFUL)
+    [warning] = warnings
+    assert warning.startswith(STUCK_REASON)
+    assert "and had not put them back 2 s later, the first html from" in warning
+    assert warning.endswith(
+        "The page has 2 fixed or sticky boxes, so the PDF may show one over its "
+        "text without a warning. They are a fixed div.tide-bar, which Chromium "
+        "prints on every page; a fixed div.ask-button, which Chromium prints on "
+        "every page. Pass --exclude with a box's name to capture the page without "
+        "it."
+    )
+    assert "Tide office" in text
+
+
+@pytest.mark.browser
+def test_clean_mode_hides_a_bar_along_the_edge_it_could_not_measure(
+    tmp_path: Path,
+) -> None:
+    """The header bar along the window's top is hidden and the page printed
+    again; the round button in the corner is not a bar and stays. The page
+    moves on every round trip, so the second measurement cannot be made
+    either, and names the button alone."""
+    warnings, text = _capture_file(tmp_path, STUCK, "--mode", "clean")
+    [warning, again] = warnings
+    assert warning.startswith(STUCK_REASON)
+    assert warning.endswith(
+        ", so clean mode hid a fixed bar along the top or bottom edge of the "
+        "window, and printed the page again without it: div.tide-bar, along the "
+        "top edge, 779 by 40 px. Chromium prints a fixed box on every page, and "
+        "one that wide along the window's edge is a site's header or footer bar, "
+        "page chrome on paper, which clean mode removes. The bundle was taken "
+        "before, so it still holds the bar's text; --mode faithful prints the "
+        "page with it and names it in a warning instead."
+    )
+    assert again.startswith(STUCK_REASON)
+    assert again.endswith(
+        "The page has 1 fixed or sticky box, so the PDF may show one over its "
+        "text without a warning. They are a fixed div.ask-button, which Chromium "
+        "prints on every page. Pass --exclude with a box's name to capture the "
+        "page without it."
+    )
+    assert "Tide office" not in text
+    assert "Ask" in text
+    bundle = (tmp_path / "capture.ai" / "content.txt").read_text(encoding="utf-8")
+    assert "Tide office" in bundle
+
+
+def _marked(**changes: Any) -> MarkedBox:
+    fields: dict[str, Any] = {
+        "name": "header.site",
+        "position": "fixed",
+        "code": BAR,
+        "reach": "alone",
+        "characters": 40,
+        "index": 0,
+        "rect": (0.0, 0.0, 779.0, 60.0),
+        "window": (779.0, 900.0),
+    }
+    fields.update(changes)
+    return MarkedBox(**fields)
+
+
+@pytest.mark.parametrize(
+    ("box", "kept"),
+    [
+        (_marked(), True),
+        # Along the bottom edge: a footer bar or a cookie bar.
+        (_marked(rect=(0.0, 840.0, 779.0, 60.0)), True),
+        # Stacked under a notice along the top edge.
+        (_marked(rect=(0.0, 40.0, 779.0, 60.0)), True),
+        # Half the window wide.
+        (_marked(rect=(0.0, 0.0, 390.0, 60.0)), True),
+        # Narrower: a round chat button in the corner, a badge.
+        (_marked(rect=(719.0, 840.0, 48.0, 48.0)), False),
+        (_marked(rect=(0.0, 0.0, 380.0, 60.0)), False),
+        # Over the whole window, or a third of it: a dialog, a backdrop.
+        (_marked(rect=(0.0, 0.0, 779.0, 900.0)), False),
+        (_marked(rect=(0.0, 0.0, 779.0, 301.0)), False),
+        # In the middle of the window: not a bar along an edge.
+        (_marked(rect=(0.0, 400.0, 779.0, 60.0)), False),
+        # Above the window altogether, or below it.
+        (_marked(rect=(0.0, -80.0, 779.0, 60.0)), False),
+        (_marked(rect=(0.0, 900.0, 779.0, 60.0)), False),
+        # The bounds `hideable` sets on a measured box.
+        (_marked(position="sticky"), False),
+        (_marked(reach="shared"), False),
+        (_marked(holds_content=True), False),
+        (_marked(characters=301), False),
+        # Where it sat was not read.
+        (_marked(rect=None), False),
+    ],
+)
+def test_clean_mode_takes_only_a_wide_fixed_bar_along_an_edge(
+    box: MarkedBox, kept: bool
+) -> None:
+    from webshot.render.covering import edge_bars
+
+    result = CoveredText(boxes=1, unmeasured="it moved", marked=(box,))
+    assert (edge_bars(result, 1200) == [box]) is kept
+
+
+def test_a_measured_box_is_left_to_the_measurement() -> None:
+    """Only a box the measurement could not reach is judged by its shape: one
+    it measured over nothing stays, and one whose colours did not take is
+    judged."""
+    from webshot.render.covering import edge_bars
+
+    measured = _marked()
+    unmarked = _marked(name="footer.site", index=1, unmarked="kept color red")
+    result = CoveredText(boxes=2, pages=2, marked=(measured, unmarked))
+    assert edge_bars(result, 1200) == []
+    result = CoveredText(
+        boxes=2, pages=2, unmarked=(unmarked,), marked=(measured, unmarked)
+    )
+    assert edge_bars(result, 1200) == [unmarked]
+
+
+#: Two lines and a fixed bar; `REPLACE_SCRIPT` swaps the second line for a new
+#: element after the marking.
+REPLACED = """<!doctype html><html><head><style>
+  body { margin: 0; font: 16px/30px sans-serif; }
+  .bar { position: fixed; top: 0; left: 0; right: 0; height: 40px; background: #345; }
+  p { margin: 0; height: 30px; }
+</style></head><body>
+  <div class="bar">Bar</div>
+  <p class="one">One</p><p class="two">Two</p>
+</body></html>"""
+
+REPLACE_SCRIPT = """(name) => {
+    const fresh = document.createElement('p');
+    fresh.className = name;
+    fresh.textContent = 'Two';
+    document.querySelector('.two').replaceWith(fresh);
+}"""
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize(
+    ("replacement", "moved"), [("two", 0), ("two second", 1)], ids=["same", "other"]
+)
+def test_an_element_the_page_replaced_is_a_change_unless_the_new_one_is_alike(
+    replacement: str, moved: int
+) -> None:
+    """A removed element is counted, unless a new one of its tag and class lays
+    out where it did (P135-1)."""
+
+    async def run() -> dict[str, Any]:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            try:
+                page = await browser.new_page()
+                await page.set_content(REPLACED)
+                await page.evaluate(
+                    MARK_BOXES_SCRIPT,
+                    {
+                        "attribute": INK_ATTRIBUTE,
+                        "base": [5, 243, 43],
+                        "noFilter": NO_FILTER_ID,
+                    },
+                )
+                await page.evaluate(REPLACE_SCRIPT, replacement)
+                found = await page.evaluate(LAYOUT_MOVED_SCRIPT)
+                await page.evaluate(RESTORE_BOXES_SCRIPT)
+                return dict(found)
+            finally:
+                await browser.close()
+
+    found = asyncio.run(run())
+    assert found["moved"] == moved
+    if moved:
+        assert found["first"] == "p.two, removed from 0,30,1280,30"

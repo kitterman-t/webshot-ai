@@ -33,7 +33,10 @@ WATCH_HOSTS = frozenset({"www.youtube.com", "youtube.com", "m.youtube.com"})
 #: What clean mode hides on a watch page: the site's bar, which holds "Skip
 #: navigation" and "Sign in" and is fixed to the window; the player and the
 #: boxes that hold it, which print black without a loaded video; and the rail
-#: of related videos, wherever the layout puts it, and the comments.
+#: of related videos, wherever the layout puts it, and the comments. And a
+#: recorded live stream's chat replay, a frame the narrow layout the page
+#: prints in puts above the title: it printed as an empty box a third of a
+#: page tall, which the capture's notes took for the player (docs/09 P135-7).
 WATCH_PAGE_NOISE: tuple[str, ...] = (
     "ytd-masthead",
     "#masthead-container",
@@ -43,6 +46,8 @@ WATCH_PAGE_NOISE: tuple[str, ...] = (
     "#secondary",
     "ytd-watch-next-secondary-results-renderer",
     "ytd-comments",
+    "#chat-container",
+    "ytd-live-chat-frame",
 )
 
 

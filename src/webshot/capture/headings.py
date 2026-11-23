@@ -29,7 +29,11 @@ are checked too (`unmarked_since`).
 A heading is matched as words, in order, ignoring case and punctuation, so
 a print stylesheet's `text-transform` and a line break inside it do not
 count as missing. Words may be up to `GAP_WORDS` apart, for the running
-header and footer printed between two pages a heading can span.
+header and footer printed between two pages a heading can span. Or it is
+matched as its letters run together, starting and ending where the printed
+text's words do: PDFium reads the spaces between words from the gaps between
+glyphs, and a display font set tight gave it two words run together, while
+one set wide gave it a word per letter (docs/09 P135-2).
 """
 
 from __future__ import annotations
@@ -71,6 +75,10 @@ _SEEN = r"""
     };
     const textOf = heading => (heading.innerText || heading.textContent || '').replace(/\s+/g, ' ').trim();
 """
+
+#: The same two, for a script elsewhere that asks which headings a reader
+#: can see: clean mode's noise rules keep what holds one (docs/09 P132-1).
+SEEN_HEADING_SCRIPT = _SEEN
 
 #: The page's title: its first `<h1>` a reader can see and that has text,
 #: kept on the window for `SHOWN_HEADINGS_SCRIPT`. Run before the capture
@@ -354,6 +362,58 @@ def words(text: str) -> list[str]:
     return re.findall(r"\w+", text.casefold())
 
 
+@dataclass(frozen=True, slots=True)
+class Words:
+    """A text's words, and their letters run together, for `contains`."""
+
+    words: tuple[str, ...]
+    #: The words joined with nothing between them.
+    joined: str
+    #: Where in `joined` each word starts, and where each ends.
+    starts: frozenset[int]
+    ends: frozenset[int]
+
+
+def indexed(text: str) -> Words:
+    """`text` read for `contains`."""
+    split = words(text)
+    starts: list[int] = []
+    ends: list[int] = []
+    at = 0
+    for word in split:
+        starts.append(at)
+        at += len(word)
+        ends.append(at)
+    return Words(tuple(split), "".join(split), frozenset(starts), frozenset(ends))
+
+
+def contains(text: Words, needle: Sequence[str]) -> bool:
+    """Whether `needle`'s words are in `text`: in order, each within
+    `GAP_WORDS` of the one before (`holds`), or as their letters run together
+    from where one of `text`'s words starts to where one ends.
+
+    The second is how PDFium's text holds a heading set in a display font. It
+    infers a space from the gap between two glyphs, and a font set tight
+    leaves none it reads as one: "Whythe north quay fills", where poppler
+    and pypdf read "Why the" (docs/09 P135-2). Set wide, the same font
+    gives a word per letter. A heading the PDF printed was named as missing,
+    on three captures of three, and a reader learns to pass over the warning
+    that catches real loss. The match must start and end at a word's edge, so
+    a heading is not found inside a longer word.
+    """
+    if holds(text.words, needle):
+        return True
+    squashed = "".join(needle)
+    if not squashed:
+        return True
+    at = text.joined.find(squashed)
+    while at >= 0:
+        if at in text.starts and at + len(squashed) in text.ends:
+            return True
+        at = text.joined.find(squashed, at + 1)
+    return False
+
+
 def holds(haystack: Sequence[str], needle: Sequence[str]) -> bool:
     """Whether `needle`'s words appear in `haystack` in order, each within
     `GAP_WORDS` of the one before."""
@@ -398,16 +458,16 @@ def missing_headings(
     bundle has them."""
     if shown.unread is not None:
         return MissingHeadings(unread=shown.unread)
-    printed_words = words(printed)
-    bundle_words = words(bundle) if bundle is not None else None
+    printed_words = indexed(printed)
+    bundle_words = indexed(bundle) if bundle is not None else None
 
     def kind(heading: Heading) -> str | None:
         needle = words(heading.text)
-        if holds(printed_words, needle):
+        if contains(printed_words, needle):
             return None
         if bundle_words is None:
             return "unprinted"
-        return "lost" if holds(bundle_words, needle) else "hidden"
+        return "lost" if contains(bundle_words, needle) else "hidden"
 
     title: Heading | None = None
     title_kind: str | None = None
@@ -424,7 +484,7 @@ def missing_headings(
         titled = any(
             heading.level == 1
             and " ".join(words(heading.text)) != title_key
-            and holds(printed_words, words(heading.text))
+            and contains(printed_words, words(heading.text))
             for heading in shown.headings
         )
         if titled and shown.title_fate == "shown":
@@ -432,7 +492,7 @@ def missing_headings(
                 headings = (shown.title, *headings)
         else:
             seen.add(title_key)
-            if not titled and not holds(printed_words, words(shown.title.text)):
+            if not titled and not contains(printed_words, words(shown.title.text)):
                 title = shown.title
                 title_kind = (
                     "isolated" if shown.title_fate == "isolated" else kind(shown.title)
@@ -547,3 +607,66 @@ def _rest_warning(headings: Sequence[Heading], kind: str, remedy: str) -> str:
             "this way."
         )
     return f"{noun} {are} not in the PDF's text: {_named(headings)}."
+
+
+#: The share of a declared headline's longer words (four letters or more)
+#: the capture's text must hold for the headline to count as there when its
+#: words are not there in order. A site often prints another headline than
+#: it declares. Over the 60 captures on disk that declare an article in
+#: JSON-LD, 15 held none of its titles in order: the 9 that held the article
+#: held 60% or more of the declared headline's longer words, and the 6 that
+#: held a popup, a wall or nothing held 22% or less (docs/09 P132-4).
+HEADLINE_WORD_SHARE = 0.5
+
+
+def missing_headline(
+    article_titles: Sequence[Sequence[str]], printed: str, bundle: str | None
+) -> str | None:
+    """The first declared article's headline when the capture holds none of
+    the declared articles' titles, or None.
+
+    `article_titles` is each article the page declares, with its titles
+    (`discover.declared_article_titles`). A title is held when the PDF's text
+    or the bundle's holds its words in order, as a heading is looked for, or
+    holds `HEADLINE_WORD_SHARE` of its longer words anywhere.
+    """
+    texts = [words(printed)]
+    if bundle is not None:
+        texts.append(words(bundle))
+    held = [set(text) for text in texts]
+    first: str | None = None
+    for titles in article_titles:
+        for title in titles:
+            needle = words(title)
+            if not needle:
+                continue
+            first = first or title
+            if any(holds(text, needle) for text in texts):
+                return None
+            longer = {word for word in needle if len(word) >= 4} or set(needle)
+            if any(
+                len(longer & have) >= HEADLINE_WORD_SHARE * len(longer) for have in held
+            ):
+                return None
+    return first
+
+
+def missing_headline_warning(headline: str, *, mode: str, bundle: bool = True) -> str:
+    """The manifest warning for `missing_headline`'s headline (docs/09 P132-4)."""
+    where = (
+        "neither the PDF's text nor the bundle's holds"
+        if bundle
+        else ("the PDF's text does not hold")
+    )
+    remedy = (
+        " Clean mode removes what it takes for page chrome: --mode faithful keeps it."
+        if mode == "clean"
+        else ""
+    )
+    return (
+        f'The page declares an article, "{_short(headline)}", in its structured '
+        f"data (JSON-LD), and {where} its headline or most of its words, so the "
+        "capture may not hold the article. A site that refuses an automated "
+        "browser, or that needs a sign-in, can serve the page without its "
+        f"article.{remedy} Look at the PDF before relying on it."
+    )
