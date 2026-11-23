@@ -61,7 +61,7 @@ dependencies = [
     # which the previous >=4.2 floor did not guarantee (docs/05 task 0.1).
     # 6.21.4 is the floor because it clears 7 advisories against 6.21.2
     # (CVE-2026-119203 to 119209, pip-audit/OSV, Oct 2026; docs/09 P112).
-    "pypdf>=6.21.4,<7",
+    "pypdf>=7.0.0,<8",
     # Reads a PDF as a viewer draws it: every object in paint order with its
     # bounds and colour, and every character's box, which pypdf does not
     # give. The covered-text check needs both from the PDF Chromium printed
