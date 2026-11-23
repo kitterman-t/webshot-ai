@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import functools
+import re
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -31,6 +32,17 @@ from .snapshot import FLAT_TREE_JS, HARVEST_MARKERS, READING_ORDER_JS
 
 VISUAL_SELECTOR = "img, svg, canvas, video, [role='img'], iframe, [data-webshot-background-asset='true']"
 OCR_PDF_PREFIX = "Text recognized within visual asset"
+
+#: The mean confidence, 0 to 100, an engine must give a reading for it to go
+#: into the PDF's text layer. A watch page's headshot was read as "me)" at 30,
+#: a podcast icon as "(9)" at 59, a playlist card as "~~ rib 5 @) 173
+#: episodes" at 58, and a video frame as "ra . > 0:00 4) Ls ." at 57; every
+#: chart and label the golden corpus reads is at 96 or 97. A search of the PDF
+#: found the readings that were not words, and an index read them as the
+#: page's text. Below this they stay in assets.json and the reading surfaces,
+#: where each carries its confidence, and a warning names them (docs/09
+#: P135-7).
+OCR_LAYER_MIN_CONFIDENCE = 70.0
 
 #: `BASE_PRINT_CSS`'s rule for recognized text, for an element it cannot reach.
 OCR_TEXT_STYLE = "; ".join(OCR_TEXT_DECLARATIONS)
@@ -256,6 +268,40 @@ class VisualAsset:
     frame_content: Literal["dom", "screenshot"] | None = None
 
 
+def _doubtful(result: OCRResult) -> bool:
+    """Whether a reading stays out of the PDF's text layer: one its engine
+    gave a mean confidence under `OCR_LAYER_MIN_CONFIDENCE`. A reading with no
+    confidence reported goes in, as before."""
+    return (
+        result.confidence is not None and result.confidence < OCR_LAYER_MIN_CONFIDENCE
+    )
+
+
+#: The asset list `doubtful_text_message` writes, each entry's confidence in
+#: group 2. The golden harness masks those figures with it (P7-13): they are
+#: the recognizer's, and move with the Tesseract build as its words do. It sits
+#: beside the writer so a change to the wording cannot leave the mask behind.
+DOUBTFUL_TEXT_LIST_RE = re.compile(
+    r"(is not in the PDF's text layer: )([^.\n\"\\]*)(\. The OCR engine's mean)"
+)
+DOUBTFUL_TEXT_CONFIDENCE_RE = re.compile(r"(\()(\d+)(%\))")
+
+
+def doubtful_text_message(assets: Sequence[VisualAsset]) -> str:
+    """The manifest warning for the readings kept out of the PDF's text layer."""
+    named = ", ".join(f"{asset.id} ({asset.ocr.confidence:.0f}%)" for asset in assets)
+    one = len(assets) == 1
+    return (
+        f"The text recognized in {'a visual asset' if one else f'{len(assets)} visual assets'}"
+        f" is not in the PDF's text layer: {named}. The OCR engine's mean "
+        f"confidence in {'it' if one else 'each'} was under "
+        f"{OCR_LAYER_MIN_CONFIDENCE:.0f}%, as it is in a reading of a photograph "
+        "or an icon rather than of words, which a search of the PDF would find "
+        "as the page's text. assets.json keeps "
+        f"{'it' if one else 'each'} with its confidence."
+    )
+
+
 async def capture_visual_assets(
     page: Page,
     assets_directory: Path,
@@ -303,6 +349,8 @@ async def capture_visual_assets(
     uncounted: list[str] = []
     #: Candidates whose capture raised, shown or not.
     capture_failures = 0
+    #: Assets whose reading is kept out of the PDF's text layer.
+    doubtful: list[VisualAsset] = []
 
     for index in range(len(found)):
         element = _locate(page, found[index]["frames"], index)
@@ -478,8 +526,15 @@ async def capture_visual_assets(
                 {
                     "id": asset_id,
                     "description": description,
-                    "ocrText": f"{OCR_PDF_PREFIX} {asset_id}: {ocr_result.text}"
-                    if ocr_result.text
+                    # One line: lines of 0.1px text sit 0.1px apart, and a
+                    # text reader took two or three of them for one, the
+                    # words of each in turn by where they start, the label's
+                    # among the picture's ("STATE Text recognized AT
+                    # within"), and PDFium took them letter by letter
+                    # (docs/09 P135-4).
+                    "ocrText": f"{OCR_PDF_PREFIX} {asset_id}: "
+                    + " ".join(ocr_result.text.split())
+                    if ocr_result.text and not _doubtful(ocr_result)
                     else "",
                     "renderedCanvas": rendered_canvas,
                     "ocrStyle": OCR_TEXT_STYLE,
@@ -491,6 +546,8 @@ async def capture_visual_assets(
             # both a saved asset and a failure, with nothing in the page or
             # the snapshot pointing at it (docs/09 P23-2).
             assets.append(asset)
+            if ocr_result.text and _doubtful(ocr_result):
+                doubtful.append(asset)
             if asset.kind == "video" and still_loading:
                 # Not "its current visual frame": the image is of the browser
                 # waiting for one, at whatever angle its spinner had reached,
@@ -518,6 +575,8 @@ async def capture_visual_assets(
                 )
             else:
                 warnings.append(f"Could not capture visual element {index + 1}: {exc}")
+    if doubtful:
+        warnings.append(doubtful_text_message(doubtful))
     if over_cap:
         # "At least" when a frame could not be counted: the number is then a
         # floor, and saying it plainly would make it read as the total.

@@ -24,7 +24,11 @@ import pytest
 from playwright.async_api import async_playwright
 from pypdf import PdfReader
 
-from webshot.capture.prepare import BASE_PRINT_CSS, adopt_stylesheet
+from webshot.capture.prepare import (
+    BASE_PRINT_CSS,
+    OCR_TEXT_DECLARATIONS,
+    adopt_stylesheet,
+)
 from webshot.capture.snapshot import FLAT_TREE_JS, HEADING_JS
 from webshot.capture.visuals import (
     RESTORE_SCROLL_JS,
@@ -267,8 +271,16 @@ def test_recognized_text_stays_off_the_page_in_every_tree(tmp_path: Path) -> Non
     # One per visual, in all three kinds of tree, or the style check is empty.
     assert len(spans) == len(SHOWN), spans
     assert {span["tree"] for span in spans} == {"top", "shadow", "frame"}
+    # The layer's own size, as its declarations set it (0.5px since docs/09
+    # P135-4), so the inline style is checked against what the sheet holds.
+    [size] = [
+        declaration.split(":", 1)[1].replace("!important", "").strip()
+        for declaration in OCR_TEXT_DECLARATIONS
+        if declaration.startswith("font-size:")
+    ]
+    assert size == "0.5px"
     assert all(
-        (span["position"], span["fontSize"]) == ("absolute", "0.1px") for span in spans
+        (span["position"], span["fontSize"]) == ("absolute", size) for span in spans
     ), spans
 
 

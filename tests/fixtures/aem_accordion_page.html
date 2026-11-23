@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Rope, tar and the winter store</title>
+<style>
+  body { font: 16px/1.6 Helvetica, Arial, sans-serif; max-width: 46rem; margin: 0 auto; padding: 1rem; }
+  /* A site's own accordion, built on Adobe Experience Manager's Core
+     Components: their script binds to the `data-cmp-hook-accordion` hooks,
+     and this variant closes an item by hiding the wrapper around its panel,
+     and gives its button no ARIA (docs/09 P132-6). */
+  .x-accordion__item-body { display: none; }
+  .x-accordion__item--open .x-accordion__item-body { display: block; }
+</style></head>
+<!-- All text invented. -->
+<body>
+<main>
+  <article>
+    <h1>Rope, tar and the winter store</h1>
+    <p>The harbor's winter store held rope, tar and lamp oil, and AEMOPENSENTINEL
+    opens the part of the page that is always shown.</p>
+    <p>Each autumn the storekeeper counted the coils and the barrels, and each
+    spring he counted them again, and the difference was the winter.</p>
+    <div class="x-accordion" data-cmp-is="accordion">
+      <div class="x-accordion__item" data-cmp-hook-accordion="item">
+        <div class="x-accordion__item-head">
+          <div class="x-accordion__button" data-cmp-hook-accordion="button">
+            <h3>ENDNOTES</h3>
+          </div>
+        </div>
+        <div class="x-accordion__item-body">
+          <div data-cmp-hook-accordion="panel" class="x-accordion__panel x-accordion__panel--hidden" role="region">
+            <ol>
+              <li id="endnote-1">The storekeeper's count of the winter of the long
+              frost, AEMENDNOTESENTINEL, written in the margin of the second
+              ledger beside the price of tar that year.</li>
+              <li>The harbor office's letter asking why eleven coils of rope had
+              gone missing, and the storekeeper's answer, which was that the
+              sea had wanted them more than the boats had.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+      <div class="x-accordion__item" data-cmp-hook-accordion="item">
+        <div class="x-accordion__item-head">
+          <div class="x-accordion__button" data-cmp-hook-accordion="button">
+            <h3>ACKNOWLEDGMENTS</h3>
+          </div>
+        </div>
+        <div class="x-accordion__item-body">
+          <div data-cmp-hook-accordion="panel" class="x-accordion__panel x-accordion__panel--hidden" role="region">
+            <p>The writer thanks the harbor museum, which keeps the ledgers, and
+            AEMCREDITSENTINEL the storekeeper's granddaughter, who read the
+            margins aloud on three wet afternoons and corrected the dates, and
+            the harbor office, which lent its copy of the almanac for the winter
+            of the long frost.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+</main>
+</body></html>

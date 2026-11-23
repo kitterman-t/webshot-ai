@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A tide table under a header that names its state in its classes</title>
+<!-- docs/09 P135-1. A header bar fixed to the top of the window prints over
+     the first line of every page. The page's script gives it a class for a
+     narrow window and takes it away at a wide one, as a header that names its
+     state in its classes does (`headroom--unpinned headroom--scrolled`). The
+     covered-text check marks the boxes with the window narrowed to the
+     printed width, where the bar has that class, and clean mode hides the bar
+     once the window is wide again, where it has not. Each line is 30px tall
+     and never wraps, and the second page starts with a page break, so the
+     line under the bar is the first of each page whatever font draws it. All
+     of the text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/30px sans-serif; color: #111; background: #fff; }
+  .column { width: 380px; margin-left: 20px; }
+  .line { height: 30px; white-space: nowrap; overflow: hidden; }
+  .second { break-before: page; }
+  .tide-bar { position: fixed; top: 0; left: 0; right: 0; height: 40px;
+    background: #234; color: #fff; z-index: 20; }
+</style>
+</head>
+<body>
+<div class="tide-bar">Tide office</div>
+<div class="column">
+  <div class="line">Under the tide bar, page one</div>
+  <div class="line">High water at the north quay, 06:12.</div>
+</div>
+<div class="column second">
+  <div class="line">Under the tide bar, page two</div>
+  <div class="line">High water at the south quay, 06:40.</div>
+</div>
+<script>
+  window.addEventListener("resize", () => {
+    document.querySelector(".tide-bar").classList.toggle("tide-bar--narrow", window.innerWidth < 1000);
+  });
+</script>
+</body>
+</html>

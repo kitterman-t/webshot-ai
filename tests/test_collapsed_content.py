@@ -411,3 +411,32 @@ def test_a_lazy_picture_in_an_opened_region_is_loaded_before_print(
             main([f"{origin}/page.html", "--output", str(pdf), "--no-ai-bundle"]) == 0
         )
     assert seen == [True]
+
+
+AEM = Path(__file__).parent / "fixtures" / "aem_accordion_page.html"
+
+
+@pytest.mark.browser
+def test_an_accordion_known_by_its_hooks_is_named_when_closed(tmp_path: Path) -> None:
+    """A site's variant of Adobe Experience Manager's accordion gives its
+    button no ARIA and hides a wrapper around the panel; its endnotes and
+    credits were in neither deliverable, and nothing said so (docs/09
+    P132-6). The hooks name the item, its button and its panel."""
+    warnings, markdown, text = _capture(tmp_path, AEM, "--collapsed", "closed")
+    [folded] = [w for w in warnings if "closed control" in w]
+    assert folded.startswith("The page keeps text behind 2 closed controls")
+    assert 'div.x-accordion__button ("ENDNOTES") opens div.x-accordion__panel' in folded
+    assert folded.count("in neither the PDF nor the bundle") == 2
+    for closed in ("AEMENDNOTESENTINEL", "AEMCREDITSENTINEL"):
+        assert closed not in markdown and closed not in text, closed
+    assert "AEMOPENSENTINEL" in text
+
+
+@pytest.mark.browser
+def test_an_accordion_closed_by_a_wrapper_is_opened(tmp_path: Path) -> None:
+    """Opening gives the panel its box back, and the wrapper around it that
+    the page hid, up to the item that holds the button."""
+    warnings, markdown, text = _capture(tmp_path, AEM)
+    assert not [w for w in warnings if "closed control" in w]
+    for opened in ("AEMENDNOTESENTINEL", "AEMCREDITSENTINEL"):
+        assert opened in markdown and opened in text, opened

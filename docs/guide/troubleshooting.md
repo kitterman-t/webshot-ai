@@ -72,7 +72,9 @@ a bug report about a capture that did not happen.
 ### The run stops with "The server returned HTTP 404"
 
 WebShot refuses to turn an error page into a capture, so a 4xx or 5xx answer
-exits `3` (or `4` for 401 and 403) and publishes nothing. Check the address.
+exits `3` (or `4` for 401 and 403) and publishes nothing. A 403 whose page
+says the page is not there ("404", "Page Not Found") exits `3` as a 404 does:
+some sites answer a missing page that way. Check the address.
 If the error page is what you want, `--allow-http-errors` captures it, and the
 manifest records the status in `source_response.http_status`.
 
@@ -144,6 +146,16 @@ WebShot prepared it, just before printing. If the screenshot is wrong too, the
 problem is in preparation: try `--mode faithful`, or a different `--selector`
 or `--exclude`. If the screenshot is right and only the PDF is wrong, the
 problem is in print pagination, and the sections below are the place to look.
+
+### The capture is empty, or holds only a popup
+
+If the warning says clean mode hid elements that showed text, a rule for page
+chrome matched the page's content: `--mode faithful` keeps it. Clean mode
+already keeps what holds the region `--selector` names, and what holds a
+visible `<h1>` and most of the page's text. A warning that the page declares
+an article whose headline the capture lacks means the page was served, or
+prepared, without it: the site may have refused an automated browser or
+wanted a sign-in, so open it in your own browser and save it from there.
 
 ### Lines are cut off at the side of the page
 

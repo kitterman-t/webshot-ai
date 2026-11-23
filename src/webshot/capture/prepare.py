@@ -27,6 +27,7 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from ..errors import UsageError
 from ..render.clipping import RELEASED_BOXES_PAST_FRAME_SCRIPT, printed_frame
+from .headings import SEEN_HEADING_SCRIPT
 
 LOGGER = logging.getLogger("webshot")
 
@@ -59,8 +60,8 @@ NOISE_SELECTORS = [
     "[aria-label*='cookie' i]",
     "[class*='cookie-consent' i]",
     "[id*='cookie-consent' i]",
-    "[class*='newsletter' i]",
-    "[class*='subscribe' i]",
+    # A newsletter's sign-up box and a subscribe button are matched by the
+    # words of a class name (`NOISE_CLASS_WORDS`), not by a selector here.
     ".sidebar",
     "#sidebar",
     ".comments",
@@ -87,6 +88,89 @@ NOISE_SELECTORS = [
     # P123-2), where the tag had written it as `ins#gpt_unit_/<network>/anchor_0`.
     "ins[id^='gpt_unit_'][id*='anchor']",
 ]
+
+#: Words that make an element page chrome when one of its class names holds
+#: the word whole: the name itself, a part of it set off by a hyphen or an
+#: underscore, or a capitalised part of a camel-case name
+#: (`newsletter-signup`, `c-newsletter__form`, `NewsletterSignup`,
+#: `subscribeBox`). They were `[class*='newsletter' i]` and
+#: `[class*='subscribe' i]`, which match anywhere in the attribute: a
+#: compliance news site writes a post's tags as classes on the section
+#: holding the post, one tag was `tag-cw-subscriber-only`, and clean mode
+#: hid the section, its `<h1>` and the article with it, printed only a
+#: popup, and said nothing (docs/09 P132-2). "subscriber" is not
+#: "subscribe": a box for subscribers holds what they subscribed to.
+#:
+#: A class name that begins `tag-`, `category-` or `term-` is passed over
+#: whatever it holds: WordPress writes the post's tags, categories and
+#: terms with those prefixes, and they say what the post is about, not
+#: what the element is. A post filed under "Newsletter" is a post.
+NOISE_CLASS_WORDS: tuple[str, ...] = ("newsletter", "subscribe")
+
+#: The share of the page's text that an element clean mode's rules match
+#: must hold, with a visible `<h1>` that would go with it, for the rule to be
+#: taken as wrong about it and the element kept (`hide_noise`). Half: a site
+#: header holding the site's name as its `<h1>`, or a blog's sidebar holding
+#: the blog's, is a small part of the page, and a theme's wrapper around the
+#: article and its sidebar, matched by `.sidebar`, held 95% of the text a
+#: think tank's blog post prints in clean mode (docs/09 P132-1). A comment
+#: feed can hold more than half of a page's text and is still removed: it
+#: holds no `<h1>`.
+NOISE_CONTENT_SHARE = 0.5
+
+#: What every element clean mode's rules hid is marked with, as a selector.
+NOISE_MARK = "[data-webshot-hidden-by='noise']"
+
+#: `classWord(element, wanted)`: the first word of `wanted` (a Set of
+#: lower-case words) that one of the element's class names holds whole, as
+#: `NOISE_CLASS_WORDS` says, or null.
+CLASS_WORD_JS = r"""
+    const classWord = (element, wanted) => {
+        for (const name of (element.getAttribute('class') || '').split(/\s+/)) {
+            if (!name || /^(?:tag|category|term)-/i.test(name)) continue;
+            for (const part of name.split(/[-_]+/)) {
+                const words = part
+                    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+                    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                    .split(' ');
+                for (const word of words) {
+                    if (wanted.has(word.toLowerCase())) return word.toLowerCase();
+                }
+            }
+        }
+        return null;
+    };
+"""
+
+#: `noiseRules(selectors, words)`: every element clean mode's rules match, in
+#: the document's own tree, mapped to the first rule that matched it, named
+#: as the warning names it. Shared by the lazy-load pass's measurement and
+#: by `hide_noise`, so the two match alike (docs/09 P23-8).
+NOISE_RULES_JS = (
+    CLASS_WORD_JS
+    + r"""
+    const noiseRules = (selectors, words) => {
+        const matched = new Map();
+        for (const selector of selectors) {
+            let elements;
+            try { elements = document.querySelectorAll(selector); }
+            catch (error) { throw new Error(`Invalid CSS selector '${selector}': ${error.message}`); }
+            for (const element of elements) {
+                if (!matched.has(element)) matched.set(element, selector);
+            }
+        }
+        if (words.length) {
+            const wanted = new Set(words.map(word => word.toLowerCase()));
+            for (const element of document.querySelectorAll('[class]')) {
+                if (matched.has(element)) continue;
+                const word = classWord(element, wanted);
+                if (word) matched.set(element, `a class name holding "${word}"`);
+            }
+        }
+        return matched;
+    };
+"""
+)
 
 #: Consent managers' dialogs, by vendor, as each vendor's script writes them.
 #: Hidden in both modes (docs/04-spec.md §5 item 5): the dialog is the
@@ -226,9 +310,25 @@ RELEASE_PRINT_CSS = """/* Release text the page truncated with CSS. Only element
 #: The 2px top margin keeps the text off the top edge of a page. Its static
 #: `top` is the top of the asset's line, which is the top of a page whenever
 #: the asset was pushed there, as `break-inside: avoid` does to an image that
-#: does not fit. Text 0.1px tall that close to a page's top edge loses every
+#: does not fit. Text 0.1px tall that close to a page's top edge lost every
 #: glyph that does not dip below the baseline: "Revenue 2026" printed as
 #: "eeue 06" (docs/09 P16-20).
+#:
+#: The spacing the page sets is put back to the font's own. The layer inherits
+#: the asset's surroundings, and a page that spaced its links 2px apart set
+#: every letter of the layer's text many letters' width from the next: a text reader
+#: took each letter for a word ("v i s u a l a s s e t"). A long word still
+#: breaks where it would run past the asset's box, as it may have before, so
+#: the layer never reaches past the page (docs/09 P135-4).
+#:
+#: The text is 0.5px tall, in the platform's regular sans-serif. At 0.1px,
+#: PDFium, which reads the text layer for every check WebShot runs on the
+#: print and underlies Chrome's own PDF viewer, left out each glyph whose ink is a
+#: thin stroke: "Tide tables" read "Tde tab es" in the Linux CI's fonts,
+#: "illicit" read "i c t" in Verdana, and "|" went in Courier even at 0.2px.
+#: Its limit is on the glyph as set, not as scaled: 0.3px kept every glyph in
+#: every font measured, and 0.5px leaves room for a thin face, whose weight
+#: and family the layer no longer takes from the page (docs/09 P135-4).
 OCR_TEXT_DECLARATIONS = (
     "position: absolute !important",
     "left: 0 !important",
@@ -240,12 +340,21 @@ OCR_TEXT_DECLARATIONS = (
     "padding: 0 !important",
     "margin: 2px 0 0 !important",
     "overflow: visible !important",
-    "font-size: 0.1px !important",
-    "line-height: 0.1px !important",
+    "font-family: sans-serif !important",
+    "font-size: 0.5px !important",
+    "font-style: normal !important",
+    "font-weight: 400 !important",
+    "line-height: 0.5px !important",
     "color: rgba(0, 0, 0, 0.01) !important",
     "white-space: pre-wrap !important",
     "border: 0 !important",
     "pointer-events: none !important",
+    "letter-spacing: normal !important",
+    "word-spacing: normal !important",
+    "text-indent: 0 !important",
+    "text-transform: none !important",
+    "word-break: normal !important",
+    "overflow-wrap: anywhere !important",
 )
 
 BASE_PRINT_CSS = (
@@ -517,13 +626,22 @@ SCROLL_TO_TOP_JS = """() => {
 #: while the visuals were harvested (docs/09 P23-8).
 #:
 #: Kept means outside every element the capture will hide, matched as
-#: `hide_elements` matches them, in the document's own tree, and counted into
-#: open shadow roots, where a component's content lives. `keptBottom` is the
+#: `hide_noise` and `hide_elements` match them, in the document's own tree,
+#: and counted into open shadow roots, where a component's content lives.
+#: An element clean mode's rules match that holds a visible `<h1>` is counted
+#: as kept: `hide_noise` keeps such an element when it holds most of the
+#: page's text (docs/09 P132-1), which takes the content region and the
+#: printed text to decide, and neither is known while the page is scrolled.
+#: Counting a site header or a blog's sidebar kept is the safe side: the pass
+#: watches more of the page, and only scrolls longer. `keptBottom` is the
 #: lowest box among kept elements with no element children: a container's box
 #: stretches with whatever its column holds, the removed feed included, and a
 #: leaf's does not. `regions` sizes each outermost removed element, so the
 #: warning can name the one that grew rather than guess.
-LAZY_LOAD_STATE_JS = """({noise, excluded}) => {
+LAZY_LOAD_STATE_JS = (
+    """({noise, words, excluded}) => {"""
+    + NOISE_RULES_JS
+    + """
     const state = {
         y: window.scrollY,
         viewport: window.innerHeight,
@@ -531,7 +649,7 @@ LAZY_LOAD_STATE_JS = """({noise, excluded}) => {
         href: location.href, title: document.title,
         kept: null, keptBottom: 0, regions: {},
     };
-    if (!noise.length && !excluded.length) return state;
+    if (!noise.length && !words.length && !excluded.length) return state;
     const matched = selectors => {
         if (!selectors.length) return new Set();
         try { return new Set(document.querySelectorAll(selectors.join(','))); } catch {}
@@ -542,7 +660,11 @@ LAZY_LOAD_STATE_JS = """({noise, excluded}) => {
         }
         return found;
     };
-    const chrome = matched(noise);
+    const chrome = new Set(noiseRules(noise, words).keys());
+    for (const heading of document.querySelectorAll('h1')) {
+        if (!heading.checkVisibility({checkOpacity: true, checkVisibilityCSS: true})) continue;
+        for (let node = heading; node; node = node.parentElement) chrome.delete(node);
+    }
     const cut = matched(excluded);
     const removed = new Set([...chrome, ...cut]);
     const filter = {acceptNode: node =>
@@ -574,6 +696,7 @@ LAZY_LOAD_STATE_JS = """({noise, excluded}) => {
     }
     return state;
 }"""
+)
 
 
 #: How many steps in a row the window may stay where it was, short of the
@@ -728,13 +851,16 @@ async def scroll_to_load(
     delay_s: float,
     *,
     noise: Sequence[str] = (),
+    noise_words: Sequence[str] = (),
     excluded: Sequence[str] = (),
 ) -> LazyLoadPass:
     """Incrementally scroll through the page to activate viewport-based lazy loading.
 
     `noise` and `excluded` are the selectors the capture will hide (clean
-    mode's page chrome, and `--exclude`). Growth inside what they match does
-    not keep the pass going once the rest of the page has stopped changing.
+    mode's page chrome, and `--exclude`), and `noise_words` the class-name
+    words clean mode hides by (`NOISE_CLASS_WORDS`). Growth inside what they
+    match does not keep the pass going once the rest of the page has stopped
+    changing.
     """
     LOGGER.info("Loading lazy content (up to %d scroll steps)...", max_scrolls)
     stable_steps = 0
@@ -765,7 +891,11 @@ async def scroll_to_load(
     first_height = 0
     end_growths = 0
     was_at_end = False
-    selectors = {"noise": list(noise), "excluded": list(excluded)}
+    selectors = {
+        "noise": list(noise),
+        "words": list(noise_words),
+        "excluded": list(excluded),
+    }
 
     for steps in range(1, max_scrolls + 1):
         try:
@@ -1404,6 +1534,241 @@ async def hide_elements(page: Page, selectors: Sequence[str], reason: str) -> in
         [list(selectors), reason],
     )
     return hidden
+
+
+#: Clean mode's removal of page chrome, and its two exceptions (docs/09
+#: P132-1). An element its rules match is kept, with every element the rules
+#: match around it, when it is the content region or holds it
+#: (`data-webshot-root`, which `--selector` and the auto-selector set): a
+#: think tank's theme classes the wrapper around its article and the
+#: article's sidebar `sidebar`, `--selector` named the article inside it,
+#: and the capture printed an empty page. And when it holds a visible `<h1>`
+#: and more than `share` of the text the page would print with it kept: what
+#: holds the page's heading and most of its words is the page, whatever its
+#: class says. Both are measured before anything is printed, on the page as
+#: a reader saw it, and text the capture has already marked to leave out (the
+#: content selector's siblings, a consent dialog) is not counted.
+#:
+#: Answers what it hid, what it kept and why, and the outermost elements it
+#: hid that held the most text, for the empty-capture warning to name.
+HIDE_NOISE_JS = (
+    r"""({selectors, words, share}) => {"""
+    + SEEN_HEADING_SCRIPT
+    + NOISE_RULES_JS
+    + r"""
+    const matched = noiseRules(selectors, words);
+    const marked = element => element.closest('[data-webshot-hidden="true"]') !== null;
+    const named = element => {
+        const cls = (element.getAttribute('class') || '').trim().split(/\s+/)[0];
+        return element.localName + (element.id ? `#${element.id}` : cls ? `.${cls}` : '');
+    };
+    const unrendered = new Set(['script', 'style', 'noscript', 'template']);
+    // The letters and digits a reader sees in `scope`, outside `skip` and
+    // outside what the capture already marked to leave out.
+    const characters = (scope, skip) => {
+        const shown = new Map();
+        let count = 0;
+        const walker = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+            acceptNode: node => {
+                if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+                if (skip.has(node) || unrendered.has(node.localName)
+                    || node.getAttribute('data-webshot-hidden') === 'true') return NodeFilter.FILTER_REJECT;
+                return NodeFilter.FILTER_SKIP;
+            },
+        });
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const parent = node.parentElement;
+            if (!parent) continue;
+            if (!shown.has(parent)) {
+                shown.set(parent, parent.checkVisibility({checkOpacity: true, checkVisibilityCSS: true}));
+            }
+            if (shown.get(parent)) count += node.data.replace(/[^\p{L}\p{N}]/gu, '').length;
+        }
+        return count;
+    };
+    const kept = new Map();
+    const keep = (element, why, held) => {
+        for (let node = element; node; node = node.parentElement) {
+            if (matched.has(node) && !kept.has(node)) kept.set(node, {why, held});
+        }
+    };
+    const root = document.querySelector('[data-webshot-root="true"]');
+    if (root) keep(root, 'root', null);
+    const headings = [...document.querySelectorAll('h1')].filter(
+        heading => seen(heading) && textOf(heading) && !marked(heading));
+    // Each heading's chain: the elements the rules match around it, the
+    // outermost last. The text is weighed against what the page would print
+    // with every chain kept and the rest of the chrome hidden, so a site
+    // header holding the site's name is weighed against the article beside
+    // it, not against itself.
+    const chains = [];
+    const around = new Set();
+    for (const heading of headings) {
+        const chain = [];
+        for (let node = heading; node; node = node.parentElement) {
+            if (matched.has(node) && !kept.has(node) && !marked(node)) chain.push(node);
+        }
+        if (chain.length) chains.push(chain);
+        for (const node of chain) around.add(node);
+    }
+    if (chains.length) {
+        const skip = new Set([...matched.keys()].filter(other => !kept.has(other) && !around.has(other)));
+        const total = characters(document.body, skip);
+        const weighed = new Map();
+        for (const chain of chains) {
+            const outermost = chain[chain.length - 1];
+            if (!weighed.has(outermost)) weighed.set(outermost, characters(outermost, skip));
+            const inside = weighed.get(outermost);
+            if (total > 0 && inside > share * total) keep(chain[0], 'heading', [inside, total]);
+        }
+    }
+    const hidden = [];
+    let count = 0;
+    for (const [element, rule] of matched) {
+        if (kept.has(element)) continue;
+        if (!element.hasAttribute('data-webshot-hidden')) count++;
+        hidden.push([element, rule]);
+    }
+    // Measured before anything is marked, which the count would then skip.
+    const outermost = hidden.filter(([element]) =>
+        !hidden.some(([other]) => other !== element && other.contains(element)));
+    const removed = outermost
+        .filter(([element]) => !marked(element))
+        .map(([element, rule]) => ({name: named(element), rule, characters: characters(element, new Set())}))
+        .filter(box => box.characters > 0)
+        .sort((a, b) => b.characters - a.characters);
+    for (const [element] of hidden) {
+        element.setAttribute('data-webshot-hidden', 'true');
+        element.setAttribute('data-webshot-hidden-by', 'noise');
+    }
+    const keptBoxes = [...kept]
+        .filter(([element]) => ![...kept.keys()].some(
+            other => other !== element && other.contains(element)))
+        .map(([element, {why, held}]) => ({
+            name: named(element), rule: matched.get(element), why,
+            characters: held ? held[0] : null, total: held ? held[1] : null,
+        }));
+    return {count, kept: keptBoxes, removed};
+}"""
+)
+
+
+@dataclass(frozen=True, slots=True)
+class NoiseBox:
+    """An element clean mode's rules matched, named as the warnings name it."""
+
+    #: `element#id` or `element.class`.
+    name: str
+    #: The rule that matched it: a selector, or the class-name word.
+    rule: str
+    #: The letters and digits of text it showed, where measured.
+    characters: int | None = None
+    #: For one kept: `root` (it holds the content region) or `heading` (it
+    #: holds a visible `<h1>` and most of the text), and the text the page
+    #: would print with it kept, when that was measured.
+    why: str = ""
+    total: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NoiseRemoval:
+    """What `hide_noise` did."""
+
+    #: Elements it marked that were not marked before.
+    hidden: int = 0
+    #: The outermost elements its rules matched and it kept.
+    kept: tuple[NoiseBox, ...] = ()
+    #: The outermost elements it hid that showed text, the most first.
+    removed: tuple[NoiseBox, ...] = ()
+
+    @property
+    def removed_characters(self) -> int:
+        return sum(box.characters or 0 for box in self.removed)
+
+
+async def hide_noise(
+    page: Page,
+    selectors: Sequence[str] = tuple(NOISE_SELECTORS),
+    words: Sequence[str] = NOISE_CLASS_WORDS,
+) -> NoiseRemoval:
+    """Mark the page chrome clean mode removes, keeping what is the page.
+
+    `selectors` and `words` are clean mode's rules: `NOISE_SELECTORS` (and a
+    watch page's own), and `NOISE_CLASS_WORDS`. Each element marked records
+    `noise` as its reason, as `hide_elements` records one. Run after the
+    content region is isolated, whose root it keeps (`HIDE_NOISE_JS`).
+    """
+    if not selectors and not words:
+        return NoiseRemoval()
+    answer: dict[str, Any] = await page.evaluate(
+        HIDE_NOISE_JS,
+        {
+            "selectors": list(selectors),
+            "words": list(words),
+            "share": NOISE_CONTENT_SHARE,
+        },
+    )
+    return NoiseRemoval(
+        hidden=int(answer["count"]),
+        kept=tuple(
+            NoiseBox(
+                name=str(box["name"]),
+                rule=str(box["rule"]),
+                characters=None
+                if box["characters"] is None
+                else int(box["characters"]),
+                why=str(box["why"]),
+                total=None if box["total"] is None else int(box["total"]),
+            )
+            for box in answer["kept"]
+        ),
+        removed=tuple(
+            NoiseBox(
+                name=str(box["name"]),
+                rule=str(box["rule"]),
+                characters=int(box["characters"]),
+            )
+            for box in answer["removed"]
+        ),
+    )
+
+
+def kept_noise_message(removal: NoiseRemoval) -> str | None:
+    """The log line for the elements clean mode's rules matched and it kept."""
+    if not removal.kept:
+        return None
+    parts = []
+    for box in removal.kept:
+        if box.why == "root":
+            reason = "it holds the content region"
+        elif box.characters is not None and box.total:
+            reason = (
+                f"it holds a visible <h1> and {box.characters / box.total:.0%} "
+                "of the page's text"
+            )
+        else:
+            reason = "it holds a visible <h1> and most of the page's text"
+        parts.append(f"{box.name} (matched by {box.rule}: {reason})")
+    return (
+        f"Kept {len(removal.kept)} element(s) clean mode would have removed as "
+        f"page chrome, because each is the page's content: {'; '.join(parts)}."
+    )
+
+
+def noise_removal_note(removal: NoiseRemoval) -> str | None:
+    """A sentence for the empty-capture warning: what clean mode hid that had
+    text, or None when it hid none."""
+    if not removal.removed:
+        return None
+    largest = removal.removed[0]
+    count = len(removal.removed)
+    held = removal.removed_characters
+    return (
+        f"Clean mode hid {count} element{'' if count == 1 else 's'} as page chrome "
+        f"that showed {held:,} letters and digits of text, the most in "
+        f"{largest.name} ({largest.characters:,}, matched by {largest.rule}): if "
+        "that is the page's content, --mode faithful keeps it."
+    )
 
 
 #: The release, run in one document at a time (see `release_clamped_text`).

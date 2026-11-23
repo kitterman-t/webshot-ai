@@ -38,6 +38,32 @@ from ..errors import EnvironmentFailure
 LOGGER = logging.getLogger("webshot")
 
 
+#: Service workers stay blocked (`service_workers="block"` below): a worker's
+#: own requests do not cross `context.route`, so the request policy would not
+#: see them (docs/09 P7-6). Playwright blocks one by replacing `register`
+#: with a function whose promise resolves to nothing, which no browser does:
+#: one that will not start a worker rejects the call, and pages are written
+#: for that. An embedded chart read `.active` off the nothing it was given,
+#: threw, and never drew itself, so a news page printed two loading spinners
+#: where its charts were (docs/09 P135-3). This refuses the way a browser
+#: does. Added after Playwright's own script, it replaces that one; were the
+#: order ever reversed, Playwright's would replace it, and registration would
+#: still be refused.
+REFUSE_SERVICE_WORKERS_SCRIPT = """(() => {
+    const container = self.ServiceWorkerContainer;
+    if (!container) return;
+    Object.defineProperty(container.prototype, 'register', {
+        configurable: true,
+        writable: true,
+        value: function register() {
+            return Promise.reject(new DOMException(
+                'Failed to register a ServiceWorker: this browser does not start service workers.',
+                'SecurityError'));
+        },
+    });
+})()"""
+
+
 async def launch_context(
     playwright: Playwright, options: CaptureOptions
 ) -> tuple[BrowserContext, Browser | None]:
@@ -81,6 +107,7 @@ async def launch_context(
         raise
     context.set_default_timeout(options.operation_timeout_ms)
     context.set_default_navigation_timeout(options.navigation_timeout_ms)
+    await context.add_init_script(REFUSE_SERVICE_WORKERS_SCRIPT)
     if options.block_private_requests or options.filesystem_roots:
         await _install_request_policy(context, options)
     return context, browser

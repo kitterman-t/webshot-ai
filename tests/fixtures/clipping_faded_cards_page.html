@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Faded harbor notices with one address too long for the page</title>
+<!-- docs/09 P135-4. P123-7's page with its three notice cards set in a muted
+     colour, 45% opaque, as a site sets a byline or a caption. The clipping
+     check clears a card whose text the PDF holds whole, and it reads the
+     PDF's text without WebShot's recognized-text layer, drawn at 1%: read
+     without everything under half opaque, the cards' text was not there, and
+     all three were counted again. What follows is P123-7's account.
+     One paragraph cites a share token with no break point in
+     it, so its line runs past the right margin of the printed page and the
+     PDF loses the end of the token: the one loss. Beside it, three notice
+     cards that a rule for short windows widens past the page. The clipping
+     check lays the page out by narrowing the window to the printed width,
+     1440 by 1000 to 779 by 1000, where that rule applies; the print is laid
+     out on a page 1045px tall (Letter, 0.6in margins, scale 0.9), where it
+     does not. So the check saw every card's lines past the edge, and the PDF
+     printed every card whole. The wrapper hides what runs past it, so the
+     document is no wider than the paper and Chromium does not shrink it to
+     fit. All of the text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/1.5 serif; color: #111; background: #fff; }
+  .page { overflow: hidden; padding: 0 20px; }
+  .card { border: 1px solid #999; padding: 8px; margin: 12px 0;
+          color: rgba(17, 17, 17, 0.45); }
+  @media (max-height: 1020px) { .card { width: 1100px; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Harbor notices</h1>
+  <p class="cite">The survey slides are shared under the token
+  EXckfpLYLRVAnz7NR5VvJZkBYsF5Rs94xo26jALMRIcjXgQwErTyUiOpAsDfGhJkLzXcVbNm1234567890HarborSurveyToken
+  for anyone who missed the meeting.</p>
+  <div class="card">The north quay closes at dusk through the winter season, and vessels
+  waiting for a berth anchor in the outer roads until called in.</div>
+  <div class="card">The pilot boat keeps its usual hours, and the night signal is shown
+  from the breakwater light from the first of the month onwards.</div>
+  <div class="card">Vessels leaving after dark report to the harbor office by radio before
+  they cast off, and again once they are clear of the breakwater.</div>
+</div>
+</body>
+</html>

@@ -333,11 +333,20 @@ there with its reason, and the run's job summary lists every skip.
    A web page whose document shows a bot check's own page in place of the
    page exits 4 with the same advice, whatever its status: a shown frame
    from DataDome's `captcha-delivery.com`, a rendered `#px-captcha` (HUMAN,
-   formerly PerimeterX), or a page titled "Access Denied" carrying a
-   reference in Akamai's dotted format. Only a signature that names the
-   vendor counts, never a phrase a page could quote. The test runs after the
+   formerly PerimeterX), a page titled "Access Denied" carrying a
+   reference in Akamai's dotted format, F5 BIG-IP's "Request Rejected" page
+   with its support ID, or a page that shows no text and nothing but Imperva
+   Incapsula's own script or frame from `/_Incapsula_Resource` (its challenge
+   and block pages; the script alone is on every page Incapsula serves).
+   Only a signature that names the vendor counts, never a phrase a page
+   could quote. The test runs after the
    lazy-load pass, and a page it cannot read, tried twice, is a manifest
-   warning. A navigation that fails with `net::ERR_HTTP2_PROTOCOL_ERROR`
+   warning. A 403 whose headers name no bot check has its page read too: a
+   bot check's page gives that page's message, and a page whose title or
+   first `<h1>` says the page is not there ("404", "not found", "can't
+   find", "does not exist") exits 3, as a 404 does, with a message that the
+   link is most likely dead rather than one that needs a sign-in (docs/09
+   P120-1, P132-3, P132-5). A navigation that fails with `net::ERR_HTTP2_PROTOCOL_ERROR`
    keeps exit 3, and its message adds that some bot checks refuse an
    automated browser this way (docs/09 P78).
    A page that sends the browser from the address asked for to its own
@@ -355,9 +364,18 @@ there with its reason, and the run's job summary lists every skip.
    negative `z-index`), that is drawn on top at more than half of a 3x3 grid
    of points over it (an interstitial with its backdrop), which a manifest
    warning names; neither rule hides a box holding more than
-   half of the page's text, which is the page (docs/09 P113-4). After the
+   half of the page's text, which is the page (docs/09 P113-4). Clean
+   mode's page chrome is named by selectors and by words a class name holds
+   whole (`NOISE_CLASS_WORDS`: newsletter, subscribe), a class beginning
+   `tag-`, `category-` or `term-` being a CMS's record of what the post is
+   about and passed over; and its rules MUST NOT hide an element that holds
+   the content region, nor one that holds a visible `<h1>` and more than
+   half of the text the page would print with every such element kept
+   (docs/09 P132-1, P132-2). After the
    render, `clean` mode also hides a fixed box measured over the page's text,
-   as item 16 bounds it, and prints the page again (docs/09 P123-6).
+   as item 16 bounds it, and prints the page again (docs/09 P123-6), and,
+   where that measurement could not be made, a fixed bar along the window's
+   top or bottom edge (docs/09 P135-1).
    `faithful` mode hides nothing else. The number of elements hidden is logged. Capture is an act of record — what was altered must be
    declared (docs/09 P79).
 6. **Frames and shadow roots:** the snapshot is the page's flat tree. Every
@@ -481,7 +499,14 @@ there with its reason, and the run's job summary lists every skip.
     finds it. The layer MUST NOT widen the printed page: it spans a box the
     page already lays out, so Chromium's shrink-to-fit never scales a page
     down to take it in. Its text MUST reach the PDF's text layer, including
-    where the asset starts a page (docs/09 P16-20).
+    where the asset starts a page (docs/09 P16-20), as one line 0.5 px tall in
+    the platform's regular sans-serif, set in the layer's own spacing, so
+    PDFium reads every glyph of it (docs/09 P135-4); a reading the engine gives a mean
+    confidence under 70% stays out of the layer, in `assets.json`, and a
+    manifest warning names each such asset with its confidence (docs/09
+    P135-7). The checks that ask what the page prints read the PDF's text
+    without the layer where the layer could answer for them (docs/09
+    P135-4).
 13. **Recognized text on the reading surfaces:** wherever the text recognized
     in a visual asset reaches `content.md`, `content.txt` or `chunks.jsonl`,
     it MUST stand between an opening line that names the asset, the engine
@@ -503,7 +528,10 @@ there with its reason, and the run's job summary lists every skip.
     published. The check reads the bundle, so it does not run under
     `--no-ai-bundle`, where nothing records a count either. The figure is the
     one Crawl4AI's structural check uses for minimal text; a one-sentence page
-    clears it (docs/09 P14-1, P22-2).
+    clears it (docs/09 P14-1, P22-2). When clean mode hid elements that
+    showed text, the warning names how many, the letters and digits they
+    showed, and the one that showed the most with the rule that matched it
+    (docs/09 P132-1).
 15. **A picture printed far finer than paper shows:** after the render, each
     picture the PDF draws at more than 600 pixels per inch, measured at the
     largest size it is drawn on any page, is reduced to 300 pixels per inch
@@ -537,8 +565,13 @@ there with its reason, and the run's job summary lists every skip.
     marked boxes (a filtered box prints its text only when measured), a box
     the render printed counts even when it has gone since, and a box whose own `style`
     attribute holds its colour as `!important` is marked through that
-    attribute and given its text back after. A measurement that could not be
-    made, or a box that could not be marked for it, is itself a warning.
+    attribute and given its text back after. The layout check that guards the
+    marking gives a page that moved up to 2 s to move back, and counts an
+    element the page removed since the render unless a new one of its tag and
+    class lays out where it was; one the page made at the printed width and
+    took away again is no change (docs/09 P135-1). A measurement that could
+    not be made, or a box that could not be marked for it, is itself a
+    warning, naming the boxes the marking found.
     In `clean` mode a `fixed` box found over the text is then hidden and the
     page printed again, with a manifest warning naming each box hidden, what
     it covered, and that the bundle, taken before, keeps its text; every
@@ -549,7 +582,15 @@ there with its reason, and the run's job summary lists every skip.
     not stop at a wall's words (item 18). A `sticky`
     box prints once, in the page's flow, and is never hidden (docs/09
     P123-6), nor is a box that still lays out once marked, because a page
-    rule outranks WebShot's hiding one (docs/09 P128). Every other box is a warning, with `--exclude` as the remedy,
+    rule outranks WebShot's hiding one (docs/09 P128). The box hidden is the
+    element measured, not what its name matches by then, and a box is named
+    by the fewest of its first three classes that name it alone (docs/09
+    P135-1). Where the measurement could not be made, or a box could not be
+    marked, `clean` mode hides instead an unmeasured `fixed` box at least half
+    the window wide, at most a third of it tall, along its top or bottom edge
+    at the printed width, within the same bounds, and prints the page again
+    with a warning naming each bar and why it was not measured (docs/09
+    P135-1). Every other box is a warning, with `--exclude` as the remedy,
     except on a page that showed an access wall (docs/09 P83, P97). The
     capture still exits 0.
 17. **A table too long to print whole:** Chromium's memory for printing one
@@ -603,14 +644,18 @@ there with its reason, and the run's job summary lists every skip.
     collapse toggle's target, with no box; the first region with no box
     after a control whose whole label says the article goes on ("Story
     continues", "Read more") or after one of its three nearest ancestors; a
-    closed `<details>`; and a known expander whose text the page fetches only
+    closed `<details>`; an Adobe Experience Manager accordion item's panel,
+    by the `data-cmp-hook-accordion` hooks of the item, its button and its
+    panel, with no box; and a known expander whose text the page fetches only
     when opened (YouTube's description). Regions in a header, navigation,
     footer or aside, regions mostly of link text, and anything the capture
     hid itself, are page chrome and are not counted. In clean mode, and
     under `--collapsed open`, a capture MUST open them once it has hidden
     what it hides and before anything is snapshotted or printed: a
     `<details>` is given its `open` attribute, a region with no box its
-    element's default display, and the expander's button is pressed. In
+    element's default display, as is each element around it with no box up
+    to the one that holds its control (docs/09 P132-6), and the expander's
+    button is pressed. In
     faithful mode, and under `--collapsed closed`, it MUST NOT open them.
     Once the page is prepared for print, a capture MUST record a manifest
     warning naming each such region that is still closed, saying whether its
@@ -667,7 +712,10 @@ there with its reason, and the run's job summary lists every skip.
     print stylesheet hid it, and `--media screen` is the remedy), and one
     warning naming the other headings it lacks, grouped the same way. A
     heading counts as printed when its words are in the PDF's text in order,
-    ignoring case and punctuation, each within 40 words of the one before.
+    ignoring case and punctuation, each within 40 words of the one before,
+    or when its letters run together are, from where a word of the PDF's text
+    starts to where one ends: PDFium runs the words of a heading set tight
+    together, and splits one set wide into letters (docs/09 P135-2).
     A title outside the region WebShot chose as the content is named, unless
     an `<h1>` of the region printed; one outside a `--selector` the caller
     gave, or removed with page chrome by clean mode, the consent-dialog
@@ -677,6 +725,38 @@ there with its reason, and the run's job summary lists every skip.
     marked whose mark came off because its print stylesheet shows it are
     checked as the others are (docs/09 P128). Headings that could not be
     read are a warning (docs/09 P123-5).
+    A page that declares an article in JSON-LD (a schema.org Article, or a
+    type beneath it, at the top of a block) MUST get a manifest warning when
+    neither the PDF's text nor the bundle's holds any of its declared titles
+    (`headline`, `name`), with words in order as a heading's are matched, or
+    half of the words of four letters or more of one: a page served without
+    its article, or a rule that removed it, leaves the declaration behind.
+    Not for a region the caller's `--selector` chose, and not when the
+    title's warning names the same heading (docs/09 P132-4).
+25. **Text hidden after a wall's marker:** once the page is prepared, a
+    capture MUST record a manifest warning when the page hides, with no box,
+    at least 200 letters and digits of text after an element whose class
+    name holds a wall's name whole (`WALL_MARKER_WORDS`: hardwall, paywall,
+    regwall), outside its header, navigation, footer, asides and dialogs,
+    more than it shows before the marker in the article or main region
+    around it. The warning names the marker and both counts, says the
+    capture holds only the opening, gives the save-it-yourself advice, and
+    offers an earlier snapshot for a web archive's copy. Nothing hidden is
+    shown, and the capture still exits 0 (docs/09 P132-7).
+26. **Text printed in columns:** after the render, in the layout the
+    clipping check measures at the printed width, a capture MUST record one
+    manifest warning naming each outermost block of at least 400 characters,
+    outside the page's header, navigation, footer and asides, that the page
+    lays out in two columns or more, with the `--css` rule that prints it in
+    one, which names no media, so it applies under the capture's `--media`.
+    A column check that could not run is a warning of its own, apart from
+    the clipping check's. The layout is the page's and is kept (docs/09
+    P135-5).
+27. **A page that asks for a service worker:** service workers stay blocked,
+    since a worker's own requests do not cross the request policy, and a
+    page's `navigator.serviceWorker.register` MUST be refused as a browser
+    refuses it, with a rejected promise, not one that resolves to nothing
+    (docs/09 P135-3).
 
 ## 6. Security requirements (carried forward and new; all MUST)
 

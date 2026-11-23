@@ -90,7 +90,13 @@ def test_clean_mode_prints_the_video_and_its_dates(
     note = f"Published 2024-11-12 by Harbor Town Council. Captured {today}."
     assert all(note in " ".join(page.split()) for page in pages), pages
     assert "The description ends with the timetable's effective date." in text
-    for chrome in ("Skip navigation", "Sign in", "Another video about the lighthouse"):
+    for chrome in (
+        "Skip navigation",
+        "Sign in",
+        "Another video about the lighthouse",
+        # The chat replay's frame (docs/09 P135-7).
+        "Chat replay of the harbor stream",
+    ):
         assert chrome not in text, chrome
     assert not [w for w in report["warnings"] if "closed control" in w]
     assert site and all(url.startswith("https://www.youtube.com/") for url in site)
@@ -104,6 +110,7 @@ def test_faithful_mode_prints_the_watch_page_as_shown(
     assert "Published 2024-11-12" not in text
     assert "Skip navigation" in text
     assert "Another video about the lighthouse keepers" in text
+    assert "Chat replay of the harbor stream" in text
     [folded] = [w for w in report["warnings"] if "closed control" in w]
     assert "ytd-text-inline-expander#description-inline-expander" in folded
 

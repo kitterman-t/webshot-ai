@@ -63,6 +63,7 @@ from pypdf.errors import PyPdfError
 
 from ..capture.headings import holds, words
 from ..config import CaptureOptions
+from .columns import COLUMN_TEXT_CHARACTERS, COLUMNS_SCRIPT, ColumnBlock, column_blocks
 from .long_tables import printable_width_px
 from .pdf import print_geometry
 
@@ -369,6 +370,16 @@ class PrintClipping:
     #: for `lost_cuts`; and how many more were counted than described.
     cuts: tuple[Mapping[str, Any], ...] = ()
     beyond: int = 0
+    #: The blocks of text the page prints in columns, read in the same
+    #: layout (`render/columns.py`, docs/09 P135-5), and why they could not
+    #: be read, when they could not.
+    columns: tuple[ColumnBlock, ...] = ()
+    columns_unread: str | None = None
+
+
+def _first_line(exc: Exception) -> str:
+    text = str(exc).strip()
+    return text.splitlines()[0] if text else type(exc).__name__
 
 
 def clipping_warnings(clipping: PrintClipping) -> list[str]:
@@ -653,22 +664,49 @@ async def find_clipped_text(
     viewport = page.viewport_size
     if viewport is None:
         # A context without a fixed viewport cannot be narrowed and restored.
-        return PrintClipping(width=None)
+        return PrintClipping(
+            width=None,
+            columns_unread="the window has no fixed size to lay the page out in",
+        )
     if width is None:
         width = await printed_width(page, options)
     if width is None:
-        return PrintClipping(width=None)
+        return PrintClipping(
+            width=None, columns_unread="the width the page prints at could not be read"
+        )
+    found: Mapping[str, Any] | None = None
+    framed = PrintClipping(width=width)
+    columns: tuple[ColumnBlock, ...] = ()
+    columns_unread: str | None = None
     try:
         await page.set_viewport_size({"width": width, "height": viewport["height"]})
-        found = await page.evaluate(
-            CLIPPED_TEXT_SCRIPT, [0, width, 0, width, EDGE_SLACK_PX]
-        )
-        framed = await _measure_frames(page, width)
+        try:
+            found = await page.evaluate(
+                CLIPPED_TEXT_SCRIPT, [0, width, 0, width, EDGE_SLACK_PX]
+            )
+            framed = await _measure_frames(page, width)
+        except PlaywrightError as exc:
+            LOGGER.debug("Measuring the printed layout failed: %s", exc)
+            found = None
+        # In the same layout, so it costs no resize of its own, and in a try
+        # of its own: its failure is not the clipping check's, nor the
+        # clipping check's its own, and each is said as what it is (P135-5).
+        try:
+            columns = column_blocks(
+                await page.evaluate(COLUMNS_SCRIPT, COLUMN_TEXT_CHARACTERS)
+            )
+        except PlaywrightError as exc:
+            columns_unread = f"the script that reads them failed: {_first_line(exc)}"
     except PlaywrightError as exc:
-        LOGGER.debug("Measuring the printed layout failed: %s", exc)
-        return PrintClipping(width=None)
+        LOGGER.debug("Laying the page out at its printed width failed: %s", exc)
+        found = None
+        columns_unread = (
+            f"the page could not be laid out at its printed width: {_first_line(exc)}"
+        )
     finally:
         await page.set_viewport_size(viewport)
+    if found is None:
+        return PrintClipping(width=None, columns=columns, columns_unread=columns_unread)
     cuts = [*found["cuts"], *framed.cuts]
     # An element past the 500 the script describes is counted, uncleared.
     beyond = int(found["count"]) - len(found["cuts"]) + framed.beyond
@@ -689,6 +727,8 @@ async def find_clipped_text(
         scrolled=int(found["scrolled"]) + framed.scrolled,
         scrolled_sample=found["scrolledSample"] or framed.scrolled_sample,
         unheld=framed.unheld,
+        columns=columns,
+        columns_unread=columns_unread,
     )
 
 

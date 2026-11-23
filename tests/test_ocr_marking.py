@@ -98,3 +98,49 @@ def test_the_golden_harness_masks_the_confidence_it_cannot_compare() -> None:
     for name in ("bundle/content.md", "bundle/chunks.jsonl"):
         assert "mean confidence <OCR-CONFIDENCE>%:]" in masked[name], name
         assert "confidence 27%" not in masked[name], name
+
+
+def _doubted(*confidences: float) -> str:
+    from webshot.capture.visuals import doubtful_text_message
+
+    return doubtful_text_message(
+        [
+            VisualAsset(
+                id=f"asset-00{index}",
+                file=f"assets/asset-00{index}.png",
+                kind="video",
+                width=640,
+                height=360,
+                ocr=OCRResult(text=NOISE, confidence=confidence, engine="Tesseract"),
+            )
+            for index, confidence in enumerate(confidences, start=1)
+        ]
+    )
+
+
+def test_the_golden_harness_masks_the_doubted_reading_confidences() -> None:
+    """The warning names each doubted asset with the recognizer's confidence.
+
+    Tesseract 5.5.4 read the lms-module video frame at 58% where the recording
+    machine's 5.5.3 read 57%, and the portable profile, which masks every other
+    confidence, failed the golden on webshot-ai's hosted runner (P7-13).
+    """
+
+    def artifacts(message: str) -> dict[str, str]:
+        warnings = json.dumps({"warnings": [message]})
+        return {
+            "bundle/manifest.json": warnings,
+            "report.json": warnings,
+            "stderr.txt": f"WARNING: {message}\n",
+        }
+
+    for older, newer in (((57.0,), (58.0,)), ((57.0, 30.0), (58.0, 41.0))):
+        recorded = portable(artifacts(_doubted(*older)))
+        assert recorded == portable(artifacts(_doubted(*newer)))
+        for name, text in recorded.items():
+            if name.endswith(".json"):
+                json.loads(text)
+            assert "asset-001 (<OCR-CONFIDENCE>%)" in text, text
+            assert "57%" not in text and "30%" not in text, text
+            # The threshold is the code's, not the recognizer's: still compared.
+            assert "was under 70%" in text, text

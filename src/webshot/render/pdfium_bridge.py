@@ -147,6 +147,60 @@ def page_texts(pdf: Path | bytes) -> tuple[str, ...]:
         document.close()
 
 
+#: How opaque, 0 to 255, a character must be drawn to count as text on the
+#: page: just above WebShot's recognized-text layer, drawn at 1% (3), and far
+#: below a muted byline or caption, which a site sets at 40 or 50% (about 115):
+#: those print, and the clipping check must find them. Half opaque, the first
+#: bound taken, read a faded card the PDF printed whole as missing and counted
+#: it as cut (review of P135-4).
+LEGIBLE_ALPHA = 10
+
+
+def legible_page_texts(pdf: Path | bytes) -> tuple[str, ...]:
+    """Each page's text as `page_texts` reads it, less the characters drawn
+    too faintly for anyone to read (`LEGIBLE_ALPHA`), with the spaces and line
+    breaks PDFium infers kept.
+
+    WebShot's recognized-text layer is drawn at 1% opacity, so a search of the
+    PDF finds text that is only pixels. It is in the PDF's text layer but not
+    on its page: a frame's layer, recognized from a screenshot taken at the
+    window's width, held text the printed frame cut at the page edge, and the
+    clipping check, asking whether the text layer holds a cut element's text,
+    was answered by the layer (docs/09 P135-4).
+    """
+    name = pdf.name if isinstance(pdf, Path) else "the PDF"
+    try:
+        document = pdfium.PdfDocument(str(pdf) if isinstance(pdf, Path) else pdf)
+    except pdfium.PdfiumError as exc:
+        raise PdfInkError(f"PDFium could not open {name}: {exc}") from exc
+    r, g, b, a = (ctypes.c_uint() for _ in range(4))
+    try:
+        pages = []
+        for index in range(len(document)):
+            page = document[index]
+            textpage = page.get_textpage()
+            try:
+                kept = []
+                for char in range(textpage.count_chars()):
+                    code = raw.FPDFText_GetUnicode(textpage.raw, char)
+                    if (
+                        raw.FPDFText_IsGenerated(textpage.raw, char) != 1
+                        and raw.FPDFText_GetFillColor(textpage.raw, char, r, g, b, a)
+                        and a.value < LEGIBLE_ALPHA
+                    ):
+                        continue
+                    kept.append(chr(code))
+                pages.append("".join(kept))
+            finally:
+                textpage.close()
+                page.close()
+        return tuple(pages)
+    except pdfium.PdfiumError as exc:
+        raise PdfInkError(f"PDFium could not read {name}: {exc}") from exc
+    finally:
+        document.close()
+
+
 def page_characters(pdf: Path | bytes) -> tuple[str, ...]:
     """Each page's characters as `read_ink` reads them, without their boxes:
     every character but line breaks and the markers PDFium uses for none."""

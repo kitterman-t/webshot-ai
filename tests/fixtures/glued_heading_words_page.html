@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Harbor notices in display type</title>
+<!-- docs/09 P135-2. Two headings in display type the PDF prints, and one its
+     print stylesheet hides. PDFium reads the spaces between words from the
+     gaps between glyphs: the first heading, set tight, comes out of it with
+     its words run together, and the second, set wide, with a word per letter.
+     Both are in the PDF. The third is in neither the PDF nor the bundle, and
+     is the one the warning names. All of the text is invented. -->
+<style>
+  body { font: 16px/1.5 sans-serif; color: #111; background: #fff; margin: 40px; }
+  h1 { font: 700 30px/1.2 sans-serif; }
+  h2 { font: 700 40px/1.2 sans-serif; margin: 24px 0 8px; }
+  .tight { letter-spacing: -0.08em; }
+  .wide { letter-spacing: 0.4em; font-size: 28px; }
+  @media print { .screen-only { display: none; } }
+</style>
+</head>
+<body>
+<h1>Harbor notices</h1>
+<p>The harbor office posts its notices each week, and this page gathers the
+ones that concern the moorings, the ferries and the winter berths.</p>
+<h2 class="tight">Quiet harbor tides turn early</h2>
+<p>The tide tables for the coming month show the low water arriving an hour
+sooner than last season, so boats moored on the inner quay should be checked
+before dawn.</p>
+<h2 class="wide">Ferry times</h2>
+<p>The morning ferry leaves the north pier at seven and returns at noon; the
+evening ferry runs only on market days.</p>
+<h2 class="screen-only">Winter berth fees</h2>
+<p>Berth holders renew at the office counter before the first frost.</p>
+</body>
+</html>

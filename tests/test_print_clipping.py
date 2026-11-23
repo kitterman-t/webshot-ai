@@ -439,6 +439,28 @@ def test_only_an_element_whose_text_the_pdf_lacks_is_counted(tmp_path: Path) -> 
     ]
 
 
+FADED_CARDS = Path(__file__).parent / "fixtures" / "clipping_faded_cards_page.html"
+
+
+@pytest.mark.browser
+def test_a_faded_element_the_pdf_holds_whole_is_not_counted(tmp_path: Path) -> None:
+    """The clipping check reads the PDF's text without WebShot's 1% opaque
+    recognized-text layer (docs/09 P135-4). Read without everything under half
+    opaque, as first written, the cards set at 45% were missing from it and
+    were counted with the token: four elements, where the PDF cut one."""
+    pdf = tmp_path / "capture.pdf"
+    assert (
+        main([str(FADED_CARDS), "-o", str(pdf), "--no-ocr", "--mode", "faithful"]) == 0
+    )
+    manifest = json.loads((pdf.with_suffix(".ai") / "manifest.json").read_text("utf-8"))
+    assert manifest["warnings"] == [
+        "Text runs off the printed page: 1 element(s) have lines past the page edge "
+        "(in div.page > p.cite), and the PDF cuts them off, so its render and text "
+        "layer hold less than the page does. A --css stylesheet that reflows that "
+        "layout for print keeps them on the page."
+    ]
+
+
 DRAWN_ADDRESS = Path(__file__).parent / "fixtures" / "clipping_drawn_address_page.html"
 
 #: A print stylesheet's rule that writes each link's address after it.

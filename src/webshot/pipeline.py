@@ -58,18 +58,26 @@ from .capture.headings import (
     hidden_since,
     missing_headings,
     missing_headings_warnings,
+    missing_headline,
+    missing_headline_warning,
     shown_headings,
     title_heading,
     unmarked_since,
+    words,
 )
 from .capture.landing import (
     WallCheck,
     access_walls,
+    automation_refusal,
     bot_check_page,
     bot_check_page_message,
     empty_capture_message,
+    hidden_after_wall,
+    hidden_after_wall_message,
     home_page_message,
     landed_on_home_page,
+    not_found_page,
+    not_found_status_message,
     refused_status_message,
     requested_url,
     sign_in_wall,
@@ -81,8 +89,11 @@ from .capture.prepare import (
     BASE_PRINT_CSS,
     CLEAN_PRINT_CSS,
     CONSENT_MANAGERS,
+    NOISE_CLASS_WORDS,
+    NOISE_MARK,
     NOISE_SELECTORS,
     LazyLoadPass,
+    NoiseRemoval,
     TextWait,
     _wait_for_fonts_and_images,
     adopt_stylesheet,
@@ -92,12 +103,15 @@ from .capture.prepare import (
     has_scrolling_tables,
     hide_consent_dialogs,
     hide_elements,
+    hide_noise,
     hide_obstructive_overlays,
     interstitials_message,
     isolate_content,
     keep_excluded_hidden,
     keep_header_footer_margins,
+    kept_noise_message,
     lazy_load_warning,
+    noise_removal_note,
     release_clamped_text,
     release_wide_tables,
     rendered_text_message,
@@ -134,14 +148,19 @@ from .render.clipping import (
     printed_width,
     release_wide_boxes,
 )
+from .render.columns import columns_warning
 from .render.covering import (
     CoveredText,
     Covering,
+    MarkedBox,
     count_printed_boxes,
     covered_text_warnings,
     find_covered_text,
+    hidden_bars_message,
     hidden_boxes_message,
     hide_covering_boxes,
+    hide_edge_bars,
+    unmeasured_boxes,
 )
 from .render.embed import collect_payloads, embed_bundle
 from .render.frames import fit_frames
@@ -155,7 +174,7 @@ from .render.ligatures import (
 from .render.long_tables import SplitTable, split_long_tables, split_tables_warning
 from .render.overprint import find_overprinted_text
 from .render.pdf import header_footer_options, is_tagged, render_pdf, validate_pdf
-from .render.pdfium_bridge import PdfInkError, page_texts
+from .render.pdfium_bridge import PdfInkError, legible_page_texts, page_texts
 from .render.text_layer import (
     WallWords,
     printed_share,
@@ -661,6 +680,8 @@ async def capture_open_page(
         if options.mode == "clean"
         else ()
     )
+    noise_words = NOISE_CLASS_WORDS if options.mode == "clean" else ()
+    noise_removal = NoiseRemoval()
     try:
         if options.scroll:
             crash.step = "loading the page's lazy content"
@@ -671,6 +692,7 @@ async def capture_open_page(
                 # What the capture will hide below, so that a feed growing only
                 # there does not hold the pass to --max-scrolls (docs/09 P23-8).
                 noise=noise,
+                noise_words=noise_words,
                 excluded=options.exclude_selectors,
             )
             lazy_message = lazy_load_warning(lazy, options.max_scrolls)
@@ -768,7 +790,14 @@ async def capture_open_page(
         if consent.shown:
             warnings.append(consent_dialogs_message(consent.shown))
         if options.mode == "clean":
-            hidden += await hide_elements(page, noise, "noise")
+            # After the isolation, whose root it keeps: a rule that matches
+            # the content region, or what holds it, is wrong about it (docs/09
+            # P132-1).
+            noise_removal = await hide_noise(page, noise, noise_words)
+            hidden += noise_removal.hidden
+            kept_noise = kept_noise_message(noise_removal)
+            if kept_noise:
+                LOGGER.info(kept_noise)
             overlays = await hide_obstructive_overlays(page)
             hidden += overlays.hidden
             if overlays.covering:
@@ -802,6 +831,12 @@ async def capture_open_page(
                 warnings.extend(await _wait_for_fonts_and_images(page))
             crash.step = "preparing the page for print"
         opened = opening_state(options.opens_collapsed, opening)
+        # Once the closed regions are opened, which a wall's hidden sections
+        # are not: the page's own stylesheet hides them, and nothing opens
+        # them (docs/09 P132-7).
+        walled = await hidden_after_wall(page)
+        if walled:
+            warnings.append(hidden_after_wall_message(walled, final_url))
 
         # Before the CSS, because the CSS targets the marks this leaves.
         released = await release_clamped_text(page)
@@ -814,15 +849,21 @@ async def capture_open_page(
         # removes, before any print stylesheet or the print media, which can
         # hide a heading from the print and the bundle alike (docs/09 P123-5).
         # After the closed regions are opened, which clean mode prints, so a
-        # heading inside one is looked for too (P120-3). With the selectors of the chrome hidden above, which tell a title
-        # removed with it from one the chosen region left out: `noise`, which
-        # on a watch page holds its bar, player and rail too (docs/09 P120-6).
+        # heading inside one is looked for too (P120-3). With the selectors of
+        # the chrome hidden above, which tell a title removed with it from one
+        # the chosen region left out. Clean mode's own by its mark, not by its
+        # rules: it keeps an element a rule matches when that element holds
+        # the page (P132-1), and a title in a kept `.sidebar` wrapper beside
+        # the chosen region was called removed as chrome, and not named
+        # (P132-8). The mark is on what it hid by every rule, a watch page's
+        # bar, player and rail among them (P120-6), and by a class name's
+        # words (P132-2).
         shown = await shown_headings(
             page,
             page_title,
             chrome=[
                 *(name for names in CONSENT_MANAGERS.values() for name in names),
-                *noise,
+                *((NOISE_MARK,) if noise or noise_words else ()),
                 *options.exclude_selectors,
             ],
         )
@@ -1026,6 +1067,9 @@ async def capture_open_page(
                 videos=len(ai_result.videos),
                 required=options.require_content,
                 waited_s=text_wait_bound(text_wait),
+                # What clean mode hid that showed text, which may be the
+                # content it is missing (docs/09 P132-1).
+                cleaned=noise_removal_note(noise_removal),
             )
             if empty and options.require_content:
                 raise CaptureIntegrityError(empty)
@@ -1203,10 +1247,14 @@ async def capture_open_page(
         with failed_requests.paused():
             checks = await check_print()
         hidden_boxes: list[Covering] = []
+        hidden_bars: list[MarkedBox] = []
+        # Why the first measurement could not be made, for the warning that
+        # names the bars hidden in its place; the second's replaces it.
+        unmeasured = checks.covering.unmeasured
         walls = checks.walls
         if (
             options.mode == "clean"
-            and checks.covering.coverings
+            and (checks.covering.coverings or unmeasured_boxes(checks.covering))
             # A print that stops at a wall's words showed a wall whether or
             # not WebShot knows its vendor, and the box over the text may be
             # that wall: hidden, it would take its words, and the warning that
@@ -1221,7 +1269,11 @@ async def capture_open_page(
             # said: a box over the text may be part of one.
             walls = walls or await access_walls(page)
             hidden_boxes = await hide_covering_boxes(page, checks.covering, walls)
-            if hidden_boxes:
+            # A box the measurement could not reach is judged by its shape
+            # instead: a bar along the window's top or bottom edge is a site's
+            # header or footer (docs/09 P135-1).
+            hidden_bars = await hide_edge_bars(page, checks.covering, walls)
+            if hidden_boxes or hidden_bars:
                 reduced = await render_once()
                 with failed_requests.paused():
                     checks = await check_print()
@@ -1243,17 +1295,43 @@ async def capture_open_page(
             record(checks.walled)
         if hidden_boxes:
             record(hidden_boxes_message(hidden_boxes))
+        if hidden_bars:
+            record(hidden_bars_message(hidden_bars, unmeasured))
         if checks.texts is not None:
+            missing = missing_headings(
+                shown,
+                "\n".join(checks.texts),
+                bundle_text if ai_result else None,
+            )
             for message in missing_headings_warnings(
-                missing_headings(
-                    shown,
-                    "\n".join(checks.texts),
-                    bundle_text if ai_result else None,
-                ),
+                missing,
                 media=options.media,
                 explicit_selector=selection.strategy == "explicit",
             ):
                 record(message)
+            # The article the page declares, which a page served without it
+            # still declares: a bot check's shell, or a rule that took it for
+            # chrome, left a popup and exit 0 (docs/09 P132-4). Not of a region
+            # the caller's own --selector chose, as the title is not; and not
+            # twice, when the title's warning has named the same heading.
+            headline = (
+                missing_headline(
+                    reading.article_titles,
+                    "\n".join(checks.texts),
+                    bundle_text if ai_result else None,
+                )
+                if selection.strategy != "explicit"
+                else None
+            )
+            if headline and not (
+                missing.title is not None
+                and words(missing.title.text) == words(headline)
+            ):
+                record(
+                    missing_headline_warning(
+                        headline, mode=options.mode, bundle=ai_result is not None
+                    )
+                )
         # With the walls read for the hiding too: a box that may be part of
         # one is not given `--exclude` as its remedy.
         for covered in covered_text_warnings(checks.covering, checks.walls or walls):
@@ -1270,10 +1348,23 @@ async def capture_open_page(
         # already written. Before embedding, which copies the warnings into
         # `capture.json` (docs/09 P16-1).
         crash.step = "checking the printed page for clipped text"
-        for clipped in clipping_warnings(
-            await find_clipped_text(page, options, checks.width, printed=checks.texts)
-        ):
+        # The text the page prints, without the recognized-text layer, which
+        # is in the text layer but not on the page: a frame's, read from a
+        # screenshot at the window's width, holds what the print cut
+        # (docs/09 P135-4). Unread, every cut element is counted.
+        try:
+            legible: tuple[str, ...] | None = await asyncio.to_thread(
+                legible_page_texts, temporary_output
+            )
+        except PdfInkError:
+            legible = None
+        clipping = await find_clipped_text(page, options, checks.width, printed=legible)
+        for clipped in clipping_warnings(clipping):
             record(clipped)
+        # Read in the clipping check's layout at the printed width (P135-5).
+        in_columns = columns_warning(clipping.columns, clipping.columns_unread)
+        if in_columns:
+            record(in_columns)
         if enrichment.walkthroughs:
             # Between printing and embedding: the appendix changes the
             # file's page count and its bytes, and both are measured below.
@@ -1606,6 +1697,31 @@ async def _capture(
                 http_status = response.status
                 content_type = response.headers.get("content-type", "")
             if response and response.status >= 400 and not options.allow_http_errors:
+                if response.status == 403 and not automation_refusal(response.headers):
+                    # A 403 that names no bot check in its headers can still
+                    # be one by its page, or a missing page: what the page
+                    # says decides which advice is true (docs/09 P132-3,
+                    # P132-5).
+                    refusal = await bot_check_page(page)
+                    if refusal.check:
+                        raise AuthenticationError(
+                            bot_check_page_message(
+                                options.source,
+                                refusal.check,
+                                firewall=refusal.firewall,
+                            ),
+                            http_status=response.status,
+                            final_url=page.url,
+                        )
+                    said = await not_found_page(page)
+                    if said:
+                        raise NavigationError(
+                            not_found_status_message(
+                                options.source, response.status, said
+                            ),
+                            http_status=response.status,
+                            final_url=page.url,
+                        )
                 # 401 and 403 are the far end refusing this browser, which is
                 # exactly what spec §3 code 4 is for; every other refused
                 # status is the page never becoming available.

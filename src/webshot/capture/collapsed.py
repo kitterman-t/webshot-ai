@@ -16,7 +16,10 @@ itself:
   names an element with no box;
 - a Bootstrap collapse toggle (`data-bs-toggle` or `data-toggle` of
   `collapse`) whose target has no box;
-- a closed `<details>`.
+- a closed `<details>`;
+- an Adobe Experience Manager accordion item, by the `data-cmp-hook-accordion`
+  hooks of its item, button and panel, whose panel has no box (docs/09
+  P132-6).
 
 And two more: a button whose label says the article goes on ("Story
 continues", "Read more") followed by a region with no box, as a finance news
@@ -26,11 +29,13 @@ when opened.
 
 In clean mode, and under `--collapsed open`, `open_collapsed` opens them
 before the page is printed and read: a `<details>` gets its `open`
-attribute, a region with no box is given its box back, and the expander's
-button is pressed. The check then names only what stayed closed. In faithful
-mode, or under `--collapsed closed`, nothing is opened: what the page showed
-is what is recorded, and the warning says where the rest is. Where it is, in
-the bundle or not, is read from the bundle once it is built, never assumed:
+attribute, a region with no box is given its box back, with each wrapper
+around it that has none up to the one holding its control, and the
+expander's button is pressed. The check then names only what stayed
+closed. In faithful mode, or under `--collapsed closed`, nothing is opened:
+what the page showed is what is recorded, and the warning says where the
+rest is. Where it is, in the bundle or not, is read from the bundle once it
+is built, never assumed:
 a policy page kept every section in a closed `<details>` whose contents its
 own stylesheet hid, and the warning said "in the bundle" of text the bundle
 did not hold (P120-3).
@@ -159,6 +164,23 @@ COLLAPSED_SCRIPT = r"""async ({minimum, open, sampleWords, fetchWaitMs, rounds, 
                 }
             }
         }
+        // Adobe Experience Manager's accordion, by the hooks its Core
+        // Components script binds to: an item, its button and its panel. A
+        // consulting firm's own variant kept the hooks, gave its button no
+        // ARIA, and closed an item by hiding a wrapper around its panel, so
+        // its endnotes and credits were in neither the PDF nor the bundle and
+        // nothing said so (docs/09 P132-6).
+        const hook = '[data-cmp-hook-accordion="item"]';
+        for (const item of document.querySelectorAll(hook)) {
+            const own = selector => [...item.querySelectorAll(selector)]
+                .find(element => element.parentElement && element.parentElement.closest(hook) === item);
+            const control = own('[data-cmp-hook-accordion="button"]');
+            const region = own('[data-cmp-hook-accordion="panel"]');
+            if (!control || !region || inChrome(control) || unboxed(control)) continue;
+            if (unboxed(region) && !inChrome(region) && prose(region)) {
+                report('hidden', control, region, text(region).length);
+            }
+        }
         // A button that says the article goes on, and the first region with
         // no box after it or after one of its three nearest ancestors: the
         // finance page's button sat in a wrapper of its own, and the rest of
@@ -243,8 +265,14 @@ COLLAPSED_SCRIPT = r"""async ({minimum, open, sampleWords, fetchWaitMs, rounds, 
             if (item.kind === 'details') item.region.open = true;
             else if (item.kind === 'fetched') item.control.click();
             else {
-                item.region.removeAttribute('hidden');
-                item.region.setAttribute('data-webshot-opened', 'true');
+                // The region, and each box around it that has none, up to
+                // the one that holds the control as well: a page can close a
+                // region by hiding a wrapper around it (docs/09 P132-6).
+                for (let node = item.region; node && unboxed(node) && !node.contains(item.control);
+                     node = node.parentElement) {
+                    node.removeAttribute('hidden');
+                    node.setAttribute('data-webshot-opened', 'true');
+                }
             }
         }
         const deadline = performance.now() + fetchWaitMs;
