@@ -88,7 +88,7 @@ dependencies = [
     # (docs/09 S3-S5): nh3 sanitizes the snapshot; docling-slim's HTML backend
     # builds the DoclingDocument (no torch — CI asserts it); chonkie
     # size-splits chunks offline with its character tokenizer.
-    "nh3>=0.3.7",
+    "nh3>=0.3.8",
     "docling-slim[format-html]>=2.150.1",
     "chonkie>=1.7.0",
     # Not used by WebShot directly: docling-core's chunker package eagerly
