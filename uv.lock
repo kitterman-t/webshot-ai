@@ -2269,7 +2269,7 @@ wheels = [
 
 [[package]]
 name = "ocrmypdf"
-version = "17.14.0"
+version = "17.14.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fpdf2" },
@@ -2285,9 +2285,9 @@ dependencies = [
     { name = "typing-extensions", marker = "python_full_version < '3.13'" },
     { name = "uharfbuzz" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6f/cc/f327a00c4e7f1eb241a27078ee12503cc31fcce1b018639441d2bd7b46d2/ocrmypdf-17.14.0.tar.gz", hash = "sha256:834c51d1f91110e5e7b9ab83818c445a3336343d7f61acdf38db88272b0016ab", size = 7779582, upload-time = "2026-11-08T21:00:51.785Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/66/4f/c7262015e4fe376f48f8c1c233520a0abc8f591ad16a26dd539e82cdbcb9/ocrmypdf-17.14.2.tar.gz", hash = "sha256:6dc0be8db27019050ca91ac351bc0b9f0523f44601bd0cd6504a1b1750731dee", size = 7785529, upload-time = "2026-11-16T01:20:28.882Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/74/47/87faa3000db434003d6adc3f9865d328c3abf7f89d575ff3f2b58ea62be2/ocrmypdf-17.14.0-py3-none-any.whl", hash = "sha256:bd56d59a3a4c78619330744c7bb69c1e28d63307a10281068d83bf85f2c327e1", size = 591907, upload-time = "2026-11-08T21:00:48.685Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/13/f2cb67d389d4d94b3ab0083abb761d8c25a40ba9c4019d2d00cf1c19cdca/ocrmypdf-17.14.2-py3-none-any.whl", hash = "sha256:259f88098f37c1c36441459946bf6bd467ba398acdb699c8aff6f6d065144a28", size = 593813, upload-time = "2026-11-16T01:20:26.986Z" },
 ]
 
 [[package]]
@@ -4265,7 +4265,7 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.8.2,<10" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.4.1" },
     { name = "nh3", specifier = ">=0.3.8" },
-    { name = "ocrmypdf", specifier = ">=17.14.0,<18" },
+    { name = "ocrmypdf", specifier = ">=17.14.2,<18" },
     { name = "onnxruntime", marker = "extra == 'ocr-rapid'", specifier = ">=1.32.0" },
     { name = "pillow", specifier = ">=13.0.0,<14" },
     { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.7" },
