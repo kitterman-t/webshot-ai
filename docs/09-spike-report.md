@@ -23855,6 +23855,8 @@ clean mode print what the stylesheet writes, the clipping check names an
 address that runs past the edge (P123-10), and `--css` with `a[href]::after
 { content: none !important; }` takes them out.
 
+The owner chose to keep the addresses and wrap them in clean mode: P139.
+
 ### P135-7 — a video's watch page: readings that are not words, and the chat replay's empty box
 
 The video tools' run captured a recorded live stream's watch page with the
@@ -23994,3 +23996,50 @@ reached them.
 
 
 
+
+## P139 — clean mode wraps the address a print stylesheet writes after a link (2026-11-23)
+
+P135-6 left a choice to the owner. A print stylesheet that writes each link's
+address after it, `a[href]::after { content: " (" attr(href) ")" }`, set an
+archived portal's long addresses as words with no break in them, and 35 ran
+past the page's edge. Leaving the addresses out would also drop the ones
+Wikipedia's and HTML5 Boilerplate's print stylesheets write, which P70-16
+keeps. The owner chose to keep every address and wrap the ones that cannot
+fit.
+
+Clean mode's print stylesheet now gives what a link's `::before` and
+`::after` draw `overflow-wrap: anywhere` and `text-wrap-mode: wrap`. Neither
+draws anything the page did not: with no `content` there is no pseudo-element
+to style. `anywhere`, unlike `break-word`, takes the address out of its box's
+narrowest width, so a table cell or a flex item holding one can shrink too.
+`text-wrap-mode`, not `white-space`, lets the address wrap after a link the
+page sets `nowrap`, and leaves the page's handling of spaces as it was: an
+address a stylesheet puts on its own line with `"\A"` under `white-space: pre`
+stays there. Faithful mode prints what the stylesheet sets, and the clipping
+check names what the edge cuts (P123-10).
+
+`tests/fixtures/clipping_wrapped_addresses_page.html` writes four addresses too
+long for a line (in a paragraph, a table cell beside a column of words, a
+flex item beside another, and after a `nowrap` link), one short address, and
+one on a line of its own. Measured with Chromium 159 (Playwright 1.65.2):
+
+| | master, clean | this change, clean | faithful (unchanged) |
+|---|---|---|---|
+| long addresses printed whole | 0 of 4 | 4 of 4 | 0 of 4 |
+| clipping warning | 4 elements | none | 4 elements |
+| PDF text coverage warning | 35% (81 of 234 runs) | none | 35% (81 of 234 runs) |
+
+The coverage warning on master was not the addresses alone. In the table and
+the flex row the unbroken address widened its own column, and the column of
+words beside it was pushed past the edge whole. With the change both columns
+print: the address breaks inside its own column, and the words beside it print
+whole in a narrower one. The short address prints unbroken, and the own-line address
+stays on its own line. `tests/test_print_clipping.py` holds clean mode
+(`test_clean_mode_wraps_a_printed_address_that_cannot_fit`, which fails on
+master's code) and faithful mode as its control; P70-16's
+`tests/test_printed_addresses.py` passes unchanged. None of the golden
+corpus's pages draws a link's `::before` or `::after`.
+
+The wrapped address reaches the PDF's text layer in pieces, a line break where
+it wrapped. No text surface of the bundle carries a printed address (P70-16),
+so only a reader of the PDF's own text sees the break.

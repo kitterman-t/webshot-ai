@@ -494,6 +494,56 @@ def test_an_address_the_print_stylesheet_draws_is_measured(tmp_path: Path) -> No
     assert "(https://harbor.test/tides)" in flat, flat
 
 
+WRAPPED_ADDRESSES = (
+    Path(__file__).parent / "fixtures" / "clipping_wrapped_addresses_page.html"
+)
+#: The end of each address too long for a line: in a paragraph, a table
+#: cell, a flex item, and after a link the page sets `nowrap`.
+ADDRESS_ENDS = ("ParagraphToken)", "TableToken)", "FlexToken)", "NowrapToken)")
+
+
+def _capture_addresses(tmp_path: Path, mode: str) -> tuple[list[str], str]:
+    pdf = tmp_path / "capture.pdf"
+    assert (
+        main([str(WRAPPED_ADDRESSES), "-o", str(pdf), "--no-ocr", "--mode", mode]) == 0
+    )
+    manifest = json.loads((pdf.with_suffix(".ai") / "manifest.json").read_text("utf-8"))
+    return manifest["warnings"], "\n".join(
+        page.extract_text() for page in PdfReader(pdf).pages
+    )
+
+
+@pytest.mark.browser
+def test_clean_mode_wraps_a_printed_address_that_cannot_fit(tmp_path: Path) -> None:
+    """Each long address breaks onto the next line and prints whole, and
+    nothing is cut; the short address prints unbroken, and the one the
+    stylesheet puts on its own line stays there (docs/09 P139). On master
+    each long address ran past the edge, as faithful mode's still does."""
+    warnings, printed = _capture_addresses(tmp_path, "clean")
+    assert warnings == []
+    flat = "".join(printed.split())
+    for end in ADDRESS_ENDS:
+        assert end in flat, (end, printed)
+    assert "(https://ferry.test/times)" in printed, printed
+    assert "page\nhttps://ferry.test/plan" in printed, printed
+
+
+@pytest.mark.browser
+def test_faithful_mode_prints_the_addresses_as_the_stylesheet_sets_them(
+    tmp_path: Path,
+) -> None:
+    """The control: with nothing wrapping them, every long address runs past
+    the edge and the clipping check names all four (docs/09 P123-10)."""
+    warnings, printed = _capture_addresses(tmp_path, "faithful")
+    assert any(
+        warning.startswith("Text runs off the printed page: 4 element(s)")
+        for warning in warnings
+    ), warnings
+    flat = "".join(printed.split())
+    for end in ADDRESS_ENDS:
+        assert end not in flat, (end, printed)
+
+
 @pytest.mark.browser
 def test_a_drawn_address_that_fits_is_not_a_finding() -> None:
     body = '<p><a href="https://harbor.test/tides">the tide tables</a> are posted.</p>'

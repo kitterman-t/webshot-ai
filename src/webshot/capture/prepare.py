@@ -383,7 +383,27 @@ pre, code { white-space: pre-wrap !important; overflow-wrap: anywhere; }
     + "}\n"
 )
 
+#: What a link's `::before` and `::after` draw may break anywhere in clean
+#: mode. A print stylesheet that writes each link's address after it,
+#: `a[href]::after { content: " (" attr(href) ")" }`, set an archive's long
+#: addresses as words with no break in them, and 35 of them ran past the
+#: page's edge (docs/09 P135-6). Leaving the addresses out was built and taken
+#: back: it dropped the citations Wikipedia's and HTML5 Boilerplate's print
+#: stylesheets write, which P70-16 keeps. Wrapping keeps every address. In a
+#: paragraph it moves only one that cannot fit. `anywhere`, unlike
+#: `break-word`, also takes the address out of its box's narrowest width, so a
+#: table cell or a flex item holding one can shrink, and the address breaks
+#: there too, where unbroken it widened its column and pushed the column beside
+#: it off the page. `text-wrap-mode` lets the address wrap after a link the page sets
+#: `nowrap`, and leaves the page's handling of spaces alone, so an address a
+#: stylesheet puts on its own line with `"\A"` under `white-space: pre` stays
+#: there. Faithful mode prints what the stylesheet sets, and the clipping
+#: check names what the edge cuts (docs/09 P123-10, P139).
 CLEAN_PRINT_CSS = """
+a[href]::before, a[href]::after {
+    overflow-wrap: anywhere !important;
+    text-wrap-mode: wrap !important;
+}
 html { background: #fff !important; }
 body { margin: 0 !important; background: transparent !important; }
 [data-webshot-root='true'] {
