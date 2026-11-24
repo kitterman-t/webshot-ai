@@ -459,8 +459,12 @@ there with its reason, and the run's job summary lists every skip.
     could not read whole, counts (docs/09 P123-7). A measurement that could
     not be made is itself a warning. It is not an exit code: the PDF is the
     page less what the edge cut, and the warning says so. WebShot does not
-    reflow a layout that runs off the page, with one exception: in `clean`
-    mode, before the bundle, a box that is itself wider than the printed page
+    reflow a layout that runs off the page, with two exceptions, both in
+    `clean` mode. What a link's `::before` and `::after` draw, such as the
+    address a print stylesheet writes after it, MAY break anywhere, after a
+    `nowrap` link too, so an address too long for its line wraps rather than
+    running past the edge; the page's handling of spaces in it is kept
+    (docs/09 P139). And before the bundle, a box that is itself wider than the printed page
     is capped at its container's width and allowed to shrink below its
     content's widest line, where that cuts fewer lines at the edge and leaves
     no capped box with content still running past its own edge; the capture

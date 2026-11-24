@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ferry notices whose printed addresses are too long for a line</title>
+<!-- docs/09 P139. A print stylesheet writes each link's address after it,
+     as `a[href]::after { content: " (" attr(href) ")" }` does. Four of the
+     addresses carry a share token with no break point in it, far wider than
+     the page: in a paragraph, in a table cell beside a column of words, in
+     a flex item beside another, and after a link the page sets `nowrap`.
+     Printed as the stylesheet sets them, each runs past the right margin and
+     the PDF loses its end. One link's address is short and fits. Another's
+     stylesheet puts it on a line of its own with "\A" under
+     `white-space: pre`. The wrapper hides what runs past it, so the document
+     is no wider than the paper and Chromium does not shrink it to fit. All
+     of the text is invented. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/1.5 serif; color: #111; background: #fff; }
+  .page { overflow: hidden; padding: 0 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { border: 1px solid #999; vertical-align: top; }
+  .row { display: flex; gap: 1em; }
+  .row > div { flex: 1; }
+  .keep { white-space: nowrap; }
+  @media print {
+    a[href]::after { content: " (" attr(href) ")"; }
+    a.own[href]::after { content: "\A" attr(href); white-space: pre; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Ferry notices</h1>
+  <p>The crossing charts are in the
+  <a href="https://files.ferry.test/s/QwErTyUiOpAsDfGhJkLzXcVbNmQwErTyUiOpAsDfGhJkLzXcVbNmQwErTyUiOpAsDfGhJkLzXcVbNmQwErTyUiOpParagraphToken">chart folder</a>
+  for the winter crews.</p>
+  <table>
+    <tr>
+      <td>The berth list is in the
+      <a href="https://files.ferry.test/s/ZxCvBnMaSdFgHjKlQwErTyUiOpZxCvBnMaSdFgHjKlQwErTyUiOpZxCvBnMaSdFgHjKlQwErTyUiOpZxCvBnMaSdTableToken">berth folder</a>.</td>
+      <td>Moorings are checked each morning before the first sailing leaves the slip.</td>
+    </tr>
+  </table>
+  <div class="row">
+    <div>The fuel log is in the
+    <a href="https://files.ferry.test/s/PlOkMiJnUhBgYtFrDeSwAqPlOkMiJnUhBgYtFrDeSwAqPlOkMiJnUhBgYtFrDeSwAqPlOkMiJnUhBgYtFrDeSwFlexToken">fuel folder</a>.</div>
+    <div>Deck crews sign the log at the end of each shift on the quay.</div>
+  </div>
+  <p>The rota is in the
+  <a class="keep" href="https://files.ferry.test/s/MnBvCxZlKjHgFdSaPoIuYtReWqMnBvCxZlKjHgFdSaPoIuYtReWqMnBvCxZlKjHgFdSaPoIuYtReWqMnBvCxNowrapToken">rota folder</a>
+  for the deck crews.</p>
+  <p>The timetable is on the
+  <a href="https://ferry.test/times">ferry office page</a>, and printed copies
+  are at the ticket hall.</p>
+  <p>The harbour plan is on the
+  <a class="own" href="https://ferry.test/plan">plan page</a> for visitors.</p>
+</div>
+</body>
+</html>

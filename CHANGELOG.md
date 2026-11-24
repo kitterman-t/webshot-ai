@@ -504,6 +504,15 @@ which records the measurements behind each change.
 
 ### Fixed
 
+- **Clean mode wraps a long address a print stylesheet writes after a
+  link.** A stylesheet's `a[href]::after { content: " (" attr(href) ")" }`
+  set an archive's long addresses with no break in them, and they ran past
+  the page's edge; in a table or a flex row the address also pushed the
+  column beside it off the page. What a link's `::before` and `::after` draw
+  now breaks where it cannot fit, after a `nowrap` link too, so every address
+  prints whole and short ones are unchanged. Faithful mode prints what the
+  stylesheet sets, and the clipping check names what the edge cuts. See
+  docs/09 P139.
 - **Clean mode no longer hides the content it was asked to keep.** A theme
   classed the wrapper around its article and sidebar `sidebar`, and the
   `.sidebar` rule hid the article, with or without `--selector`, leaving an
